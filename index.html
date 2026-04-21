@@ -3277,20 +3277,104 @@ function saveEditTx(txId) {
   showToast('Changes saved!');
 }
 
+function updateEditTransferPreview() {
+  const fromId = document.getElementById('etf-from')?.value;
+  const toId = document.getElementById('etf-to')?.value;
+  const amount = parseFloat(document.getElementById('etf-amount')?.value) || 0;
+  const txCurr = document.getElementById('etf-currency')?.value;
+  const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
+  const customRateRow = document.getElementById('etf-custom-rate-row');
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  if (customRateRow) customRateRow.style.display = useSnapshot ? 'none' : 'block';
+  const currLabel = document.getElementById('etf-custom-curr-label');
+  if (currLabel && txCurr && txCurr !== 'PHP') currLabel.textContent = txCurr;
+  const previewDiv = document.getElementById('etf-toamount-preview');
+  const previewVal = document.getElementById('etf-toamount-val');
+  const hint = document.getElementById('etf-toamount-hint');
+  const fxPrev = document.getElementById('etf-forex-preview');
+  if (!fromAcct || !toAcct || !amount || !previewDiv) return;
+  const toCurr = toAcct.currency;
+  const isCross = txCurr !== toCurr;
+  const foreignCurr = txCurr !== 'PHP' ? txCurr : toCurr;
+  const snapRate = getLatestFxRate(foreignCurr);
+  let toAmt;
+  if (!useSnapshot && isCross) {
+    const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+    toAmt = customRate > 0 ? (txCurr === 'PHP' ? amount / snapRate : amount * snapRate) : convert(amount, txCurr, toCurr);
+  } else {
+    toAmt = isCross ? convert(amount, txCurr, toCurr) : amount;
+  }
+  if (previewVal) previewVal.textContent = fmt(toAmt, toCurr);
+  if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ₱${snapRate.toFixed(4)} snapshot)` : '';
+  previewDiv.style.display = amount > 0 ? 'block' : 'none';
+  // Forex preview
+  if (!useSnapshot && isCross && fxPrev) {
+    const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+    if (customRate > 0) {
+      let diff;
+      if (txCurr === 'PHP') {
+        const toAmtSnap = amount / snapRate;
+        diff = Math.round((amount - (toAmtSnap * customRate)) * 100) / 100;
+      } else {
+        const toAmtSnap = amount * snapRate;
+        diff = Math.round((toAmtSnap - (amount * customRate)) * 100) / 100;
+      }
+      const isLoss = diff < 0;
+      fxPrev.style.display = 'block';
+      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ₱${snapRate.toFixed(4)} | Transaction rate: ₱${customRate.toFixed(4)}</div>
+        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ₱${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
+    } else { fxPrev.style.display = 'none'; }
+  } else if (fxPrev) { fxPrev.style.display = 'none'; }
+}
+
+function syncEditTransferCurrency() {
+  const fromId = document.getElementById('etf-from')?.value;
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const currSel = document.getElementById('etf-currency');
+  if (fromAcct && currSel) currSel.value = fromAcct.currency;
+  document.getElementById('etf-custom-rate') && (document.getElementById('etf-custom-rate').value = '');
+  updateEditTransferPreview();
+}
+
 function openEditTransfer(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
   const accts = db.accounts.filter(a=>!a.archived);
   const acctOpts = (selId) => accts.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
+  // Detect if existing tx used custom rate (toAmount differs from snapshot conversion)
+  const toAcct = accts.find(a=>a.id===tx.toAccountId);
+  const foreignCurr = tx.currency !== 'PHP' ? tx.currency : toAcct?.currency;
+  const snapRate = getLatestFxRate(foreignCurr || 'PGK');
+  let existingCustomRate = '';
+  if (tx.toAmount != null && toAcct && tx.currency !== toAcct.currency) {
+    const derivedRate = tx.currency === 'PHP' ? tx.amount / tx.toAmount : tx.toAmount / tx.amount;
+    if (Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = derivedRate.toFixed(4);
+  }
+  const hasCustomRate = existingCustomRate !== '';
   openSheet('gen','Edit Transfer',`
-    <div class="form-group"><label class="form-label">From Account</label><select class="form-input" id="etf-from">${acctOpts(tx.fromAccountId)}</select></div>
-    <div class="form-group"><label class="form-label">To Account</label><select class="form-input" id="etf-to">${acctOpts(tx.toAccountId)}</select></div>
+    <div class="form-group"><label class="form-label">From Account</label><select class="form-input" id="etf-from" onchange="syncEditTransferCurrency()">${acctOpts(tx.fromAccountId)}</select></div>
+    <div class="form-group"><label class="form-label">To Account</label><select class="form-input" id="etf-to" onchange="updateEditTransferPreview()">${acctOpts(tx.toAccountId)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="etf-amount" value="${tx.amount}"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="etf-currency">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="etf-amount" value="${tx.amount}" oninput="updateEditTransferPreview()"></div>
+      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="etf-currency" onchange="updateEditTransferPreview()">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">To Amount (if different)</label><input class="form-input" type="number" id="etf-toamount" value="${tx.toAmount||''}"></div>
+    <div id="etf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
+      <span style="color:var(--text3)">To Account receives: </span><span id="etf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
+      <span id="etf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <input type="checkbox" id="etf-use-snapshot" ${hasCustomRate?'':'checked'} onchange="updateEditTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <label for="etf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
+    </div>
+    <div id="etf-custom-rate-row" style="display:${hasCustomRate?'block':'none'};margin-bottom:8px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Transaction rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
+        <input class="form-input" type="number" id="etf-custom-rate" placeholder="Enter transaction rate" step="any" value="${existingCustomRate}" oninput="updateEditTransferPreview()">
+      </div>
+    </div>
+    <div id="etf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;display:none"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="etf-date" value="${tx.date}"></div>
       <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="etf-time" value="${tx.time||''}"></div>
@@ -3298,24 +3382,63 @@ function openEditTransfer(txId) {
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="etf-notes" value="${tx.notes||''}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditTransfer('${txId}')">Save Changes</button>
   `);
+  setTimeout(updateEditTransferPreview, 50);
 }
 
 function saveEditTransfer(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
   const oldDate = tx.date;
+  const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
+  const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
   tx.fromAccountId = document.getElementById('etf-from').value;
   tx.toAccountId = document.getElementById('etf-to').value;
   tx.amount = parseFloat(document.getElementById('etf-amount').value) || tx.amount;
   tx.currency = document.getElementById('etf-currency').value;
-  tx.toAmount = parseFloat(document.getElementById('etf-toamount').value) || null;
   tx.date = document.getElementById('etf-date').value;
   tx.time = document.getElementById('etf-time').value;
   tx.notes = document.getElementById('etf-notes').value.trim();
   if (tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date);
 
-  // Recompute auto-forex child if exists
-  recomputeTransferForexChild(txId);
+  const toAcct2 = db.accounts.find(a=>a.id===tx.toAccountId);
+  const isCross = toAcct2 && tx.currency !== toAcct2.currency;
+  if (isCross) {
+    const foreignCurr2 = tx.currency !== 'PHP' ? tx.currency : toAcct2.currency;
+    const snapRate2 = getLatestFxRate(foreignCurr2);
+    if (!useSnapshot && customRate > 0) {
+      // Custom rate — toAmount based on snapshot, forex child handles difference
+      tx.toAmount = tx.currency === 'PHP'
+        ? Math.round((tx.amount / snapRate2) * 10000) / 10000
+        : Math.round(tx.amount * snapRate2 * 100) / 100;
+      // Update or create forex child
+      const forexDiff = tx.currency === 'PHP'
+        ? Math.round((tx.amount - (tx.toAmount * customRate)) * 100) / 100
+        : Math.round((tx.toAmount - (tx.amount * customRate)) * 100) / 100;
+      let child = db.transactions.find(t => t.parentId === txId && t.isAutoForex);
+      if (!child) {
+        child = { id: genId(), parentId: txId, isAutoForex: true, createdAt: new Date().toISOString() };
+        db.transactions.push(child);
+      }
+      const phpAcct = db.accounts.find(a=>!a.archived && a.currency==='PHP') || db.accounts.find(a=>!a.archived);
+      Object.assign(child, {
+        type: forexDiff >= 0 ? 'income' : 'expense',
+        amount: Math.abs(forexDiff),
+        currency: 'PHP',
+        accountId: phpAcct?.id,
+        categoryId: forexDiff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
+        date: tx.date, time: tx.time||nowTime(),
+        notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (transaction rate vs snapshot)`,
+        fxSnapshot: tx.fxSnapshot,
+      });
+    } else {
+      tx.toAmount = convert(tx.amount, tx.currency, toAcct2.currency);
+      // Remove forex child if using snapshot
+      db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
+    }
+  } else {
+    tx.toAmount = null;
+    db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
+  }
 
   saveDB();
   closeSheet('gen');
