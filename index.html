@@ -656,6 +656,18 @@ const EMOJI_GROUPS = {
 // DATA LAYER
 // ════════════════════════════════════════════════════════════
 const DB_KEY = 'trackbudget_v2';
+
+// Country → native currency mapping (for budget display logic)
+const COUNTRY_CURRENCIES = {
+  'Philippines':'PHP','Papua New Guinea':'PGK','Australia':'AUD','United States':'USD',
+  'Japan':'JPY','United Kingdom':'GBP','Singapore':'SGD','Hong Kong':'HKD',
+  'United Arab Emirates':'AED','Saudi Arabia':'SAR','South Korea':'KRW',
+  'Canada':'CAD','New Zealand':'NZD','Malaysia':'MYR','Thailand':'THB',
+  'Indonesia':'IDR','Vietnam':'VND','India':'INR','China':'CNY',
+  'Germany':'EUR','France':'EUR','Italy':'EUR','Spain':'EUR',
+  'Taiwan':'TWD','Switzerland':'CHF','Norway':'NOK','Sweden':'SEK',
+  'Denmark':'DKK','Mexico':'MXN','Brazil':'BRL','South Africa':'ZAR',
+};
 const GDRIVE_CLIENT_ID = '722832233918-3srovc3q8kt9i7145ga6gtskscqp1l9n.apps.googleusercontent.com';
 const GDRIVE_FOLDER_NAME = 'TrackBudget';
 const GDRIVE_BACKUPS_FOLDER_NAME = 'Backups';
@@ -1468,8 +1480,22 @@ function renderDashboard() {
   const disp = db.displayCurrency || 'PHP';
 
   // Budget bars
+  // Budget display logic:
+  // - Nationality budget (PHP) always shown
+  // - Location budget shown ONLY if location is set AND its native currency is in tracked currencies
+  const userNationality = db.profile?.nationality || 'Philippines';
+  const userLocation = db.profile?.country || '';
+  const natCurrency = COUNTRY_CURRENCIES[userNationality] || 'PHP';
+  const locationCurrency = COUNTRY_CURRENCIES[userLocation] || null;
+  const locationBudgetActive = locationCurrency && db.trackedCurrencies.includes(locationCurrency) && userLocation !== userNationality;
+
   let budgetHTML = '';
   for (const bgt of db.budgets.filter(b=>b.active)) {
+    // Nationality budget: always show if budget currency matches nationality's currency
+    const isNatBudget = bgt.currency === natCurrency;
+    // Location budget: show only if location set + location currency tracked + different from nationality
+    const isLocBudget = locationBudgetActive && bgt.currency === locationCurrency;
+    if (!isNatBudget && !isLocBudget) continue;
     const spent = db.transactions.filter(t=>
       !t.archived && !t.isSettlement && !t.isLoanTx && t.date && t.date.startsWith(mk) &&
       (t.type==='expense'||t.type==='shared') &&
