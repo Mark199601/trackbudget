@@ -2662,8 +2662,13 @@ function submitTransfer() {
     const forex = computeTransferForex();
     if (forex && forex.direction !== 'none' && Math.abs(forex.gainLossPhp) >= 0.01) {
       const isGain = forex.direction === 'gain';
-      const phpAcct = db.accounts.find(a=>!a.archived && a.currency === 'PHP') || db.accounts.find(a=>!a.archived);
-      if (phpAcct) {
+      const fromAcctF = db.accounts.find(a=>a.id===fromId);
+      const toAcctF = db.accounts.find(a=>a.id===toId);
+      const forexAcct = (fromAcctF?.currency==='PHP' ? fromAcctF : null)
+        || (toAcctF?.currency==='PHP' ? toAcctF : null)
+        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+        || db.accounts.find(a=>!a.archived);
+      if (forexAcct) {
         const childAmt = Math.abs(forex.gainLossPhp);
         db.transactions.push({
           id: genId(),
@@ -2671,7 +2676,7 @@ function submitTransfer() {
           amount: childAmt,
           currency: 'PHP',
           categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
-          accountId: phpAcct.id,
+          accountId: forexAcct.id,
           date, time: time||nowTime(),
           notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${forex.actualRate.toFixed(4)} vs snapshot ${forex.snapshotRate.toFixed(4)})`,
           fxSnapshot,
@@ -2684,19 +2689,24 @@ function submitTransfer() {
   }
 
 
-  // Auto-log forex gain/loss if custom rate used — always in PHP
+  // Auto-log forex gain/loss if custom rate used — account: PHP side of the transfer
   if (forexDiff !== 0 && !useSnapshot && customRate > 0) {
-    const phpAcct = db.accounts.find(a=>!a.archived && a.currency==='PHP') || db.accounts.find(a=>!a.archived);
-    if (phpAcct) {
+    const fromAcctF2 = db.accounts.find(a=>a.id===fromId);
+    const toAcctF2 = db.accounts.find(a=>a.id===toId);
+    const forexAcct2 = (fromAcctF2?.currency==='PHP' ? fromAcctF2 : null)
+      || (toAcctF2?.currency==='PHP' ? toAcctF2 : null)
+      || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+      || db.accounts.find(a=>!a.archived);
+    if (forexAcct2) {
       db.transactions.push({
         id: genId(),
         type: forexDiff > 0 ? 'income' : 'expense',
         amount: Math.abs(forexDiff),
         currency: 'PHP',
-        accountId: phpAcct.id,
+        accountId: forexAcct2.id,
         categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
         date, time: time||nowTime(),
-        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (custom rate vs snapshot)`,
+        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (transaction rate vs snapshot)`,
         fxSnapshot: buildFxSnapshot(date),
         parentId,
         isAutoForex: true,
@@ -3419,12 +3429,17 @@ function saveEditTransfer(txId) {
         child = { id: genId(), parentId: txId, isAutoForex: true, createdAt: new Date().toISOString() };
         db.transactions.push(child);
       }
-      const phpAcct = db.accounts.find(a=>!a.archived && a.currency==='PHP') || db.accounts.find(a=>!a.archived);
+      const fromAcctEdit = db.accounts.find(a=>a.id===tx.fromAccountId);
+      const toAcctEdit = db.accounts.find(a=>a.id===tx.toAccountId);
+      const forexAcctEdit = (fromAcctEdit?.currency==='PHP' ? fromAcctEdit : null)
+        || (toAcctEdit?.currency==='PHP' ? toAcctEdit : null)
+        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+        || db.accounts.find(a=>!a.archived);
       Object.assign(child, {
         type: forexDiff >= 0 ? 'income' : 'expense',
         amount: Math.abs(forexDiff),
         currency: 'PHP',
-        accountId: phpAcct?.id,
+        accountId: forexAcctEdit?.id,
         categoryId: forexDiff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
         date: tx.date, time: tx.time||nowTime(),
         notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (transaction rate vs snapshot)`,
