@@ -1487,30 +1487,36 @@ function renderDashboard() {
   const userLocation = db.profile?.country || '';
   const natCurrency = COUNTRY_CURRENCIES[userNationality] || 'PHP';
   const locationCurrency = COUNTRY_CURRENCIES[userLocation] || null;
-  const locationBudgetActive = locationCurrency && db.trackedCurrencies.includes(locationCurrency) && userLocation !== userNationality;
+  // Location budget condition: location is set AND location's currency is in tracked currencies AND different from nationality
+  const locationBudgetActive = userLocation && locationCurrency && db.trackedCurrencies.includes(locationCurrency) && userLocation !== userNationality;
 
+  // Build the list of currencies to show budget bars for
+  // Always: nationality currency. Conditionally: location currency.
+  const budgetCurrenciesToShow = new Set([natCurrency]);
+  if (locationBudgetActive) budgetCurrenciesToShow.add(locationCurrency);
+
+  // For each currency to show, find matching budget or show empty bar
   let budgetHTML = '';
-  for (const bgt of db.budgets.filter(b=>b.active)) {
-    // Nationality budget: always show if budget currency matches nationality's currency
-    const isNatBudget = bgt.currency === natCurrency;
-    // Location budget: show only if location set + location currency tracked + different from nationality
-    const isLocBudget = locationBudgetActive && bgt.currency === locationCurrency;
-    if (!isNatBudget && !isLocBudget) continue;
+  for (const curr of budgetCurrenciesToShow) {
+    const isNat = curr === natCurrency;
+    const country = isNat ? userNationality : userLocation;
+    const bgt = db.budgets.find(b => b.active && b.currency === curr);
+    const limit = bgt?.limit || 0;
     const spent = db.transactions.filter(t=>
       !t.archived && !t.isSettlement && !t.isLoanTx && t.date && t.date.startsWith(mk) &&
       (t.type==='expense'||t.type==='shared') &&
-      t.currency===bgt.currency
+      t.currency===curr
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
-    const pct = Math.min(spent/bgt.limit, 1);
+    const pct = limit > 0 ? Math.min(spent/limit, 1) : 0;
     const cls = pct > 1 ? 'bar-over' : pct > 0.8 ? 'bar-warn' : 'bar-ok';
-    const over = spent > bgt.limit;
+    const over = limit > 0 && spent > limit;
     budgetHTML += `<div class="budget-bar-wrap">
       <div class="budget-bar-top">
-        <div class="budget-bar-name">${getFlag(bgt.location)} ${bgt.location}</div>
-        <div class="budget-bar-amounts">${sym(bgt.currency)}${spent.toFixed(0)} / ${sym(bgt.currency)}${bgt.limit.toLocaleString()}</div>
+        <div class="budget-bar-name">${getFlag(country)} ${country}</div>
+        <div class="budget-bar-amounts">${sym(curr)}${spent.toFixed(0)} / ${limit > 0 ? sym(curr)+limit.toLocaleString() : '<span style="color:var(--text4);font-size:11px">No limit set</span>'}</div>
       </div>
       <div class="budget-bar-track"><div class="budget-bar-fill ${cls}" style="width:${(pct*100).toFixed(1)}%"></div></div>
-      ${over?`<div style="font-size:11px;color:var(--red);margin-top:4px">⚠ Over by ${sym(bgt.currency)}${(spent-bgt.limit).toFixed(0)}</div>`:''}
+      ${over?`<div style="font-size:11px;color:var(--red);margin-top:4px">⚠ Over by ${sym(curr)}${(spent-limit).toFixed(0)}</div>`:''}
     </div>`;
   }
 
