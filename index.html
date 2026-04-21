@@ -1690,6 +1690,18 @@ function renderTxRow(tx, showDate=false) {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
     detail = `${from.name} → ${to.name}`;
+    // Override name to "Transfer"
+    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+      <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
+      <div class="tx-meta">
+        <div class="tx-name">Transfer</div>
+        <div class="tx-detail">${from.name} → ${to.name}${tx.notes?' · '+tx.notes:''}</div>
+      </div>
+      <div class="tx-right">
+        <div class="tx-amount tx-neu">↔ ${fmt(tx.amount,tx.currency)}</div>
+        ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
+      </div>
+    </div>`;
   } else if (tx.type==='lend'||tx.type==='borrow') {
     detail = `${tx.type==='lend'?'To':'From'}: ${tx.personName||'?'} · ${acct.name}`;
   } else if (tx.type==='shared') {
@@ -2729,12 +2741,38 @@ function openTxDetail(txId) {
     }
   }
 
-  openDlg('Transaction Detail',
-    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+  // For transfer: build special header with both currencies + rate
+  let detailHeader = '';
+  if (tx.type === 'transfer') {
+    const fromAcctD = getAccountDisplay(tx.fromAccountId);
+    const toAcctD = getAccountDisplay(tx.toAccountId);
+    const fromCurr = tx.currency;
+    const toCurr = toAcctD.currency || fromCurr;
+    const toAmt = tx.toAmount != null ? tx.toAmount : convert(tx.amount, fromCurr, toCurr);
+    const isCross = fromCurr !== toCurr;
+    // Rate at time of transfer — always show as "1 [foreign] = ₱X"
+    const foreignCurr = fromCurr !== 'PHP' ? fromCurr : toCurr;
+    const snapRate = tx.fxSnapshot?.[foreignCurr] || db.fxRates[foreignCurr] || 1;
+    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ₱${snapRate.toFixed(4)} (at time of transfer)</div>` : '';
+    detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div class="tx-icon tx-icon-transfer" style="width:44px;height:44px;font-size:20px">↔️</div>
+      <div>
+        <div style="font-size:16px;font-weight:600">Transfer</div>
+        <div style="font-family:var(--mono);font-size:16px;margin-top:2px;color:var(--text2)">
+          ${fmt(tx.amount,fromCurr)} → ${fmt(toAmt,toCurr)}
+        </div>
+        ${rateStr}
+      </div>
+    </div>`;
+  } else {
+    detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${cat.icon}</div>
-      <div><div style="font-size:16px;font-weight:600">${cat.name.replace(/^[^ ]+ /,'')}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
-    </div>
-    ${rows}${fxBadge}`,
+      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':cat.name.replace(/^[^ ]+ /,'')}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
+    </div>`;
+  }
+
+  openDlg('Transaction Detail',
+    `${detailHeader}${rows}${fxBadge}`,
     footer
   );
 }
