@@ -2175,10 +2175,14 @@ function submitRemittance() {
 
 function renderTransferForm() {
   const accts = db.accounts.filter(a=>!a.archived);
-  const acctOpts = (sel)=>accts.map(a=>`<option value="${a.id}" ${a.currency==='PGK'&&!sel?' selected':a.currency==='PHP'&&sel?' selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  // Default From = first PGK account, Default To = first PHP account
+  const firstFrom = accts.find(a=>a.currency==='PGK') || accts[0];
+  const firstTo = accts.find(a=>a.currency==='PHP') || accts[1] || accts[0];
+  const acctOpts = (sel)=>accts.map(a=>`<option value="${a.id}" ${a.id===(sel?firstTo:firstFrom)?.id?' selected':''}>${a.name} (${a.currency})</option>`).join('');
+  const fromCurr = firstFrom?.currency || 'PGK';
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===fromCurr?'selected':''}>${c}</option>`).join('');
   return `<div>
-    <div class="form-group"><label class="form-label">From Account *</label><select class="form-input" id="tf-from" onchange="updateTransferPreview()">${acctOpts(false)}</select></div>
+    <div class="form-group"><label class="form-label">From Account *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
     <div class="form-group"><label class="form-label">To Account *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
@@ -2251,6 +2255,16 @@ function computeTransferForex() {
   if (Math.abs(gainLossPhp) < 0.01) return { gainLossPhp: 0, snapshotRate, actualRate, direction: 'none' };
 
   return { gainLossPhp, snapshotRate, actualRate, direction: gainLossDir, fromCurr: fromAcct.currency, toCurr: toAcct.currency };
+}
+
+function syncTransferCurrency() {
+  const fromId = document.getElementById('tf-from')?.value;
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const currSel = document.getElementById('tf-currency');
+  if (fromAcct && currSel) currSel.value = fromAcct.currency;
+  // Reset toamount when from account changes
+  const toAmountEl = document.getElementById('tf-toamount');
+  if (toAmountEl) toAmountEl.value = '';
 }
 
 function updateTransferPreview() {
