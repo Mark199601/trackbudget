@@ -1628,6 +1628,41 @@ function renderDashboard() {
     </div>
   </div>`;
 
+
+  // 4-metric grid
+  const cashWalletTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid'];
+  const cashTotal = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type))
+    .reduce((s,a)=>{ const b=toPhp(getAcctBalance(a.id),a.currency); return s+(b>0?b:0); },0);
+  const cashAcctCount = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type)).length;
+  const loansOutTotal = db.loans.lent.filter(l=>!l.settled)
+    .reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+  const loansOutCount = db.loans.lent.filter(l=>!l.settled).length;
+  const debtsTotal = db.loans.borrowed.filter(l=>!l.settled)
+    .reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+  const debtsCount = db.loans.borrowed.filter(l=>!l.settled).length;
+  const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
+  const metricsHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px;overflow-x:auto">
+    <div class="metric-card" style="cursor:pointer" onclick="nav('accounts')">
+      <div class="metric-label">Cash & Wallets</div>
+      <div class="metric-value" style="font-size:16px">${fmt(fromPhp(cashTotal,disp),disp)}</div>
+      <div class="metric-sub">${cashAcctCount} accounts</div>
+    </div>
+    <div class="metric-card" style="cursor:pointer" onclick="nav('loans')">
+      <div class="metric-label">Loans Out</div>
+      <div class="metric-value" style="font-size:16px;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
+      <div class="metric-sub">${loansOutCount} active</div>
+    </div>
+    <div class="metric-card" style="cursor:pointer" onclick="nav('loans')">
+      <div class="metric-label">Debts</div>
+      <div class="metric-value" style="font-size:16px;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
+      <div class="metric-sub">${debtsCount} active</div>
+    </div>
+    <div class="metric-card" style="cursor:pointer" onclick="nav('transactions')">
+      <div class="metric-label">Txns This Month</div>
+      <div class="metric-value" style="font-size:16px">${txnsThisMonth}</div>
+      <div class="metric-sub">transactions</div>
+    </div>
+  </div>`;
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
     ${alertsHTML}
     <div class="hero-card" style="margin-bottom:16px">
@@ -1668,6 +1703,8 @@ function renderDashboard() {
         </div>
       </details>`:''}
     </div>
+
+    ${metricsHTML}
 
     ${syncHTML}
 
