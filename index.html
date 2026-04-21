@@ -5392,6 +5392,22 @@ function initGoogleDrive() {
   });
 }
 
+function connectDrive() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    showToast('Google API loading... try again in a moment');
+    return;
+  }
+  if (!_gdriveTokenClient) {
+    initGoogleDrive();
+    setTimeout(() => {
+      if (_gdriveTokenClient) _gdriveTokenClient.requestAccessToken({ prompt: 'select_account' });
+      else showToast('Google API not ready, please try again');
+    }, 600);
+    return;
+  }
+  _gdriveTokenClient.requestAccessToken({ prompt: 'select_account' });
+}
+
 async function driveRequest(method, url, body, extraHeaders) {
   const headers = {
     'Authorization': 'Bearer ' + _gdriveAccessToken,
