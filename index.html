@@ -1030,11 +1030,19 @@ function getAcctBalance(acctId) {
     // isLoanTx must be checked FIRST — these have type=income/expense as placeholder
     // but their actual balance impact is determined by loanDirection, not type
     if (tx.isLoanTx) {
-      if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= tx.amount;   // money went out
-      else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += tx.amount; // money came in
+      // Convert loan amount to account's currency if different
+      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= loanAmtInAcctCurr;
+      else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += loanAmtInAcctCurr;
     }
-    else if (tx.type === 'expense' && tx.accountId === acctId) bal -= tx.amount;
-    else if (tx.type === 'income' && tx.accountId === acctId) bal += tx.amount;
+    else if (tx.type === 'expense' && tx.accountId === acctId) {
+      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      bal -= amt;
+    }
+    else if (tx.type === 'income' && tx.accountId === acctId) {
+      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      bal += amt;
+    }
     else if (tx.type === 'shared' && tx.accountId === acctId) bal -= (tx.totalBill || tx.amount);
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) bal -= tx.amount;
@@ -2176,7 +2184,10 @@ function renderTransferForm() {
       <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">To Amount (leave blank if same currency)</label><input class="form-input" type="number" id="tf-toamount" placeholder="Auto = same as amount" step="any" oninput="updateTransferPreview()"></div>
+    <div class="form-group">
+      <label class="form-label">To Amount <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;font-weight:400"></span></label>
+      <input class="form-input" type="number" id="tf-toamount" placeholder="Auto-computed from FX rate" step="any" oninput="updateTransferPreview()">
+    </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="tf-date" value="${today()}" onchange="updateTransferPreview()"></div>
@@ -2244,7 +2255,30 @@ function computeTransferForex() {
 
 function updateTransferPreview() {
   const el = document.getElementById('tf-forex-preview');
+  const hint = document.getElementById('tf-toamount-hint');
   if (!el) return;
+
+  const fromId = document.getElementById('tf-from')?.value;
+  const toId = document.getElementById('tf-to')?.value;
+  const amount = parseFloat(document.getElementById('tf-amount')?.value) || 0;
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const toAmountEl = document.getElementById('tf-toamount');
+
+  // Auto-compute To Amount when crossing currencies and field is empty
+  if (fromAcct && toAcct && fromAcct.currency !== toAcct.currency && amount > 0 && !toAmountEl?.value) {
+    const fromCurr = fromAcct.currency;
+    const toCurr = toAcct.currency;
+    const autoAmt = convert(amount, fromCurr, toCurr);
+    if (autoAmt && autoAmt > 0) {
+      toAmountEl.placeholder = `≈ ${fmt(autoAmt, toCurr)} (auto)`;
+      if (hint) hint.textContent = `(1 ${fromCurr} = ${convert(1, fromCurr, toCurr).toFixed(4)} ${toCurr} from FX settings)`;
+    }
+  } else if (fromAcct && toAcct && fromAcct.currency === toAcct.currency) {
+    if (toAmountEl) toAmountEl.placeholder = 'Same currency — leave blank';
+    if (hint) hint.textContent = '';
+  }
+
   const forex = computeTransferForex();
   if (!forex) { el.style.display = 'none'; return; }
   el.style.display = 'block';
@@ -2375,7 +2409,12 @@ function submitTransfer() {
   const toId = document.getElementById('tf-to')?.value;
   const amount = parseFloat(document.getElementById('tf-amount')?.value);
   const currency = document.getElementById('tf-currency')?.value;
-  const toAmount = parseFloat(document.getElementById('tf-toamount')?.value) || null;
+  const toAmountRaw = parseFloat(document.getElementById('tf-toamount')?.value);
+  const fromAcct2 = db.accounts.find(a=>a.id===fromId);
+  const toAcct2 = db.accounts.find(a=>a.id===toId);
+  const toAmount = toAmountRaw || (fromAcct2 && toAcct2 && fromAcct2.currency !== toAcct2.currency
+    ? convert(amount, fromAcct2.currency, toAcct2.currency)
+    : null);
   const date = document.getElementById('tf-date')?.value;
   const time = document.getElementById('tf-time')?.value;
   const notes = document.getElementById('tf-notes')?.value?.trim() || '';
