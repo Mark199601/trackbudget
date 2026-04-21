@@ -3885,12 +3885,15 @@ function openLoanDetail(loanId, direction) {
       <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden">
         ${payments.map(p => {
           const destAcct = db.accounts.find(a=>a.id===p.accountId);
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border)">
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
             <div>
               <div style="font-size:12px;font-weight:500">${p.notes||'Payment'}</div>
               <div style="font-size:11px;color:var(--text3)">${fmtD(p.date)} → ${destAcct?.name||'Unknown'}</div>
             </div>
-            <div style="font-family:var(--mono);font-size:13px;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-family:var(--mono);font-size:13px;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
+              <span style="font-size:10px;color:var(--text4)">✎</span>
+            </div>
           </div>`;
         }).join('')}
       </div>
@@ -3934,7 +3937,7 @@ function openLoanDetail(loanId, direction) {
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="editLoanMeta('${loanId}','${direction}')">Edit Notes/Due</button>
+        <button class="btn btn-ghost btn-sm" onclick="editLoanFull('${loanId}','${direction}')">Edit Loan</button>
         <button class="btn btn-warning btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
       </div>
     `:`<div style="margin-top:12px;display:flex;gap:8px">
@@ -3989,24 +3992,108 @@ function settleLoan(loanId, direction, full) {
   } catch(e) { showToast('Error: '+e.message); }
 }
 
-function editLoanMeta(loanId, direction) {
+function editLoanFull(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
-  openDlg('Edit Loan Details',
-    `<div class="form-group"><label class="form-label">Notes / Commitment</label><textarea class="form-input" id="lm-notes" rows="3" style="resize:none">${loan.notes||''}</textarea></div>
-    <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="lm-due" value="${loan.dueDate||''}"></div>`,
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===loan.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===loan.currency?'selected':''}>${c}</option>`).join('');
+  openDlg('Edit Loan',
+    `<div class="form-group"><label class="form-label">Person *</label><input class="form-input" id="lf-person" value="${loan.personName||''}"></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="lf-amount" value="${loan.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">${direction==='lent'?'From Account':'To Account'}</label><select class="form-input" id="lf-account">${acctOpts}</select></div>
+    <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="lf-due" value="${loan.dueDate||''}"></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${loan.notes||''}</textarea></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-primary btn-sm" onclick="saveLoanMeta('${loanId}','${direction}')">Save</button>`
+     <button class="btn btn-primary btn-sm" onclick="saveLoanFull('${loanId}','${direction}')">Save</button>`
   );
 }
 
-function saveLoanMeta(loanId, direction) {
+function saveLoanFull(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
-  loan.notes = document.getElementById('lm-notes')?.value?.trim()||'';
-  loan.dueDate = document.getElementById('lm-due')?.value||null;
-  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Saved!');
+  const newPerson = document.getElementById('lf-person')?.value?.trim();
+  const newAmount = parseFloat(document.getElementById('lf-amount')?.value);
+  const newCurr = document.getElementById('lf-currency')?.value;
+  const newAcct = document.getElementById('lf-account')?.value;
+  if (!newPerson) { showToast('Enter person name'); return; }
+
+  const oldAcct = loan.accountId;
+  loan.personName = newPerson;
+  loan.amount = newAmount || loan.amount;
+  loan.remaining = newAmount || loan.remaining;
+  loan.currency = newCurr || loan.currency;
+  loan.accountId = newAcct || loan.accountId;
+  loan.dueDate = document.getElementById('lf-due')?.value || null;
+  loan.notes = document.getElementById('lf-notes')?.value?.trim() || '';
+
+  // Update the parent isLoanTx transaction to reflect new account/amount
+  const parentTx = db.transactions.find(t => t.isLoanTx && t.loanId === loanId);
+  if (parentTx) {
+    parentTx.accountId = loan.accountId;
+    parentTx.amount = loan.amount;
+    parentTx.currency = loan.currency;
+    parentTx.notes = `${direction==='lent'?'Lent to':'Borrowed from'} ${loan.personName}`;
+  }
+
+  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Loan updated!');
 }
+
+function editLoanPayment(paymentId, loanId, direction) {
+  const payment = db.transactions.find(t => t.id === paymentId);
+  if (!payment) return;
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===payment.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===payment.currency?'selected':''}>${c}</option>`).join('');
+  openDlg('Edit Payment',
+    `<div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="ep2-amount" value="${payment.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ep2-currency">${currOpts}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Account</label><select class="form-input" id="ep2-acct">${acctOpts}</select></div>
+    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ep2-date" value="${payment.date}"></div>
+    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ep2-notes" value="${payment.notes||''}"></div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="deleteLoanPayment('${paymentId}','${loanId}','${direction}')">Delete</button>
+     <button class="btn btn-primary btn-sm" onclick="saveLoanPayment('${paymentId}','${loanId}','${direction}')">Save</button>`
+  );
+}
+
+function saveLoanPayment(paymentId, loanId, direction) {
+  const payment = db.transactions.find(t => t.id === paymentId);
+  const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
+  if (!payment || !loan) return;
+  const oldAmt = payment.amount;
+  payment.amount = parseFloat(document.getElementById('ep2-amount')?.value) || payment.amount;
+  payment.currency = document.getElementById('ep2-currency')?.value || payment.currency;
+  payment.accountId = document.getElementById('ep2-acct')?.value || payment.accountId;
+  payment.date = document.getElementById('ep2-date')?.value || payment.date;
+  payment.notes = document.getElementById('ep2-notes')?.value?.trim() || payment.notes;
+  // Recalculate loan remaining
+  const allPayments = getLoanPayments(loanId);
+  const totalPaid = allPayments.reduce((s,p) => s + (p.currency===loan.currency ? p.amount : convert(p.amount,p.currency,loan.currency)), 0);
+  loan.remaining = Math.max(0, loan.amount - totalPaid);
+  loan.settled = loan.remaining <= 0.001;
+  if (loan.settled) loan.settledDate = today();
+  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment updated!');
+}
+
+function deleteLoanPayment(paymentId, loanId, direction) {
+  const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
+  if (!loan) return;
+  db.transactions = db.transactions.filter(t => t.id !== paymentId);
+  // Recalculate remaining
+  const allPayments = getLoanPayments(loanId);
+  const totalPaid = allPayments.reduce((s,p) => s + (p.currency===loan.currency ? p.amount : convert(p.amount,p.currency,loan.currency)), 0);
+  loan.remaining = Math.max(0, loan.amount - totalPaid);
+  loan.settled = loan.remaining <= 0.001;
+  if (!loan.settled) loan.settledDate = null;
+  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment deleted');
+}
+
+function editLoanMeta(loanId, direction) { editLoanFull(loanId, direction); }
+function saveLoanMeta(loanId, direction) { saveLoanFull(loanId, direction); }
 
 function archiveLoan(loanId, direction) {
   const loans = direction==='lent' ? db.loans.lent : db.loans.borrowed;
