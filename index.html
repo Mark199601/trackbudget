@@ -2448,9 +2448,18 @@ function updateTransferPreview() {
       const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
       const snapRate = getLatestFxRate(txCurr);
       if (customRate > 0 && snapRate > 0) {
-        const snapshotAmt = amount * snapRate;
-        const actualAmt = amount * customRate;
-        const diff = actualAmt - snapshotAmt;
+        // Forex diff always in PHP
+        const foreignCurr2 = txCurr !== 'PHP' ? txCurr : toAcct.currency;
+        const snapRate2 = getLatestFxRate(foreignCurr2);
+        let diff;
+        if (txCurr === 'PHP') {
+          // sending PHP, receiving foreign: gain if customRate < snapRate (get more foreign)
+          diff = ((amount / customRate) - (amount / snapRate2)) * snapRate2;
+        } else {
+          // sending foreign, receiving PHP
+          diff = (customRate - snapRate2) * amount;
+        }
+        const snapshotAmt = 0; const actualAmt = 0; // unused
         const isLoss = diff < 0;
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
@@ -2608,11 +2617,30 @@ function submitTransfer() {
   let forexDiff = 0;
   if (isCross) {
     if (!useSnapshot && customRate > 0) {
-      // Custom rate: toAmount based on actual rate
-      const snapshotRate = getLatestFxRate(currency !== 'PHP' ? currency : toAcct2.currency);
-      const snapshotAmt = convert(amount, currency, toAcct2.currency);
-      toAmount = currency === 'PHP' ? amount / customRate : amount * customRate;
-      forexDiff = toAmount - snapshotAmt; // positive = gain, negative = loss
+      // Custom rate — figure out which currency is foreign
+      // Foreign currency is the non-PHP one; rate is always expressed as 1 foreign = X PHP
+      const foreignCurr = currency !== 'PHP' ? currency : toAcct2.currency;
+      const snapshotRate = getLatestFxRate(foreignCurr);
+      // toAmount: how much to-account receives at custom rate
+      // If sending PHP, receiving PGK: toAmount = phpSent / customRate (PGK received)
+      // If sending PGK, receiving PHP: toAmount = pgkSent * customRate (PHP received)
+      if (currency === 'PHP') {
+        // Sending PHP, receiving foreign
+        toAmount = amount / customRate; // foreign received
+        // Forex: snapshot says you'd get amount/snapshotRate, but you actually get amount/customRate
+        // If customRate < snapshotRate → you get MORE foreign → gain in PHP terms
+        const snapshotForeign = amount / snapshotRate;
+        const actualForeign = amount / customRate;
+        forexDiff = (actualForeign - snapshotForeign) * snapshotRate; // PHP equivalent gain/loss
+      } else {
+        // Sending foreign, receiving PHP
+        toAmount = amount * customRate; // PHP received
+        // Forex: snapshot says PHP received = amount*snapshotRate
+        // If customRate < snapshotRate → you receive LESS PHP → loss
+        const snapshotPhp = amount * snapshotRate;
+        const actualPhp = amount * customRate;
+        forexDiff = actualPhp - snapshotPhp; // PHP gain (negative = loss)
+      }
     } else {
       toAmount = convert(amount, currency, toAcct2.currency);
     }
@@ -2658,19 +2686,19 @@ function submitTransfer() {
   }
 
 
-  // Auto-log forex gain/loss if custom rate used
-  if (forexDiff !== 0 && !useSnapshot) {
+  // Auto-log forex gain/loss if custom rate used — always in PHP
+  if (forexDiff !== 0 && !useSnapshot && customRate > 0) {
     const phpAcct = db.accounts.find(a=>!a.archived && a.currency==='PHP') || db.accounts.find(a=>!a.archived);
     if (phpAcct) {
       db.transactions.push({
         id: genId(),
         type: forexDiff > 0 ? 'income' : 'expense',
         amount: Math.abs(forexDiff),
-        currency: toAcct2?.currency || 'PHP',
+        currency: 'PHP',
         accountId: phpAcct.id,
         categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
         date, time: time||nowTime(),
-        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (custom rate)`,
+        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (custom rate vs snapshot)`,
         fxSnapshot: buildFxSnapshot(date),
         parentId,
         isAutoForex: true,
