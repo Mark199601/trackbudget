@@ -1045,8 +1045,20 @@ function getAcctBalance(acctId) {
     }
     else if (tx.type === 'shared' && tx.accountId === acctId) bal -= (tx.totalBill || tx.amount);
     else if (tx.type === 'transfer') {
-      if (tx.fromAccountId === acctId) bal -= tx.amount;
-      if (tx.toAccountId === acctId) bal += (tx.toAmount || tx.amount);
+      if (tx.fromAccountId === acctId) {
+        // Deduct in account's currency
+        const deductAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        bal -= deductAmt;
+      }
+      if (tx.toAccountId === acctId) {
+        // Add toAmount if specified (already in to-account currency), else convert from tx currency
+        if (tx.toAmount != null) {
+          bal += tx.toAmount;
+        } else {
+          const addAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+          bal += addAmt;
+        }
+      }
     }
     else if (tx.type === 'remittance') {
       if (tx.fromAccountId === acctId) bal -= tx.amount;
@@ -2188,9 +2200,9 @@ function renderTransferForm() {
       <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">To Amount <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;font-weight:400"></span></label>
-      <input class="form-input" type="number" id="tf-toamount" placeholder="Auto-computed from FX rate" step="any" oninput="updateTransferPreview()">
+    <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:4px;display:none">
+      <span style="color:var(--text3)">To Account receives: </span><span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
+      <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
     </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
     <div class="form-row fr2">
@@ -2279,18 +2291,24 @@ function updateTransferPreview() {
   const toAcct = db.accounts.find(a=>a.id===toId);
   const toAmountEl = document.getElementById('tf-toamount');
 
-  // Auto-compute To Amount when crossing currencies and field is empty
-  if (fromAcct && toAcct && fromAcct.currency !== toAcct.currency && amount > 0 && !toAmountEl?.value) {
-    const fromCurr = fromAcct.currency;
+  // Show To Account receives preview
+  const previewDiv = document.getElementById('tf-toamount-preview');
+  const previewVal = document.getElementById('tf-toamount-val');
+  const txCurr = document.getElementById('tf-currency')?.value;
+  if (fromAcct && toAcct && amount > 0 && previewDiv && previewVal) {
     const toCurr = toAcct.currency;
-    const autoAmt = convert(amount, fromCurr, toCurr);
-    if (autoAmt && autoAmt > 0) {
-      toAmountEl.placeholder = `≈ ${fmt(autoAmt, toCurr)} (auto)`;
-      if (hint) hint.textContent = `(1 ${fromCurr} = ${convert(1, fromCurr, toCurr).toFixed(4)} ${toCurr} from FX settings)`;
+    const autoAmt = txCurr !== toCurr ? convert(amount, txCurr, toCurr) : amount;
+    previewVal.textContent = fmt(autoAmt, toCurr);
+    if (hint) {
+      if (txCurr !== toCurr) {
+        hint.textContent = `(1 ${txCurr} = ${convert(1, txCurr, toCurr).toFixed(4)} ${toCurr})`;
+      } else {
+        hint.textContent = '';
+      }
     }
-  } else if (fromAcct && toAcct && fromAcct.currency === toAcct.currency) {
-    if (toAmountEl) toAmountEl.placeholder = 'Same currency — leave blank';
-    if (hint) hint.textContent = '';
+    previewDiv.style.display = 'block';
+  } else if (previewDiv) {
+    previewDiv.style.display = 'none';
   }
 
   const forex = computeTransferForex();
@@ -2423,12 +2441,13 @@ function submitTransfer() {
   const toId = document.getElementById('tf-to')?.value;
   const amount = parseFloat(document.getElementById('tf-amount')?.value);
   const currency = document.getElementById('tf-currency')?.value;
-  const toAmountRaw = parseFloat(document.getElementById('tf-toamount')?.value);
   const fromAcct2 = db.accounts.find(a=>a.id===fromId);
   const toAcct2 = db.accounts.find(a=>a.id===toId);
-  const toAmount = toAmountRaw || (fromAcct2 && toAcct2 && fromAcct2.currency !== toAcct2.currency
-    ? convert(amount, fromAcct2.currency, toAcct2.currency)
-    : null);
+  // Auto-compute toAmount: convert tx amount (in tx currency) to to-account currency
+  const toAmountAuto = (fromAcct2 && toAcct2 && currency !== toAcct2.currency)
+    ? convert(amount, currency, toAcct2.currency)
+    : null;
+  const toAmount = toAmountAuto;
   const date = document.getElementById('tf-date')?.value;
   const time = document.getElementById('tf-time')?.value;
   const notes = document.getElementById('tf-notes')?.value?.trim() || '';
