@@ -2662,26 +2662,29 @@ function submitTransfer() {
   });
 
   // Auto-create forex gain/loss child transaction if cross-currency
-  const forex = computeTransferForex();
-  if (forex && forex.direction !== 'none' && Math.abs(forex.gainLossPhp) >= 0.01) {
-    const isGain = forex.direction === 'gain';
-    const phpAcct = db.accounts.find(a=>!a.archived && a.currency === 'PHP') || db.accounts.find(a=>!a.archived);
-    if (phpAcct) {
-      const childAmt = Math.abs(forex.gainLossPhp);
-      db.transactions.push({
-        id: genId(),
-        type: isGain ? 'income' : 'expense',
-        amount: childAmt,
-        currency: 'PHP',
-        categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
-        accountId: phpAcct.id,
-        date, time: time||nowTime(),
-        notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${forex.actualRate.toFixed(4)} vs snapshot ${forex.snapshotRate.toFixed(4)})`,
-        fxSnapshot,
-        parentId, // link to transfer
-        isAutoForex: true, // flag to mark as auto-generated
-        createdAt: new Date().toISOString()
-      });
+  // Skip if using custom rate — forexDiff block below handles it instead
+  if (useSnapshot) {
+    const forex = computeTransferForex();
+    if (forex && forex.direction !== 'none' && Math.abs(forex.gainLossPhp) >= 0.01) {
+      const isGain = forex.direction === 'gain';
+      const phpAcct = db.accounts.find(a=>!a.archived && a.currency === 'PHP') || db.accounts.find(a=>!a.archived);
+      if (phpAcct) {
+        const childAmt = Math.abs(forex.gainLossPhp);
+        db.transactions.push({
+          id: genId(),
+          type: isGain ? 'income' : 'expense',
+          amount: childAmt,
+          currency: 'PHP',
+          categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
+          accountId: phpAcct.id,
+          date, time: time||nowTime(),
+          notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${forex.actualRate.toFixed(4)} vs snapshot ${forex.snapshotRate.toFixed(4)})`,
+          fxSnapshot,
+          parentId,
+          isAutoForex: true,
+          createdAt: new Date().toISOString()
+        });
+      }
     }
   }
 
