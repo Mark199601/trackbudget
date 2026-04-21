@@ -2631,7 +2631,7 @@ function submitTransfer() {
         // If customRate < snapshotRate → you get MORE foreign → gain in PHP terms
         const snapshotForeign = amount / snapshotRate;
         const actualForeign = amount / customRate;
-        forexDiff = (actualForeign - snapshotForeign) * snapshotRate; // PHP equivalent gain/loss
+        forexDiff = Math.round((actualForeign - snapshotForeign) * snapshotRate * 100) / 100; // PHP equivalent gain/loss
       } else {
         // Sending foreign, receiving PHP
         toAmount = amount * customRate; // PHP received
@@ -2639,7 +2639,7 @@ function submitTransfer() {
         // If customRate < snapshotRate → you receive LESS PHP → loss
         const snapshotPhp = amount * snapshotRate;
         const actualPhp = amount * customRate;
-        forexDiff = actualPhp - snapshotPhp; // PHP gain (negative = loss)
+        forexDiff = Math.round((actualPhp - snapshotPhp) * 100) / 100; // PHP gain (negative = loss), rounded
       }
     } else {
       toAmount = convert(amount, currency, toAcct2.currency);
@@ -2959,10 +2959,17 @@ function openTxDetail(txId) {
     const toCurr = toAcctD.currency || fromCurr;
     const toAmt = tx.toAmount != null ? tx.toAmount : convert(tx.amount, fromCurr, toCurr);
     const isCross = fromCurr !== toCurr;
-    // Rate at time of transfer — always show as "1 [foreign] = ₱X"
+    // Rate at time of transfer — compute actual rate from toAmount if available
     const foreignCurr = fromCurr !== 'PHP' ? fromCurr : toCurr;
     const snapRate = tx.fxSnapshot?.[foreignCurr] || db.fxRates[foreignCurr] || 1;
-    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ₱${snapRate.toFixed(4)} (at time of transfer)</div>` : '';
+    // Actual rate: derive from toAmount if stored
+    let actualRate = snapRate;
+    if (tx.toAmount != null && isCross) {
+      if (fromCurr === 'PHP') actualRate = tx.amount / tx.toAmount; // PHP/foreign
+      else if (toCurr === 'PHP') actualRate = tx.toAmount / tx.amount; // foreign→PHP
+      else actualRate = snapRate;
+    }
+    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ₱${actualRate.toFixed(4)} (at time of transfer)</div>` : '';
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-transfer" style="width:44px;height:44px;font-size:20px">↔️</div>
       <div>
@@ -2989,8 +2996,12 @@ function openTxDetail(txId) {
 function openEditTx(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
-  // Block editing auto-generated child transactions (forex, reimbursement, loan payment settlements)
-  if (tx.isAutoForex || tx.isAutoReimb || tx.isLoanPayment) {
+  // Block editing auto-generated child transactions
+  if (tx.isAutoForex) {
+    showToast('💡 This is an auto-generated forex entry. Edit the parent transfer.');
+    return;
+  }
+  if (tx.isAutoReimb || tx.isLoanPayment) {
     showToast('💡 Manage this via the parent Loan record in Loans.');
     return;
   }
@@ -3357,6 +3368,11 @@ function archiveTx(txId, skipConfirm) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
 
+  // Block archiving auto-generated transactions directly
+  if (tx.isAutoForex) {
+    showToast('💡 Archive the parent transfer to remove this entry.');
+    return;
+  }
   // Block archiving loan payment and parent loan transactions directly
   if (tx.isLoanPayment) {
     showToast('💡 Manage this via the parent Loan record in Loans.');
