@@ -664,9 +664,23 @@ const COUNTRY_CURRENCIES = {
   'United Arab Emirates':'AED','Saudi Arabia':'SAR','South Korea':'KRW',
   'Canada':'CAD','New Zealand':'NZD','Malaysia':'MYR','Thailand':'THB',
   'Indonesia':'IDR','Vietnam':'VND','India':'INR','China':'CNY',
-  'Germany':'EUR','France':'EUR','Italy':'EUR','Spain':'EUR',
+  'Germany':'EUR','France':'EUR','Italy':'EUR','Spain':'EUR','Portugal':'EUR',
+  'Netherlands':'EUR','Belgium':'EUR','Austria':'EUR','Greece':'EUR',
   'Taiwan':'TWD','Switzerland':'CHF','Norway':'NOK','Sweden':'SEK',
   'Denmark':'DKK','Mexico':'MXN','Brazil':'BRL','South Africa':'ZAR',
+  'Poland':'PLN','Czech Republic':'CZK','Hungary':'HUF','Romania':'RON',
+  'Micronesia':'USD','Guam':'USD','Palau':'USD','Marshall Islands':'USD',
+  'Nauru':'AUD','Kiribati':'AUD','Tuvalu':'AUD',
+  'Fiji':'FJD','Vanuatu':'VUV','Solomon Islands':'SBD','Samoa':'WST',
+  'Tonga':'TOP','Papua':'PGK','Qatar':'QAR','Kuwait':'KWD',
+  'Bahrain':'BHD','Oman':'OMR','Jordan':'JOD','Israel':'ILS',
+  'Turkey':'TRY','Russia':'RUB','Ukraine':'UAH','Pakistan':'PKR',
+  'Bangladesh':'BDT','Sri Lanka':'LKR','Nepal':'NPR','Myanmar':'MMK',
+  'Cambodia':'KHR','Laos':'LAK','Brunei':'BND','Maldives':'MVR',
+  'Argentina':'ARS','Chile':'CLP','Colombia':'COP','Peru':'PEN',
+  'Ecuador':'USD','Panama':'USD','Puerto Rico':'USD',
+  'Egypt':'EGP','Nigeria':'NGN','Kenya':'KES','Ghana':'GHS',
+  'Tanzania':'TZS','Uganda':'UGX','Ethiopia':'ETB','Morocco':'MAD',
 };
 const GDRIVE_CLIENT_ID = '722832233918-3srovc3q8kt9i7145ga6gtskscqp1l9n.apps.googleusercontent.com';
 const GDRIVE_FOLDER_NAME = 'TrackBudget';
@@ -1087,7 +1101,10 @@ function getNetWorth() {
   for (const acct of db.accounts) {
     if (acct.archived) continue;
     const phpBal = toPhp(getAcctBalance(acct.id), acct.currency);
-    if (assetTypes.includes(acct.type) && phpBal > 0) assets += phpBal;
+    if (assetTypes.includes(acct.type)) {
+      if (phpBal > 0) assets += phpBal;
+      else if (phpBal < 0) liabs += Math.abs(phpBal); // overdrawn asset account = liability
+    }
     if (acct.type === 'Credit Card' && phpBal < 0) liabs += Math.abs(phpBal);
   }
   for (const inv of db.investments) {
@@ -1558,9 +1575,15 @@ function renderDashboard() {
   for (const acct of db.accounts.filter(a=>!a.archived)) {
     const bal = getAcctBalance(acct.id);
     const phpBal = toPhp(bal, acct.currency);
-    if (assetTypes.includes(acct.type) && phpBal > 0) {
-      totalAssets += phpBal;
-      assetRows.push({ name: acct.name, type: acct.type, bal, currency: acct.currency, phpBal });
+    if (assetTypes.includes(acct.type)) {
+      if (phpBal > 0) {
+        totalAssets += phpBal;
+        assetRows.push({ name: acct.name, type: acct.type, bal, currency: acct.currency, phpBal });
+      } else if (phpBal < 0) {
+        // Negative balance asset account (e.g. GCash overdrawn) → counts as liability
+        totalLiab += Math.abs(phpBal);
+        liabRows.push({ name: acct.name, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
+      }
     } else if (acct.type === 'Credit Card' && phpBal < 0) {
       totalLiab += Math.abs(phpBal);
       liabRows.push({ name: acct.name, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
@@ -2120,6 +2143,29 @@ function renderRemittanceForm() {
       PHP received: —
     </div>
 
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:4px">Remittance Fee <span style="font-size:10px;font-weight:400;color:var(--text4)">(optional)</span></div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Fee Amount</label>
+        <input class="form-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fee Currency</label>
+        <select class="form-input" id="rem-fee-currency">
+          ${db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fee Category</label>
+      <select class="form-input" id="rem-fee-cat">
+        ${[...db.categories.expense].filter(c=>!c.archived).flatMap(c=>[
+          `<option value="${c.id}">${c.icon} ${c.name}</option>`,
+          ...(c.subcats||[]).filter(sc=>!sc.archived).map(sc=>`<option value="${sc.id}">&nbsp;&nbsp;${sc.icon} ${sc.name}</option>`)
+        ]).join('')}
+      </select>
+    </div>
+
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Date *</label>
@@ -2132,8 +2178,8 @@ function renderRemittanceForm() {
     </div>
 
     <div class="form-group">
-      <label class="form-label">Notes / Fee (optional)</label>
-      <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU fee K25, receipt #12345"></textarea>
+      <label class="form-label">Notes (optional)</label>
+      <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU receipt #12345"></textarea>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitRemittance()">Save Remittance</button>
@@ -2220,12 +2266,31 @@ function submitRemittance() {
       createdAt: new Date().toISOString()
     });
 
+    // Create remittance fee expense if specified
+    const feeAmt = parseFloat(document.getElementById('rem-fee-amount')?.value) || 0;
+    const feeCurr = document.getElementById('rem-fee-currency')?.value || currency;
+    const feeCat = document.getElementById('rem-fee-cat')?.value || null;
+    if (feeAmt > 0) {
+      db.transactions.push({
+        id: genId(),
+        type: 'expense',
+        currency: feeCurr,
+        amount: feeAmt,
+        accountId: fromId,
+        categoryId: feeCat,
+        date, time,
+        notes: `Remittance fee${notes?' — '+notes:''}`,
+        fxSnapshot: buildFxSnapshot(date),
+        createdAt: new Date().toISOString()
+      });
+    }
+
     saveDB();
     closeSheet('add');
     if (currentPage==='dashboard') renderDashboard();
     else if (currentPage==='transactions') renderTransactions();
     else if (currentPage==='accounts') renderAccounts();
-    showToast(`Remittance saved: ${sym(currency)}${amount} → ₱${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`);
+    showToast(`Remittance saved: ${sym(currency)}${amount} → ₱${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${feeAmt>0?' (fee: '+fmt(feeAmt,feeCurr)+')':''}`);
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -2244,9 +2309,19 @@ function renderTransferForm() {
       <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
     </div>
-    <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:4px;display:none">
+    <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
       <span style="color:var(--text3)">To Account receives: </span><span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
       <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <input type="checkbox" id="tf-use-snapshot" checked onchange="updateTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <label for="tf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
+    </div>
+    <div id="tf-custom-rate-row" style="display:none;margin-bottom:8px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Actual rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
+        <input class="form-input" type="number" id="tf-custom-rate" placeholder="Enter actual rate" step="any" oninput="updateTransferPreview()">
+      </div>
     </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
     <div class="form-row fr2">
@@ -2335,22 +2410,61 @@ function updateTransferPreview() {
   const toAcct = db.accounts.find(a=>a.id===toId);
   const toAmountEl = document.getElementById('tf-toamount');
 
+  const txCurr = document.getElementById('tf-currency')?.value;
+  const useSnapshot = document.getElementById('tf-use-snapshot')?.checked !== false;
+  const customRateRow = document.getElementById('tf-custom-rate-row');
+  const customCurrLabel = document.getElementById('tf-custom-curr-label');
+
+  // Show/hide custom rate input
+  if (customRateRow) customRateRow.style.display = useSnapshot ? 'none' : 'block';
+  if (customCurrLabel && txCurr && txCurr !== 'PHP') customCurrLabel.textContent = txCurr;
+
   // Show To Account receives preview
   const previewDiv = document.getElementById('tf-toamount-preview');
   const previewVal = document.getElementById('tf-toamount-val');
-  const txCurr = document.getElementById('tf-currency')?.value;
   if (fromAcct && toAcct && amount > 0 && previewDiv && previewVal) {
     const toCurr = toAcct.currency;
-    const autoAmt = txCurr !== toCurr ? convert(amount, txCurr, toCurr) : amount;
+    let autoAmt;
+    if (!useSnapshot && txCurr !== 'PHP') {
+      const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+      autoAmt = customRate > 0 ? (txCurr === 'PHP' ? amount / customRate : amount * customRate) : convert(amount, txCurr, toCurr);
+    } else {
+      autoAmt = txCurr !== toCurr ? convert(amount, txCurr, toCurr) : amount;
+    }
     previewVal.textContent = fmt(autoAmt, toCurr);
     if (hint) {
       if (txCurr !== toCurr) {
-        hint.textContent = `(1 ${txCurr} = ${convert(1, txCurr, toCurr).toFixed(4)} ${toCurr})`;
+        const snapRate = getLatestFxRate(txCurr !== 'PHP' ? txCurr : toCurr);
+        hint.textContent = useSnapshot ? `(1 ${txCurr !== 'PHP' ? txCurr : toCurr} = ₱${snapRate.toFixed(4)} snapshot)` : '';
       } else {
         hint.textContent = '';
       }
     }
     previewDiv.style.display = 'block';
+
+    // Forex gain/loss preview when custom rate used
+    const fxPreview = document.getElementById('tf-forex-preview');
+    if (!useSnapshot && txCurr !== 'PHP' && txCurr !== toAcct.currency) {
+      const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+      const snapRate = getLatestFxRate(txCurr);
+      if (customRate > 0 && snapRate > 0) {
+        const snapshotAmt = amount * snapRate;
+        const actualAmt = amount * customRate;
+        const diff = actualAmt - snapshotAmt;
+        const isLoss = diff < 0;
+        const color = isLoss ? 'var(--red)' : 'var(--green)';
+        const icon = isLoss ? '📉' : '📈';
+        const label = isLoss ? 'Forex Loss' : 'Forex Gain';
+        if (fxPreview) {
+          fxPreview.style.display = 'block';
+          fxPreview.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${txCurr} = ₱${snapRate.toFixed(4)} | Actual: 1 ${txCurr} = ₱${customRate.toFixed(4)}</div>
+            <div style="color:${color};font-weight:600">${icon} ${label}: ₱${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged as ${isLoss?'expense':'income'})</span></div>`;
+        }
+      } else if (fxPreview) fxPreview.style.display = 'none';
+    } else {
+      const fxPreview = document.getElementById('tf-forex-preview');
+      if (fxPreview) fxPreview.style.display = 'none';
+    }
   } else if (previewDiv) {
     previewDiv.style.display = 'none';
   }
@@ -2487,11 +2601,22 @@ function submitTransfer() {
   const currency = document.getElementById('tf-currency')?.value;
   const fromAcct2 = db.accounts.find(a=>a.id===fromId);
   const toAcct2 = db.accounts.find(a=>a.id===toId);
-  // Auto-compute toAmount: convert tx amount (in tx currency) to to-account currency
-  const toAmountAuto = (fromAcct2 && toAcct2 && currency !== toAcct2.currency)
-    ? convert(amount, currency, toAcct2.currency)
-    : null;
-  const toAmount = toAmountAuto;
+  const useSnapshot = document.getElementById('tf-use-snapshot')?.checked !== false;
+  const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+  const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
+  let toAmount = null;
+  let forexDiff = 0;
+  if (isCross) {
+    if (!useSnapshot && customRate > 0) {
+      // Custom rate: toAmount based on actual rate
+      const snapshotRate = getLatestFxRate(currency !== 'PHP' ? currency : toAcct2.currency);
+      const snapshotAmt = convert(amount, currency, toAcct2.currency);
+      toAmount = currency === 'PHP' ? amount / customRate : amount * customRate;
+      forexDiff = toAmount - snapshotAmt; // positive = gain, negative = loss
+    } else {
+      toAmount = convert(amount, currency, toAcct2.currency);
+    }
+  }
   const date = document.getElementById('tf-date')?.value;
   const time = document.getElementById('tf-time')?.value;
   const notes = document.getElementById('tf-notes')?.value?.trim() || '';
@@ -2532,6 +2657,27 @@ function submitTransfer() {
     }
   }
 
+
+  // Auto-log forex gain/loss if custom rate used
+  if (forexDiff !== 0 && !useSnapshot) {
+    const phpAcct = db.accounts.find(a=>!a.archived && a.currency==='PHP') || db.accounts.find(a=>!a.archived);
+    if (phpAcct) {
+      db.transactions.push({
+        id: genId(),
+        type: forexDiff > 0 ? 'income' : 'expense',
+        amount: Math.abs(forexDiff),
+        currency: toAcct2?.currency || 'PHP',
+        accountId: phpAcct.id,
+        categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
+        date, time: time||nowTime(),
+        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (custom rate)`,
+        fxSnapshot: buildFxSnapshot(date),
+        parentId,
+        isAutoForex: true,
+        createdAt: new Date().toISOString()
+      });
+    }
+  }
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   if (fromAcct) fromAcct.lastTxDate = date;
   const toAcct = db.accounts.find(a=>a.id===toId);
