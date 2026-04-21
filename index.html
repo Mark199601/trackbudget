@@ -1049,20 +1049,26 @@ function getAcctBalance(acctId) {
 }
 
 function getNetWorth() {
-  let total = 0;
+  // Assets: positive-balance asset-type accounts + investments + receivables (lent loans)
+  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
+  let assets = 0, liabs = 0;
   for (const acct of db.accounts) {
     if (acct.archived) continue;
-    total += toPhp(getAcctBalance(acct.id), acct.currency);
+    const phpBal = toPhp(getAcctBalance(acct.id), acct.currency);
+    if (assetTypes.includes(acct.type) && phpBal > 0) assets += phpBal;
+    if (acct.type === 'Credit Card' && phpBal < 0) liabs += Math.abs(phpBal);
   }
-  // Add investment values
   for (const inv of db.investments) {
-    if (!inv.archived) total += toPhp(inv.currentValue || inv.amount, inv.currency);
+    if (!inv.archived) assets += toPhp(inv.currentValue || inv.amount, inv.currency);
   }
-  // Deduct outstanding borrowed loans (liabilities)
+  // Lent loans = receivables (asset), borrowed loans = liabilities
+  for (const l of db.loans.lent) {
+    if (!l.settled) assets += toPhp(l.remaining || l.amount, l.currency);
+  }
   for (const l of db.loans.borrowed) {
-    if (!l.settled) total -= toPhp(l.remaining || l.amount, l.currency);
+    if (!l.settled) liabs += toPhp(l.remaining || l.amount, l.currency);
   }
-  return total;
+  return assets - liabs;
 }
 
 function getMonthTotals(monthKey) {
@@ -1503,7 +1509,7 @@ function renderDashboard() {
     if (assetTypes.includes(acct.type) && phpBal > 0) {
       totalAssets += phpBal;
       assetRows.push({ name: acct.name, type: acct.type, bal, currency: acct.currency, phpBal });
-    } else if (liabTypes.includes(acct.type) || (acct.type === 'Credit Card' && phpBal < 0)) {
+    } else if (acct.type === 'Credit Card' && phpBal < 0) {
       totalLiab += Math.abs(phpBal);
       liabRows.push({ name: acct.name, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
     }
