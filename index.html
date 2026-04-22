@@ -610,11 +610,23 @@ const COUNTRY_TO_CURRENCY = {
   'Singapore':'SGD','Malaysia':'MYR','Indonesia':'IDR','Thailand':'THB',
   'Vietnam':'VND','India':'INR','China':'CNY','South Korea':'KRW',
   'Hong Kong':'HKD','Taiwan':'TWD','Vanuatu':'VUV','Fiji':'FJD',
-  'Solomon Islands':'SBD','Tonga':'TOP','Samoa':'WST','Germany':'EUR',
-  'France':'EUR','Italy':'EUR','Spain':'EUR','Netherlands':'EUR',
+  'Solomon Islands':'SBD','Tonga':'TOP','Samoa':'WST','Kiribati':'AUD',
+  'Tuvalu':'AUD','Nauru':'AUD','Palau':'USD','Micronesia':'USD',
+  'Marshall Islands':'USD','Guam':'USD','Puerto Rico':'USD',
+  'Germany':'EUR','France':'EUR','Italy':'EUR','Spain':'EUR','Netherlands':'EUR',
+  'Portugal':'EUR','Belgium':'EUR','Austria':'EUR','Greece':'EUR',
   'Brazil':'BRL','Mexico':'MXN','South Africa':'ZAR','Nigeria':'NGN',
   'Saudi Arabia':'SAR','UAE':'AED','Qatar':'QAR','Kuwait':'KWD',
+  'Bahrain':'BHD','Oman':'OMR','Jordan':'JOD','Israel':'ILS',
   'European Union':'EUR','Switzerland':'CHF','Sweden':'SEK','Norway':'NOK',
+  'Denmark':'DKK','Poland':'PLN','Czech Republic':'CZK','Hungary':'HUF',
+  'Romania':'RON','Turkey':'TRY','Russia':'RUB','Ukraine':'UAH',
+  'Pakistan':'PKR','Bangladesh':'BDT','Sri Lanka':'LKR','Nepal':'NPR',
+  'Myanmar':'MMK','Cambodia':'KHR','Laos':'LAK','Brunei':'BND',
+  'Maldives':'MVR','Egypt':'EGP','Kenya':'KES','Ghana':'GHS',
+  'Tanzania':'TZS','Uganda':'UGX','Ethiopia':'ETB','Morocco':'MAD',
+  'Argentina':'ARS','Chile':'CLP','Colombia':'COP','Peru':'PEN',
+  'Ecuador':'USD','Panama':'USD',
 };
 
 const FLAGS = {
@@ -623,11 +635,23 @@ const FLAGS = {
   'Singapore':'🇸🇬','Malaysia':'🇲🇾','Indonesia':'🇮🇩','Thailand':'🇹🇭',
   'Vietnam':'🇻🇳','India':'🇮🇳','China':'🇨🇳','South Korea':'🇰🇷',
   'Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Vanuatu':'🇻🇺','Fiji':'🇫🇯',
-  'Solomon Islands':'🇸🇧','Tonga':'🇹🇴','Samoa':'🇼🇸','Germany':'🇩🇪',
-  'France':'🇫🇷','Italy':'🇮🇹','Spain':'🇪🇸','Netherlands':'🇳🇱',
+  'Solomon Islands':'🇸🇧','Tonga':'🇹🇴','Samoa':'🇼🇸','Kiribati':'🇰🇮',
+  'Tuvalu':'🇹🇻','Nauru':'🇳🇷','Palau':'🇵🇼','Micronesia':'🇫🇲',
+  'Marshall Islands':'🇲🇭','Guam':'🇬🇺','Puerto Rico':'🇵🇷',
+  'Germany':'🇩🇪','France':'🇫🇷','Italy':'🇮🇹','Spain':'🇪🇸','Netherlands':'🇳🇱',
+  'Portugal':'🇵🇹','Belgium':'🇧🇪','Austria':'🇦🇹','Greece':'🇬🇷',
   'Brazil':'🇧🇷','Mexico':'🇲🇽','South Africa':'🇿🇦','Nigeria':'🇳🇬',
   'Saudi Arabia':'🇸🇦','UAE':'🇦🇪','Qatar':'🇶🇦','Kuwait':'🇰🇼',
+  'Bahrain':'🇧🇭','Oman':'🇴🇲','Jordan':'🇯🇴','Israel':'🇮🇱',
   'Switzerland':'🇨🇭','Sweden':'🇸🇪','Norway':'🇳🇴','Denmark':'🇩🇰',
+  'Poland':'🇵🇱','Czech Republic':'🇨🇿','Hungary':'🇭🇺','Romania':'🇷🇴',
+  'Turkey':'🇹🇷','Russia':'🇷🇺','Ukraine':'🇺🇦','Pakistan':'🇵🇰',
+  'Bangladesh':'🇧🇩','Sri Lanka':'🇱🇰','Nepal':'🇳🇵','Myanmar':'🇲🇲',
+  'Cambodia':'🇰🇭','Laos':'🇱🇦','Brunei':'🇧🇳','Maldives':'🇲🇻',
+  'Egypt':'🇪🇬','Kenya':'🇰🇪','Ghana':'🇬🇭','Tanzania':'🇹🇿',
+  'Uganda':'🇺🇬','Ethiopia':'🇪🇹','Morocco':'🇲🇦',
+  'Argentina':'🇦🇷','Chile':'🇨🇱','Colombia':'🇨🇴','Peru':'🇵🇪',
+  'Ecuador':'🇪🇨','Panama':'🇵🇦',
 };
 
 function getFlag(country) { return FLAGS[country] || '🌍'; }
@@ -2187,20 +2211,12 @@ function renderRemittanceForm() {
         <input class="form-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any">
       </div>
       <div class="form-group">
-        <label class="form-label">Fee Currency</label>
-        <select class="form-input" id="rem-fee-currency">
-          ${db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('')}
+        <label class="form-label">Fee Account</label>
+        <select class="form-input" id="rem-fee-acct">
+          <option value="">-- No fee --</option>
+          ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('')}
         </select>
       </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Fee Category</label>
-      <select class="form-input" id="rem-fee-cat">
-        ${[...db.categories.expense].filter(c=>!c.archived).flatMap(c=>[
-          `<option value="${c.id}">${c.icon} ${c.name}</option>`,
-          ...(c.subcats||[]).filter(sc=>!sc.archived).map(sc=>`<option value="${sc.id}">&nbsp;&nbsp;${sc.icon} ${sc.name}</option>`)
-        ]).join('')}
-      </select>
     </div>
 
     <div class="form-row fr2">
@@ -2303,21 +2319,23 @@ function submitRemittance() {
       createdAt: new Date().toISOString()
     });
 
-    // Create remittance fee expense if specified
+    // Create remittance fee expense if specified — child of remittance (parentId = id)
     const feeAmt = parseFloat(document.getElementById('rem-fee-amount')?.value) || 0;
-    const feeCurr = document.getElementById('rem-fee-currency')?.value || currency;
-    const feeCat = document.getElementById('rem-fee-cat')?.value || null;
-    if (feeAmt > 0) {
+    const feeAcctId = document.getElementById('rem-fee-acct')?.value || '';
+    const feeAcct = db.accounts.find(a=>a.id===feeAcctId);
+    if (feeAmt > 0 && feeAcct) {
       db.transactions.push({
         id: genId(),
         type: 'expense',
-        currency: feeCurr,
+        currency: feeAcct.currency,
         amount: feeAmt,
-        accountId: fromId,
-        categoryId: feeCat,
+        accountId: feeAcctId,
+        categoryId: 'sc-remittancefee',
         date, time,
         notes: `Remittance fee${notes?' — '+notes:''}`,
         fxSnapshot: buildFxSnapshot(date),
+        parentId: id,
+        isAutoFee: true,
         createdAt: new Date().toISOString()
       });
     }
@@ -2992,6 +3010,12 @@ function openTxDetail(txId) {
         <span>💡 Auto-generated forex entry. Archive parent to remove.</span>
         ${parentTxExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
       </div>`;
+    } else if (tx.isAutoFee) {
+      const parentFeeExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
+      footer = `<div style="font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
+        <span>💡 Auto-generated remittance fee. Archive parent to remove.</span>
+        ${parentFeeExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
+      </div>`;
     } else {
       footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openEditTx('${tx.id}')">Edit</button>
        <button class="btn btn-warning btn-sm" onclick="archiveTx('${tx.id}')">Archive</button>`;
@@ -3075,6 +3099,10 @@ function openEditTx(txId) {
   // Block editing auto-generated child transactions
   if (tx.isAutoForex) {
     showToast('💡 This is an auto-generated forex entry. Edit the parent transfer.');
+    return;
+  }
+  if (tx.isAutoFee) {
+    showToast('💡 This is an auto-generated remittance fee. Edit the parent remittance.');
     return;
   }
   if (tx.isAutoReimb || tx.isLoanPayment) {
@@ -3577,6 +3605,10 @@ function archiveTx(txId, skipConfirm) {
     showToast('💡 Archive the parent transfer to remove this entry.');
     return;
   }
+  if (tx.isAutoFee) {
+    showToast('💡 Archive the parent remittance to remove this fee entry.');
+    return;
+  }
   // Block archiving loan payment and parent loan transactions directly
   if (tx.isLoanPayment) {
     showToast('💡 Manage this via the parent Loan record in Loans.');
@@ -3600,6 +3632,7 @@ function archiveTx(txId, skipConfirm) {
     const summary = children.map(c => {
       const typeLabel = c.isAutoForex ? 'Forex ' + (c.type === 'income' ? 'Gain' : 'Loss')
                       : c.isAutoReimb ? `Reimbursement from ${c.reimbPerson || 'someone'}`
+                      : c.isAutoFee ? 'Remittance Fee'
                       : c.type;
       return `• ${typeLabel}: ${fmt(c.amount, c.currency)}`;
     }).join('<br>');
