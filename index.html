@@ -5723,7 +5723,12 @@ function computeContractActual(contract) {
   for (const bid of BUCKET_DEFS) {
     const linked = (contract.bucketLinks||{})[bid] || [];
     if (linked.length > 0) {
-      total += linked.reduce((s,id)=>s+(parseFloat(getAcctBalance(id))||0),0);
+      total += linked.reduce((s,id) => {
+        const acct = db.accounts.find(a=>a.id===id);
+        if (!acct) return s;
+        const bal = parseFloat(getAcctBalance(id)) || 0;
+        return s + toPhp(bal, acct.currency);
+      }, 0);
     } else {
       total += parseFloat((contract.buckets||{})[bid]) || 0;
     }
@@ -5986,18 +5991,6 @@ function saveContractMonthly(contractId, val) {
   saveDB(); renderPlanning();
 }
 
-function saveInvestBucket(bucketId, val) {
-  if (!db.settings.investmentPlan) db.settings.investmentPlan={monthlyGoal:45000,safeTarget:970000,buckets:{},bucketLinks:{}};
-  if (!db.settings.investmentPlan.buckets) db.settings.investmentPlan.buckets={};
-  db.settings.investmentPlan.buckets[bucketId]=parseFloat(val)||0;
-  saveDB();
-}
-
-function saveInvestMonthly(val) {
-  if (!db.settings.investmentPlan) db.settings.investmentPlan={monthlyGoal:45000,safeTarget:970000,buckets:{},bucketLinks:{}};
-  db.settings.investmentPlan.monthlyGoal=parseInt(val)||45000;
-  saveDB(); renderPlanning();
-}
 
 
 // ════════════════════════════════════════════════════════════
