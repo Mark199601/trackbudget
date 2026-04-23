@@ -417,6 +417,7 @@ option{background:var(--bg3);color:var(--text)}
     <div class="sb-section">Overview</div>
     <div class="sb-item active" id="sn-dashboard" onclick="nav('dashboard')"><div class="si-icon">⊞</div>Dashboard</div>
     <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon">📊</div>Analytics</div>
+    <div class="sb-item" id="sn-ai" onclick="nav('ai')"><div class="si-icon">🤖</div>AI Insights<span class="si-badge" id="ai-badge" style="display:none">!</span></div>
     <div class="sb-item" id="sn-targets" onclick="nav('targets')"><div class="si-icon">🎯</div>Targets</div>
     <div class="sb-divider"></div>
     <div class="sb-section">Money</div>
@@ -973,6 +974,8 @@ function defaultDB() {
         ]},
         {id:'c-financial',name:'Financial',icon:'💱',archived:false,subcats:[
           {id:'sc-remittance',name:'Remittance',icon:'📤',archived:false},
+          {id:'sc-externalin',name:'External In',icon:'📥',archived:false},
+          {id:'sc-externalout',name:'External Out',icon:'📤',archived:false},
           {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false},
           {id:'sc-misc',name:'Miscellaneous',icon:'📌',archived:false},
         ]},
@@ -1167,6 +1170,8 @@ function getAcctBalance(acctId) {
       if (tx.fromAccountId === acctId) bal -= tx.amount;
       if (tx.toAccountId === acctId) bal += (tx.phpAmount || tx.amount * tx.rate);
     }
+    else if (tx.type === 'external-in' && tx.accountId === acctId) bal += tx.amount;
+    else if (tx.type === 'external-out' && tx.accountId === acctId) bal -= tx.amount;
   }
   return bal;
 }
@@ -1264,18 +1269,20 @@ function txAmountDisplay(tx) {
   if (tx.type==='transfer') return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='remittance') return {cls:'tx-neu', str:'📤 '+fmt(tx.amount,tx.currency)};
   if (tx.type==='shared') return {cls:'tx-neg', str:'-'+fmt(tx.myShare||tx.amount, tx.currency)};
+  if (tx.type==='external-in') return {cls:'tx-pos', str:'📥 +'+fmt(tx.amount,tx.currency)};
+  if (tx.type==='external-out') return {cls:'tx-neg', str:'📤 -'+fmt(tx.amount,tx.currency)};
   return {cls:'tx-neg', str:'-'+fmt(tx.amount,tx.currency)};
 }
 
 // ════════════════════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════════════════════
-const PAGES = ['dashboard','analytics','targets','transactions','accounts','loans','planning','settings'];
+const PAGES = ['dashboard','analytics','ai','targets','transactions','accounts','loans','planning','settings'];
 let currentPage = 'dashboard';
 
 function nav(page) {
   currentPage = page;
-  const titles = {dashboard:'Dashboard',analytics:'Analytics',targets:'Targets',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',targets:'Targets',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
@@ -1291,7 +1298,7 @@ function nav(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '';
   content.scrollTop = 0;
-  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, targets:renderTargets, transactions:renderTransactions, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
+  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, targets:renderTargets, transactions:renderTransactions, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   if (fn[page]) fn[page]();
 }
 
@@ -1334,6 +1341,15 @@ function closeDlg() { document.getElementById('dlg-overlay').classList.remove('o
 
 // Wire up close buttons — use addEventListener for reliability
 function wireEvents() {
+  document.addEventListener('click', function(e) {
+    const container = document.getElementById('type-dd-container');
+    const menu = document.getElementById('type-dd-menu');
+    if (container && menu && !container.contains(e.target)) {
+      menu.style.display = 'none';
+      const arrow = document.getElementById('type-dd-arrow');
+      if (arrow) arrow.style.transform = '';
+    }
+  });
   document.getElementById('add-close').addEventListener('click', () => closeSheet('add'));
   document.getElementById('gen-close').addEventListener('click', () => closeSheet('gen'));
   document.getElementById('add-overlay').addEventListener('click', () => closeSheet('add'));
@@ -1438,6 +1454,7 @@ function finishOnboard() {
   checkMobileLayout();
   checkAlerts();
   nav('dashboard');
+    setTimeout(aiScheduleCheck, 2000);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1912,9 +1929,28 @@ function renderAddSheet() {
   const body = document.getElementById('add-body');
 
   // Type toggle
-  const types = ['expense','income','shared','transfer','remittance'];
-  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance'};
-  const typeHTML = `<div class="type-toggle">${types.map(t=>`<button class="type-btn ${s.type===t?'act-'+t:''}" onclick="setAddType('${t}')">${typeLabels[t]}</button>`).join('')}</div>`;
+  const types = ['expense','income','shared','transfer','remittance','external-in','external-out','lend','borrow'];
+  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance','external-in':'External In','external-out':'External Out',lend:'Lend',borrow:'Borrow'};
+  const typeIcons = {expense:'💸',income:'📈',shared:'🤝',transfer:'↔️',remittance:'📤','external-in':'📥','external-out':'📤',lend:'🏦',borrow:'📋'};
+  const typeHTML = `<div class="type-dd-wrap" style="position:relative;margin-bottom:16px" id="type-dd-container">
+    <div class="type-dd-btn" onclick="toggleTypeDd()" style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:14px;font-weight:500;user-select:none">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="type-dd-icon" style="font-size:16px">${typeIcons[s.type]||'💸'}</span>
+        <span id="type-dd-label">${typeLabels[s.type]||'Expense'}</span>
+      </div>
+      <svg id="type-dd-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0"><path d="M1 1l5 5 5-5" stroke="var(--text3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div id="type-dd-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-lg);z-index:100;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <div style="padding:4px">
+        ${Object.entries(typeLabels).map(([t,label])=>`
+        <div class="type-dd-opt${s.type===t?' type-dd-active':''}" onclick="setAddType('${t}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13px${s.type===t?';background:var(--accent-bg);color:var(--accent)':''}">
+          <span style="font-size:16px">${typeIcons[t]}</span>
+          <span>${label}</span>
+          ${s.type===t?'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
 
   if (s.type === 'transfer') {
     body.innerHTML = typeHTML + renderTransferForm();
@@ -1923,6 +1959,11 @@ function renderAddSheet() {
   if (s.type === 'remittance') {
     body.innerHTML = typeHTML + renderRemittanceForm();
     setTimeout(updateRemittancePhpPreview, 0);
+    return;
+  }
+  if (s.type === 'external-in' || s.type === 'external-out') {
+    body.innerHTML = typeHTML + renderExternalForm(s.type);
+    setTimeout(syncExtCurrency, 0);
     return;
   }
 
@@ -1938,7 +1979,20 @@ function renderAddSheet() {
   if (s.type === 'shared') setTimeout(afterRenderShared, 0);
 }
 
+function toggleTypeDd() {
+  const menu = document.getElementById('type-dd-menu');
+  const arrow = document.getElementById('type-dd-arrow');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
 function setAddType(type) {
+  const menu = document.getElementById('type-dd-menu');
+  const arrow = document.getElementById('type-dd-arrow');
+  if (menu) menu.style.display = 'none';
+  if (arrow) arrow.style.transform = '';
   _addState.type = type;
   _addState.step = 1;
   _addState.catId = null;
@@ -2400,6 +2454,89 @@ function submitRemittance() {
     else if (currentPage==='accounts') renderAccounts();
     showToast(`Remittance saved: ${sym(currency)}${amount} → ₱${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${feeAmt>0?' (fee: '+fmt(feeAmt,feeCurr)+')':''}`);
   } catch(e) { showToast('Error: '+e.message); }
+}
+
+
+function renderExternalForm(type) {
+  const isIn = type === 'external-in';
+  const accts = db.accounts.filter(a=>!a.archived);
+  const acctOpts = accts.map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  return `<div>
+    <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
+      ${isIn ? '📥 <strong>External In</strong> — Receiving from outside. Adds to your account balance. Not counted as income.' : '📤 <strong>External Out</strong> — Sending to outside. Reduces your account balance. Not counted as expense.'}
+    </div>
+    <div class="form-group">
+      <label class="form-label">${isIn ? 'To Account (yours) *' : 'From Account (yours) *'}</label>
+      <select class="form-input" id="ext-account" onchange="syncExtCurrency()">${acctOpts}</select>
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Amount *</label>
+        <input class="form-input" type="number" id="ext-amount" placeholder="0.00" step="any">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <select class="form-input" id="ext-currency">${currOpts}</select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${isIn ? 'From (optional)' : 'To (optional)'}</label>
+      <input class="form-input" id="ext-person" placeholder="${isIn ? 'e.g. Papa, Company advance' : 'e.g. Pasalubong, Papa'}">
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Date *</label>
+        <input class="form-input" type="date" id="ext-date" value="${today()}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Time</label>
+        <input class="form-input" type="time" id="ext-time" value="${nowTime()}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <textarea class="form-input" id="ext-notes" rows="2" style="resize:none"></textarea>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="submitExternal('${type}')">Save</button>
+  </div>`;
+}
+
+function syncExtCurrency() {
+  const acctId = document.getElementById('ext-account')?.value;
+  const acct = db.accounts.find(a=>a.id===acctId);
+  const sel = document.getElementById('ext-currency');
+  if (acct && sel) sel.value = acct.currency;
+}
+
+function submitExternal(type) {
+  const isIn = type === 'external-in';
+  const acctId = document.getElementById('ext-account')?.value;
+  const amount = parseFloat(document.getElementById('ext-amount')?.value);
+  const currency = document.getElementById('ext-currency')?.value;
+  const date = document.getElementById('ext-date')?.value;
+  const time = document.getElementById('ext-time')?.value || nowTime();
+  const person = document.getElementById('ext-person')?.value?.trim() || '';
+  const notes = document.getElementById('ext-notes')?.value?.trim() || '';
+  if (!acctId) { showToast('Select an account'); return; }
+  if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
+  if (!date) { showToast('Select date'); return; }
+  const fxSnapshot = buildFxSnapshot(date);
+  db.transactions.push({
+    id: genId(), type, amount, currency,
+    accountId: acctId, externalParty: person, date, time,
+    notes: notes || (person ? (isIn ? `From ${person}` : `To ${person}`) : ''),
+    fxSnapshot, categoryId: isIn ? 'sc-externalin' : 'sc-externalout',
+    createdAt: new Date().toISOString()
+  });
+  const acct = db.accounts.find(a=>a.id===acctId);
+  if (acct) acct.lastTxDate = date;
+  saveDB();
+  closeSheet('add');
+  if (currentPage==='dashboard') renderDashboard();
+  else if (currentPage==='transactions') renderTransactions();
+  else if (currentPage==='accounts') renderAccounts();
+  showToast(isIn ? '📥 External In recorded' : '📤 External Out recorded');
 }
 
 function renderTransferForm() {
@@ -5025,12 +5162,14 @@ function renderAnalytics() {
     <button class="tab-btn ${_analyticsTab==='trends'?'active':''}" onclick="setAnalyticsTab('trends')">Trends</button>
     <button class="tab-btn ${_analyticsTab==='wealth'?'active':''}" onclick="setAnalyticsTab('wealth')">Wealth</button>
     <button class="tab-btn ${_analyticsTab==='forex'?'active':''}" onclick="setAnalyticsTab('forex')">Forex</button>
+  <button class="tab-btn ${_analyticsTab==='external'?'active':''}" onclick="setAnalyticsTab('external')">External</button>
   </div>`;
   let content = '';
   if (_analyticsTab==='overview') content = renderAnalyticsOverview();
   else if (_analyticsTab==='spending') content = renderAnalyticsSpending();
   else if (_analyticsTab==='trends') content = renderAnalyticsTrends();
   else if (_analyticsTab==='wealth') content = renderAnalyticsWealth();
+  else if (_analyticsTab==='external') content = renderAnalyticsExternal();
   else content = renderAnalyticsForex();
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
@@ -7255,6 +7394,39 @@ async function loadFromDrive() {
   await showBackupPicker();
 }
 
+// Silent auto-save (no toasts, for background saves)
+async function saveToDriveSilent() {
+  if (!_gdriveAccessToken) return;
+  try {
+    const folderId = await getOrCreateBackupsFolder();
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/[:.]/g,'-').slice(0,19);
+    const filename = `trackbudget_${dateStr}.json`;
+    const backupData = { ...db, _backupMeta: {
+      savedAt: now.toISOString(), version: '3.0',
+      deviceName: db.settings.deviceName || 'Unknown',
+      txCount: db.transactions.length,
+      acctCount: db.accounts.filter(a=>!a.archived).length
+    }};
+    const formData = new FormData();
+    formData.append('metadata', new Blob([JSON.stringify({ name: filename, parents: [folderId] })], { type: 'application/json' }));
+    formData.append('file', new Blob([JSON.stringify(backupData)], { type: 'application/json' }));
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + _gdriveAccessToken },
+      body: formData
+    });
+    if (!res.ok) throw new Error(await res.text());
+    db.settings.lastDriveSync = now.toISOString();
+    db.settings.lastDriveBackupFile = filename;
+    saveDB();
+    await pruneOldBackups(folderId, 10);
+  } catch(e) {
+    console.warn('Auto-save to Drive failed:', e.message);
+    // Silent fail — no toast
+  }
+}
+
 // Auto-save trigger (5 min idle)
 let _autoSaveTimer = null;
 function autoSaveTrigger() {
@@ -7262,7 +7434,7 @@ function autoSaveTrigger() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(()=>{
     ensureDriveToken(() => {
-      saveToDrive();
+      saveToDriveSilent();
     });
   }, 5*60*1000);
 }
@@ -7483,6 +7655,296 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register(swUrl).catch(e => console.warn('SW reg failed:', e));
   } catch(e) { console.warn('SW setup error:', e); }
 }
+// ═══════════════════════════════════════════════════════════
+// OFFLINE AI ENGINE
+// ═══════════════════════════════════════════════════════════
+
+let _aiInsights = [];
+let _aiLastRun = null;
+
+function runAIAnalysis() {
+  _aiInsights = [];
+  _aiLastRun = new Date().toISOString();
+  _aiInsights.push(...aiBudgetIntelligence());
+  _aiInsights.push(...aiAnomalyDetection());
+  _aiInsights.push(...aiPaydayPredictor());
+  _aiInsights.push(...aiSavingsPace());
+  _aiInsights.push(...aiRecurringDetector());
+  _aiInsights.push(...aiFxAdvisor());
+  _aiInsights.push(...aiCategoryTrends());
+  _aiInsights.push(...aiCashFlowForecast());
+  _aiInsights.push(...aiReimbursementNudge());
+  if (!db.settings.aiInsights) db.settings.aiInsights = {};
+  db.settings.aiInsights.lastRun = _aiLastRun;
+  db.settings.aiInsights.insights = _aiInsights;
+  saveDB();
+  const urgent = _aiInsights.filter(i=>i.priority==='high').length;
+  const badge = document.getElementById('ai-badge');
+  if (badge) { badge.style.display = urgent > 0 ? 'inline' : 'none'; badge.textContent = urgent || ''; }
+  return _aiInsights;
+}
+
+function aiGetMonthsTxs(n) {
+  const now = new Date();
+  return Array.from({length:n},(_,i)=>{
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const mk = d.toISOString().slice(0,7);
+    return { month:mk, txs:db.transactions.filter(t=>!t.archived&&t.date&&t.date.startsWith(mk)) };
+  });
+}
+
+function aiBudgetIntelligence() {
+  const insights = []; const months = aiGetMonthsTxs(3);
+  for (const bgt of (db.budgets||[]).filter(b=>b.active)) {
+    const avgSpend = months.reduce((s,m)=>{
+      return s + m.txs.filter(t=>(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
+        .reduce((ss,t)=>ss+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
+    },0) / (months.filter(m=>m.txs.length>0).length||1);
+    const ratio = avgSpend / bgt.limit;
+    const sym = bgt.currency==='PHP'?'₱':'K';
+    if (ratio > 1.1) insights.push({id:'budget-over-'+bgt.id,type:'budget',priority:'high',icon:'📈',title:`${bgt.location} budget consistently over`,body:`Average: ${sym}${avgSpend.toFixed(0)}/mo vs limit ${sym}${bgt.limit}. Consider raising to ${sym}${Math.ceil(avgSpend*1.05/50)*50}.`,action:'Review budget limit'});
+    else if (ratio < 0.75) insights.push({id:'budget-under-'+bgt.id,type:'budget',priority:'low',icon:'📉',title:`${bgt.location} budget has room`,body:`Spending ${sym}${avgSpend.toFixed(0)}/mo avg — ${Math.round((1-ratio)*100)}% below limit. Could reallocate ${sym}${Math.abs(avgSpend-bgt.limit).toFixed(0)} to savings.`,action:'Consider reallocating'});
+  }
+  return insights;
+}
+
+function aiAnomalyDetection() {
+  const insights = []; const months = aiGetMonthsTxs(4);
+  const current = months[0]; const historical = months.slice(1);
+  const cats = {};
+  for (const m of historical) for (const t of m.txs.filter(t=>t.type==='expense'||t.type==='shared')) {
+    const cat = t.categoryId||'misc';
+    if (!cats[cat]) cats[cat]=[];
+    cats[cat].push(toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency));
+  }
+  for (const [cat,amounts] of Object.entries(cats)) {
+    const avg = amounts.reduce((s,v)=>s+v,0)/amounts.length;
+    const curAmt = current.txs.filter(t=>(t.type==='expense'||t.type==='shared')&&t.categoryId===cat)
+      .reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
+    if (curAmt > avg*1.5 && avg > 200) {
+      const catName = getCategoryDisplay(cat)?.name||cat;
+      insights.push({id:'anomaly-'+cat,type:'anomaly',priority:'medium',icon:'⚠️',title:`Unusual ${catName} spending`,body:`This month: ₱${curAmt.toFixed(0)} vs avg ₱${avg.toFixed(0)} — ${Math.round((curAmt/avg-1)*100)}% higher.`,action:null});
+    }
+  }
+  return insights;
+}
+
+function aiPaydayPredictor() {
+  const insights = [];
+  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  if (incomeTxs.length < 2) return insights;
+  const dates = incomeTxs.map(t=>new Date(t.date));
+  const intervals = dates.slice(0,-1).map((d,i)=>Math.round((d-dates[i+1])/(1000*60*60*24)));
+  const avgInterval = Math.round(intervals.reduce((s,v)=>s+v,0)/intervals.length);
+  const nextPayday = new Date(dates[0]); nextPayday.setDate(nextPayday.getDate()+avgInterval);
+  const daysUntil = Math.round((nextPayday-new Date())/(1000*60*60*24));
+  if (daysUntil >= 0 && daysUntil <= 14) {
+    insights.push({id:'payday',type:'payday',priority:daysUntil<=3?'high':'low',icon:'💰',title:daysUntil===0?'Payday today?':`Next income in ~${daysUntil} days`,body:`Based on ${avgInterval}-day cycle. Expected around ${nextPayday.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}.`,action:null});
+  }
+  return insights;
+}
+
+function aiSavingsPace() {
+  const insights = [];
+  const plan = db.settings?.investmentPlan;
+  const startDate = new Date('2026-02-25'); const endDate = new Date('2028-02-25'); const today = new Date();
+  const progress = Math.max(0,Math.min(1,(today-startDate)/(endDate-startDate)));
+  const targetNow = 970000 * progress;
+  let actualTotal = 0;
+  if (plan) {
+    for (const b of (plan.buckets||[])) {
+      const links = (plan.bucketLinks||{})[b.id]||[];
+      if (links.length > 0) for (const id of links) actualTotal += Math.max(0, toPhp(getAcctBalance(id), db.accounts.find(a=>a.id===id)?.currency||'PHP'));
+      else actualTotal += parseFloat(b.manualBalance||0);
+    }
+  }
+  const gap = targetNow - actualTotal;
+  const monthlyGoal = plan?.monthlyGoal||45000;
+  const remainingMonths = (endDate-today)/(1000*60*60*24*30);
+  const projected = actualTotal + monthlyGoal*remainingMonths;
+  if (gap > 5000) {
+    insights.push({id:'savings-behind',type:'savings',priority:gap>50000?'high':'medium',icon:'🎯',title:`₱${gap.toLocaleString('en-US',{maximumFractionDigits:0})} behind savings target`,body:`Expected by now: ₱${targetNow.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}. Actual: ₱${actualTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}. ${projected>=970000?'✅ Still on track for ₱970k.':'⚠️ May not reach ₱970k at current pace.'}`,action:'Review contract tab'});
+  } else {
+    insights.push({id:'savings-ok',type:'savings',priority:'low',icon:'✅',title:'Savings on track!',body:`₱${Math.abs(gap).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')} ${gap<=0?'ahead of':'behind'} pace. Projected: ₱${projected.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}.`,action:null});
+  }
+  return insights;
+}
+
+function aiRecurringDetector() {
+  const insights = []; const groups = {};
+  for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date)) {
+    const key = Math.round(t.amount/10)*10+'-'+t.categoryId;
+    if (!groups[key]) groups[key]=[];
+    groups[key].push(t);
+  }
+  for (const [key,grp] of Object.entries(groups)) {
+    if (grp.length >= 3) {
+      const months = [...new Set(grp.map(t=>t.date.slice(0,7)))];
+      if (months.length >= 3) {
+        const catName = getCategoryDisplay(grp[0].categoryId)?.name||grp[0].categoryId;
+        const avg = grp.reduce((s,t)=>s+t.amount,0)/grp.length;
+        insights.push({id:'recurring-'+key,type:'recurring',priority:'low',icon:'🔄',title:`Possible subscription: ${catName}`,body:`~${fmt(avg,grp[0].currency)} appears ${grp.length}× across ${months.length} months.`,action:'Add to recurring'});
+      }
+    }
+  }
+  return insights.slice(0,3);
+}
+
+function aiFxAdvisor() {
+  const insights = []; const history = db.fxHistory?.PGK||[];
+  if (history.length < 2) return insights;
+  const rates = history.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(h=>h.rate);
+  const last3Avg = rates.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,rates.length);
+  const current = db.fxRates?.PGK||last3Avg;
+  if (current > last3Avg*1.01) insights.push({id:'fx-good',type:'fx',priority:'medium',icon:'💱',title:'Good time to remit!',body:`Current ₱${current.toFixed(2)}/PGK is above recent avg ₱${last3Avg.toFixed(2)}.`,action:'Log remittance'});
+  else if (current < last3Avg*0.99) insights.push({id:'fx-wait',type:'fx',priority:'low',icon:'⏳',title:'FX rate below average',body:`Current ₱${current.toFixed(2)}/PGK below recent avg ₱${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,action:null});
+  return insights;
+}
+
+function aiCategoryTrends() {
+  const insights = []; const months = aiGetMonthsTxs(3);
+  const catMonthly = {};
+  for (const m of months) for (const t of m.txs.filter(t=>t.type==='expense'||t.type==='shared')) {
+    const cat = t.categoryId;
+    if (!catMonthly[cat]) catMonthly[cat]=[];
+    catMonthly[cat].push({month:m.month,amt:toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency)});
+  }
+  for (const [cat,entries] of Object.entries(catMonthly)) {
+    const byMonth = {};
+    for (const e of entries) byMonth[e.month]=(byMonth[e.month]||0)+e.amt;
+    const vals = Object.values(byMonth).sort();
+    if (vals.length < 2) continue;
+    const change = (vals[vals.length-1]-vals[0])/(vals[0]||1)*100;
+    if (change > 25 && vals[0] > 500) {
+      insights.push({id:'trend-'+cat,type:'trend',priority:change>50?'medium':'low',icon:'📊',title:`${getCategoryDisplay(cat)?.name||cat} spending up`,body:`+${Math.round(change)}% over 3 months.`,action:null});
+    }
+  }
+  return insights.slice(0,3);
+}
+
+function aiCashFlowForecast() {
+  const insights = []; const today = new Date();
+  const mk = today.toISOString().slice(0,7);
+  const daysInMonth = new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const daysPassed = today.getDate(); const daysLeft = daysInMonth - daysPassed;
+  const monthTxs = db.transactions.filter(t=>!t.archived&&t.date&&t.date.startsWith(mk));
+  const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
+  const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
+  const daily = daysPassed > 0 ? spent/daysPassed : 0;
+  const projected = spent + daily*daysLeft;
+  const bgt = db.budgets?.find(b=>b.active&&b.currency==='PHP');
+  if (bgt) {
+    if (projected > bgt.limit*1.1) insights.push({id:'cashflow-over',type:'cashflow',priority:'high',icon:'🔮',title:'Projected to exceed budget',body:`At ₱${daily.toFixed(0)}/day, projected: ₱${projected.toFixed(0)} vs budget ₱${bgt.limit}.`,action:'Review spending'});
+    else insights.push({id:'cashflow-ok',type:'cashflow',priority:'low',icon:'🔮',title:'Cash flow looks healthy',body:`Projected month-end: ₱${projected.toFixed(0)} (budget: ₱${bgt.limit}). Daily rate: ₱${daily.toFixed(0)}.`,action:null});
+  }
+  return insights;
+}
+
+function aiReimbursementNudge() {
+  const insights = []; const today = new Date();
+  for (const tx of db.transactions.filter(t=>t.type==='shared'&&!t.archived&&!t.settled)) {
+    const days = Math.round((today-new Date(tx.date))/(1000*60*60*24));
+    if (days >= 7) {
+      const persons = tx.persons?.map(p=>p.name).join(', ')||tx.personName||'someone';
+      const owed = (tx.totalBill||tx.amount)-(tx.myShare||(tx.totalBill||tx.amount)/2);
+      insights.push({id:'reimb-'+tx.id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:`Follow up with ${persons}`,body:`${days} days pending — owes ${fmt(owed,tx.currency)}.`,action:'Go to Reimbursements'});
+    }
+  }
+  return insights;
+}
+
+function renderAIPage() {
+  const saved = db.settings?.aiInsights;
+  if (saved?.insights) { _aiInsights = saved.insights; _aiLastRun = saved.lastRun; }
+  const today = new Date();
+  if ((today.getDay()===0 && new Date(_aiLastRun||0).toDateString()!==today.toDateString()) || !_aiLastRun) runAIAnalysis();
+  const lastLabel = _aiLastRun ? new Date(_aiLastRun).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
+  const byType = ['budget','anomaly','payday','savings','recurring','fx','trend','cashflow','reimbursement'].reduce((o,t)=>({...o,[t]:_aiInsights.filter(i=>i.type===t)}),{});
+  const pColor = {high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
+
+  function card(ins) {
+    const col = pColor[ins.priority]||'var(--text3)';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${col};border-radius:var(--r-md);padding:14px;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:20px;flex-shrink:0">${ins.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${ins.title}</div>
+          <div style="font-size:12px;color:var(--text3);line-height:1.5">${ins.body}</div>
+          ${ins.action?`<div style="margin-top:8px"><span style="font-size:11px;color:${col};font-weight:500">${ins.action} →</span></div>`:''}
+        </div>
+        <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-full);background:${col}20;color:${col};flex-shrink:0;text-transform:uppercase">${ins.priority}</span>
+      </div>
+    </div>`;
+  }
+
+  function section(title, icon, items) {
+    if (!items.length) return '';
+    return `<div style="margin-bottom:20px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:8px;font-weight:600">${icon} ${title}</div>${items.map(card).join('')}</div>`;
+  }
+
+  const high = _aiInsights.filter(i=>i.priority==='high').length;
+  document.getElementById('page-content').innerHTML = `<div class="page-pad">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text4)">Last: ${lastLabel} · Auto-runs Sundays</div>
+      <button class="btn btn-primary btn-sm" onclick="runAIAnalysis();renderAIPage()">🔄 Analyze Now</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+      <div style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-full);font-size:12px"><strong>${_aiInsights.length}</strong> insights</div>
+      ${high>0?`<div style="padding:8px 14px;background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-full);font-size:12px;color:var(--red)"><strong>${high}</strong> need attention</div>`:`<div style="padding:8px 14px;background:rgba(0,200,100,0.1);border:1px solid var(--green);border-radius:var(--r-full);font-size:12px;color:var(--green)">✅ All clear</div>`}
+    </div>
+    ${_aiInsights.length===0?`<div class="empty-state"><div class="empty-icon">🤖</div><div class="empty-text">No insights yet</div><div style="font-size:12px;color:var(--text4)">Click "Analyze Now"</div></div>`:''}
+    ${section('Budget Intelligence','📈',byType.budget)}
+    ${section('Spending Anomalies','⚠️',byType.anomaly)}
+    ${section('Savings Pace','🎯',byType.savings)}
+    ${section('Cash Flow Forecast','🔮',byType.cashflow)}
+    ${section('FX Rate Advisor','💱',byType.fx)}
+    ${section('Reimbursement Nudges','🤝',byType.reimbursement)}
+    ${section('Category Trends','📊',byType.trend)}
+    ${section('Payday Predictor','💰',byType.payday)}
+    ${section('Recurring Expenses','🔄',byType.recurring)}
+  </div>`;
+}
+
+function aiScheduleCheck() {
+  const today = new Date();
+  if (today.getDay()===0) {
+    const saved = db.settings?.aiInsights;
+    if (!saved?.lastRun || new Date(saved.lastRun).toDateString()!==today.toDateString()) runAIAnalysis();
+  }
+  setTimeout(aiScheduleCheck, 60*60*1000);
+}
+
+// ── External Analytics Tab ──
+function renderAnalyticsExternal() {
+  const disp = db.displayCurrency||'PHP';
+  const txs = db.transactions.filter(t=>!t.archived&&(t.type==='external-in'||t.type==='external-out'));
+  if (!txs.length) return `<div class="empty-state page-pad"><div class="empty-icon">📥</div><div class="empty-text">No external transactions yet</div><div style="font-size:12px;color:var(--text4)">Use External In/Out in Add Transaction</div></div>`;
+  const inTxs = txs.filter(t=>t.type==='external-in');
+  const outTxs = txs.filter(t=>t.type==='external-out');
+  const totalIn = inTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
+  const totalOut = outTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
+  const net = totalIn - totalOut;
+  const parties = {};
+  for (const t of txs) {
+    const p = t.externalParty||'Unknown';
+    if (!parties[p]) parties[p]={in:0,out:0};
+    if (t.type==='external-in') parties[p].in+=toPhp(t.amount,t.currency);
+    else parties[p].out+=toPhp(t.amount,t.currency);
+  }
+  const partyRows = Object.entries(parties).sort((a,b)=>(b[1].in+b[1].out)-(a[1].in+a[1].out))
+    .map(([name,v])=>`<div class="detail-row" style="padding:10px 0"><div class="detail-label">${name}</div><div class="detail-value" style="text-align:right"><span style="color:var(--green);font-family:var(--mono);font-size:12px">+${fmt(fromPhp(v.in,disp),disp)}</span>${v.out>0?`<span style="color:var(--red);font-family:var(--mono);font-size:12px;margin-left:8px">-${fmt(fromPhp(v.out,disp),disp)}</span>`:''}</div></div>`).join('');
+  return `<div class="page-pad">
+    <div class="form-row fr2" style="margin-bottom:16px">
+      <div class="metric-card"><div class="metric-label">Total In</div><div class="metric-value" style="color:var(--green)">${fmt(fromPhp(totalIn,disp),disp)}</div><div style="font-size:11px;color:var(--text4)">${inTxs.length} txns</div></div>
+      <div class="metric-card"><div class="metric-label">Total Out</div><div class="metric-value" style="color:var(--red)">${fmt(fromPhp(totalOut,disp),disp)}</div><div style="font-size:11px;color:var(--text4)">${outTxs.length} txns</div></div>
+    </div>
+    <div class="metric-card" style="margin-bottom:16px"><div class="metric-label">Net External</div><div class="metric-value" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${fmt(fromPhp(net,disp),disp)}</div></div>
+    <div class="card" style="margin-bottom:16px"><div class="section-title" style="margin-bottom:8px">By Party</div>${partyRows}</div>
+    <div class="card"><div class="section-title" style="margin-bottom:8px">Recent</div>${txs.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(t=>`<div class="tx-item" onclick="openTxDetail('${t.id}')"><div class="tx-icon">${t.type==='external-in'?'📥':'📤'}</div><div class="tx-meta"><div class="tx-name">${t.externalParty||'External'}</div><div class="tx-detail">${fmtD(t.date)}${t.notes?' · '+t.notes:''}</div></div><div class="tx-right"><div class="tx-amount ${t.type==='external-in'?'tx-pos':'tx-neg'}">${t.type==='external-in'?'+':'-'}${fmt(t.amount,t.currency)}</div></div></div>`).join('')}</div>
+  </div>`;
+}
+
+
 </script>
 </body>
 </html>
