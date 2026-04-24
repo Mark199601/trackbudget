@@ -17,20 +17,36 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:#09090f;--bg2:#111118;--bg3:#18181f;--bg4:#202028;--bg5:#28282f;
-  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);--border3:rgba(255,255,255,0.16);
-  --text:#f0f0f8;--text2:#9898b0;--text3:#58586a;--text4:#38384a;
-  --accent:#7c6df0;--accent2:#6458d0;--accent-bg:rgba(124,109,240,0.1);--accent-border:rgba(124,109,240,0.25);
-  --green:#2dd98a;--green-bg:rgba(45,217,138,0.1);--green-border:rgba(45,217,138,0.2);
-  --red:#f0565a;--red-bg:rgba(240,86,90,0.1);--red-border:rgba(240,86,90,0.2);
-  --amber:#f0a832;--amber-bg:rgba(240,168,50,0.1);--amber-border:rgba(240,168,50,0.2);
-  --teal:#22d4c8;--teal-bg:rgba(34,212,200,0.1);
-  --purple:#b07ef0;--purple-bg:rgba(176,126,240,0.1);
-  --blue:#4a8cf0;--blue-bg:rgba(74,140,240,0.1);--blue-border:rgba(74,140,240,0.2);
+  /* ── Shared (both modes) ── */
+  --accent:#7c6df0;--accent2:#6458d0;--accent-bg:rgba(124,109,240,0.12);--accent-border:rgba(124,109,240,0.3);
+  --green:#16a34a;--green-bg:rgba(22,163,74,0.1);--green-border:rgba(22,163,74,0.2);
+  --red:#dc2626;--red-bg:rgba(220,38,38,0.1);--red-border:rgba(220,38,38,0.2);
+  --amber:#d97706;--amber-bg:rgba(217,119,6,0.1);--amber-border:rgba(217,119,6,0.2);
+  --teal:#0d9488;--teal-bg:rgba(13,148,136,0.1);
+  --purple:#7c6df0;--purple-bg:rgba(124,109,240,0.1);
+  --blue:#2563eb;--blue-bg:rgba(37,99,235,0.1);--blue-border:rgba(37,99,235,0.2);
   --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;--r-full:999px;
   --font:'Geist',sans-serif;--mono:'Geist Mono',monospace;
   --nav-h:64px;--header-h:56px;--sidebar-w:240px;
   --transition:0.18s cubic-bezier(0.4,0,0.2,1);
+}
+/* ── DARK MODE (default) ── */
+:root, [data-theme="dark"] {
+  --bg:#09090f;--bg2:#111118;--bg3:#18181f;--bg4:#202028;--bg5:#28282f;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);--border3:rgba(255,255,255,0.16);
+  --text:#f0f0f8;--text2:#9898b0;--text3:#6868a0;--text4:#4848a0;
+  --input-bg:#111118;--shadow:0 2px 12px rgba(0,0,0,0.4);
+}
+/* ── LIGHT MODE ── */
+[data-theme="light"] {
+  --bg:#f8f7ff;--bg2:#ffffff;--bg3:#f0eeff;--bg4:#e8e4ff;--bg5:#ddd8ff;
+  --border:rgba(124,109,240,0.12);--border2:rgba(124,109,240,0.2);--border3:rgba(124,109,240,0.3);
+  --text:#1a1330;--text2:#4a3f7a;--text3:#7c6df0;--text4:#9d8ef5;
+  --input-bg:#ffffff;--shadow:0 2px 12px rgba(124,109,240,0.12);
+  /* Override semantic colors for light mode readability */
+  --green:#16a34a;--red:#dc2626;--amber:#d97706;
+  --green-bg:rgba(22,163,74,0.08);--red-bg:rgba(220,38,38,0.08);--amber-bg:rgba(217,119,6,0.08);
+  --accent-bg:rgba(124,109,240,0.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;-webkit-font-smoothing:antialiased;overflow:hidden}
@@ -72,6 +88,9 @@ input,select,textarea{font-family:var(--font)}
 .bn-add-circle{width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(124,109,240,0.4);transition:transform var(--transition)}
 .bn-add:active .bn-add-circle{transform:scale(0.92)}
 
+@media(max-width:1023px){
+#sidebar{position:fixed;left:0;top:0;bottom:0;z-index:200;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);display:flex!important}
+#sidebar.sidebar-open{transform:translateX(0)}
 @media(max-width:1023px){
   #sidebar{display:none}
   #bottom-nav{display:block}
@@ -120,7 +139,7 @@ input,select,textarea{font-family:var(--font)}
 
 .form-group{margin-bottom:14px}
 .form-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:7px}
-.form-input{width:100%;padding:10px 13px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);color:var(--text);font-size:14px;outline:none;transition:border-color var(--transition);-webkit-appearance:none;appearance:none}
+.form-input{width:100%;padding:10px 13px;background:var(--input-bg,var(--bg3));border:1px solid var(--border2);border-radius:var(--r-md);color:var(--text);font-size:14px;outline:none;transition:border-color var(--transition);-webkit-appearance:none;appearance:none}
 .form-input:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--text4)}
 .form-input:disabled{opacity:0.5;cursor:not-allowed}
@@ -435,7 +454,7 @@ option{background:var(--bg3);color:var(--text)}
   <div id="main">
     <div id="page-header">
       <div class="ph-left">
-        <button id="mob-menu-btn" onclick="nav('settings')" style="display:none;background:none;border:none;color:var(--text2);padding:4px">
+        <button id="mob-menu-btn" onclick="openMobileSidebar()" style="display:none;background:none;border:none;color:var(--text2);padding:4px;cursor:pointer">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="ph-title" id="ph-title">Dashboard</div>
@@ -1281,6 +1300,8 @@ const PAGES = ['dashboard','analytics','ai','targets','transactions','accounts',
 let currentPage = 'dashboard';
 
 function nav(page) {
+  // Close mobile sidebar if open
+  closeMobileSidebar();
   currentPage = page;
   const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',targets:'Targets',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
@@ -1315,6 +1336,13 @@ function renderPageHeader(page) {
   } else {
     r.innerHTML = '';
   }
+  // Always append theme toggle button
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  r.innerHTML += `<button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme"
+    style="background:none;border:1px solid var(--border2);border-radius:var(--r-full);width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all var(--transition)"
+    onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+    ${isLight ? '🌙' : '☀️'}
+  </button>`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -5177,62 +5205,143 @@ function renderAnalytics() {
 function setAnalyticsTab(t) { _analyticsTab=t; renderAnalytics(); }
 
 function renderAnalyticsOverview() {
-  const mk = currMonthKey();
-  const lmk = lastMonthKey();
-  const curr = getMonthTotals(mk);
-  const prev = getMonthTotals(lmk);
   const disp = db.displayCurrency || 'PHP';
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  // State: selected period ('ytd' or 'YYYY-MM')
+  if (!window._analyticsOverviewPeriod) window._analyticsOverviewPeriod = 'ytd';
+  const period = window._analyticsOverviewPeriod;
+
+  // Build YTD months (Jan to now)
+  const ytdMonths = [];
+  for (let i = 0; i <= currentMonth; i++) {
+    const key = `${currentYear}-${String(i+1).padStart(2,'0')}`;
+    const t = getMonthTotals(key);
+    const d = new Date(currentYear, i, 1);
+    ytdMonths.push({ key, label: d.toLocaleString('en',{month:'short'}), year: currentYear, ...t });
+  }
+
+  // Get all months that have data (for selector)
+  const allMonthsWithData = [];
+  const txDates = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
+  const uniqueMonths = [...new Set(txDates)].sort().reverse();
+  for (const mk of uniqueMonths) {
+    const [y, mo] = mk.split('-').map(Number);
+    const d = new Date(y, mo-1, 1);
+    allMonthsWithData.push({ key: mk, label: d.toLocaleString('en',{month:'long',year:'numeric'}) });
+  }
+  // Also add current month even if no data
+  const currentMk = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+  if (!allMonthsWithData.find(m=>m.key===currentMk)) {
+    allMonthsWithData.unshift({ key: currentMk, label: now.toLocaleString('en',{month:'long',year:'numeric'}) });
+  }
+
+  // Determine what data to show in metric cards
+  let metricMk, metricLabel;
+  if (period === 'ytd') {
+    metricMk = currentMk;
+    metricLabel = 'This Month';
+  } else {
+    metricMk = period;
+    const [y,mo] = period.split('-').map(Number);
+    metricLabel = new Date(y,mo-1,1).toLocaleString('en',{month:'long',year:'numeric'});
+  }
+
+  const curr = getMonthTotals(metricMk);
+  const prevDate = new Date(metricMk + '-01');
+  prevDate.setMonth(prevDate.getMonth()-1);
+  const prevMk = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+  const prev = getMonthTotals(prevMk);
   const incomeChg = prev.income > 0 ? ((curr.income-prev.income)/prev.income*100) : null;
   const expChg = prev.expense > 0 ? ((curr.expense-prev.expense)/prev.expense*100) : null;
 
-  // Last 6 months
-  const months = [];
-  for (let i=5; i>=0; i--) {
-    const d = new Date(); d.setMonth(d.getMonth()-i);
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const t = getMonthTotals(key);
-    months.push({ key, label:d.toLocaleString('en',{month:'short'}), ...t });
+  // Chart months: YTD if ytd, else last 6 months centered on selected
+  let chartMonths;
+  if (period === 'ytd') {
+    chartMonths = ytdMonths;
+  } else {
+    chartMonths = [];
+    const [selY, selMo] = period.split('-').map(Number);
+    const selDate = new Date(selY, selMo-1, 1);
+    for (let i = -2; i <= 2; i++) {
+      const d = new Date(selDate.getFullYear(), selDate.getMonth()+i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const t = getMonthTotals(key);
+      chartMonths.push({ key, label: d.toLocaleString('en',{month:'short'}), ...t });
+    }
   }
-  const maxVal = Math.max(...months.map(m=>Math.max(m.income,m.expense)),1);
+  const maxVal = Math.max(...chartMonths.map(m=>Math.max(m.income,m.expense)),1);
 
-  const barChart = months.map(m=>`
+  // Days in selected month (safe calculation)
+  const [mY, mM] = metricMk.split('-').map(Number);
+  const daysInMetricMonth = new Date(mY, mM, 0).getDate();
+
+  const barChart = chartMonths.map(m=>`
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
       <div style="width:100%;display:flex;gap:2px;height:80px;align-items:flex-end">
         <div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:${(m.income/maxVal*100).toFixed(1)}%;min-height:${m.income>0?'2px':'0'};opacity:0.8"></div>
         <div style="flex:1;background:var(--red);border-radius:3px 3px 0 0;height:${(m.expense/maxVal*100).toFixed(1)}%;min-height:${m.expense>0?'2px':'0'};opacity:0.8"></div>
       </div>
-      <div style="font-size:10px;color:var(--text4)">${m.label}</div>
+      <div style="font-size:10px;color:${m.key===metricMk?'var(--accent)':'var(--text4)'};font-weight:${m.key===metricMk?'600':'400'}">${m.label}</div>
     </div>`).join('');
 
+  // Month/year selector options
+  const selectorOpts = [
+    `<option value="ytd" ${period==='ytd'?'selected':''}>YTD (${currentYear})</option>`,
+    ...allMonthsWithData.map(m=>`<option value="${m.key}" ${period===m.key?'selected':''}>${m.label}</option>`)
+  ].join('');
+
+  const chgBadge = (chg) => chg===null ? '' :
+    `<span style="font-size:11px;color:${chg>=0?'var(--green)':'var(--red)'}">
+      ${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% vs prev
+    </span>`;
+
   return `<div class="page-pad">
-    <div class="metric-grid g2" style="margin-bottom:16px">
+    <!-- Period selector -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2)">${period==='ytd'?'Year to Date — '+currentYear:metricLabel}</div>
+      <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('overview')">
+        ${selectorOpts}
+      </select>
+    </div>
+
+    <!-- Metric cards -->
+    <div class="form-row fr2" style="margin-bottom:12px">
       <div class="metric-card">
-        <div class="metric-label">Income This Month</div>
-        <div class="metric-value" style="color:var(--green);font-size:18px">${fmt(fromPhp(curr.income,disp),disp)}</div>
-        ${incomeChg!==null?`<div class="metric-sub" style="color:${incomeChg>=0?'var(--green)':'var(--red)'}">${incomeChg>=0?'↑':'↓'} ${Math.abs(incomeChg).toFixed(0)}% vs last month</div>`:''}
+        <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(fromPhp(curr.income,disp),disp)}</div>
+        ${chgBadge(incomeChg)}
       </div>
       <div class="metric-card">
-        <div class="metric-label">Expenses This Month</div>
-        <div class="metric-value" style="color:var(--red);font-size:18px">${fmt(fromPhp(curr.expense,disp),disp)}</div>
-        ${expChg!==null?`<div class="metric-sub" style="color:${expChg<=0?'var(--green)':'var(--red)'}">${expChg>=0?'↑':'↓'} ${Math.abs(expChg).toFixed(0)}% vs last month</div>`:''}
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Savings Rate</div>
-        <div class="metric-value" style="font-size:18px">${curr.income>0?((curr.net/curr.income)*100).toFixed(0):0}%</div>
-        <div class="metric-sub">of income saved</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Daily Avg Spend</div>
-        <div class="metric-value" style="font-size:18px">${fmt(fromPhp(curr.expense/new Date().getDate(),disp),disp)}</div>
-        <div class="metric-sub">this month</div>
+        <div class="metric-label">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
+        <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(curr.expense,disp),disp)}</div>
+        ${chgBadge(expChg)}
       </div>
     </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-hdr"><div class="section-title">6-Month Overview</div></div>
+    <div class="form-row fr2" style="margin-bottom:16px">
+      <div class="metric-card">
+        <div class="metric-label">SAVINGS RATE</div>
+        <div class="metric-value">${curr.income>0?Math.round((1-curr.expense/curr.income)*100):0}%</div>
+        <div style="font-size:11px;color:var(--text4)">of income saved</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">DAILY AVG SPEND</div>
+        <div class="metric-value">${fmt(fromPhp(curr.expense/daysInMetricMonth,disp),disp)}</div>
+        <div style="font-size:11px;color:var(--text4)">${period==='ytd'?'this month':metricLabel.split(' ')[0]}</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">
+        ${period==='ytd'?'YTD OVERVIEW — '+currentYear:'MONTHLY OVERVIEW'}
+      </div>
       <div style="display:flex;gap:4px;align-items:flex-end">${barChart}</div>
-      <div style="display:flex;gap:16px;margin-top:10px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;background:var(--green);border-radius:2px"></div>Income</div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;background:var(--red);border-radius:2px"></div>Expenses</div>
+      <div style="display:flex;gap:16px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text4)"><div style="width:10px;height:10px;background:var(--green);border-radius:2px"></div>Income</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text4)"><div style="width:10px;height:10px;background:var(--red);border-radius:2px"></div>Expenses</div>
       </div>
     </div>
   </div>`;
@@ -5288,11 +5397,14 @@ function renderAnalyticsTrends() {
     const d = new Date(); d.setMonth(d.getMonth()-i);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const t = getMonthTotals(key);
-    months.push({ label:d.toLocaleString('en',{month:'short', year:'2-digit'}), ...t });
+    months.push({ key, label:d.toLocaleString('en',{month:'short', year:'2-digit'}), ...t });
   }
-  const maxVal = Math.max(...months.map(m=>Math.max(m.income,m.expense)),1);
+  // Only show months with actual data
+  const filteredMonths = months.filter(m => m.income > 0 || m.expense > 0);
+  const displayMonths = filteredMonths.length > 0 ? filteredMonths : months.slice(-1);
+  const maxVal = Math.max(...displayMonths.map(m=>Math.max(m.income,m.expense)),1);
 
-  const rows = months.map(m=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+  const rows = displayMonths.map(m=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
     <div style="width:60px;font-size:12px;color:var(--text3)">${m.label}</div>
     <div style="flex:1">
       <div style="height:4px;background:var(--green);border-radius:2px;margin-bottom:3px;width:${(m.income/maxVal*80).toFixed(1)}%"></div>
@@ -7439,6 +7551,27 @@ function autoSaveTrigger() {
   }, 5*60*1000);
 }
 
+// ── THEME SYSTEM ──
+function initTheme() {
+  const saved = localStorage.getItem('tb_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  db.settings = db.settings || {};
+  db.settings.theme = saved;
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('tb_theme', next);
+  db.settings.theme = next;
+  saveDB();
+  // Update toggle button icon
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+  if (currentPage === 'settings') renderSettings();
+}
+
 // Initialize Google Drive on page load
 if (typeof window !== 'undefined') {
   window.addEventListener('load', () => setTimeout(initGoogleDrive, 1000));
@@ -7522,6 +7655,22 @@ function copyDebugReport(text) {
 // ════════════════════════════════════════════════════════════
 // MOBILE LAYOUT
 // ════════════════════════════════════════════════════════════
+function openMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.add('sidebar-open');
+  if (overlay) overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('sidebar-open');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 function checkMobileLayout() {
   const isMobile = window.innerWidth < 1024;
   const mobMenu = document.getElementById('mob-menu-btn');
@@ -7609,6 +7758,7 @@ function initApp() {
     document.getElementById('sb-name').textContent = db.profile.nickname;
     checkMobileLayout();
     checkAlerts();
+    initTheme();
     nav('dashboard');
   }
   } catch(e) {
@@ -7864,13 +8014,29 @@ function renderAIPage() {
 
   function card(ins) {
     const col = pColor[ins.priority]||'var(--text3)';
+    // Navigation map per action
+    const actionNav = {
+      'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('contract'),100); },
+      'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+      'Log remittance': ()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },
+      'Go to Reimbursements': ()=>{ nav('transactions'); setTimeout(()=>setTxTab&&setTxTab('reimb'),100); },
+      'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('recurring'),100); },
+      'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
+      'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+    };
+    const navFn = ins.action && actionNav[ins.action] ? actionNav[ins.action] : null;
+    const actionId = ins.id ? 'ai-act-'+ins.id.replace(/[^a-z0-9]/gi,'-') : '';
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${col};border-radius:var(--r-md);padding:14px;margin-bottom:10px">
       <div style="display:flex;align-items:flex-start;gap:10px">
         <span style="font-size:20px;flex-shrink:0">${ins.icon}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;margin-bottom:4px">${ins.title}</div>
           <div style="font-size:12px;color:var(--text3);line-height:1.5">${ins.body}</div>
-          ${ins.action?`<div style="margin-top:8px"><span style="font-size:11px;color:${col};font-weight:500">${ins.action} →</span></div>`:''}
+          ${ins.action?`<div style="margin-top:8px">
+            <span id="${actionId}" style="font-size:11px;color:${col};font-weight:500;cursor:${navFn?'pointer':'default'};text-decoration:${navFn?'underline':'none'}" onclick="${navFn?`aiNavigate('${ins.id}')`:''}">
+              ${ins.action} →
+            </span>
+          </div>`:''}
         </div>
         <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-full);background:${col}20;color:${col};flex-shrink:0;text-transform:uppercase">${ins.priority}</span>
       </div>
@@ -7903,6 +8069,22 @@ function renderAIPage() {
     ${section('Payday Predictor','💰',byType.payday)}
     ${section('Recurring Expenses','🔄',byType.recurring)}
   </div>`;
+}
+
+function aiNavigate(insId) {
+  const ins = _aiInsights.find(i=>i.id===insId);
+  if (!ins || !ins.action) return;
+  const actionNav = {
+    'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('contract'); },150); },
+    'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+    'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
+    'Go to Reimbursements': ()=>{ nav('transactions'); setTimeout(()=>{ if(typeof setTxTab==='function') setTxTab('reimb'); },150); },
+    'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('recurring'); },150); },
+    'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
+    'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+  };
+  const fn = actionNav[ins.action];
+  if (fn) fn();
 }
 
 function aiScheduleCheck() {
