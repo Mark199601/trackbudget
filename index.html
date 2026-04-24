@@ -138,6 +138,17 @@ input,select,textarea{font-family:var(--font)}
 
 .form-group{margin-bottom:14px}
 .form-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:7px}
+/* ── Custom Date/Time Picker ── */
+.dt-field{position:relative}
+.dt-display{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:14px;color:var(--text);transition:border-color var(--transition),box-shadow var(--transition);user-select:none;width:100%}
+.dt-display:hover{border-color:var(--accent-border)}
+.dt-display.dt-active{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.dt-display .dt-icon{font-size:15px;flex-shrink:0;opacity:0.7}
+.dt-display .dt-val{flex:1;color:var(--text)}
+.dt-display .dt-placeholder{color:var(--text4)}
+.dt-native{position:absolute;opacity:0;pointer-events:none;top:0;left:0;width:100%;height:100%;cursor:pointer}
+.dt-row{display:flex;gap:8px}
+.dt-row .dt-field{flex:1}
 .form-input{width:100%;padding:10px 13px;background:var(--input-bg,var(--bg3));border:1px solid var(--border2);border-radius:var(--r-md);color:var(--text);font-size:14px;outline:none;transition:border-color var(--transition);-webkit-appearance:none;appearance:none}
 .form-input:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--text4)}
@@ -1981,15 +1992,28 @@ function renderAddSheet() {
 
   if (s.type === 'transfer') {
     body.innerHTML = typeHTML + renderTransferForm();
+    setTimeout(() => {
+      if (document.getElementById('tf-date')?.value) dtUpdate('tf-date','date');
+      if (document.getElementById('tf-time')?.value) dtUpdate('tf-time','time');
+    }, 0);
     return;
   }
   if (s.type === 'remittance') {
     body.innerHTML = typeHTML + renderRemittanceForm();
+    setTimeout(() => {
+      if (document.getElementById('rem-date')?.value) dtUpdate('rem-date','date');
+      if (document.getElementById('rem-time')?.value) dtUpdate('rem-time','time');
+    }, 0);
     setTimeout(updateRemittancePhpPreview, 0);
     return;
   }
   if (s.type === 'external-in' || s.type === 'external-out') {
     body.innerHTML = typeHTML + renderExternalForm(s.type);
+    setTimeout(() => {
+      if (document.getElementById('ext-date')?.value) dtUpdate('ext-date','date');
+      if (document.getElementById('ext-time')?.value) dtUpdate('ext-time','time');
+      syncExtCurrency();
+    }, 0);
     setTimeout(syncExtCurrency, 0);
     return;
   }
@@ -2002,6 +2026,11 @@ function renderAddSheet() {
 
   // Step 2: Amount + details
   body.innerHTML = typeHTML + renderAmountForm();
+    // Init date/time display values
+    setTimeout(() => {
+      if (document.getElementById('add-date')?.value) dtUpdate('add-date','date');
+      if (document.getElementById('add-time')?.value) dtUpdate('add-time','time');
+    }, 0);
   setTimeout(syncAddCurrency, 0);
   if (s.type === 'shared') setTimeout(afterRenderShared, 0);
 }
@@ -2183,14 +2212,11 @@ function renderAmountForm() {
       </div>
     </div>
 
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Date *</label>
-        <input class="form-input" type="date" id="add-date" value="${today()}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Time</label>
-        <input class="form-input" type="time" id="add-time" value="${nowTime()}">
+    <div class="form-group">
+      <label class="form-label">Date & Time *</label>
+      <div class="dt-row">
+        ${dtField('add-date','date','Date')}
+        ${dtField('add-time','time','Time')}
       </div>
     </div>
 
@@ -2353,14 +2379,11 @@ function renderRemittanceForm() {
       </div>
     </div>
 
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Date *</label>
-        <input class="form-input" type="date" id="rem-date" value="${today()}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Time</label>
-        <input class="form-input" type="time" id="rem-time" value="${nowTime()}">
+    <div class="form-group">
+      <label class="form-label">Date & Time *</label>
+      <div class="dt-row">
+        ${dtField('rem-date','date','Date')}
+        ${dtField('rem-time','time','Time')}
       </div>
     </div>
 
@@ -2414,7 +2437,7 @@ function submitRemittance() {
     const toId = document.getElementById('rem-to-acct')?.value;
     const amount = parseFloat(document.getElementById('rem-amount')?.value);
     const rate = parseFloat(document.getElementById('rem-rate')?.value);
-    const date = document.getElementById('rem-date')?.value;
+    const date = parseInputDate(document.getElementById('rem-date')?.value);
     const time = document.getElementById('rem-time')?.value || nowTime();
     const notes = document.getElementById('rem-notes')?.value?.trim() || '';
 
@@ -2511,14 +2534,11 @@ function renderExternalForm(type) {
       <label class="form-label">${isIn ? 'From (optional)' : 'To (optional)'}</label>
       <input class="form-input" id="ext-person" placeholder="${isIn ? 'e.g. Papa, Company advance' : 'e.g. Pasalubong, Papa'}">
     </div>
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Date *</label>
-        <input class="form-input" type="date" id="ext-date" value="${today()}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Time</label>
-        <input class="form-input" type="time" id="ext-time" value="${nowTime()}">
+    <div class="form-group">
+      <label class="form-label">Date & Time *</label>
+      <div class="dt-row">
+        ${dtField('ext-date','date','Date')}
+        ${dtField('ext-time','time','Time')}
       </div>
     </div>
     <div class="form-group">
@@ -2541,7 +2561,7 @@ function submitExternal(type) {
   const acctId = document.getElementById('ext-account')?.value;
   const amount = parseFloat(document.getElementById('ext-amount')?.value);
   const currency = document.getElementById('ext-currency')?.value;
-  const date = document.getElementById('ext-date')?.value;
+  const date = parseInputDate(document.getElementById('ext-date')?.value);
   const time = document.getElementById('ext-time')?.value || nowTime();
   const person = document.getElementById('ext-person')?.value?.trim() || '';
   const notes = document.getElementById('ext-notes')?.value?.trim() || '';
@@ -2596,9 +2616,12 @@ function renderTransferForm() {
       </div>
     </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="tf-date" value="${today()}" onchange="updateTransferPreview()"></div>
-      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="tf-time" value="${nowTime()}"></div>
+    <div class="form-group">
+      <label class="form-label">Date & Time *</label>
+      <div class="dt-row">
+        <div class="dt-field"><div class="dt-display" id="dtd-tf-date" onclick="dtTrigger('tf-date','date')"><span class="dt-icon">📅</span><span class="dt-val dt-placeholder" id="dtv-tf-date">Date</span></div><input type="date" class="dt-native form-input" id="tf-date" onchange="dtUpdate('tf-date','date');updateTransferPreview()"></div>
+        ${dtField('tf-time','time','Time')}
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
     <button class="btn btn-primary btn-full" onclick="submitTransfer()">Save Transfer</button>
@@ -2779,11 +2802,11 @@ function submitAddTx() {
   const s = _addState;
   const currency = document.getElementById('add-currency')?.value;
   const accountId = document.getElementById('add-account')?.value;
-  const date = document.getElementById('add-date')?.value;
+  const date = parseInputDate(document.getElementById('add-date')?.value);
   const time = document.getElementById('add-time')?.value;
   const notes = document.getElementById('add-notes')?.value?.trim() || '';
   const personName = document.getElementById('add-person')?.value?.trim() || '';
-  const dueDate = document.getElementById('add-duedate')?.value || null;
+  const dueDate = parseInputDate(document.getElementById('add-duedate')?.value) || null;
   const myShare = parseFloat(document.getElementById('add-myshare')?.value) || null;
   const totalBill = parseFloat(document.getElementById('add-total-bill')?.value) || null;
   const splitCount = parseInt(document.getElementById('add-split-count')?.value) || 2;
@@ -2912,7 +2935,7 @@ function submitTransfer() {
       toAmount = convert(amount, currency, toAcct2.currency);
     }
   }
-  const date = document.getElementById('tf-date')?.value;
+  const date = parseInputDate(document.getElementById('tf-date')?.value);
   const time = document.getElementById('tf-time')?.value;
   const notes = document.getElementById('tf-notes')?.value?.trim() || '';
 
@@ -3388,9 +3411,12 @@ function openEditTx(txId) {
   openSheet('gen', 'Edit Transaction', `
     <div class="form-group"><label class="form-label">Category</label><select class="form-input" id="edit-cat">${catOpts}</select></div>
     ${sharedFieldsHTML}
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Date *</label><input class="form-input" type="date" id="edit-date" value="${tx.date}"></div>
-      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="edit-time" value="${tx.time||''}"></div>
+    <div class="form-group">
+      <label class="form-label">Date & Time</label>
+      <div class="dt-row">
+        ${dtField('edit-date','date','Date')}
+        ${dtField('edit-time','time','Time')}
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="edit-notes" rows="2" style="resize:none">${tx.notes||''}</textarea></div>
     <div style="display:flex;gap:8px">
@@ -3667,9 +3693,12 @@ function openEditTransfer(txId) {
       </div>
     </div>
     <div id="etf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;display:none"></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="etf-date" value="${tx.date}"></div>
-      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="etf-time" value="${tx.time||''}"></div>
+    <div class="form-group">
+      <label class="form-label">Date & Time *</label>
+      <div class="dt-row">
+        ${dtField('etf-date','date','Date')}
+        ${dtField('etf-time','time','Time')}
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="etf-notes" value="${tx.notes||''}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditTransfer('${txId}')">Save Changes</button>
@@ -4815,7 +4844,7 @@ function saveLoanFull(loanId, direction) {
   loan.remaining = newAmount || loan.remaining;
   loan.currency = newCurr || loan.currency;
   loan.accountId = newAcct || loan.accountId;
-  loan.dueDate = document.getElementById('lf-due')?.value || null;
+  loan.dueDate = parseInputDate(document.getElementById('lf-due')?.value) || null;
   loan.notes = document.getElementById('lf-notes')?.value?.trim() || '';
 
   // Update the parent isLoanTx transaction to reflect new account/amount
@@ -4977,8 +5006,8 @@ function saveAddLoan(direction) {
   if (!person || !amount) { showToast('Enter person and amount'); return; }
   if (!accountId) { showToast('Select an account'); return; }
   const currency = document.getElementById('nl-currency')?.value || 'PHP';
-  const date = document.getElementById('nl-date')?.value || today();
-  const dueDate = document.getElementById('nl-due')?.value || null;
+  const date = parseInputDate(document.getElementById('nl-date')?.value) || today();
+  const dueDate = parseInputDate(document.getElementById('nl-due')?.value) || null;
   const notes = document.getElementById('nl-notes')?.value?.trim() || '';
   const loanId = genId();
 
@@ -5078,7 +5107,7 @@ function saveAddTarget() {
     id:genId(), name, icon,
     goal, currency:document.getElementById('nt-currency')?.value||'PHP',
     current:parseFloat(document.getElementById('nt-current')?.value)||0,
-    deadline:document.getElementById('nt-deadline')?.value||null,
+    deadline:parseInputDate(document.getElementById('nt-deadline')?.value)||null,
     notes:document.getElementById('nt-notes')?.value?.trim()||'',
   });
   saveDB(); closeSheet('gen'); renderTargets(); showToast('Target added!');
@@ -5113,7 +5142,7 @@ function saveEditTarget(id) {
   t.goal = parseFloat(document.getElementById('et-goal')?.value)||t.goal;
   t.currency = document.getElementById('et-currency')?.value||t.currency;
   t.current = parseFloat(document.getElementById('et-current')?.value)||0;
-  t.deadline = document.getElementById('et-deadline')?.value||null;
+  t.deadline = parseInputDate(document.getElementById('et-deadline')?.value)||null;
   t.notes = document.getElementById('et-notes')?.value?.trim()||'';
   saveDB(); closeSheet('gen'); renderTargets(); showToast('Target updated!');
 }
@@ -6149,15 +6178,36 @@ function openContractWizard() {
   `);
 }
 
+function parseInputDate(val) {
+  if (!val) return '';
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  // Try parsing display format (e.g. "Feb 26, 2026")
+  const d = new Date(val);
+  if (!isNaN(d)) return d.toISOString().slice(0,10);
+  return val;
+}
+
 function saveContractWizard() {
   const location = document.getElementById('cw-location')?.value?.trim();
-  const startDate = document.getElementById('cw-start')?.value;
-  const endDate = document.getElementById('cw-end')?.value;
+  const startRaw = document.getElementById('cw-start')?.value;
+  const endRaw = document.getElementById('cw-end')?.value;
+  const startDate = parseInputDate(startRaw);
+  const endDate = parseInputDate(endRaw);
   const monthly = parseFloat(document.getElementById('cw-monthly')?.value);
   const target = parseFloat(document.getElementById('cw-target')?.value);
   const goalCurr = document.getElementById('cw-goalcurr')?.value || 'PHP';
   const notes = document.getElementById('cw-notes')?.value?.trim() || '';
-  if (!location||!startDate||!endDate||!monthly||!target) { showToast('Fill in all required fields'); return; }
+  if (!location||!startDate||!endDate||!monthly||!target) {
+    const missing = [];
+    if (!location) missing.push('Location');
+    if (!startDate) missing.push('Start Date');
+    if (!endDate) missing.push('End Date');
+    if (!monthly) missing.push('Monthly Goal');
+    if (!target) missing.push('Target Amount');
+    showToast('Missing: ' + missing.join(', '));
+    return;
+  }
   if (new Date(endDate) <= new Date(startDate)) { showToast('End date must be after start date'); return; }
 
   // Archive current active contract if any
@@ -7573,6 +7623,53 @@ function autoSaveTrigger() {
       saveToDriveSilent();
     });
   }, 5*60*1000);
+}
+
+// ── CUSTOM DATE/TIME PICKER ──
+function dtField(inputId, type, placeholder) {
+  const icon = type === 'time' ? '🕐' : '📅';
+  return `<div class="dt-field">
+    <div class="dt-display" id="dtd-${inputId}" onclick="dtTrigger('${inputId}','${type}')">
+      <span class="dt-icon">${icon}</span>
+      <span class="dt-val dt-placeholder" id="dtv-${inputId}">${placeholder}</span>
+    </div>
+    <input type="${type}" class="dt-native form-input" id="${inputId}" onchange="dtUpdate('${inputId}','${type}')">
+  </div>`;
+}
+
+function dtTrigger(inputId, type) {
+  const input = document.getElementById(inputId);
+  const display = document.getElementById('dtd-' + inputId);
+  if (!input || !display) return;
+  display.classList.add('dt-active');
+  input.style.pointerEvents = 'auto';
+  try { input.showPicker ? input.showPicker() : input.click(); } catch(e) { input.click(); }
+  const onBlur = () => { display.classList.remove('dt-active'); input.style.pointerEvents = 'none'; };
+  input.addEventListener('blur', onBlur, { once: true });
+}
+
+function dtUpdate(inputId, type) {
+  const input = document.getElementById(inputId);
+  const valSpan = document.getElementById('dtv-' + inputId);
+  if (!input || !valSpan) return;
+  const val = input.value;
+  if (!val) return;
+  if (type === 'date') {
+    const d = new Date(val + 'T00:00:00');
+    valSpan.textContent = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  } else {
+    const [h, m] = val.split(':');
+    const hour = parseInt(h);
+    valSpan.textContent = ((hour % 12) || 12) + ':' + m + ' ' + (hour >= 12 ? 'PM' : 'AM');
+  }
+  valSpan.classList.remove('dt-placeholder');
+}
+
+function dtSet(inputId, value, type) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = value;
+  dtUpdate(inputId, type || (value.includes(':') ? 'time' : 'date'));
 }
 
 // ── THEME SYSTEM ──
