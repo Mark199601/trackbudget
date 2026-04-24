@@ -41,12 +41,13 @@
 [data-theme="light"] {
   --bg:#f8f7ff;--bg2:#ffffff;--bg3:#f0eeff;--bg4:#e8e4ff;--bg5:#ddd8ff;
   --border:rgba(124,109,240,0.12);--border2:rgba(124,109,240,0.2);--border3:rgba(124,109,240,0.3);
-  --text:#1a1330;--text2:#4a3f7a;--text3:#7c6df0;--text4:#9d8ef5;
+  --text:#1a1330;--text2:#3d3560;--text3:#5c5285;--text4:#8878b8;
   --input-bg:#ffffff;--shadow:0 2px 12px rgba(124,109,240,0.12);
   /* Override semantic colors for light mode readability */
-  --green:#16a34a;--red:#dc2626;--amber:#d97706;
-  --green-bg:rgba(22,163,74,0.08);--red-bg:rgba(220,38,38,0.08);--amber-bg:rgba(217,119,6,0.08);
+  --green:#16a34a;--red:#dc2626;--amber:#b45309;
+  --green-bg:rgba(22,163,74,0.08);--red-bg:rgba(220,38,38,0.08);--amber-bg:rgba(180,83,9,0.08);
   --accent-bg:rgba(124,109,240,0.08);
+  --bg5:#cdc6f8;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;-webkit-font-smoothing:antialiased;overflow:hidden}
@@ -111,15 +112,15 @@ input,select,textarea{font-family:var(--font)}
 @media(max-width:1023px){.g4{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.g3{grid-template-columns:1fr 1fr}}
 
-.hero-card{border-radius:var(--r-xl);padding:24px;position:relative;overflow:hidden;background:linear-gradient(135deg,#0d0d1f 0%,#12122a 40%,#0a0a22 100%);border:1px solid rgba(124,109,240,0.2)}
+.hero-card{border-radius:var(--r-xl);padding:24px;position:relative;overflow:hidden;background:linear-gradient(135deg,#0d0d1f 0%,#12122a 40%,#0a0a22 100%)}
 .hero-card::after{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(124,109,240,0.12) 0%,transparent 70%);pointer-events:none}
-.hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);margin-bottom:8px}
+.hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.7);margin-bottom:8px}
 .hero-amount{font-family:var(--mono);font-size:36px;font-weight:500;letter-spacing:-1.5px;color:#fff;line-height:1}
-.hero-currency{font-size:16px;color:rgba(255,255,255,0.4);margin-right:3px}
-.hero-sub{font-size:12px;color:rgba(255,255,255,0.3);margin-top:8px}
+.hero-currency{font-size:16px;color:rgba(255,255,255,0.8);margin-right:3px}
+.hero-sub{font-size:12px;color:rgba(255,255,255,0.7);margin-top:8px}
 .hero-row{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
 .hero-stat{display:flex;flex-direction:column;gap:3px}
-.hero-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.3)}
+.hero-stat-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.65)}
 .hero-stat-value{font-family:var(--mono);font-size:13px;font-weight:500}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:var(--r-md);font-size:14px;font-weight:500;border:none;transition:all var(--transition);white-space:nowrap}
@@ -5212,13 +5213,14 @@ function renderAnalyticsOverview() {
   if (!window._analyticsOverviewPeriod) window._analyticsOverviewPeriod = 'ytd';
   const period = window._analyticsOverviewPeriod;
 
-  // Build YTD months (Jan to now)
+  // Build YTD months (Jan to Dec — all 12, future months shown as empty)
   const ytdMonths = [];
-  for (let i = 0; i <= currentMonth; i++) {
+  for (let i = 0; i < 12; i++) {
     const key = `${currentYear}-${String(i+1).padStart(2,'0')}`;
-    const t = getMonthTotals(key);
+    const isFuture = i > currentMonth;
+    const t = isFuture ? {income:0, expense:0, net:0} : getMonthTotals(key);
     const d = new Date(currentYear, i, 1);
-    ytdMonths.push({ key, label: d.toLocaleString('en',{month:'short'}), year: currentYear, ...t });
+    ytdMonths.push({ key, label: d.toLocaleString('en',{month:'short'}), year: currentYear, isFuture, ...t });
   }
 
   // Get all months that have data (for selector)
@@ -5279,10 +5281,10 @@ function renderAnalyticsOverview() {
   const barChart = chartMonths.map(m=>`
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
       <div style="width:100%;display:flex;gap:2px;height:80px;align-items:flex-end">
-        <div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:${(m.income/maxVal*100).toFixed(1)}%;min-height:${m.income>0?'2px':'0'};opacity:0.8"></div>
-        <div style="flex:1;background:var(--red);border-radius:3px 3px 0 0;height:${(m.expense/maxVal*100).toFixed(1)}%;min-height:${m.expense>0?'2px':'0'};opacity:0.8"></div>
+        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--green)'};border-radius:3px 3px 0 0;height:${m.isFuture?'8':(m.income/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.3':'0.8'}"></div>
+        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--red)'};border-radius:3px 3px 0 0;height:${m.isFuture?'4':(m.expense/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.2':'0.8'}"></div>
       </div>
-      <div style="font-size:10px;color:${m.key===metricMk?'var(--accent)':'var(--text4)'};font-weight:${m.key===metricMk?'600':'400'}">${m.label}</div>
+      <div style="font-size:10px;color:${m.key===metricMk?'var(--accent)':m.isFuture?'var(--border3)':'var(--text4)'};font-weight:${m.key===metricMk?'600':'400'}">${m.label}</div>
     </div>`).join('');
 
   // Month/year selector options
@@ -5421,32 +5423,56 @@ function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
   const nw = getNetWorth();
   const accts = db.accounts.filter(a=>!a.archived);
-  const byType = {};
+  const LIABILITY_TYPES = new Set(['Credit Card']);
+  const assetByType = {}, liabByType = {};
   for (const a of accts) {
-    if (!byType[a.type]) byType[a.type] = 0;
-    byType[a.type] += toPhp(getAcctBalance(a.id), a.currency);
+    const val = toPhp(getAcctBalance(a.id), a.currency);
+    if (LIABILITY_TYPES.has(a.type)) {
+      liabByType[a.type] = (liabByType[a.type]||0) + val;
+    } else {
+      assetByType[a.type] = (assetByType[a.type]||0) + val;
+    }
   }
-  const sorted = Object.entries(byType).sort((a,b)=>b[1]-a[1]);
+  const totalAssets = Object.values(assetByType).reduce((s,v)=>s+v,0);
+  const totalLiab = Object.values(liabByType).reduce((s,v)=>s+v,0);
+  const assetSorted = Object.entries(assetByType).sort((a,b)=>b[1]-a[1]);
+  const liabSorted = Object.entries(liabByType).sort((a,b)=>a[1]-b[1]);
+
+  function typeRow(type, val, base, color) {
+    const pct = base > 0 ? Math.abs(val/base*100) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${type}</span><span style="font-family:var(--mono);color:${color||'var(--text)'}">${fmt(fromPhp(val,disp),disp)}</span>
+      </div>
+      <div style="height:5px;background:var(--bg5);border-radius:3px;overflow:hidden">
+        <div style="height:100%;border-radius:3px;background:${color||'var(--accent)'};width:${pct.toFixed(1)}%"></div>
+      </div>
+    </div>`;
+  }
 
   return `<div class="page-pad">
     <div class="hero-card" style="margin-bottom:16px">
       <div class="hero-label">Net Worth</div>
-      <div style="font-size:32px;font-weight:600;font-family:var(--mono)">${fmt(fromPhp(nw,disp),disp)}</div>
+      <div style="font-size:32px;font-weight:600;font-family:var(--mono);color:#fff">${fmt(fromPhp(nw,disp),disp)}</div>
     </div>
-    <div class="card">
-      <div class="section-title" style="margin-bottom:12px">By Account Type</div>
-      ${sorted.map(([type,val])=>{
-        const pct = nw > 0 ? Math.abs(val/nw*100) : 0;
-        return `<div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-            <span>${type}</span><span style="font-family:var(--mono)">${fmt(fromPhp(val,disp),disp)}</span>
-          </div>
-          <div style="height:5px;background:var(--bg5);border-radius:3px;overflow:hidden">
-            <div style="height:100%;border-radius:3px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
-          </div>
-        </div>`;
-      }).join('')}
+    <div class="form-row fr2" style="margin-bottom:14px">
+      <div class="metric-card">
+        <div class="metric-label">ASSETS</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">LIABILITIES</div>
+        <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
+      </div>
     </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:12px;color:var(--green)">By Account Type</div>
+      ${assetSorted.map(([t,v])=>typeRow(t,v,totalAssets)).join('')}
+    </div>
+    ${liabSorted.length > 0 ? `<div class="card">
+      <div class="section-title" style="margin-bottom:12px;color:var(--red)">Liabilities</div>
+      ${liabSorted.map(([t,v])=>typeRow(t,Math.abs(v),Math.abs(totalLiab),'var(--red)')).join('')}
+    </div>` : ''}
   </div>`;
 }
 
