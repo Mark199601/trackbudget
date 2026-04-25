@@ -4110,6 +4110,21 @@ function deleteTxPerm(txId) {
   );
 }
 
+function promptArchiveDelete(txId, txName, childCount) {
+  const childNote = childCount > 0
+    ? `<div style="margin-top:8px;font-size:12px;color:var(--amber)">⚠️ ${childCount} linked transaction${childCount>1?'s':''} will also be permanently deleted.</div>`
+    : '';
+  openDlg('Delete Permanently?',
+    `<div style="font-size:14px;color:var(--text2);line-height:1.6">
+      <strong>${txName}</strong> will be permanently deleted from your archive.
+      ${childNote}
+      <div style="margin-top:10px;font-size:12px;color:var(--red)">This cannot be undone.</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="closeDlg();confirmDeleteTx('${txId}')">Delete Permanently</button>`
+  );
+}
+
 function confirmDeleteTx(txId) {
   // Delete the tx itself
   db.archivedTransactions = db.archivedTransactions.filter(t => t.id !== txId);
@@ -4168,7 +4183,7 @@ function openTxArchiveSheet() {
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <div class="tx-amount ${cls}" style="font-size:13px">${str}</div>
           <button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();restoreTx('${tx.id}')">↩</button>
-          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();confirmDeleteTx('${tx.id}')">🗑</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();promptArchiveDelete('${tx.id}','${(cat?.name||tx.type).replace(/'/g,'')}',${children.length})">🗑</button>
         </div>
       </div>
       ${children.length > 0 ? `<div id="arch-children-${tx.id}" style="display:none">${childRows}</div>` : ''}
