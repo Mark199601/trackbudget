@@ -451,6 +451,7 @@ option{background:var(--bg3);color:var(--text)}
     <div class="sb-divider"></div>
     <div class="sb-section">Money</div>
     <div class="sb-item" id="sn-transactions" onclick="nav('transactions')"><div class="si-icon">↕</div>Transactions</div>
+  <div class="sb-item" id="sn-reimbursements" onclick="nav('reimbursements')"><div class="si-icon">🤝</div>Reimbursements</div>
     <div class="sb-item" id="sn-accounts" onclick="nav('accounts')"><div class="si-icon">🏦</div>Accounts</div>
     <div class="sb-item" id="sn-loans" onclick="nav('loans')"><div class="si-icon">🤝</div>Loans<span class="si-badge" id="loans-badge" style="display:none">0</span></div>
     <div class="sb-divider"></div>
@@ -1307,14 +1308,14 @@ function txAmountDisplay(tx) {
 // ════════════════════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════════════════════
-const PAGES = ['dashboard','analytics','ai','installments','transactions','accounts','loans','planning','settings'];
+const PAGES = ['dashboard','analytics','ai','installments','transactions','reimbursements','accounts','loans','planning','settings'];
 let currentPage = 'dashboard';
 
 function nav(page) {
   // Close mobile sidebar if open
   closeMobileSidebar();
   currentPage = page;
-  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
@@ -1330,7 +1331,7 @@ function nav(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '';
   content.scrollTop = 0;
-  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, installments:renderInstallments, transactions:renderTransactions, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
+  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   if (fn[page]) fn[page]();
 }
 
@@ -4031,10 +4032,15 @@ function restoreTx(txId) {
 
   saveDB();
   closeDlg();
-  renderTransactions();
+  // Snappy — refresh archive sheet if open, else render transactions
+  if (document.getElementById('sheet-gen')?.style.display !== 'none') {
+    openTxArchiveSheet();
+  } else {
+    renderTransactions();
+  }
   showToast(restored > 0
-    ? `Restored + ${restored} linked transaction${restored > 1 ? 's' : ''}`
-    : 'Transaction restored');
+    ? `↩ Restored + ${restored} linked`
+    : '↩ Transaction restored');
 }
 
 function deleteTxPerm(txId) {
@@ -4061,54 +4067,61 @@ function confirmDeleteTx(txId) {
 }
 
 function openTxArchiveSheet() {
-  const archived = (db.archivedTransactions || [])
-    .filter(t => !t.cascadedFrom) // show parents only, not auto-cascaded children
+  const all = db.archivedTransactions || [];
+  // Get parents only (not cascaded children)
+  const parents = all.filter(t => !t.cascadedFrom)
     .sort((a,b) => (b.archivedAt||b.date||'').localeCompare(a.archivedAt||a.date||''));
 
-  if (archived.length === 0) {
-    openDlg('Archive',
-      '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived transactions</div>',
-      '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>');
+  if (parents.length === 0) {
+    openSheet('gen', 'Archive',
+      '<div class="empty-state"><div class="empty-icon">🗃️</div><div class="empty-text">No archived transactions</div></div>');
     return;
   }
 
-  const rows = archived.slice(0, 50).map(tx => {
+  function buildParentRow(tx) {
     const cat = getCategoryDisplay(tx.categoryId);
     const {cls, str} = txAmountDisplay(tx);
-    const archivedDate = tx.archivedAt ? fmtD(tx.archivedAt) : '';
-    return `<div class="tx-item" onclick="openArchivedTxDetail('${tx.id}')">
-      <div class="tx-icon">${cat?.icon||'📋'}</div>
-      <div class="tx-meta">
-        <div class="tx-name">${cat?.name || tx.type}</div>
-        <div class="tx-detail">${fmtD(tx.date)}${archivedDate ? ' · archived ' + archivedDate : ''}</div>
+    const children = all.filter(c => c.cascadedFrom === tx.id);
+    const childRows = children.map(c => {
+      const cCat = getCategoryDisplay(c.categoryId);
+      const {cls:cCls, str:cStr} = txAmountDisplay(c);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 44px;border-bottom:1px solid var(--border);opacity:0.7">
+        <span style="font-size:13px">${cCat?.icon||'↳'}</span>
+        <div style="flex:1;font-size:12px;color:var(--text3)">${cCat?.name||c.type} <span style="color:var(--text4)">· child</span></div>
+        <div class="tx-amount ${cCls}" style="font-size:12px">${cStr}</div>
+      </div>`;
+    }).join('');
+
+    return `<div style="border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer" onclick="toggleArchivedExpand('${tx.id}')">
+        <div class="tx-icon" style="flex-shrink:0">${cat?.icon||'📋'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500">${cat?.name||tx.type}</div>
+          <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}${children.length>0?` · ${children.length} linked`:''}${tx.archivedAt?' · archived '+fmtD(tx.archivedAt):''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div class="tx-amount ${cls}" style="font-size:13px">${str}</div>
+          <button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();restoreTx('${tx.id}')">↩</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();confirmDeleteTx('${tx.id}')">🗑</button>
+        </div>
       </div>
-      <div class="tx-right"><div class="tx-amount ${cls}">${str}</div></div>
+      ${children.length > 0 ? `<div id="arch-children-${tx.id}" style="display:none">${childRows}</div>` : ''}
     </div>`;
-  }).join('');
+  }
 
-  openSheet('gen', `Archive (${archived.length})`,
-    `<div>${rows}</div>
-     ${archived.length > 50 ? `<div style="text-align:center;font-size:12px;color:var(--text4);padding:12px">Showing latest 50 of ${archived.length}</div>` : ''}`
+  openSheet('gen', `Archive (${parents.length})`,
+    `<div>${parents.slice(0,50).map(buildParentRow).join('')}</div>
+     ${parents.length > 50 ? `<div style="text-align:center;font-size:12px;color:var(--text4);padding:12px">Showing 50 of ${parents.length}</div>` : ''}`
   );
 }
 
-function openArchivedTxDetail(txId) {
-  const tx = (db.archivedTransactions||[]).find(t=>t.id===txId);
-  if (!tx) return;
-  const cat = getCategoryDisplay(tx.categoryId);
-  const {cls, str} = txAmountDisplay(tx);
-  openDlg(cat?.name || tx.type,
-    `<div style="font-size:13px;line-height:1.8;color:var(--text2)">
-      <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:${cls==='tx-pos'?'var(--green)':'var(--red)'};margin-bottom:12px">${str}</div>
-      <div>📅 ${fmtD(tx.date)}</div>
-      ${tx.notes ? `<div>📝 ${tx.notes}</div>` : ''}
-      <div style="margin-top:8px;font-size:11px;color:var(--amber)">🗃 Archived ${tx.archivedAt ? fmtD(tx.archivedAt) : ''}</div>
-    </div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>
-     <button class="btn btn-primary btn-sm" onclick="restoreTx('${txId}')">↩ Restore</button>
-     <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="confirmDeleteTx('${txId}')">🗑 Delete</button>`
-  );
+function toggleArchivedExpand(txId) {
+  const el = document.getElementById('arch-children-' + txId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+// openArchivedTxDetail removed — handled inline in archive sheet
+
 
 function renderTxArchive() {
   const txs = db.archivedTransactions.slice().sort((a,b)=>b.date.localeCompare(a.date));
@@ -4156,6 +4169,10 @@ function renderTxArchive() {
 // ════════════════════════════════════════════════════════════
 // REIMBURSEMENTS TAB
 // ════════════════════════════════════════════════════════════
+function renderReimbursementsPage() {
+  document.getElementById('page-content').innerHTML = renderReimbTab();
+}
+
 function renderReimbTab() {
   // Build per-person view: each shared tx may have multiple persons.
   // Group by person name, where each (person, tx) entry has its own owed amount.
@@ -5108,13 +5125,23 @@ function openLoanArchiveSheet() {
 function restoreLoan(loanId, direction) {
   const list = direction === 'lent' ? db.loans.lent : db.loans.borrowed;
   const loan = list.find(l => l.id === loanId);
-  if (loan) {
-    loan.archived = false;
-    saveDB();
-    closeSheet('gen');
-    renderLoans();
-    showToast('Loan restored ✓');
+  if (!loan) return;
+  loan.archived = false;
+  // Restore all associated loan payment transactions
+  const payments = (db.archivedTransactions||[]).filter(t => t.isLoanPayment && t.loanId === loanId);
+  for (const p of payments) {
+    const idx = db.archivedTransactions.findIndex(t => t.id === p.id);
+    if (idx >= 0) {
+      const restored = db.archivedTransactions.splice(idx, 1)[0];
+      delete restored.archivedAt;
+      delete restored.cascadedFrom;
+      db.transactions.push(restored);
+    }
   }
+  saveDB();
+  // Snappy — re-render archive sheet
+  openLoanArchiveSheet();
+  showToast(`↩ Loan restored${payments.length > 0 ? ' + ' + payments.length + ' payments' : ''}`);
 }
 
 function renderLoanArchive() {
@@ -8472,7 +8499,7 @@ function renderAIPage() {
       'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('contract'),100); },
       'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
       'Log remittance': ()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },
-      'Go to Reimbursements': ()=>{ nav('transactions'); setTimeout(()=>setTxTab&&setTxTab('reimb'),100); },
+      'Go to Reimbursements': ()=>{ nav('reimbursements'); },
       'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('recurring'),100); },
       'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
       'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
@@ -8531,7 +8558,7 @@ function aiNavigate(insId) {
     'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('contract'); },150); },
     'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
     'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
-    'Go to Reimbursements': ()=>{ nav('transactions'); setTimeout(()=>{ if(typeof setTxTab==='function') setTxTab('reimb'); },150); },
+    'Go to Reimbursements': ()=>{ nav('reimbursements'); },
     'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('recurring'); },150); },
     'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
     'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
