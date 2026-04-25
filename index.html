@@ -3036,18 +3036,24 @@ function renderTransactions() {
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_txTab==='log'?'active':''}" onclick="setTxTab('log')">Log</button>
     <button class="tab-btn ${_txTab==='reimb'?'active':''}" onclick="setTxTab('reimb')">Reimbursements</button>
-    <button class="tab-btn ${_txTab==='archive'?'active':''}" onclick="setTxTab('archive')">Archive</button>
   </div>`;
 
   let content = '';
   if (_txTab === 'log') content = renderTxLog();
-  else if (_txTab === 'reimb') content = renderReimbTab();
-  else content = renderTxArchive();
+  else content = renderReimbTab();
 
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
 
-function setTxTab(tab) { _txTab = tab; renderTransactions(); }
+function setTxTab(tab) {
+  if (tab === 'archive') {
+    openTxArchiveSheet();
+    return;
+  }
+  _txTab = tab;
+  saveDB();
+  renderTransactions();
+}
 
 function renderTxLog() {
   const months = [...new Set(db.transactions.filter(t=>!t.archived).map(t=>t.date?.slice(0,7)))].filter(Boolean).sort((a,b)=>b.localeCompare(a));
@@ -3086,13 +3092,64 @@ function renderTxLog() {
 
   if (!txHTML) txHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions this month</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
 
-  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:10px">
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
       <select class="form-input" style="flex:1;max-width:200px;padding:7px 12px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
-      <span style="font-size:12px;color:var(--text3)">${txs.length} transactions</span>
+      <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} txns</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
     </div>
-    <div class="filter-chips">${chipHTML}</div>
+    <div style="padding:8px 16px;border-bottom:1px solid var(--border)">
+      <div class="type-dd-wrap" style="position:relative" id="txfilter-container">
+        <div onclick="toggleTxFilterDd()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:13px;font-weight:500;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span id="txfilter-icon">${_txFilter==='all'?'📋':_txFilter==='expense'?'💸':_txFilter==='income'?'📈':_txFilter==='shared'?'🤝':_txFilter==='transfer'?'↔️':'🏦'}</span>
+            <span id="txfilter-label">${_txFilter==='all'?'All Types':_txFilter.charAt(0).toUpperCase()+_txFilter.slice(1)}</span>
+          </div>
+          <svg id="txfilter-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0"><path d="M1 1l5 5 5-5" stroke="var(--text3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="txfilter-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-lg);z-index:100;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.2)">
+          <div style="padding:4px">
+            ${[['all','📋','All Types'],['expense','💸','Expense'],['income','📈','Income'],['shared','🤝','Shared'],['transfer','↔️','Transfer'],['loans','🏦','Loans']].map(([val,icon,label])=>`
+            <div onclick="setTxFilterDd('${val}','${icon}','${label}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13px${_txFilter===val?';background:var(--accent-bg);color:var(--accent)':''}">
+              <span style="font-size:15px">${icon}</span><span>${label}</span>
+              ${_txFilter===val?'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
     <div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
 }
+
+function toggleTxFilterDd() {
+  const menu = document.getElementById('txfilter-menu');
+  const arrow = document.getElementById('txfilter-arrow');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function setTxFilterDd(val, icon, label) {
+  _txFilter = val;
+  document.getElementById('txfilter-menu').style.display = 'none';
+  document.getElementById('txfilter-arrow').style.transform = '';
+  const iconEl = document.getElementById('txfilter-icon');
+  const labelEl = document.getElementById('txfilter-label');
+  if (iconEl) iconEl.textContent = icon;
+  if (labelEl) labelEl.textContent = label;
+  renderTransactions();
+}
+
+// Click outside to close filter dropdown
+document.addEventListener('click', function(e) {
+  const container = document.getElementById('txfilter-container');
+  const menu = document.getElementById('txfilter-menu');
+  if (container && menu && !container.contains(e.target)) {
+    menu.style.display = 'none';
+    const arrow = document.getElementById('txfilter-arrow');
+    if (arrow) arrow.style.transform = '';
+  }
+});
 
 function setTxFilter(f) { _txFilter = f; renderTransactions(); }
 function setTxMonth(m) { _txMonth = m; renderTransactions(); }
@@ -4001,6 +4058,32 @@ function confirmDeleteTx(txId) {
     : 'Deleted permanently');
 }
 
+function openTxArchiveSheet() {
+  const archived = db.transactions.filter(t=>t.archived).sort((a,b)=>b.date.localeCompare(a.date));
+  if (archived.length === 0) {
+    openDlg('Archive', '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived transactions</div>',
+      '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>');
+    return;
+  }
+  const rows = archived.slice(0,50).map(tx => {
+    const cat = getCategoryDisplay(tx.categoryId);
+    const {cls, str} = txAmountDisplay(tx);
+    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+      <div class="tx-icon">${cat?.icon||'📋'}</div>
+      <div class="tx-meta">
+        <div class="tx-name">${cat?.name||tx.type}</div>
+        <div class="tx-detail">${fmtD(tx.date)} · <span style="color:var(--amber)">Archived</span></div>
+      </div>
+      <div class="tx-right"><div class="tx-amount ${cls}">${str}</div></div>
+    </div>`;
+  }).join('');
+
+  openSheet('gen', `Archive (${archived.length})`,
+    `<div>${rows}</div>
+     ${archived.length > 50 ? `<div style="text-align:center;font-size:12px;color:var(--text4);padding:12px">Showing latest 50 of ${archived.length}</div>` : ''}`
+  );
+}
+
 function renderTxArchive() {
   const txs = db.archivedTransactions.slice().sort((a,b)=>b.date.localeCompare(a.date));
   if (txs.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">🗃️</div><div class="empty-text">No archived transactions</div></div>`;
@@ -4082,7 +4165,10 @@ function renderReimbTab() {
     return `<div class="empty-state page-pad"><div class="empty-icon">🤝</div><div class="empty-text">No pending reimbursements</div><div style="font-size:12px;color:var(--text4)">Add a "Shared" transaction to track split expenses</div></div>`;
   }
 
-  let html = '<div class="page-pad">';
+  let html = `<div style="display:flex;justify-content:flex-end;padding:10px 20px 0">
+    <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openTxArchiveSheet()">Archive →</button>
+  </div>`;
+  html += '<div class="page-pad">';
   for (const [person, entries] of Object.entries(persons)) {
     // Aggregate totals per currency for this person
     const byCurr = {};
@@ -4686,7 +4772,10 @@ function renderLoanList(direction) {
   const settled = loans.filter(l=>l.settled);
   const totalPhp = active.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
 
-  let html = `<div class="page-pad">`;
+  let html = `<div class="page-pad">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openLoanArchiveSheet()">Archive →</button>
+    </div>`;
   if (active.length > 0) {
     html += `<div style="background:var(--bg3);border-radius:var(--r-md);padding:12px 15px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:12px;color:var(--text3)">${active.length} active ${direction==='lent'?'loans out':'debts'}</div>
@@ -4958,6 +5047,48 @@ function archiveLoan(loanId, direction) {
   loan.archivedAt = today(); loan.direction = direction;
   db.archivedLoans.push(loan);
   saveDB(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
+}
+
+function openLoanArchiveSheet() {
+  const archivedLent = db.loans.lent.filter(l=>l.archived);
+  const archivedBorrowed = db.loans.borrowed.filter(l=>l.archived);
+  const all = [
+    ...archivedLent.map(l=>({...l,direction:'lent'})),
+    ...archivedBorrowed.map(l=>({...l,direction:'borrowed'}))
+  ].sort((a,b)=>b.date.localeCompare(a.date));
+
+  if (all.length === 0) {
+    openDlg('Loan Archive',
+      '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived loans</div>',
+      '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>'
+    );
+    return;
+  }
+
+  const rows = all.map(l => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:500">${l.personName||'Unknown'}</div>
+        <div style="font-size:11px;color:var(--text4)">${l.direction==='lent'?'Lent':'Borrowed'} · ${fmtD(l.date)} · ${fmt(l.amount,l.currency)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="restoreLoan('${l.id}','${l.direction}')">↩ Restore</button>
+    </div>`).join('');
+
+  openSheet('gen', `Loan Archive (${all.length})`,
+    `<div>${rows}</div>`
+  );
+}
+
+function restoreLoan(loanId, direction) {
+  const list = direction === 'lent' ? db.loans.lent : db.loans.borrowed;
+  const loan = list.find(l => l.id === loanId);
+  if (loan) {
+    loan.archived = false;
+    saveDB();
+    closeSheet('gen');
+    renderLoans();
+    showToast('Loan restored ✓');
+  }
 }
 
 function renderLoanArchive() {
@@ -6865,19 +6996,19 @@ function renderCatsTab() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="section-title">Categories</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
-        <input type="checkbox" ${_showArchivedCats?'checked':''} onchange="_showArchivedCats=this.checked;renderSettings()"> Show Archived
+        <button class="btn btn-ghost btn-sm" onclick="showArchivedCatsPage()" style="font-size:12px">Archived →</button>
       </label>
     </div>`;
 
   for (const forType of ['expense','income']) {
-    const cats = db.categories[forType].filter(c=>_showArchivedCats||!c.archived);
+    const cats = db.categories[forType].filter(c=>!c.archived);
     html += `<div style="margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent)">${forType} Categories</div>
         <button class="btn btn-ghost btn-sm" onclick="openAddMajorCat('${forType}')">+ Add</button>
       </div>`;
     for (const cat of cats) {
-      const subcats = (cat.subcats||[]).filter(sc=>_showArchivedCats||!sc.archived);
+      const subcats = (cat.subcats||[]).filter(sc=>!sc.archived);
       html += `<div style="margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer" onclick="toggleCatExpand('cat-${cat.id}')">
           <div style="display:flex;align-items:center;gap:8px">
@@ -7145,6 +7276,43 @@ function saveEditCat(catId, forType) {
     cat.name = document.getElementById('ec-name')?.value?.trim()||cat.name;
     saveDB(); closeDlg(); renderSettings(); showToast('Saved!');
   }
+}
+
+function showArchivedCatsPage() {
+  const expArchived = db.categories.expense.filter(c=>c.archived);
+  const incArchived = db.categories.income.filter(c=>c.archived);
+  const expSubArchived = db.categories.expense.flatMap(c=>(c.subcats||[]).filter(s=>s.archived).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'expense',parentId:c.id})));
+  const incSubArchived = db.categories.income.flatMap(c=>(c.subcats||[]).filter(s=>s.archived).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'income',parentId:c.id})));
+  const all = [
+    ...expArchived.map(c=>({...c,forType:'expense',isParent:true})),
+    ...incArchived.map(c=>({...c,forType:'income',isParent:true})),
+    ...expSubArchived,
+    ...incSubArchived
+  ];
+
+  if (all.length === 0) {
+    openDlg('Archived Categories',
+      '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived categories</div>',
+      '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>'
+    );
+    return;
+  }
+
+  const rows = all.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:500">${c.icon||''} ${c.name}</div>
+        <div style="font-size:11px;color:var(--text4)">${c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="${c.isParent ? `toggleArchiveCat('${c.id}','${c.forType}')` : `toggleArchiveSubCat('${c.parentId}','${c.id}','${c.forType}')`};closeDlg()">
+        ↩ Restore
+      </button>
+    </div>`).join('');
+
+  openDlg('Archived Categories',
+    `<div style="max-height:60vh;overflow-y:auto">${rows}</div>`,
+    '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>'
+  );
 }
 
 function toggleArchiveCat(catId, forType) {
