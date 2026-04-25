@@ -447,7 +447,7 @@ option{background:var(--bg3);color:var(--text)}
     <div class="sb-item active" id="sn-dashboard" onclick="nav('dashboard')"><div class="si-icon">⊞</div>Dashboard</div>
     <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon">📊</div>Analytics</div>
     <div class="sb-item" id="sn-ai" onclick="nav('ai')"><div class="si-icon">🤖</div>AI Insights<span class="si-badge" id="ai-badge" style="display:none">!</span></div>
-    <div class="sb-item" id="sn-targets" onclick="nav('targets')"><div class="si-icon">🎯</div>Targets</div>
+    <div class="sb-item" id="sn-installments" onclick="nav('installments')"><div class="si-icon">💳</div>Installments</div>
     <div class="sb-divider"></div>
     <div class="sb-section">Money</div>
     <div class="sb-item" id="sn-transactions" onclick="nav('transactions')"><div class="si-icon">↕</div>Transactions</div>
@@ -461,6 +461,7 @@ option{background:var(--bg3);color:var(--text)}
     <div style="padding:0 12px"><button class="btn btn-primary btn-full" onclick="openAddSheet()" style="font-size:13px">+ Add Transaction</button></div>
   </nav>
 
+  <div id="sidebar-overlay" onclick="closeMobileSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:199;-webkit-tap-highlight-color:transparent"></div>
   <div id="main">
     <div id="page-header">
       <div class="ph-left">
@@ -1306,14 +1307,14 @@ function txAmountDisplay(tx) {
 // ════════════════════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════════════════════
-const PAGES = ['dashboard','analytics','ai','targets','transactions','accounts','loans','planning','settings'];
+const PAGES = ['dashboard','analytics','ai','installments','transactions','accounts','loans','planning','settings'];
 let currentPage = 'dashboard';
 
 function nav(page) {
   // Close mobile sidebar if open
   closeMobileSidebar();
   currentPage = page;
-  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',targets:'Targets',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
@@ -1329,7 +1330,7 @@ function nav(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '';
   content.scrollTop = 0;
-  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, targets:renderTargets, transactions:renderTransactions, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
+  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, installments:renderInstallments, transactions:renderTransactions, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   if (fn[page]) fn[page]();
 }
 
@@ -4395,10 +4396,29 @@ function renderAcctCard(a) {
 function renderArchivedAccounts() {
   const accts = db.accounts.filter(a=>a.archived);
   if (accts.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">🗃️</div><div class="empty-text">No archived accounts</div></div>`;
-  return `<div class="page-pad">${accts.map(a=>`<div class="acct-card" style="margin-bottom:8px;opacity:0.7" onclick="openAcctDetail('${a.id}')">
-    <div class="acct-card-top"><div class="acct-name">${a.name}</div><span class="pill pill-gray">Archived</span></div>
-    <div class="acct-balance" style="color:var(--text3)">${fmt(getAcctBalance(a.id),a.currency)}</div>
-  </div>`).join('')}</div>`;
+  return `<div class="page-pad">${accts.map(a=>{
+    const hasTxns = db.transactions.some(t=>t.accountId===a.id||t.fromAccountId===a.id||t.toAccountId===a.id);
+    const bal = a.lastKnownBalance !== undefined ? a.lastKnownBalance : getAcctBalance(a.id);
+    const archivedDate = a.archivedAt ? new Date(a.archivedAt).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '';
+    return `<div class="card" style="margin-bottom:10px;opacity:0.85">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:14px;font-weight:600">${a.name}</div>
+          <div style="font-size:11px;color:var(--text4)">${a.type} · ${a.currency}${archivedDate?' · Archived '+archivedDate:''}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:14px;color:var(--text3)">${fmt(bal,a.currency)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text4);margin-bottom:10px">
+        ${hasTxns
+          ? `<span style="color:var(--amber)">⚠ Has transactions — cannot be permanently deleted</span>`
+          : `<span style="color:var(--green)">✓ No transactions</span>`}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="restoreAccount('${a.id}')">↩ Restore</button>
+        ${!hasTxns ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteAccount('${a.id}')">🗑 Delete Permanently</button>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function openAcctDetail(acctId) {
@@ -4496,17 +4516,34 @@ function saveEditAccount(acctId) {
 
 function archiveAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
-  if (a) { a.archived=true; saveDB(); closeSheet('gen'); renderAccounts(); showToast('Account archived'); }
+  if (!a) return;
+  // Snapshot current balance before archiving
+  a.lastKnownBalance = getAcctBalance(acctId);
+  a.archivedAt = new Date().toISOString();
+  a.archived = true;
+  saveDB();
+  closeSheet('gen');
+  setAcctTab('archived');
+  renderAccounts();
+  showToast('Account archived');
 }
 function restoreAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (a) { a.archived=false; saveDB(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
 }
 function deleteAccount(acctId) {
-  openDlg('Delete Account?',
-    `<p style="font-size:14px;color:var(--text2)">This will only delete the account record. Past transactions will remain. This cannot be undone.</p>`,
+  const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
+  if (hasTxns) {
+    openDlg('Cannot Delete',
+      `<p style="font-size:14px;color:var(--text2)">This account has existing transactions and cannot be permanently deleted. You can archive it instead — all transaction history will be preserved.</p>`,
+      `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Okay</button>`
+    );
+    return;
+  }
+  openDlg('Delete Permanently?',
+    `<p style="font-size:14px;color:var(--text2)">This account has no transactions. It will be permanently deleted. This cannot be undone.</p>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="confirmDeleteAccount('${acctId}')">Delete</button>`
+     <button class="btn btn-danger btn-sm" onclick="confirmDeleteAccount('${acctId}')">Delete Permanently</button>`
   );
 }
 function confirmDeleteAccount(acctId) {
@@ -5037,41 +5074,113 @@ function saveAddLoan(direction) {
 // ════════════════════════════════════════════════════════════
 // TARGETS PAGE
 // ════════════════════════════════════════════════════════════
-function renderTargets() {
-  const targets = db.targets;
-  if (targets.length === 0) {
-    document.getElementById('page-content').innerHTML = `<div class="empty-state page-pad"><div class="empty-icon">🎯</div><div class="empty-text">No savings targets yet</div><button class="btn btn-primary btn-sm" onclick="openAddTarget()">+ Add Target</button></div>`;
+function renderInstallments() {
+  const installs = db.installments || [];
+  const active = installs.filter(i => !i.completed && !i.archived);
+  const completed = installs.filter(i => i.completed);
+
+  if (installs.length === 0) {
+    document.getElementById('page-content').innerHTML = `<div class="empty-state page-pad">
+      <div class="empty-icon">💳</div>
+      <div class="empty-text">No installments yet</div>
+      <div style="font-size:12px;color:var(--text4);margin-bottom:16px">Track your monthly payment plans</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddInstallment()">+ Add Installment</button>
+    </div>`;
     return;
   }
-  let html = '<div class="page-pad">';
-  for (const t of targets) {
-    const pct = Math.min((t.current||0)/t.goal*100,100);
-    const remaining = t.goal - (t.current||0);
-    const d = daysUntil(t.deadline);
-    const dailyNeeded = d && d > 0 ? remaining/d : null;
-    html += `<div class="target-card" onclick="openEditTarget('${t.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:22px">${t.icon||'🎯'}</span>
-          <div>
-            <div style="font-size:14px;font-weight:600">${t.name}</div>
-            ${t.deadline?`<div style="font-size:11px;color:var(--text3)">${fmtDFull(t.deadline)} ${d!==null?`· ${d}d left`:''}</div>`:''}
+
+  function installCard(inst) {
+    const totalMonths = inst.totalMonths || 12;
+    const paidMonths = inst.paidMonths || 0;
+    const monthlyAmt = inst.monthlyAmount || 0;
+    const alreadyPaid = inst.alreadyPaid || 0;
+    const totalPaidMonths = alreadyPaid + paidMonths;
+    const remainingMonths = totalMonths - totalPaidMonths;
+    const remaining = remainingMonths * monthlyAmt;
+    const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
+    const isComplete = remainingMonths <= 0;
+    const linkedTxs = (inst.linkedTxIds || []).map(id => db.transactions.find(t => t.id === id)).filter(Boolean);
+
+    // Month pills
+    const months = [];
+    const startDate = new Date(inst.startDate + '-01');
+    for (let i = 0; i < totalMonths; i++) {
+      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+      const label = d.toLocaleString('en', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
+      const isPaid = i < totalPaidMonths;
+      const isCurrent = i === totalPaidMonths;
+      months.push({ label, isPaid, isCurrent });
+    }
+
+    const pillsHtml = months.map(m =>
+      `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;margin:2px;
+        background:${m.isPaid ? 'rgba(45,217,138,0.1)' : m.isCurrent ? 'rgba(124,109,240,0.15)' : 'rgba(255,255,255,0.04)'};
+        color:${m.isPaid ? 'var(--green)' : m.isCurrent ? 'var(--accent)' : 'var(--text4)'}">
+        ${m.isPaid ? '✓ ' : m.isCurrent ? '▶ ' : ''}${m.label}
+      </span>`
+    ).join('');
+
+    const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
+
+    return `<div class="card" style="margin-bottom:12px${isComplete ? ';opacity:0.65' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${inst.name}</div>
+          <div style="font-size:11px;color:var(--text4)">📂 ${catName} · ${fmt(monthlyAmt,'PHP')}/month</div>
+        </div>
+        ${isComplete
+          ? `<span style="padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
+          : `<span style="padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} left</span>`}
+      </div>
+
+      ${!isComplete ? `
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
+        <span>${fmt(remaining,'PHP')} remaining</span>
+        <span>${totalPaidMonths} / ${totalMonths} months paid</span>
+      </div>
+      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
+        <div style="height:100%;border-radius:3px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-bottom:12px">
+        <span>${inst.startDate ? new Date(inst.startDate+'-01').toLocaleString('en',{month:'short',year:'numeric'}) : ''} – ${inst.endDate ? new Date(inst.endDate+'-01').toLocaleString('en',{month:'short',year:'numeric'}) : ''}</span>
+        <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
+      </div>` : `
+      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;border-radius:3px;background:var(--green);width:100%"></div>
+      </div>`}
+
+      <!-- Month pills -->
+      <div style="margin-bottom:12px;line-height:1.8">${pillsHtml}</div>
+
+      ${linkedTxs.length > 0 ? `
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:8px">Linked Transactions</div>
+      ${linkedTxs.slice(0,3).map(tx => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">${tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment'} <span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;background:var(--accent-bg);color:var(--accent)">🔗 linked</span></div>
+            <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}</div>
           </div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600">${fmt(t.current||0,t.currency)}</div>
-          <div style="font-size:11px;color:var(--text3)">of ${fmt(t.goal,t.currency)}</div>
-        </div>
-      </div>
-      <div class="target-bar"><div class="target-bar-fill" style="width:${pct.toFixed(1)}%;background:${pct>=100?'var(--green)':pct>=70?'var(--accent)':'var(--accent)'}"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
-        <span>${pct.toFixed(0)}% complete</span>
-        ${dailyNeeded?`<span>Need ${fmt(dailyNeeded,t.currency)}/day</span>`:`<span>${remaining>0?fmt(remaining,t.currency)+' to go':'✓ Reached!'}</span>`}
-      </div>
-      ${t.notes?`<div style="font-size:11px;color:var(--text3);margin-top:6px">${t.notes}</div>`:''}
+          <div style="font-family:var(--mono);font-size:13px;color:var(--red)">-${fmt(tx.amount,tx.currency)}</div>
+        </div>`).join('')}
+      ` : ''}
+
+      ${!isComplete ? `
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-ghost btn-sm" onclick="openInstallmentSuggest('${inst.id}')">🔍 Find matching</button>
+        <button class="btn btn-ghost btn-sm" onclick="markInstallmentPaid('${inst.id}')">✓ Mark month paid</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEditInstallment('${inst.id}')">✏️</button>
+      </div>` : ''}
     </div>`;
   }
-  html += '</div>';
+
+  const html = `<div class="page-pad">
+    ${active.map(installCard).join('')}
+    ${completed.length > 0 ? `
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:16px 0 10px">Completed</div>
+      ${completed.map(installCard).join('')}` : ''}
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="openAddInstallment()">+ Add Installment</button>
+  </div>`;
+
   document.getElementById('page-content').innerHTML = html;
 }
 
@@ -7040,7 +7149,22 @@ function saveEditCat(catId, forType) {
 
 function toggleArchiveCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
-  if (cat) { cat.archived=!cat.archived; saveDB(); closeDlg(); renderSettings(); }
+  if (!cat) return;
+  const isArchiving = !cat.archived;
+  if (isArchiving) {
+    // Migrate all subcats' transactions to preserve category name in notes
+    const subIds = (cat.subcats||[]).map(s=>s.id);
+    const catLabel = `${cat.icon} ${cat.name}`;
+    for (const tx of db.transactions) {
+      if (subIds.includes(tx.categoryId) || tx.categoryId === catId) {
+        const suffix = `[deleted category: ${catLabel}]`;
+        if (!tx.notes) tx.notes = suffix;
+        else if (!tx.notes.includes('[deleted category:')) tx.notes = tx.notes + ' · ' + suffix;
+      }
+    }
+  }
+  cat.archived = isArchiving;
+  saveDB(); closeDlg(); renderSettings();
 }
 
 function openEditSubCat(catId, subId, forType) {
@@ -7064,7 +7188,21 @@ function saveEditSubCat(catId, subId, forType) {
 function toggleArchiveSubCat(catId, subId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   const sc = cat?.subcats?.find(s=>s.id===subId);
-  if (sc) { sc.archived=!sc.archived; saveDB(); closeDlg(); renderSettings(); }
+  if (!sc) return;
+  const isArchiving = !sc.archived;
+  if (isArchiving) {
+    // Migrate transactions with this subcategory
+    const catLabel = `${sc.icon||cat?.icon||''} ${sc.name}`;
+    for (const tx of db.transactions) {
+      if (tx.categoryId === subId) {
+        const suffix = `[deleted category: ${catLabel}]`;
+        if (!tx.notes) tx.notes = suffix;
+        else if (!tx.notes.includes('[deleted category:')) tx.notes = tx.notes + ' · ' + suffix;
+      }
+    }
+  }
+  sc.archived = isArchiving;
+  saveDB(); closeDlg(); renderSettings();
 }
 
 // ── DATA TAB (Export/Import/Debug) ──
@@ -8245,6 +8383,246 @@ function renderAnalyticsExternal() {
     <div class="card" style="margin-bottom:16px"><div class="section-title" style="margin-bottom:8px">By Party</div>${partyRows}</div>
     <div class="card"><div class="section-title" style="margin-bottom:8px">Recent</div>${txs.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(t=>`<div class="tx-item" onclick="openTxDetail('${t.id}')"><div class="tx-icon">${t.type==='external-in'?'📥':'📤'}</div><div class="tx-meta"><div class="tx-name">${t.externalParty||'External'}</div><div class="tx-detail">${fmtD(t.date)}${t.notes?' · '+t.notes:''}</div></div><div class="tx-right"><div class="tx-amount ${t.type==='external-in'?'tx-pos':'tx-neg'}">${t.type==='external-in'?'+':'-'}${fmt(t.amount,t.currency)}</div></div></div>`).join('')}</div>
   </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// INSTALLMENTS SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+function openAddInstallment() {
+  const cats = [...(db.categories.expense||[]),...(db.categories.income||[])].filter(c=>!c.archived);
+  const catOpts = cats.flatMap(c => (c.subcats||[]).filter(s=>!s.archived).map(s =>
+    `<option value="${s.id}">${c.icon} ${c.name} › ${s.icon} ${s.name}</option>`
+  )).join('');
+
+  openSheet('gen', 'New Installment', `
+    <div class="form-group">
+      <label class="form-label">Name *</label>
+      <input class="form-input" id="inst-name" placeholder="e.g. iPhone 16">
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Icon</label>
+        <input class="form-input" id="inst-icon" placeholder="💳" maxlength="2">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Monthly Amount *</label>
+        <input class="form-input" type="number" id="inst-amount" placeholder="3745" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-input" id="inst-cat">${catOpts}</select>
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Total Months *</label>
+        <input class="form-input" type="number" id="inst-total" placeholder="24" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Already Paid (months)</label>
+        <input class="form-input" type="number" id="inst-paid" placeholder="0" min="0" value="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Start Month * (YYYY-MM)</label>
+      <input class="form-input" id="inst-start" placeholder="${new Date().toISOString().slice(0,7)}" maxlength="7">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input class="form-input" id="inst-notes" placeholder="e.g. from BDO credit card">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveNewInstallment()">Save Installment</button>
+  `);
+}
+
+function saveNewInstallment() {
+  const name = document.getElementById('inst-name')?.value?.trim();
+  const icon = document.getElementById('inst-icon')?.value?.trim() || '💳';
+  const monthlyAmount = parseFloat(document.getElementById('inst-amount')?.value);
+  const categoryId = document.getElementById('inst-cat')?.value;
+  const totalMonths = parseInt(document.getElementById('inst-total')?.value);
+  const alreadyPaid = parseInt(document.getElementById('inst-paid')?.value) || 0;
+  const startDate = document.getElementById('inst-start')?.value?.trim();
+  const notes = document.getElementById('inst-notes')?.value?.trim() || '';
+
+  if (!name || !monthlyAmount || !totalMonths || !startDate) {
+    showToast('Fill in all required fields'); return;
+  }
+  if (!/^\d{4}-\d{2}$/.test(startDate)) {
+    showToast('Start month format: YYYY-MM (e.g. 2025-10)'); return;
+  }
+
+  // Compute end date
+  const [sy, sm] = startDate.split('-').map(Number);
+  const endD = new Date(sy, sm - 1 + totalMonths - 1, 1);
+  const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,'0')}`;
+
+  if (!db.installments) db.installments = [];
+  db.installments.push({
+    id: genId(),
+    name, icon, monthlyAmount, categoryId,
+    totalMonths, alreadyPaid, paidMonths: 0,
+    startDate, endDate, notes,
+    linkedTxIds: [],
+    completed: false,
+    createdAt: new Date().toISOString()
+  });
+  saveDB();
+  closeSheet('gen');
+  renderInstallments();
+  showToast('Installment added ✓');
+}
+
+function markInstallmentPaid(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  inst.paidMonths = (inst.paidMonths || 0) + 1;
+  const totalPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
+  if (totalPaid >= inst.totalMonths) {
+    inst.completed = true;
+    showToast('🎉 Installment fully paid off!');
+  } else {
+    showToast('Month marked as paid ✓');
+  }
+  saveDB();
+  renderInstallments();
+}
+
+function openInstallmentSuggest(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  const monthly = inst.monthlyAmount;
+  const tolerance = monthly * 0.1; // ±10%
+
+  // Find matching transactions — same category, similar amount, not already linked
+  const linked = new Set(inst.linkedTxIds || []);
+  const matches = db.transactions.filter(t =>
+    !t.archived &&
+    (t.type === 'expense' || t.type === 'shared') &&
+    t.categoryId === inst.categoryId &&
+    Math.abs(t.amount - monthly) <= tolerance &&
+    !linked.has(t.id)
+  ).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 10);
+
+  if (matches.length === 0) {
+    showToast('No matching transactions found');
+    return;
+  }
+
+  const rowsHtml = matches.map(tx => {
+    const isExact = tx.amount === monthly;
+    const diff = Math.abs(tx.amount - monthly);
+    return `<div class="suggest-row" id="sr-${tx.id}" onclick="toggleSuggestRow('${tx.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg3);margin-bottom:6px;cursor:pointer;border:1.5px solid transparent">
+      <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border3);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0" id="src-${tx.id}"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment'}</div>
+        <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}${!isExact ? ` · <span style="color:var(--amber)">⚠ diff: ${fmt(diff,'PHP')}</span>` : ''}</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:13px;color:var(--red)">-${fmt(tx.amount,tx.currency)}</div>
+    </div>`;
+  }).join('');
+
+  openDlg('🔍 Find Matching Transactions',
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Showing ${inst.categoryId ? getCategoryDisplay(inst.categoryId)?.name : 'matching'} transactions near ${fmt(monthly,'PHP')}</div>
+     <div id="suggest-rows">${rowsHtml}</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmLinkTransactions('${instId}')">Link Selected</button>`
+  );
+  window._suggestInstId = instId;
+  window._suggestSelected = new Set();
+}
+
+function toggleSuggestRow(txId) {
+  if (!window._suggestSelected) window._suggestSelected = new Set();
+  const el = document.getElementById('sr-' + txId);
+  const check = document.getElementById('src-' + txId);
+  if (window._suggestSelected.has(txId)) {
+    window._suggestSelected.delete(txId);
+    el.style.borderColor = 'transparent';
+    el.style.background = 'var(--bg3)';
+    check.textContent = '';
+    check.style.background = '';
+    check.style.borderColor = 'var(--border3)';
+  } else {
+    window._suggestSelected.add(txId);
+    el.style.borderColor = 'var(--accent)';
+    el.style.background = 'var(--accent-bg)';
+    check.textContent = '✓';
+    check.style.background = 'var(--accent)';
+    check.style.borderColor = 'var(--accent)';
+  }
+}
+
+function confirmLinkTransactions(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst || !window._suggestSelected) { closeDlg(); return; }
+  const toLink = [...window._suggestSelected];
+  if (toLink.length === 0) { showToast('No transactions selected'); return; }
+  if (!inst.linkedTxIds) inst.linkedTxIds = [];
+  inst.linkedTxIds.push(...toLink);
+  // Update paidMonths based on linked count
+  inst.paidMonths = Math.max(inst.paidMonths || 0, inst.linkedTxIds.length);
+  const totalPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
+  if (totalPaid >= inst.totalMonths) inst.completed = true;
+  saveDB();
+  closeDlg();
+  renderInstallments();
+  showToast(`${toLink.length} transaction${toLink.length > 1 ? 's' : ''} linked ✓`);
+}
+
+function openEditInstallment(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  openSheet('gen', 'Edit Installment', `
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="einst-name" value="${inst.name}">
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Monthly Amount</label>
+        <input class="form-input" type="number" id="einst-amount" value="${inst.monthlyAmount}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Already Paid (months)</label>
+        <input class="form-input" type="number" id="einst-paid" value="${inst.alreadyPaid || 0}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="einst-notes" value="${inst.notes || ''}">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveEditInstallment('${instId}')">Save</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;color:var(--red)" onclick="archiveInstallment('${instId}')">Archive</button>
+  `);
+}
+
+function saveEditInstallment(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  inst.name = document.getElementById('einst-name')?.value?.trim() || inst.name;
+  inst.monthlyAmount = parseFloat(document.getElementById('einst-amount')?.value) || inst.monthlyAmount;
+  inst.alreadyPaid = parseInt(document.getElementById('einst-paid')?.value) || 0;
+  inst.notes = document.getElementById('einst-notes')?.value?.trim() || '';
+  const totalPaid = inst.alreadyPaid + (inst.paidMonths || 0);
+  if (totalPaid >= inst.totalMonths) inst.completed = true;
+  saveDB();
+  closeSheet('gen');
+  renderInstallments();
+  showToast('Installment updated ✓');
+}
+
+function archiveInstallment(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  inst.archived = true;
+  saveDB();
+  closeSheet('gen');
+  renderInstallments();
+  showToast('Installment archived');
 }
 
 
