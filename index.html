@@ -8164,6 +8164,12 @@ async function loadFromDrive() {
 async function saveToDriveSilent() {
   if (!_gdriveAccessToken) return;
   try {
+    // Check token validity first — if expired, clear and bail silently
+    const testRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + _gdriveAccessToken);
+    if (!testRes.ok) {
+      _gdriveAccessToken = null; // Token expired — will re-auth next manual save
+      return;
+    }
     const folderId = await getOrCreateBackupsFolder();
     const now = new Date();
     const dateStr = now.toISOString().replace(/[:.]/g,'-').slice(0,19);
@@ -8199,9 +8205,11 @@ function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(()=>{
-    ensureDriveToken(() => {
+    // Only auto-save if token is already available — no popup on background save
+    if (_gdriveAccessToken) {
       saveToDriveSilent();
-    });
+    }
+    // If no token, skip silently — user can manually save next time
   }, 5*60*1000);
 }
 
