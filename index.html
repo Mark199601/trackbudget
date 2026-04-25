@@ -5682,6 +5682,37 @@ function renderAnalyticsOverview() {
   const [mY, mM] = metricMk.split('-').map(Number);
   const daysInMetricMonth = new Date(mY, mM, 0).getDate();
 
+  // ── Pie chart data ──
+  const allTxs = db.transactions.filter(t =>
+    !t.archived && !t.isSettlement && t.date &&
+    (period === 'ytd'
+      ? t.date.startsWith(String(currentYear))
+      : t.date.startsWith(metricMk))
+  );
+  const expCats = {}, incCats = {};
+  let expTotal = 0, incTotal = 0;
+  const pieColors = ['#7c6df0','#f0565a','#f0a832','#2dd98a','#22d4c8','#b07ef0','#4a8cf0','#f07070','#70c4f0'];
+  for (const tx of allTxs) {
+    if (tx.type === 'expense' || tx.type === 'shared') {
+      const cat = getCategoryDisplay(tx.categoryId);
+      const name = cat.name.replace(/^[^ ]+ /,'');
+      const amt = txToPhp(tx);
+      expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:''});
+      expCats[name].total += amt;
+      expTotal += amt;
+    } else if (tx.type === 'income') {
+      const cat = getCategoryDisplay(tx.categoryId);
+      const name = cat.name.replace(/^[^ ]+ /,'');
+      const amt = txToPhp(tx);
+      incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:''});
+      incCats[name].total += amt;
+      incTotal += amt;
+    }
+  }
+  // Assign colors
+  Object.keys(expCats).forEach((k,i) => expCats[k].color = pieColors[i % pieColors.length]);
+  Object.keys(incCats).forEach((k,i) => incCats[k].color = pieColors[i % pieColors.length]);
+
   const barChart = chartMonths.map(m=>`
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
       <div style="width:100%;display:flex;gap:2px;height:80px;align-items:flex-end">
@@ -5709,6 +5740,18 @@ function renderAnalyticsOverview() {
       <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('overview')">
         ${selectorOpts}
       </select>
+    </div>
+
+    <!-- Pie Charts -->
+    <div class="form-row fr2" style="margin-bottom:16px">
+      <div class="card" style="padding:14px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Expenses by Category</div>
+        ${buildPieChart(expCats, expTotal, 'exp')}
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Income by Category</div>
+        ${buildPieChart(incCats, incTotal, 'inc')}
+      </div>
     </div>
 
     <!-- Metric cards -->
@@ -5751,47 +5794,142 @@ function renderAnalyticsOverview() {
   </div>`;
 }
 
+function buildPieChart(cats, total, prefix) {
+  const entries = Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
+  if (!entries.length || total === 0) {
+    return `<div style="text-align:center;color:var(--text4);font-size:12px;padding:20px 0">No data</div>`;
+  }
+  const disp = db.displayCurrency || 'PHP';
+  const r = 50, cx = 60, cy = 60;
+  let cumAngle = -90;
+  const slices = entries.map(([name, v]) => {
+    const pct = v.total / total;
+    const angle = pct * 360;
+    const startRad = cumAngle * Math.PI / 180;
+    const endRad = (cumAngle + angle) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+    const large = angle > 180 ? 1 : 0;
+    const path = angle >= 359.9
+      ? `M ${cx} ${cy} m -${r} 0 a ${r} ${r} 0 1 1 ${r*2} 0 a ${r} ${r} 0 1 1 -${r*2} 0`
+      : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+    cumAngle += angle;
+    return { path, color: v.color, name, total: v.total, pct: (pct*100).toFixed(1), icon: v.icon };
+  });
+
+  const svgSlices = slices.map(s =>
+    `<path d="${s.path}" fill="${s.color}" stroke="var(--bg2)" stroke-width="1.5" opacity="0.9"/>`
+  ).join('');
+
+  const legend = slices.slice(0,5).map(s =>
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <div style="width:10px;height:10px;border-radius:2px;background:${s.color};flex-shrink:0"></div>
+      <div style="font-size:11px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${s.icon} ${s.name}</div>
+      <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${s.pct}%</div>
+    </div>`
+  ).join('');
+
+  return `<div style="display:flex;gap:12px;align-items:center">
+    <svg width="120" height="120" viewBox="0 0 120 120" style="flex-shrink:0">
+      ${svgSlices}
+      <circle cx="${cx}" cy="${cy}" r="22" fill="var(--bg2)"/>
+      <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="9" fill="var(--text3)" font-family="system-ui">${fmt(fromPhp(total,disp),disp)}</text>
+    </svg>
+    <div style="flex:1;min-width:0">${legend}${slices.length>5?`<div style="font-size:10px;color:var(--text4)">+${slices.length-5} more</div>`:''}</div>
+  </div>`;
+}
+
 function renderAnalyticsSpending() {
   const disp = db.displayCurrency || 'PHP';
-  const mk = currMonthKey();
-  const txs = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date?.startsWith(mk)&&(t.type==='expense'||t.type==='shared'));
-  // Group by major category
+  const period = window._analyticsOverviewPeriod || 'ytd';
+  const now = new Date();
+
+  // Determine month key(s) to show
+  let mks = [];
+  if (period === 'ytd') {
+    // All months this year up to current
+    for (let i = 0; i <= now.getMonth(); i++) {
+      mks.push(`${now.getFullYear()}-${String(i+1).padStart(2,'0')}`);
+    }
+  } else {
+    mks = [period];
+  }
+
+  const txs = db.transactions.filter(t =>
+    !t.archived && !t.isSettlement &&
+    mks.some(mk => t.date?.startsWith(mk)) &&
+    (t.type==='expense' || t.type==='shared')
+  );
+
+  // Group by parent category with subcategory drill-down
   const catTotals = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    // Use snapshot-aware conversion
     const phpAmt = txToPhp(tx);
-    const key = cat.name.replace(/^[^ ]+ /,'');
-    if (!catTotals[key]) catTotals[key] = {total:0, icon:cat.icon, count:0};
-    catTotals[key].total += phpAmt;
-    catTotals[key].count++;
+    const parentName = cat.name.replace(/^[^ ]+ /,'');
+    const parentIcon = cat.icon;
+    const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
+    if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{} };
+    catTotals[parentName].total += phpAmt;
+    if (!catTotals[parentName].subs[subName]) catTotals[parentName].subs[subName] = { total:0, icon:cat.icon };
+    catTotals[parentName].subs[subName].total += phpAmt;
   }
+
   const sorted = Object.entries(catTotals).sort((a,b)=>b[1].total-a[1].total);
   const total = sorted.reduce((s,[,v])=>s+v.total,0);
+  const colors = ['var(--accent)','var(--red)','var(--amber)','var(--green)','var(--teal)','var(--purple)','var(--blue)'];
 
-  if (sorted.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">📊</div><div class="empty-text">No expense data this month</div></div>`;
+  const periodLabel = period === 'ytd'
+    ? `YTD ${now.getFullYear()}`
+    : new Date(period+'-01').toLocaleString('en',{month:'long',year:'numeric'});
 
-  const bars = sorted.map(([name,v],i)=>{
+  if (sorted.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">📊</div><div class="empty-text">No expense data for ${periodLabel}</div></div>`;
+
+  const bars = sorted.map(([name,v],i) => {
     const pct = total > 0 ? (v.total/total*100) : 0;
-    const colors = ['var(--accent)','var(--red)','var(--amber)','var(--green)','var(--teal)','var(--purple)','var(--blue)'];
-    return `<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-        <span>${v.icon} ${name}</span>
-        <span style="font-family:var(--mono)">${fmt(fromPhp(v.total,disp),disp)} <span style="color:var(--text4);font-size:11px">${pct.toFixed(0)}%</span></span>
+    const color = colors[i % colors.length];
+    const subEntries = Object.entries(v.subs).sort((a,b)=>b[1].total-a[1].total);
+    const subRows = subEntries.length > 1 ? subEntries.map(([sName, sv]) => {
+      const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
+      return `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0 3px 20px;border-bottom:1px solid var(--border)">
+        <span>${sv.icon} ${sName}</span>
+        <span style="font-family:var(--mono)">${fmt(fromPhp(sv.total,disp),disp)} <span style="color:var(--text4)">${sPct.toFixed(0)}%</span></span>
+      </div>`;
+    }).join('') : '';
+
+    return `<div style="margin-bottom:4px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">
+      <div style="padding:10px 12px;cursor:${subEntries.length>1?'pointer':'default'}" onclick="${subEntries.length>1?`toggleSpendingDrill('drill-${i}')`:''}" >
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span style="font-weight:500">${v.icon} ${name}</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="font-family:var(--mono)">${fmt(fromPhp(v.total,disp),disp)}</span>
+            <span style="color:var(--text4);font-size:11px">${pct.toFixed(0)}%</span>
+            ${subEntries.length>1?`<span style="font-size:10px;color:var(--text4)">▼</span>`:''}
+          </span>
+        </div>
+        <div style="height:5px;background:var(--bg5);border-radius:3px;overflow:hidden">
+          <div style="height:100%;border-radius:3px;background:${color};width:${pct.toFixed(1)}%"></div>
+        </div>
       </div>
-      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden">
-        <div style="height:100%;border-radius:3px;background:${colors[i%colors.length]};width:${pct.toFixed(1)}%"></div>
-      </div>
+      ${subEntries.length>1?`<div id="drill-${i}" style="display:none;background:var(--bg3)">${subRows}</div>`:''}
     </div>`;
   });
 
   return `<div class="page-pad">
     <div class="metric-card" style="margin-bottom:16px">
-      <div class="metric-label">Total Expenses — ${fmtMonth(mk+'-01')}</div>
+      <div class="metric-label">TOTAL EXPENSES — ${periodLabel.toUpperCase()}</div>
       <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(total,disp),disp)}</div>
+      <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transactions · ${sorted.length} categories</div>
     </div>
-    <div class="card">${bars.join('')}</div>
+    <div>${bars.join('')}</div>
   </div>`;
+}
+
+function toggleSpendingDrill(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function renderAnalyticsTrends() {
