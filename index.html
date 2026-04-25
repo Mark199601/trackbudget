@@ -4102,10 +4102,17 @@ function confirmDeleteTx(txId) {
   const deleted = before - db.archivedTransactions.length;
   saveDB();
   closeDlg();
-  renderTransactions();
+  // Snappy — if archive sheet is open, re-render it; else render transactions
+  const sheetOpen = document.getElementById('sheet-gen') &&
+    document.getElementById('sheet-gen').style.display !== 'none';
+  if (sheetOpen) {
+    openTxArchiveSheet();
+  } else {
+    renderTransactions();
+  }
   showToast(deleted > 0
-    ? `Permanently deleted (+ ${deleted} linked transaction${deleted > 1 ? 's' : ''})`
-    : 'Deleted permanently');
+    ? `Deleted (+ ${deleted} linked)`
+    : '🗑 Permanently deleted');
 }
 
 function openTxArchiveSheet() {
