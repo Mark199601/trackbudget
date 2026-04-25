@@ -4091,12 +4091,9 @@ function restoreTx(txId) {
 
   saveDB();
   closeDlg();
-  // Snappy — refresh archive sheet if open, else render transactions
-  if (document.getElementById('sheet-gen')?.style.display !== 'none') {
-    openTxArchiveSheet();
-  } else {
-    renderTransactions();
-  }
+  // Snappy — re-render archive sheet
+  openTxArchiveSheet();
+  if (currentPage === 'transactions') renderTransactions();
   showToast(restored > 0
     ? `↩ Restored + ${restored} linked`
     : '↩ Transaction restored');
@@ -4135,13 +4132,9 @@ function confirmDeleteTx(txId) {
   saveDB();
   closeDlg();
   // Snappy — if archive sheet is open, re-render it; else render transactions
-  const sheetOpen = document.getElementById('sheet-gen') &&
-    document.getElementById('sheet-gen').style.display !== 'none';
-  if (sheetOpen) {
-    openTxArchiveSheet();
-  } else {
-    renderTransactions();
-  }
+  // Always re-render archive sheet after delete (it was open since user clicked from it)
+  openTxArchiveSheet();
+  if (currentPage === 'transactions') renderTransactions();
   showToast(deleted > 0
     ? `Deleted (+ ${deleted} linked)`
     : '🗑 Permanently deleted');
