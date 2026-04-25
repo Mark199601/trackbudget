@@ -3035,13 +3035,9 @@ let _txMonth = currMonthKey();
 
 function renderTransactions() {
   const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn ${_txTab==='log'?'active':''}" onclick="setTxTab('log')">Log</button>
-    <button class="tab-btn ${_txTab==='reimb'?'active':''}" onclick="setTxTab('reimb')">Reimbursements</button>
+    <button class="tab-btn active">Log</button>
   </div>`;
-
-  let content = '';
-  if (_txTab === 'log') content = renderTxLog();
-  else content = renderReimbTab();
+  let content = renderTxLog();
 
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
@@ -3374,11 +3370,13 @@ function openTxDetail(txId) {
         ? `💰 Reimb. from ${c.reimbPerson||'someone'}`
         : c.notes || 'Child';
       const archivedTag = c.archived ? `<span style="font-size:9px;color:var(--text4);margin-left:4px">[archived]</span>` : '';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)">
-        <div style="font-size:12px;color:var(--text2)">${childLabel}${archivedTag}</div>
-        <div style="display:flex;align-items:center;gap:6px">
+      const isReimb = c.isAutoReimb;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;color:var(--text2);flex:1;cursor:pointer" onclick="closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)">${childLabel}${archivedTag}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <div style="font-family:var(--mono);font-size:12px" class="${cAmtD.cls}">${cAmtD.str}</div>
-          <span style="font-size:10px;color:var(--accent)">→</span>
+          <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)" title="View">→</span>
+          ${isReimb ? `<span style="font-size:12px;color:var(--red);cursor:pointer" onclick="event.stopPropagation();deleteChildReimb('${c.id}','${tx.id}')" title="Delete settlement">🗑</span>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -3982,6 +3980,54 @@ function archiveTx(txId, skipConfirm) {
   else if (currentPage==='dashboard') renderDashboard();
   else if (currentPage==='accounts') renderAccounts();
   showToast(cascaded > 0 ? `Archived (${cascaded} linked also removed)` : 'Transaction archived');
+}
+
+function deleteChildReimb(childId, parentId) {
+  openDlg('Delete Settlement?',
+    `<div style="font-size:14px;color:var(--text2);line-height:1.6">
+      This will delete the reimbursement settlement and reset the status back to <strong>unsettled</strong>.<br><br>
+      The original shared transaction will remain intact.
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmDeleteChildReimb('${childId}','${parentId}')">Delete</button>`
+  );
+}
+
+function confirmDeleteChildReimb(childId, parentId) {
+  // Find and remove child from transactions
+  const childIdx = db.transactions.findIndex(t => t.id === childId);
+  if (childIdx >= 0) db.transactions.splice(childIdx, 1);
+
+  // Also check archivedTransactions
+  const archIdx = (db.archivedTransactions||[]).findIndex(t => t.id === childId);
+  if (archIdx >= 0) db.archivedTransactions.splice(archIdx, 1);
+
+  // Reset parent paidSoFar for this person
+  const parent = db.transactions.find(t => t.id === parentId);
+  if (parent) {
+    const child = db.transactions.find(t=>t.id===childId) ||
+                  (db.archivedTransactions||[]).find(t=>t.id===childId);
+    const person = child?.reimbPerson;
+    if (person && parent.paidSoFar) {
+      // Remove or reduce paidSoFar for this person
+      if (parent.paidSoFar[person]) {
+        const childAmt = child?.amount || 0;
+        parent.paidSoFar[person] = Math.max(0, (parent.paidSoFar[person] || 0) - childAmt);
+        if (parent.paidSoFar[person] === 0) delete parent.paidSoFar[person];
+      }
+    }
+    // Recalculate settled status
+    const persons = parent.persons || [];
+    const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
+    const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+v, 0);
+    parent.settled = totalPaid >= totalOwed && totalOwed > 0;
+  }
+
+  saveDB();
+  closeDlg();
+  // Re-open parent detail
+  setTimeout(() => openTxDetail(parentId), 100);
+  showToast('Settlement deleted — marked unsettled');
 }
 
 function restoreTx(txId) {
