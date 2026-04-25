@@ -3067,6 +3067,8 @@ function renderTxLog() {
     if (t.archived || !t.date || !t.date.startsWith(_txMonth)) return false;
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
     if (t.isLoanPayment && _txFilter !== 'loans') return false;
+    // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
+    if (t.isAutoReimb) return false;
     if (_txFilter === 'all') return true;
     if (_txFilter === 'loans') return !!(t.isLoanTx || t.isLoanPayment);
     return t.type === _txFilter;
@@ -4059,20 +4061,26 @@ function confirmDeleteTx(txId) {
 }
 
 function openTxArchiveSheet() {
-  const archived = db.transactions.filter(t=>t.archived).sort((a,b)=>b.date.localeCompare(a.date));
+  const archived = (db.archivedTransactions || [])
+    .filter(t => !t.cascadedFrom) // show parents only, not auto-cascaded children
+    .sort((a,b) => (b.archivedAt||b.date||'').localeCompare(a.archivedAt||a.date||''));
+
   if (archived.length === 0) {
-    openDlg('Archive', '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived transactions</div>',
+    openDlg('Archive',
+      '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived transactions</div>',
       '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>');
     return;
   }
-  const rows = archived.slice(0,50).map(tx => {
+
+  const rows = archived.slice(0, 50).map(tx => {
     const cat = getCategoryDisplay(tx.categoryId);
     const {cls, str} = txAmountDisplay(tx);
-    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+    const archivedDate = tx.archivedAt ? fmtD(tx.archivedAt) : '';
+    return `<div class="tx-item" onclick="openArchivedTxDetail('${tx.id}')">
       <div class="tx-icon">${cat?.icon||'📋'}</div>
       <div class="tx-meta">
-        <div class="tx-name">${cat?.name||tx.type}</div>
-        <div class="tx-detail">${fmtD(tx.date)} · <span style="color:var(--amber)">Archived</span></div>
+        <div class="tx-name">${cat?.name || tx.type}</div>
+        <div class="tx-detail">${fmtD(tx.date)}${archivedDate ? ' · archived ' + archivedDate : ''}</div>
       </div>
       <div class="tx-right"><div class="tx-amount ${cls}">${str}</div></div>
     </div>`;
@@ -4081,6 +4089,24 @@ function openTxArchiveSheet() {
   openSheet('gen', `Archive (${archived.length})`,
     `<div>${rows}</div>
      ${archived.length > 50 ? `<div style="text-align:center;font-size:12px;color:var(--text4);padding:12px">Showing latest 50 of ${archived.length}</div>` : ''}`
+  );
+}
+
+function openArchivedTxDetail(txId) {
+  const tx = (db.archivedTransactions||[]).find(t=>t.id===txId);
+  if (!tx) return;
+  const cat = getCategoryDisplay(tx.categoryId);
+  const {cls, str} = txAmountDisplay(tx);
+  openDlg(cat?.name || tx.type,
+    `<div style="font-size:13px;line-height:1.8;color:var(--text2)">
+      <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:${cls==='tx-pos'?'var(--green)':'var(--red)'};margin-bottom:12px">${str}</div>
+      <div>📅 ${fmtD(tx.date)}</div>
+      ${tx.notes ? `<div>📝 ${tx.notes}</div>` : ''}
+      <div style="margin-top:8px;font-size:11px;color:var(--amber)">🗃 Archived ${tx.archivedAt ? fmtD(tx.archivedAt) : ''}</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>
+     <button class="btn btn-primary btn-sm" onclick="restoreTx('${txId}')">↩ Restore</button>
+     <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="confirmDeleteTx('${txId}')">🗑 Delete</button>`
   );
 }
 
