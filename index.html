@@ -1936,6 +1936,23 @@ function renderTxRow(tx, showDate=false) {
     detail = acct.name;
   }
   if (tx.notes) detail += ` · ${tx.notes}`;
+  // For shared txs — show child settlements inline below
+  let settlementRows = '';
+  if (tx.type === 'shared') {
+    const settlements = db.transactions.filter(t => t.parentId === tx.id && t.isAutoReimb);
+    if (settlements.length > 0) {
+      settlementRows = settlements.map(s => {
+        const sAmt = txAmountDisplay(s);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text4)">↳</span>
+          <span style="font-size:12px;color:var(--green);flex:1">💰 Reimb. from ${s.reimbPerson||'?'}</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(s.amount,s.currency)}</span>
+          <span style="font-size:10px;color:var(--green)">✓</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
   return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
@@ -1946,7 +1963,7 @@ function renderTxRow(tx, showDate=false) {
       <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
       ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
     </div>
-  </div>`;
+  </div>${settlementRows}`;
 }
 
 // ════════════════════════════════════════════════════════════
