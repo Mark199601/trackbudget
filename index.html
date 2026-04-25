@@ -90,8 +90,8 @@ input,select,textarea{font-family:var(--font)}
 .bn-add:active .bn-add-circle{transform:scale(0.92)}
 
 @media(max-width:1023px){
-  #sidebar{display:none;position:fixed;left:0;top:0;bottom:0;z-index:200;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1)}
-  #sidebar.sidebar-open{display:flex;transform:translateX(0)}
+  #sidebar{display:flex;position:fixed;left:0;top:0;bottom:0;z-index:200;transform:translateX(-100%);transition:transform 0.32s cubic-bezier(0.32,0.72,0,1);visibility:hidden}
+  #sidebar.sidebar-open{transform:translateX(0);visibility:visible}
   #bottom-nav{display:block}
   #page-header{padding:0 16px;height:52px}
   #page-content{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
@@ -462,7 +462,7 @@ option{background:var(--bg3);color:var(--text)}
     <div style="padding:0 12px"><button class="btn btn-primary btn-full" onclick="openAddSheet()" style="font-size:13px">+ Add Transaction</button></div>
   </nav>
 
-  <div id="sidebar-overlay" onclick="closeMobileSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:199;-webkit-tap-highlight-color:transparent"></div>
+  <div id="sidebar-overlay" onclick="closeMobileSidebar()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:199;-webkit-tap-highlight-color:transparent;opacity:0;pointer-events:none;transition:opacity 0.32s ease"></div>
   <div id="main">
     <div id="page-header">
       <div class="ph-left">
@@ -980,12 +980,10 @@ function defaultDB() {
           {id:'sc-philhealth',name:'Philhealth',icon:'🏥',archived:false},
           {id:'sc-tax',name:'Tax',icon:'📋',archived:false},
           {id:'sc-sss',name:'SSS',icon:'🛡️',archived:false},
-          {id:'sc-atemafe',name:'Ate Mafe Loan',icon:'👩',archived:false},
+          {id:'sc-pagibig',name:'Pag-IBIG',icon:'🏠',archived:false},
+          {id:'sc-insurance',name:'Insurance',icon:'🛡️',archived:false},
         ]},
         {id:'c-shopping',name:'Shopping',icon:'🛍️',archived:false,subcats:[
-          {id:'sc-iphone',name:'iPhone (Installment)',icon:'📱',archived:false},
-          {id:'sc-ipad',name:'iPad (Installment)',icon:'📲',archived:false},
-          {id:'sc-cabinet',name:'Cabinet (Installment)',icon:'🗄️',archived:false},
           {id:'sc-shopee',name:'Shopee/Lazada',icon:'📦',archived:false},
           {id:'sc-clothing',name:'Clothing',icon:'👗',archived:false},
           {id:'sc-gadgets',name:'Gadgets',icon:'💻',archived:false},
@@ -1020,8 +1018,7 @@ function defaultDB() {
         {id:'c-returns',name:'Returns & Gains',icon:'📈',archived:false,subcats:[
           {id:'sc-investreturns',name:'Investment Returns',icon:'📈',archived:false},
           {id:'sc-forexgain',name:'Forex Gain',icon:'📊',archived:false},
-          {id:'sc-loanrepayment',name:'Loan Repayment Received',icon:'🤝',archived:false},
-          {id:'sc-reimbreceived',name:'Reimbursement Received',icon:'🔄',archived:false},
+          {id:'sc-dividends',name:'Dividends',icon:'💵',archived:false},
         ]},
         {id:'c-otherincome',name:'Other Income',icon:'💰',archived:false,subcats:[
           {id:'sc-otherincome',name:'Other Income',icon:'💰',archived:false},
@@ -1139,7 +1136,7 @@ let db = (() => {
     // Migration: tag existing reimbursement and loan settlement transactions
     // that were created before isSettlement flag existed
     for (const tx of [...(parsed.transactions||[]), ...(parsed.archivedTransactions||[])]) {
-      if (!tx.isSettlement && (tx.isAutoReimb || tx.categoryId === 'sc-loanrepayment')) {
+      if (!tx.isSettlement && tx.isAutoReimb) {
         tx.isSettlement = true;
       }
     }
@@ -5041,7 +5038,7 @@ function settleLoan(loanId, direction, full) {
       type: direction==='lent' ? 'income' : 'expense',
       amount: payAmt,
       currency: payCurr,
-      categoryId: direction==='lent' ? 'sc-loanrepayment' : 'c-obligations',
+      categoryId: direction==='lent' ? 'sc-investreturns' : 'sc-misc',
       accountId: payAcctId,
       date: today(),
       time: nowTime(),
@@ -8368,7 +8365,7 @@ function openMobileSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) sidebar.classList.add('sidebar-open');
-  if (overlay) overlay.style.display = 'block';
+  if (overlay) { overlay.style.opacity = '1'; overlay.style.pointerEvents = 'auto'; }
   document.body.style.overflow = 'hidden';
 }
 
@@ -8376,7 +8373,7 @@ function closeMobileSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) sidebar.classList.remove('sidebar-open');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) { overlay.style.opacity = '0'; overlay.style.pointerEvents = 'none'; }
   document.body.style.overflow = '';
 }
 
