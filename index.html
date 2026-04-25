@@ -3101,9 +3101,10 @@ function renderTxLog() {
   for (const date of dates) {
     const dayTxs = groups[date];
     const dayNet = dayTxs.reduce((s,t)=>{
-      if (t.isSettlement) return s;
-      if (t.type==='income') return s+t.amount;
-      if (t.type==='expense'||t.type==='shared') return s-t.amount;
+      if (t.isSettlement || t.isAutoReimb) return s;
+      if (t.type==='income') return s + toPhp(t.amount, t.currency);
+      if (t.type==='expense') return s - toPhp(t.amount, t.currency);
+      if (t.type==='shared') return s - toPhp(t.myShare || t.amount, t.currency);
       return s;
     }, 0);
     txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:10px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${dayNet>=0?'+':''}${dayNet.toFixed(0)}</span></div>`;
