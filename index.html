@@ -3994,27 +3994,24 @@ function deleteChildReimb(childId, parentId) {
 }
 
 function confirmDeleteChildReimb(childId, parentId) {
-  // Find and remove child from transactions
+  // Get child FIRST before deleting
+  const child = db.transactions.find(t => t.id === childId)
+             || (db.archivedTransactions||[]).find(t => t.id === childId);
+  const reimbPerson = child?.reimbPerson;
+  const childAmt = child?.amount || 0;
+
+  // Now remove child from transactions
   const childIdx = db.transactions.findIndex(t => t.id === childId);
   if (childIdx >= 0) db.transactions.splice(childIdx, 1);
-
-  // Also check archivedTransactions
   const archIdx = (db.archivedTransactions||[]).findIndex(t => t.id === childId);
   if (archIdx >= 0) db.archivedTransactions.splice(archIdx, 1);
 
   // Reset parent paidSoFar for this person
   const parent = db.transactions.find(t => t.id === parentId);
   if (parent) {
-    const child = db.transactions.find(t=>t.id===childId) ||
-                  (db.archivedTransactions||[]).find(t=>t.id===childId);
-    const person = child?.reimbPerson;
-    if (person && parent.paidSoFar) {
-      // Remove or reduce paidSoFar for this person
-      if (parent.paidSoFar[person]) {
-        const childAmt = child?.amount || 0;
-        parent.paidSoFar[person] = Math.max(0, (parent.paidSoFar[person] || 0) - childAmt);
-        if (parent.paidSoFar[person] === 0) delete parent.paidSoFar[person];
-      }
+    if (reimbPerson && parent.paidSoFar && parent.paidSoFar[reimbPerson]) {
+      parent.paidSoFar[reimbPerson] = Math.max(0, (parent.paidSoFar[reimbPerson] || 0) - childAmt);
+      if (parent.paidSoFar[reimbPerson] === 0) delete parent.paidSoFar[reimbPerson];
     }
     // Recalculate settled status
     const persons = parent.persons || [];
@@ -4025,9 +4022,8 @@ function confirmDeleteChildReimb(childId, parentId) {
 
   saveDB();
   closeDlg();
-  // Re-open parent detail
   setTimeout(() => openTxDetail(parentId), 100);
-  showToast('Settlement deleted — marked unsettled');
+  showToast('Settlement deleted — Mike now shows as pending');
 }
 
 function restoreTx(txId) {
