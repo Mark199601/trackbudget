@@ -8098,7 +8098,7 @@ async function checkDriveForBackup() {
 async function showBackupPicker() {
   if (!_gdriveAccessToken) return;
   try {
-    showToast('Loading backups list...');
+    showToast('Loading backups...');
     const folderId = await getOrCreateFolder();
     const files = await driveRequest('GET',
       `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'trackbudget' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=10`
@@ -8108,26 +8108,17 @@ async function showBackupPicker() {
       return;
     }
 
-    // Fetch device name for each backup (parallel)
-    const fileMetas = await Promise.all(files.files.map(async (f) => {
-      try {
-        const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
-        return { ...f, deviceName: data?._backupMeta?.deviceName || null };
-      } catch(e) {
-        return { ...f, deviceName: null };
-      }
-    }));
-
-    const rows = fileMetas.map((f, i) => {
+    // Show list immediately — no device fetch (too slow on mobile)
+    const rows = files.files.map((f, i) => {
       const d = new Date(f.createdTime);
       const pad = n => String(n).padStart(2,'0');
       const dateLabel = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       const sizeKb = f.size ? (f.size/1024).toFixed(1)+' KB' : '';
       const isLatest = i === 0;
-      const deviceTag = f.deviceName ? `<span style="font-size:10px;color:var(--accent);margin-left:6px">📱 ${f.deviceName}</span>` : '';
-      return `<div onclick="confirmLoadDriveBackup('${f.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);background:${isLatest?'var(--accent-bg)':'transparent'}">
+      return `<div onclick="confirmLoadDriveBackup('${f.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px;cursor:pointer;border-bottom:1px solid var(--border);background:${isLatest?'var(--accent-bg)':'transparent'}">
         <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${dateLabel} ${isLatest?'<span style="font-size:10px;color:var(--accent);margin-left:6px">● latest</span>':''}${deviceTag}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${dateLabel}${isLatest?' <span style="font-size:10px;color:var(--accent)">● latest</span>':''}</div>
+          <div style="font-size:11px;color:var(--text4);margin-top:2px" id="dev-${f.id}">loading device...</div>
         </div>
         <div style="font-size:11px;color:var(--text4)">${sizeKb}</div>
       </div>`;
@@ -8138,6 +8129,20 @@ async function showBackupPicker() {
       <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden;max-height:360px;overflow-y:auto">${rows}</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>`
     );
+
+    // Lazy-load device names in background
+    files.files.forEach(async (f) => {
+      try {
+        const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+        const device = data?._backupMeta?.deviceName || 'Unknown Device';
+        const el = document.getElementById('dev-' + f.id);
+        if (el) el.textContent = '📱 ' + device;
+      } catch(e) {
+        const el = document.getElementById('dev-' + f.id);
+        if (el) el.textContent = '';
+      }
+    });
+
   } catch(e) {
     showToast('Failed to load backups: ' + e.message);
     console.error(e);
