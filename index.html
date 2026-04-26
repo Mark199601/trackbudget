@@ -8258,7 +8258,7 @@ function dtSet(inputId, value, type) {
 }
 
 // ── DEVICE DETECTION & NAMING ──
-function detectDeviceName() {
+function detectDeviceType() {
   const ua = navigator.userAgent;
   const platform = navigator.platform || '';
   if (/iPhone/.test(ua)) return 'iPhone';
@@ -8269,52 +8269,17 @@ function detectDeviceName() {
   if (/Macintosh|MacIntel/.test(ua)) return 'Mac';
   if (/Win/.test(platform) || /Windows/.test(ua)) return 'Windows PC';
   if (/Linux/.test(platform)) return 'Linux PC';
-  return null; // Cannot detect
+  return 'Unknown Device';
 }
 
 function initDeviceName() {
-  const stored = localStorage.getItem('tb_device_name');
-  if (stored) {
-    db.settings.deviceName = stored;
-    return;
-  }
-  // First time on this device
-  const detected = detectDeviceName();
-  if (detected) {
-    localStorage.setItem('tb_device_name', detected);
-    db.settings.deviceName = detected;
-    saveDB();
-  } else {
-    // Cannot detect — prompt user
-    setTimeout(() => promptDeviceName(), 1500);
-  }
-}
-
-function promptDeviceName() {
-  openDlg('📱 Name This Device',
-    `<div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px">
-      Device could not be detected automatically.<br>
-      Give this device a name so backups can be identified correctly.
-    </div>
-    <input class="form-input" id="device-name-input" placeholder="e.g. Work PC, Home Laptop..." style="margin-bottom:8px">`,
-    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Skip</button>
-     <button class="btn btn-primary btn-sm" onclick="saveDeviceName()">Save</button>`
-  );
-  setTimeout(() => document.getElementById('device-name-input')?.focus(), 100);
-}
-
-function saveDeviceName() {
-  const name = document.getElementById('device-name-input')?.value?.trim();
-  if (!name) { showToast('Enter a device name'); return; }
-  localStorage.setItem('tb_device_name', name);
-  db.settings.deviceName = name;
-  saveDB();
-  closeDlg();
-  showToast(`Device saved as "${name}"`);
+  const type = detectDeviceType();
+  localStorage.setItem('tb_device_name', type);
+  db.settings.deviceName = type;
 }
 
 function getDeviceName() {
-  return localStorage.getItem('tb_device_name') || db.settings.deviceName || 'Unknown Device';
+  return localStorage.getItem('tb_device_name') || detectDeviceType();
 }
 
 // ── THEME SYSTEM ──
