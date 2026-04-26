@@ -1144,9 +1144,16 @@ let db = (() => {
   } catch(e) { return defaultDB(); }
 })();
 
+let _isSavingToDrive = false;
 function saveDB() {
-  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); autoSaveTrigger(); }
+  // Local save only — no Drive sync trigger
+  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch(e) { showToast('⚠ Storage full — export backup!', 4000); }
+}
+function saveDBWithSync() {
+  // Local save + trigger Drive sync (for actual data changes only)
+  saveDB();
+  if (!_isSavingToDrive) autoSaveTrigger();
 }
 // ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
@@ -1484,7 +1491,7 @@ function obNext(currentStep) {
 
 function finishOnboard() {
   db.onboarded = true;
-  saveDB();
+  saveDBWithSync();
   document.getElementById('onboard').style.display = 'none';
   document.getElementById('app-shell').style.display = 'flex';
   document.getElementById('sb-name').textContent = db.profile.nickname;
@@ -2513,7 +2520,7 @@ function submitRemittance() {
       });
     }
 
-    saveDB();
+    saveDBWithSync();
     closeSheet('add');
     if (currentPage==='dashboard') renderDashboard();
     else if (currentPage==='transactions') renderTransactions();
@@ -2595,7 +2602,7 @@ function submitExternal(type) {
   });
   const acct = db.accounts.find(a=>a.id===acctId);
   if (acct) acct.lastTxDate = date;
-  saveDB();
+  saveDBWithSync();
   closeSheet('add');
   if (currentPage==='dashboard') renderDashboard();
   else if (currentPage==='transactions') renderTransactions();
@@ -2885,7 +2892,7 @@ function submitAddTx() {
   // update account lastTxDate
   const acct = db.accounts.find(a=>a.id===accountId);
   if (acct) acct.lastTxDate = date;
-  saveDB();
+  saveDBWithSync();
   closeSheet('add');
   checkAlerts();
   if (currentPage==='dashboard') renderDashboard();
@@ -2914,7 +2921,7 @@ function savePaydayFx(currency) {
   if (!rate || rate <= 0) { showToast('Enter a valid rate'); return; }
   db.fxRates[currency] = rate;
   recordFxSnapshot(currency, rate, today());
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   showToast(`${currency} rate updated to ₱${rate}`);
 }
@@ -3032,7 +3039,7 @@ function submitTransfer() {
   if (fromAcct) fromAcct.lastTxDate = date;
   const toAcct = db.accounts.find(a=>a.id===toId);
   if (toAcct) toAcct.lastTxDate = date;
-  saveDB();
+  saveDBWithSync();
   closeSheet('add');
   if (currentPage==='dashboard') renderDashboard();
   else if (currentPage==='transactions') renderTransactions();
@@ -3666,7 +3673,7 @@ function saveEditTx(txId) {
     tx.date = newDate;
     tx.fxSnapshot = buildFxSnapshot(newDate);
   }
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   if (currentPage==='transactions') renderTransactions();
   else if (currentPage==='dashboard') renderDashboard();
@@ -3844,7 +3851,7 @@ function saveEditTransfer(txId) {
     db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
   }
 
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   if (currentPage==='transactions') renderTransactions();
   else if (currentPage==='reimbursements') renderReimbursementsPage();
@@ -3993,7 +4000,7 @@ function archiveTx(txId, skipConfirm) {
   }
 
   // If parent was a shared tx, also reset settled status if it had any (already archived so moot)
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   closeSheet('gen');
   if (currentPage==='transactions') renderTransactions();
@@ -4040,7 +4047,7 @@ function confirmDeleteChildReimb(childId, parentId) {
     parent.settled = totalPaid >= totalOwed && totalOwed > 0;
   }
 
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   setTimeout(() => openTxDetail(parentId), 100);
   showToast('Settlement deleted — Mike now shows as pending');
@@ -4092,7 +4099,7 @@ function restoreTx(txId) {
     }
   }
 
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   // Snappy — re-render archive sheet
   openTxArchiveSheet();
@@ -4132,7 +4139,7 @@ function confirmDeleteTx(txId) {
   const before = db.archivedTransactions.length;
   db.archivedTransactions = db.archivedTransactions.filter(t => t.cascadedFrom !== txId);
   const deleted = before - db.archivedTransactions.length;
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   // Snappy — if archive sheet is open, re-render it; else render transactions
   // Always re-render archive sheet after delete (it was open since user clicked from it)
@@ -4505,7 +4512,7 @@ function confirmReimbSettlement(person) {
     });
   }
 
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   // Refresh whichever page is currently showing
   if (currentPage === 'reimbursements') renderReimbursementsPage();
@@ -4684,7 +4691,7 @@ function saveAddAccount() {
     alertThreshold:parseFloat(document.getElementById('na-threshold')?.value)||null,
     archived:false, lastTxDate:null,
   });
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   renderAccounts();
   showToast('Account added!');
@@ -4717,7 +4724,7 @@ function saveEditAccount(acctId) {
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
   a.note = document.getElementById('ea-note')?.value?.trim() || '';
   a.alertThreshold = parseFloat(document.getElementById('ea-threshold')?.value) || null;
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   renderAccounts();
   showToast('Account updated!');
@@ -4730,7 +4737,7 @@ function archiveAccount(acctId) {
   a.lastKnownBalance = getAcctBalance(acctId);
   a.archivedAt = new Date().toISOString();
   a.archived = true;
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   setAcctTab('archived');
   renderAccounts();
@@ -4738,7 +4745,7 @@ function archiveAccount(acctId) {
 }
 function restoreAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
-  if (a) { a.archived=false; saveDB(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
+  if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
 }
 function deleteAccount(acctId) {
   const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
@@ -4757,7 +4764,7 @@ function deleteAccount(acctId) {
 }
 function confirmDeleteAccount(acctId) {
   db.accounts = db.accounts.filter(a=>a.id!==acctId);
-  saveDB(); closeDlg(); closeSheet('gen'); renderAccounts(); showToast('Account deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderAccounts(); showToast('Account deleted');
 }
 
 function renderInvestments() {
@@ -4821,7 +4828,7 @@ function saveAddInv() {
     notes:document.getElementById('ai-notes')?.value?.trim()||'',
     archived:false,
   });
-  saveDB(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
+  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
 }
 
 function openEditInv(invId) {
@@ -4854,12 +4861,12 @@ function saveEditInv(id) {
   inv.currency = document.getElementById('ei-currency')?.value||inv.currency;
   inv.currentValue = parseFloat(document.getElementById('ei-current')?.value)||inv.amount;
   inv.notes = document.getElementById('ei-notes')?.value?.trim()||'';
-  saveDB(); closeSheet('gen'); renderAccounts(); showToast('Investment updated!');
+  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment updated!');
 }
 
 function deleteInv(id) {
   db.investments = db.investments.filter(i=>i.id!==id);
-  saveDB(); closeSheet('gen'); renderAccounts(); showToast('Investment deleted');
+  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment deleted');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -5051,7 +5058,7 @@ function settleLoan(loanId, direction, full) {
       createdAt: new Date().toISOString(),
     });
 
-    saveDB();
+    saveDBWithSync();
     closeSheet('gen');
     renderLoans();
     checkAlerts();
@@ -5105,7 +5112,7 @@ function saveLoanFull(loanId, direction) {
     parentTx.notes = `${direction==='lent'?'Lent to':'Borrowed from'} ${loan.personName}`;
   }
 
-  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Loan updated!');
+  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Loan updated!');
 }
 
 function editLoanPayment(paymentId, loanId, direction) {
@@ -5143,7 +5150,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (loan.settled) loan.settledDate = today();
-  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment updated!');
+  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment updated!');
 }
 
 function deleteLoanPayment(paymentId, loanId, direction) {
@@ -5156,7 +5163,7 @@ function deleteLoanPayment(paymentId, loanId, direction) {
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (!loan.settled) loan.settledDate = null;
-  saveDB(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment deleted');
+  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment deleted');
 }
 
 function editLoanMeta(loanId, direction) { editLoanFull(loanId, direction); }
@@ -5169,7 +5176,7 @@ function archiveLoan(loanId, direction) {
   const loan = loans.splice(idx,1)[0];
   loan.archivedAt = today(); loan.direction = direction;
   db.archivedLoans.push(loan);
-  saveDB(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
+  saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
 }
 
 function openLoanArchiveSheet() {
@@ -5218,7 +5225,7 @@ function restoreLoan(loanId, direction) {
       db.transactions.push(restored);
     }
   }
-  saveDB();
+  saveDBWithSync();
   // Snappy — re-render archive sheet
   openLoanArchiveSheet();
   showToast(`↩ Loan restored${payments.length > 0 ? ' + ' + payments.length + ' payments' : ''}`);
@@ -5275,7 +5282,7 @@ function confirmDeleteLoan(loanId) {
   // Remove all linked child payment transactions
   db.transactions = db.transactions.filter(t=>!(t.parentId===loanId && t.isLoanPayment));
   db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.parentId===loanId && t.isLoanPayment));
-  saveDB(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
+  saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
 }
 
 function openAddLoan(direction='lent') {
@@ -5332,7 +5339,7 @@ function saveAddLoan(direction) {
     createdAt: new Date().toISOString(),
   });
 
-  saveDB(); closeSheet('gen'); renderLoans(); showToast('Loan added!');
+  saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan added!');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -5483,7 +5490,7 @@ function saveAddTarget() {
     deadline:parseInputDate(document.getElementById('nt-deadline')?.value)||null,
     notes:document.getElementById('nt-notes')?.value?.trim()||'',
   });
-  saveDB(); closeSheet('gen'); renderTargets(); showToast('Target added!');
+  saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target added!');
 }
 
 function openEditTarget(id) {
@@ -5517,11 +5524,11 @@ function saveEditTarget(id) {
   t.current = parseFloat(document.getElementById('et-current')?.value)||0;
   t.deadline = parseInputDate(document.getElementById('et-deadline')?.value)||null;
   t.notes = document.getElementById('et-notes')?.value?.trim()||'';
-  saveDB(); closeSheet('gen'); renderTargets(); showToast('Target updated!');
+  saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target updated!');
 }
 function deleteTarget(id) {
   db.targets = db.targets.filter(t=>t.id!==id);
-  saveDB(); closeSheet('gen'); renderTargets(); showToast('Target deleted');
+  saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target deleted');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -6144,7 +6151,7 @@ function saveAddPayday() {
     nextDate:document.getElementById('np-next')?.value||null,
     accountId:document.getElementById('np-acct')?.value||null,
   });
-  saveDB(); closeSheet('gen'); renderPlanning(); showToast('Schedule added!');
+  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Schedule added!');
 }
 
 function editPaydaySchedule(id) {
@@ -6178,12 +6185,12 @@ function saveEditPayday(id) {
   ps.currency = document.getElementById('ep-currency')?.value||ps.currency;
   ps.frequency = document.getElementById('ep-freq')?.value||ps.frequency;
   ps.nextDate = document.getElementById('ep-next')?.value||null;
-  saveDB(); closeSheet('gen'); renderPlanning(); showToast('Updated!');
+  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Updated!');
 }
 
 function deletePayday(id) {
   db.paydaySchedules = db.paydaySchedules.filter(s=>s.id!==id);
-  saveDB(); closeSheet('gen'); renderPlanning(); showToast('Deleted');
+  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Deleted');
 }
 
 function renderRecurringTab() {
@@ -6246,7 +6253,7 @@ function saveAddRecurring() {
     nextDate:document.getElementById('nr-next')?.value||null,
     active:true,
   });
-  saveDB(); closeSheet('gen'); renderPlanning(); showToast('Recurring added!');
+  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Recurring added!');
 }
 
 function editRecurring(id) {
@@ -6267,17 +6274,17 @@ function saveEditRecurring(id) {
   if (!r) return;
   r.nextDate = document.getElementById('er-next')?.value||r.nextDate;
   r.amount = parseFloat(document.getElementById('er-amt')?.value)||r.amount;
-  saveDB(); closeDlg(); renderPlanning(); showToast('Updated!');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Updated!');
 }
 
 function toggleRecurring(id) {
   const r = db.recurringTxs.find(x=>x.id===id);
-  if (r) { r.active=!r.active; saveDB(); closeDlg(); renderPlanning(); }
+  if (r) { r.active=!r.active; saveDBWithSync(); closeDlg(); renderPlanning(); }
 }
 
 function deleteRecurring(id) {
   db.recurringTxs = db.recurringTxs.filter(r=>r.id!==id);
-  saveDB(); closeDlg(); renderPlanning(); showToast('Deleted');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Deleted');
 }
 
 function renderContractTab() {
@@ -6648,7 +6655,7 @@ function deleteContractPerm(contractId) {
 
 function confirmDeleteContract(contractId) {
   db.contracts = (db.contracts||[]).filter(c=>c.id!==contractId);
-  saveDB(); closeDlg(); renderPlanning(); showToast('Contract deleted');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Contract deleted');
 }
 
 function doCheckin(contractId, hit) {
@@ -6749,7 +6756,7 @@ function saveContractWizard() {
     createdAt: today(),
   });
   db.activeContractId = newId;
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   _planTab = 'contract';
   renderPlanning();
@@ -6786,12 +6793,12 @@ function saveEditContract(contractId) {
   c.goalCurrency = document.getElementById('ec2-curr')?.value||c.goalCurrency;
   c.targetAmount = parseFloat(document.getElementById('ec2-target')?.value)||c.targetAmount;
   c.notes = document.getElementById('ec2-notes')?.value?.trim()||c.notes;
-  saveDB(); closeSheet('gen'); renderPlanning(); showToast('Contract updated!');
+  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Contract updated!');
 }
 
 function archiveContract(contractId) {
   const c = (db.contracts||[]).find(x=>x.id===contractId);
-  if (c) { c.status='archived'; db.activeContractId=null; saveDB(); renderPlanning(); showToast('Contract archived'); }
+  if (c) { c.status='archived'; db.activeContractId=null; saveDBWithSync(); renderPlanning(); showToast('Contract archived'); }
 }
 
 function switchContract(contractId) {
@@ -6799,7 +6806,7 @@ function switchContract(contractId) {
   if (current) current.status='archived';
   const next = (db.contracts||[]).find(c=>c.id===contractId);
   if (next) { next.status='active'; db.activeContractId=contractId; }
-  saveDB(); renderPlanning(); showToast('Switched contract');
+  saveDBWithSync(); renderPlanning(); showToast('Switched contract');
 }
 
 function toggleContractBucket(contractId, bucketId, acctId, checked) {
@@ -6809,7 +6816,7 @@ function toggleContractBucket(contractId, bucketId, acctId, checked) {
   if (!c.bucketLinks[bucketId]) c.bucketLinks[bucketId]=[];
   if (checked) { if (!c.bucketLinks[bucketId].includes(acctId)) c.bucketLinks[bucketId].push(acctId); }
   else { c.bucketLinks[bucketId]=c.bucketLinks[bucketId].filter(id=>id!==acctId); }
-  saveDB(); renderPlanning();
+  saveDBWithSync(); renderPlanning();
 }
 
 function saveContractBucket(contractId, bucketId, val) {
@@ -6817,14 +6824,14 @@ function saveContractBucket(contractId, bucketId, val) {
   if (!c) return;
   if (!c.buckets) c.buckets={};
   c.buckets[bucketId]=parseFloat(val)||0;
-  saveDB();
+  saveDBWithSync();
 }
 
 function saveContractMonthly(contractId, val) {
   const c = (db.contracts||[]).find(x=>x.id===contractId);
   if (!c) return;
   c.monthlyGoal=parseInt(val)||c.monthlyGoal;
-  saveDB(); renderPlanning();
+  saveDBWithSync(); renderPlanning();
 }
 
 
@@ -6931,7 +6938,7 @@ function saveProfile() {
   if (nick) db.profile.nickname = nick;
   if (country) db.profile.country = country;
   if (nat) db.profile.nationality = nat;
-  saveDB();
+  saveDBWithSync();
   document.getElementById('sb-name').textContent = db.profile.nickname;
   closeSheet('gen');
   renderSettings();
@@ -6940,14 +6947,14 @@ function saveProfile() {
 
 function setDisplayCurrency(curr) {
   db.displayCurrency = curr;
-  saveDB();
+  saveDBWithSync();
   showToast(`Display currency: ${curr}`);
 }
 
 function removeTrackedCurr(code) {
   if (code === 'PHP') { showToast('PHP cannot be removed'); return; }
   db.trackedCurrencies = db.trackedCurrencies.filter(c=>c!==code);
-  saveDB(); renderSettings();
+  saveDBWithSync(); renderSettings();
 }
 
 function openAddCurrencyDlg() {
@@ -6973,7 +6980,7 @@ function addTrackedCurr(code) {
   if (!db.trackedCurrencies.includes(code)) {
     db.trackedCurrencies.push(code);
     if (!db.fxRates[code]) db.fxRates[code] = 1;
-    saveDB();
+    saveDBWithSync();
     closeDlg();
     renderSettings();
     showToast(`${code} added! Update its FX rate in FX Rates tab.`);
@@ -7059,7 +7066,7 @@ function confirmAddFxHistory(currency) {
   // Update current rate if this is the latest date
   const sorted = db.fxHistory[currency].slice().sort((a,b)=>b.date.localeCompare(a.date));
   db.fxRates[currency] = sorted[0].rate;
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   renderSettings();
   showToast(`${currency} rate added for ${date}`);
@@ -7170,11 +7177,11 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
         recomputeTransferForexChild(tx.id);
       }
     }
-    saveDB();
+    saveDBWithSync();
     renderSettings();
     showToast(`Rate updated & ${updated} tx snapshots recomputed`);
   } else {
-    saveDB();
+    saveDBWithSync();
     renderSettings();
     showToast('Rate updated (snapshots unchanged)');
   }
@@ -7203,7 +7210,7 @@ function confirmDeleteFxHistory(currency, idx) {
   // Update latest fxRates
   const newSorted = db.fxHistory[currency].slice().sort((a,b)=>b.date.localeCompare(a.date));
   if (newSorted.length > 0) db.fxRates[currency] = newSorted[0].rate;
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   renderSettings();
   showToast('Rate entry deleted');
@@ -7217,7 +7224,7 @@ function updateFxRate(code, val) {
     recordFxSnapshot(code, rate, today(), 'manual');
   }
 }
-function saveAllFxRates() { saveDB(); showToast('FX rates saved!'); }
+function saveAllFxRates() { saveDBWithSync(); showToast('FX rates saved!'); }
 
 function renderBudgetsTab() {
   return `<div class="page-pad">
@@ -7235,8 +7242,8 @@ function renderBudgetsTab() {
   </div>`;
 }
 
-function toggleBudget(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.active=val;saveDB();} }
-function updateBudgetLimit(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.limit=parseFloat(val)||b.limit;saveDB();} }
+function toggleBudget(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.active=val;saveDBWithSync();} }
+function updateBudgetLimit(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.limit=parseFloat(val)||b.limit;saveDBWithSync();} }
 
 function openAddBudget() {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -7256,7 +7263,7 @@ function saveAddBudget() {
   const limit = parseFloat(document.getElementById('nb-limit')?.value);
   if (!loc||!limit) { showToast('Enter location and limit'); return; }
   db.budgets.push({ id:'bgt-'+genId(), location:loc, currency:document.getElementById('nb-curr')?.value||'PHP', limit, active:true });
-  saveDB(); closeDlg(); renderSettings(); showToast('Budget added!');
+  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Budget added!');
 }
 
 // ── CATEGORIES MANAGER ──
@@ -7455,7 +7462,7 @@ function acceptAiCatSugg(inputId, suggBoxId, forType) {
   if (!db.aiCatMemory) db.aiCatMemory = [];
   db.aiCatMemory.push({ input, result: sugg, forType, ts: Date.now() });
   if (db.aiCatMemory.length > 200) db.aiCatMemory = db.aiCatMemory.slice(-200);
-  saveDB();
+  saveDBWithSync();
 
   const box = document.getElementById(suggBoxId);
   if (box) { box.innerHTML=''; box.style.display='none'; }
@@ -7479,7 +7486,7 @@ function dismissAiCatSugg(inputId, suggBoxId) {
     if (!db.aiCatMemory) db.aiCatMemory = [];
     db.aiCatMemory.push({ input, result: { ...sugg, dismissed: true }, ts: Date.now() });
     if (db.aiCatMemory.length > 200) db.aiCatMemory = db.aiCatMemory.slice(-200);
-    saveDB();
+    saveDBWithSync();
   }
   const box = document.getElementById(suggBoxId);
   if (box) { box.innerHTML=''; box.style.display='none'; }
@@ -7504,7 +7511,7 @@ function saveAddMajorCat(forType) {
   if (!name) { showToast('Enter name'); return; }
   const icon = document.getElementById('nc-emoji-display')?.textContent || '📌';
   db.categories[forType].push({ id:'c-'+genId(), name, icon, archived:false, subcats:[] });
-  saveDB(); closeSheet('gen'); renderSettings(); showToast('Category added!');
+  saveDBWithSync(); closeSheet('gen'); renderSettings(); showToast('Category added!');
 }
 
 function openAddSubCat(catId, forType) {
@@ -7527,7 +7534,7 @@ function saveAddSubCat(catId, forType) {
     if (!cat.subcats) cat.subcats = [];
     cat.subcats.push({ id:'sc-'+genId(), name, icon, archived:false });
   }
-  saveDB(); closeSheet('gen'); renderSettings(); showToast('Subcategory added!');
+  saveDBWithSync(); closeSheet('gen'); renderSettings(); showToast('Subcategory added!');
 }
 
 function openEditCat(catId, forType) {
@@ -7545,7 +7552,7 @@ function saveEditCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   if (cat) {
     cat.name = document.getElementById('ec-name')?.value?.trim()||cat.name;
-    saveDB(); closeDlg(); renderSettings(); showToast('Saved!');
+    saveDBWithSync(); closeDlg(); renderSettings(); showToast('Saved!');
   }
 }
 
@@ -7603,7 +7610,7 @@ function toggleArchiveCat(catId, forType) {
     }
   }
   cat.archived = isArchiving;
-  saveDB(); closeDlg(); renderSettings();
+  saveDBWithSync(); closeDlg(); renderSettings();
 }
 
 function openEditSubCat(catId, subId, forType) {
@@ -7621,7 +7628,7 @@ function openEditSubCat(catId, subId, forType) {
 function saveEditSubCat(catId, subId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   const sc = cat?.subcats?.find(s=>s.id===subId);
-  if (sc) { sc.name = document.getElementById('esc-name')?.value?.trim()||sc.name; saveDB(); closeDlg(); renderSettings(); }
+  if (sc) { sc.name = document.getElementById('esc-name')?.value?.trim()||sc.name; saveDBWithSync(); closeDlg(); renderSettings(); }
 }
 
 function toggleArchiveSubCat(catId, subId, forType) {
@@ -7641,7 +7648,7 @@ function toggleArchiveSubCat(catId, subId, forType) {
     }
   }
   sc.archived = isArchiving;
-  saveDB(); closeDlg(); renderSettings();
+  saveDBWithSync(); closeDlg(); renderSettings();
 }
 
 // ── DATA TAB (Export/Import/Debug) ──
@@ -7722,7 +7729,7 @@ function importJSON(event) {
 function replaceImport() {
   if (!window._importedDB) return;
   db = window._importedDB;
-  saveDB(); closeDlg(); nav('dashboard'); showToast('Data replaced!');
+  saveDBWithSync(); closeDlg(); nav('dashboard'); showToast('Data replaced!');
 }
 
 function mergeImport() {
@@ -7738,7 +7745,7 @@ function mergeImport() {
   for (const acct of (imp.accounts||[])) {
     if (!db.accounts.find(a=>a.id===acct.id)) db.accounts.push(acct);
   }
-  saveDB(); closeDlg(); nav('dashboard'); showToast(`Merged: ${added} new transactions`);
+  saveDBWithSync(); closeDlg(); nav('dashboard'); showToast(`Merged: ${added} new transactions`);
 }
 
 function exportXLSX() {
@@ -7933,7 +7940,6 @@ function ensureDriveToken(callback, silent=false) {
         return;
       }
       _gdriveAccessToken = tokenResponse.access_token;
-      db.settings.googleDriveConnected = true;
       _gdriveTokenClient = silentClient;
       callback();
     }
@@ -8144,7 +8150,13 @@ async function showBackupPicker() {
     });
 
   } catch(e) {
-    showToast('Failed to load backups: ' + e.message);
+    const msg = e.message || 'Unknown error';
+    if (msg.includes('401') || msg.includes('403')) {
+      showToast('Session expired — tap Load again to re-connect');
+      _gdriveAccessToken = null;
+    } else {
+      showToast('Failed to load backups: ' + msg);
+    }
     console.error(e);
   }
 }
@@ -8164,7 +8176,7 @@ async function confirmLoadDriveBackup(fileId) {
     };
     Object.assign(db, backup);
     Object.assign(db.settings, driveSettings);
-    saveDB();
+    saveDBWithSync();
     showToast('✅ Backup loaded! Reloading...');
     setTimeout(() => location.reload(), 1200);
   } catch(e) {
@@ -8174,7 +8186,10 @@ async function confirmLoadDriveBackup(fileId) {
 
 async function loadFromDrive() {
   if (!_gdriveAccessToken) {
-    ensureDriveToken(() => loadFromDrive());
+    showToast('Connecting to Drive...');
+    ensureDriveToken(async () => {
+      await showBackupPicker();
+    }, false); // Allow popup for manual load
     return;
   }
   await showBackupPicker();
@@ -8183,6 +8198,8 @@ async function loadFromDrive() {
 // Silent auto-save (no toasts, for background saves)
 async function saveToDriveSilent() {
   if (!_gdriveAccessToken) return;
+  if (_isSavingToDrive) return; // Prevent re-entry
+  _isSavingToDrive = true;
   try {
     // Check token validity first — if expired, clear and bail silently
     const testRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + _gdriveAccessToken);
@@ -8215,7 +8232,8 @@ async function saveToDriveSilent() {
     await pruneOldBackups(folderId, 10);
   } catch(e) {
     console.warn('Auto-save to Drive failed:', e.message);
-    // Silent fail — no toast
+  } finally {
+    _isSavingToDrive = false;
   }
 }
 
@@ -8326,7 +8344,7 @@ function toggleTheme() {
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('tb_theme', next);
   db.settings.theme = next;
-  saveDB();
+  saveDBWithSync();
   // Update toggle button icon
   const btn = document.getElementById('theme-toggle-btn');
   if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
@@ -8389,7 +8407,7 @@ function autoPurgeArchived() {
   const before = db.archivedTransactions.length;
   db.archivedTransactions = db.archivedTransactions.filter(t=>!t.archivedAt || t.archivedAt > cutoffStr);
   const purged = before - db.archivedTransactions.length;
-  if (purged > 0) saveDB();
+  if (purged > 0) saveDBWithSync();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -8918,7 +8936,7 @@ function saveNewInstallment() {
     completed: false,
     createdAt: new Date().toISOString()
   });
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   renderInstallments();
   showToast('Installment added ✓');
@@ -8935,7 +8953,7 @@ function markInstallmentPaid(instId) {
   } else {
     showToast('Month marked as paid ✓');
   }
-  saveDB();
+  saveDBWithSync();
   renderInstallments();
 }
 
@@ -9016,7 +9034,7 @@ function confirmLinkTransactions(instId) {
   inst.paidMonths = Math.max(inst.paidMonths || 0, inst.linkedTxIds.length);
   const totalPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
   if (totalPaid >= inst.totalMonths) inst.completed = true;
-  saveDB();
+  saveDBWithSync();
   closeDlg();
   renderInstallments();
   showToast(`${toLink.length} transaction${toLink.length > 1 ? 's' : ''} linked ✓`);
@@ -9058,7 +9076,7 @@ function saveEditInstallment(instId) {
   inst.notes = document.getElementById('einst-notes')?.value?.trim() || '';
   const totalPaid = inst.alreadyPaid + (inst.paidMonths || 0);
   if (totalPaid >= inst.totalMonths) inst.completed = true;
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   renderInstallments();
   showToast('Installment updated ✓');
@@ -9068,7 +9086,7 @@ function archiveInstallment(instId) {
   const inst = db.installments.find(i => i.id === instId);
   if (!inst) return;
   inst.archived = true;
-  saveDB();
+  saveDBWithSync();
   closeSheet('gen');
   renderInstallments();
   showToast('Installment archived');
