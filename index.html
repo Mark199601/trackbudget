@@ -8101,20 +8101,32 @@ async function showBackupPicker() {
       showToast('No backups found in Drive.');
       return;
     }
-    const rows = files.files.map((f, i) => {
+
+    // Fetch device name for each backup (parallel)
+    const fileMetas = await Promise.all(files.files.map(async (f) => {
+      try {
+        const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+        return { ...f, deviceName: data?._backupMeta?.deviceName || null };
+      } catch(e) {
+        return { ...f, deviceName: null };
+      }
+    }));
+
+    const rows = fileMetas.map((f, i) => {
       const d = new Date(f.createdTime);
       const pad = n => String(n).padStart(2,'0');
       const dateLabel = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       const sizeKb = f.size ? (f.size/1024).toFixed(1)+' KB' : '';
       const isLatest = i === 0;
+      const deviceTag = f.deviceName ? `<span style="font-size:10px;color:var(--accent);margin-left:6px">📱 ${f.deviceName}</span>` : '';
       return `<div onclick="confirmLoadDriveBackup('${f.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);background:${isLatest?'var(--accent-bg)':'transparent'}">
         <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${dateLabel} ${isLatest?'<span style="font-size:10px;color:var(--accent);margin-left:6px">● latest</span>':''}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${f.name}</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${dateLabel} ${isLatest?'<span style="font-size:10px;color:var(--accent);margin-left:6px">● latest</span>':''}${deviceTag}</div>
         </div>
         <div style="font-size:11px;color:var(--text4)">${sizeKb}</div>
       </div>`;
     }).join('');
+
     openDlg('☁️ Select Backup to Load',
       `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Tap a backup to load. Your current local data will be replaced.</div>
       <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden;max-height:360px;overflow-y:auto">${rows}</div>`,
