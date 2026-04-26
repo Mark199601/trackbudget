@@ -7893,15 +7893,17 @@ function connectDrive() {
 }
 
 // Ensure we have a valid token, silent re-auth if possible, fallback to popup
-function ensureDriveToken(callback) {
+function ensureDriveToken(callback, silent=false) {
   if (_gdriveAccessToken) { callback(); return; }
-  if (!db.settings.googleDriveConnected) { openDriveSheet(); return; }
-  if (typeof google === 'undefined' || !google.accounts) {
-    showToast('Google API loading, please try again');
-    initGoogleDrive();
+  if (!db.settings.googleDriveConnected) {
+    if (!silent) openDriveSheet();
     return;
   }
-  // Try silent first (no popup)
+  if (typeof google === 'undefined' || !google.accounts) {
+    if (!silent) showToast('Google API loading, please try again');
+    return;
+  }
+  // Try silent token refresh first (no popup)
   const silentClient = google.accounts.oauth2.initTokenClient({
     client_id: GDRIVE_CLIENT_ID,
     scope: GDRIVE_SCOPES,
@@ -7909,7 +7911,12 @@ function ensureDriveToken(callback) {
     hint: db.settings.googleDriveEmail || '',
     callback: (tokenResponse) => {
       if (tokenResponse.error) {
-        // Silent failed — fall back to popup
+        if (silent) {
+          // Silent mode — never show popup, just skip
+          console.warn('Silent token refresh failed:', tokenResponse.error);
+          return;
+        }
+        // Non-silent — fall back to popup
         const popupClient = google.accounts.oauth2.initTokenClient({
           client_id: GDRIVE_CLIENT_ID,
           scope: GDRIVE_SCOPES,
@@ -7927,7 +7934,6 @@ function ensureDriveToken(callback) {
       }
       _gdriveAccessToken = tokenResponse.access_token;
       db.settings.googleDriveConnected = true;
-      saveDB();
       _gdriveTokenClient = silentClient;
       callback();
     }
@@ -8185,7 +8191,7 @@ async function saveToDriveSilent() {
     const filename = `trackbudget_${dateStr}.json`;
     const backupData = { ...db, _backupMeta: {
       savedAt: now.toISOString(), version: '3.0',
-      deviceName: db.settings.deviceName || 'Unknown',
+      deviceName: getDeviceName(),
       txCount: db.transactions.length,
       acctCount: db.accounts.filter(a=>!a.archived).length
     }};
@@ -8212,12 +8218,17 @@ async function saveToDriveSilent() {
 let _autoSaveTimer = null;
 function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
-  if (!_gdriveAccessToken) return; // No popup on background save
   clearTimeout(_autoSaveTimer);
   // 30-second debounce — saves once after 30s of inactivity
   _autoSaveTimer = setTimeout(async () => {
     if (_gdriveAccessToken) {
+      // Token already available — save directly
       await saveToDriveSilent();
+    } else {
+      // Token missing — try silent re-auth (no popup)
+      ensureDriveToken(async () => {
+        await saveToDriveSilent();
+      }, true); // true = silent mode (no popup)
     }
   }, 30 * 1000);
 }
