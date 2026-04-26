@@ -8003,6 +8003,7 @@ async function saveToDrive() {
       _backupMeta: {
         savedAt: now.toISOString(),
         version: '3.0',
+        deviceName: getDeviceName(),
         txCount: db.transactions.length,
         acctCount: db.accounts.filter(a => !a.archived).length
       }
@@ -8073,6 +8074,7 @@ async function checkDriveForBackup() {
       <div style="background:var(--bg3);border-radius:var(--r-md);padding:14px;margin-bottom:16px">
         <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">📦 ${latest.name}</div>
         <div style="font-size:12px;color:var(--text3);line-height:1.8">
+          📱 Device: <strong style="color:var(--text)">${meta.deviceName || 'Unknown Device'}</strong><br>
           📅 Saved: <strong style="color:var(--text)">${dateLabel}</strong><br>
           💳 Accounts: <strong style="color:var(--text)">${acctCount}</strong><br>
           📊 Transactions: <strong style="color:var(--text)">${txCount}</strong>
@@ -8109,6 +8111,7 @@ async function showBackupPicker() {
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text)">${dateLabel} ${isLatest?'<span style="font-size:10px;color:var(--accent);margin-left:6px">● latest</span>':''}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${f.name}</div>
+          ${meta?.deviceName ? `<div style="font-size:10px;color:var(--accent);margin-top:2px">📱 ${meta.deviceName}</div>` : ''}
         </div>
         <div style="font-size:11px;color:var(--text4)">${sizeKb}</div>
       </div>`;
