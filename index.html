@@ -8212,14 +8212,14 @@ async function saveToDriveSilent() {
 let _autoSaveTimer = null;
 function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
+  if (!_gdriveAccessToken) return; // No popup on background save
   clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(()=>{
-    // Only auto-save if token is already available — no popup on background save
+  // 30-second debounce — saves once after 30s of inactivity
+  _autoSaveTimer = setTimeout(async () => {
     if (_gdriveAccessToken) {
-      saveToDriveSilent();
+      await saveToDriveSilent();
     }
-    // If no token, skip silently — user can manually save next time
-  }, 5*60*1000);
+  }, 30 * 1000);
 }
 
 // ── CUSTOM DATE/TIME PICKER ──
