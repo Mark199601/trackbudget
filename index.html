@@ -7669,9 +7669,7 @@ function renderDataTab() {
       <input type="file" id="import-file" accept=".json,.txt" style="display:none" onchange="importJSON(event);this.value=''">
     </div>
     <div class="card" style="margin-bottom:16px">
-      <div class="section-title" style="margin-bottom:12px">Debug</div>
-      <div class="settings-row" onclick="openDebugReport()">
-        <div class="sr-left"><div class="sr-icon">🔍</div><div><div class="sr-text">Run Debug Report</div><div class="sr-sub">Scan for data issues</div></div></div>
+      </div>
         <div class="sr-right">→</div>
       </div>
     </div>
@@ -8071,7 +8069,7 @@ async function checkDriveForBackup() {
     const pad = n => String(n).padStart(2,'0');
     const dateLabel = `${backupDate.getFullYear()}-${pad(backupDate.getMonth()+1)}-${pad(backupDate.getDate())} ${pad(backupDate.getHours())}:${pad(backupDate.getMinutes())}`;
     openDlg('☁️ Drive Backup Found',
-      `<div style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:16px">Found your latest backup on Google Drive:</div>
+      `<div style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:16px">Found a backup on Google Drive:</div>
       <div style="background:var(--bg3);border-radius:var(--r-md);padding:14px;margin-bottom:16px">
         <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">📦 ${latest.name}</div>
         <div style="font-size:12px;color:var(--text3);line-height:1.8">
@@ -8257,6 +8255,66 @@ function dtSet(inputId, value, type) {
   dtUpdate(inputId, type || (value.includes(':') ? 'time' : 'date'));
 }
 
+// ── DEVICE DETECTION & NAMING ──
+function detectDeviceName() {
+  const ua = navigator.userAgent;
+  const platform = navigator.platform || '';
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/Android/.test(ua) && /Mobile/.test(ua)) return 'Android Phone';
+  if (/Android/.test(ua)) return 'Android Tablet';
+  if (/CrOS/.test(ua)) return 'Chromebook';
+  if (/Macintosh|MacIntel/.test(ua)) return 'Mac';
+  if (/Win/.test(platform) || /Windows/.test(ua)) return 'Windows PC';
+  if (/Linux/.test(platform)) return 'Linux PC';
+  return null; // Cannot detect
+}
+
+function initDeviceName() {
+  const stored = localStorage.getItem('tb_device_name');
+  if (stored) {
+    db.settings.deviceName = stored;
+    return;
+  }
+  // First time on this device
+  const detected = detectDeviceName();
+  if (detected) {
+    localStorage.setItem('tb_device_name', detected);
+    db.settings.deviceName = detected;
+    saveDB();
+  } else {
+    // Cannot detect — prompt user
+    setTimeout(() => promptDeviceName(), 1500);
+  }
+}
+
+function promptDeviceName() {
+  openDlg('📱 Name This Device',
+    `<div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+      Device could not be detected automatically.<br>
+      Give this device a name so backups can be identified correctly.
+    </div>
+    <input class="form-input" id="device-name-input" placeholder="e.g. Work PC, Home Laptop..." style="margin-bottom:8px">`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Skip</button>
+     <button class="btn btn-primary btn-sm" onclick="saveDeviceName()">Save</button>`
+  );
+  setTimeout(() => document.getElementById('device-name-input')?.focus(), 100);
+}
+
+function saveDeviceName() {
+  const name = document.getElementById('device-name-input')?.value?.trim();
+  if (!name) { showToast('Enter a device name'); return; }
+  localStorage.setItem('tb_device_name', name);
+  db.settings.deviceName = name;
+  saveDB();
+  closeDlg();
+  showToast(`Device saved as "${name}"`);
+}
+
+function getDeviceName() {
+  return localStorage.getItem('tb_device_name') || db.settings.deviceName || 'Unknown Device';
+}
+
 // ── THEME SYSTEM ──
 function initTheme() {
   const saved = localStorage.getItem('tb_theme') || 'dark';
@@ -8283,61 +8341,6 @@ if (typeof window !== 'undefined') {
   window.addEventListener('load', () => setTimeout(initGoogleDrive, 1000));
 }
 
-// ════════════════════════════════════════════════════════════
-// DEBUG REPORT
-// ════════════════════════════════════════════════════════════
-function openDebugReport() {
-  const issues = [];
-  // 1. Orphaned transactions (deleted account)
-  const acctIds = new Set(db.accounts.map(a=>a.id));
-  for (const tx of db.transactions) {
-    const acctId = tx.accountId || tx.fromAccountId;
-    if (acctId && !acctIds.has(acctId)) issues.push({type:'orphan-tx', id:tx.id, msg:`TX ${tx.date} (${fmt(tx.amount,tx.currency)}) linked to deleted account`, fixable:false});
-  }
-  // 2. Missing FX snapshots
-  for (const tx of db.transactions) {
-    if (tx.currency !== 'PHP' && (!tx.fxSnapshot || !tx.fxSnapshot[tx.currency])) {
-      issues.push({type:'no-fx-snap', id:tx.id, msg:`TX ${tx.date} in ${tx.currency} missing FX snapshot`, fixable:true, fix:'fixFxSnapshot'});
-    }
-  }
-  // 3. Missing FX rates for tracked currencies
-  for (const curr of db.trackedCurrencies) {
-    if (curr !== 'PHP' && !db.fxRates[curr]) {
-      issues.push({type:'no-fx-rate', id:curr, msg:`No FX rate set for ${curr}`, fixable:false});
-    }
-  }
-  // 4. Negative remaining on loans
-  for (const l of [...db.loans.lent, ...db.loans.borrowed]) {
-    if (!l.settled && l.remaining < 0) issues.push({type:'neg-loan', id:l.id, msg:`Loan ${l.personName}: negative remaining balance`, fixable:true, fix:'fixNegLoan'});
-  }
-  // 5. Crypto alert
-  const nw = getNetWorth();
-  if (nw > 0) {
-    const cryptoVal = db.accounts.filter(a=>a.type==='Crypto Wallet'&&!a.archived).reduce((s,a)=>s+toPhp(getAcctBalance(a.id),a.currency),0);
-    if (cryptoVal/nw > 0.05) issues.push({type:'crypto-alloc', msg:`Crypto is ${((cryptoVal/nw)*100).toFixed(1)}% of net worth (alert threshold: 5%)`, fixable:false});
-  }
-  // 6. Transactions with no date
-  for (const tx of db.transactions) {
-    if (!tx.date) issues.push({type:'no-date', id:tx.id, msg:`Transaction ID ${tx.id} has no date`, fixable:true, fix:'fixTxDate'});
-  }
-
-  const reportText = issues.length === 0 ?
-    '✅ No issues found! Your data looks healthy.' :
-    issues.map((i,n)=>`${n+1}. [${i.type}] ${i.msg}`).join('\n');
-
-  openSheet('gen','Debug Report',`
-    <div style="margin-bottom:12px;font-size:12px;color:var(--text3)">${issues.length} issue(s) found · ${db.transactions.length} transactions · ${db.accounts.length} accounts</div>
-    ${issues.length===0?`<div class="ai-card"><div class="ai-dot">✅</div><div class="ai-text">All checks passed. Data is healthy!</div></div>`:
-    issues.map(issue=>`<div style="padding:12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;border-left:3px solid ${issue.fixable?'var(--amber)':'var(--red)'}">
-      <div style="font-size:12px;color:var(--text2)">${issue.msg}</div>
-      ${issue.fixable?`<button class="btn btn-warning btn-sm" style="margin-top:8px" onclick="autoFix('${issue.type}','${issue.id||''}')">Auto-fix</button>`:'<div style="font-size:10px;color:var(--text4);margin-top:4px">Manual fix required</div>'}
-    </div>`).join('')}
-    <div style="margin-top:16px">
-      <button class="btn btn-ghost btn-sm" onclick="copyDebugReport(\`${reportText.replace(/`/g,"'")}\`)">📋 Copy Report</button>
-    </div>
-  `);
-}
-
 function autoFix(type, id) {
   if (type === 'fixFxSnapshot' || type === 'no-fx-snap') {
     const tx = db.transactions.find(t=>t.id===id);
@@ -8350,12 +8353,7 @@ function autoFix(type, id) {
     if (tx) { tx.date = today(); }
   }
   saveDB();
-  openDebugReport();
   showToast('Fixed!');
-}
-
-function copyDebugReport(text) {
-  navigator.clipboard?.writeText(text).then(()=>showToast('Copied to clipboard!'));
 }
 
 // ════════════════════════════════════════════════════════════
@@ -8465,6 +8463,7 @@ function initApp() {
     checkMobileLayout();
     checkAlerts();
     initTheme();
+    initDeviceName();
     nav('dashboard');
   }
   } catch(e) {
