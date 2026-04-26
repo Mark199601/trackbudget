@@ -8273,8 +8273,10 @@ function dtSet(inputId, value, type) {
 function detectDeviceType() {
   const ua = navigator.userAgent;
   const platform = navigator.platform || '';
-  if (/iPhone/.test(ua)) return 'iPhone';
+  // iPad on iOS 13+ reports as Macintosh — check touch support first
   if (/iPad/.test(ua)) return 'iPad';
+  if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return 'iPad';
+  if (/iPhone/.test(ua)) return 'iPhone';
   if (/Android/.test(ua) && /Mobile/.test(ua)) return 'Android Phone';
   if (/Android/.test(ua)) return 'Android Tablet';
   if (/CrOS/.test(ua)) return 'Chromebook';
