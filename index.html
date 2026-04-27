@@ -5713,6 +5713,10 @@ document.addEventListener('click', e => {
 let _analyticsTab = 'overview';
 
 function renderAnalytics() {
+  // Refresh AI insights once per tab switch so inline insights stay current
+  if (typeof runAIAnalysis === 'function') {
+    try { runAIAnalysis(); } catch(e) { console.warn('AI analysis failed:', e); }
+  }
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_analyticsTab==='overview'?'active':''}" onclick="setAnalyticsTab('overview')">Overview</button>
     <button class="tab-btn ${_analyticsTab==='spending'?'active':''}" onclick="setAnalyticsTab('spending')">Spending</button>
@@ -5732,6 +5736,36 @@ function renderAnalytics() {
 }
 
 function setAnalyticsTab(t) { _analyticsTab=t; renderAnalytics(); }
+
+// ─── INLINE ANALYTICS INSIGHTS HELPER ───
+// Renders compact insight cards for embedding in analytics tabs.
+// Insights shown inline are also filterable from the standalone AI page.
+const INLINE_AI_TYPES = new Set(['velocity','anomaly','trend','atm','saverate','cashflow','recap','recurring','budget','fx']);
+
+function renderInlineInsights(types, opts = {}) {
+  const max = opts.max || 3;
+  const matching = (_aiInsights || []).filter(i => types.includes(i.type)).slice(0, max);
+  if (matching.length === 0) return '';
+  
+  const pColor = { high: 'var(--red)', medium: 'var(--amber)', low: 'var(--green)' };
+  const cards = matching.map(ins => {
+    const col = pColor[ins.priority] || 'var(--text3)';
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${col};border-radius:var(--r-md);margin-bottom:6px">
+      <div style="font-size:16px;flex-shrink:0;line-height:1.2">${ins.icon || '💡'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.3">${ins.title}</div>
+      </div>
+    </div>`;
+  }).join('');
+  
+  return `<div style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4)">💡 Insights</div>
+      <button onclick="nav('ai')" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:500;cursor:pointer;padding:0">View in AI Insights →</button>
+    </div>
+    ${cards}
+  </div>`;
+}
 
 function renderAnalyticsOverview() {
   const disp = db.displayCurrency || 'PHP';
@@ -5872,6 +5906,7 @@ function renderAnalyticsOverview() {
         ${selectorOpts}
       </select>
     </div>
+    ${renderInlineInsights(['saverate','cashflow','recap'])}
 
     <!-- Pie Charts -->
     <div class="form-row fr2" style="margin-bottom:16px">
@@ -6083,6 +6118,7 @@ function renderAnalyticsSpending() {
       <div style="font-size:32px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:-0.02em">${fmt(total,view)}</div>
       <div style="font-size:12px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
+    ${renderInlineInsights(['velocity','anomaly','atm'])}
     <div>${bars.join('')}</div>
   </div>`;
 }
@@ -6123,7 +6159,10 @@ function renderAnalyticsTrends() {
     </div>
   </div>`).join('');
 
-  return `<div class="page-pad"><div class="card">${rows}</div></div>`;
+  return `<div class="page-pad">
+    ${renderInlineInsights(['recurring','budget','trend'])}
+    <div class="card">${rows}</div>
+  </div>`;
 }
 
 function renderAnalyticsWealth() {
@@ -6188,6 +6227,7 @@ function renderAnalyticsForex() {
   if (currencies.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">💱</div><div class="empty-text">No tracked currencies</div></div>`;
 
   let html = '<div class="page-pad">';
+  html += renderInlineInsights(['fx']);
   for (const curr of currencies) {
     const history = (db.fxHistory[curr] || []).slice(-12);
     const currentRate = db.fxRates[curr] || 0;
@@ -8806,11 +8846,21 @@ function runAIAnalysis() {
   _aiInsights.push(...aiCategoryTrends());
   _aiInsights.push(...aiCashFlowForecast());
   _aiInsights.push(...aiReimbursementNudge());
+  // New analyzers
+  _aiInsights.push(...aiAccountBalanceAlert());
+  _aiInsights.push(...aiInstallmentReminder());
+  _aiInsights.push(...aiSpendingVelocity());
+  _aiInsights.push(...aiSavingRate());
+  _aiInsights.push(...aiContractMilestone());
+  _aiInsights.push(...aiTransferActivity());
+  _aiInsights.push(...aiWeeklyRecap());
+  _aiInsights.push(...aiAtmFeeWaste());
+  _aiInsights.push(...aiSmartSuggestion());
   if (!db.settings.aiInsights) db.settings.aiInsights = {};
   db.settings.aiInsights.lastRun = _aiLastRun;
   db.settings.aiInsights.insights = _aiInsights;
   saveDB();
-  const urgent = _aiInsights.filter(i=>i.priority==='high').length;
+  const urgent = _aiInsights.filter(i=>i.priority==='high' && !INLINE_AI_TYPES.has(i.type)).length;
   const badge = document.getElementById('ai-badge');
   if (badge) { badge.style.display = urgent > 0 ? 'inline' : 'none'; badge.textContent = urgent || ''; }
   return _aiInsights;
@@ -9009,13 +9059,325 @@ function aiReimbursementNudge() {
   return insights;
 }
 
-function renderAIPage() {
-  const saved = db.settings?.aiInsights;
-  if (saved?.insights) { _aiInsights = saved.insights; _aiLastRun = saved.lastRun; }
+
+// ─── NEW ANALYZERS ───
+
+function aiAccountBalanceAlert() {
+  const insights = [];
+  for (const acct of db.accounts) {
+    if (acct.archived || acct.type === 'External') continue;
+    const bal = getAcctBalance(acct.id);
+    if (bal <= 0) continue;
+    // Calculate avg daily spend from this account over last 30 days
+    const today = new Date();
+    const thirtyAgo = new Date(today.getTime() - 30*24*60*60*1000);
+    const recent = db.transactions.filter(t => 
+      !t.archived && t.accountId === acct.id && 
+      (t.type === 'expense' || t.type === 'shared') &&
+      new Date(t.date) >= thirtyAgo
+    );
+    if (recent.length < 3) continue;
+    const totalSpent = recent.reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
+    const avgDaily = totalSpent / 30;
+    if (avgDaily <= 0) continue;
+    const daysLeft = Math.floor(bal / avgDaily);
+    if (daysLeft <= 14 && daysLeft >= 0) {
+      insights.push({
+        id: 'lowbal-'+acct.id, type: 'balance',
+        priority: daysLeft <= 5 ? 'high' : 'medium',
+        icon: '🏦',
+        title: `${acct.name} running low`,
+        body: `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} days remaining.`,
+        action: 'View Accounts'
+      });
+    }
+  }
+  return insights.slice(0,3);
+}
+
+function aiInstallmentReminder() {
+  const insights = [];
+  if (!db.installments) return insights;
   const today = new Date();
-  if ((today.getDay()===0 && new Date(_aiLastRun||0).toDateString()!==today.toDateString()) || !_aiLastRun) runAIAnalysis();
+  for (const inst of db.installments) {
+    if (inst.archived || inst.completed) continue;
+    const totalPaid = (inst.alreadyPaid || 0) + (inst.paidMonths || 0);
+    const remaining = inst.totalMonths - totalPaid;
+    if (remaining <= 0) continue;
+    
+    // Calculate next due date
+    const startDate = new Date(inst.startDate + '-01');
+    const nextDueDate = new Date(startDate);
+    nextDueDate.setMonth(nextDueDate.getMonth() + totalPaid);
+    const daysUntil = Math.round((nextDueDate - today)/(1000*60*60*24));
+    
+    if (daysUntil >= -2 && daysUntil <= 7) {
+      const dueText = daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` 
+        : daysUntil === 0 ? 'due today' 
+        : `due in ${daysUntil} days`;
+      insights.push({
+        id: 'inst-'+inst.id, type: 'installment',
+        priority: daysUntil < 0 ? 'high' : daysUntil <= 2 ? 'medium' : 'low',
+        icon: inst.icon || '💳',
+        title: `${inst.name} payment ${dueText}`,
+        body: `~${fmt(inst.monthlyAmount, 'PGK')} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} payments left.`,
+        action: 'View Installments'
+      });
+    }
+  }
+  return insights.slice(0,5);
+}
+
+function aiSpendingVelocity() {
+  const insights = [];
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+  const monthProgress = dayOfMonth / daysInMonth;
+  
+  // Compare this month vs last month
+  const thisMk = today.toISOString().slice(0,7);
+  const lastDate = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const lastMk = lastDate.toISOString().slice(0,7);
+  
+  const thisMonth = getMonthTotals(thisMk);
+  const lastMonth = getMonthTotals(lastMk);
+  
+  if (lastMonth.expense <= 0 || thisMonth.expense <= 0) return insights;
+  
+  // Pace check: are we under/over last month at this point?
+  const projectedFullMonth = thisMonth.expense / monthProgress;
+  const change = ((projectedFullMonth - lastMonth.expense) / lastMonth.expense) * 100;
+  
+  if (Math.abs(change) >= 25 && dayOfMonth >= 7) {
+    if (change < -25) {
+      insights.push({
+        id: 'velocity-down', type: 'velocity',
+        priority: 'low', icon: '📉',
+        title: `Spending down ${Math.abs(change).toFixed(0)}% vs last month`,
+        body: `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Keep it up!`,
+        action: null
+      });
+    } else if (change > 25) {
+      insights.push({
+        id: 'velocity-up', type: 'velocity',
+        priority: change > 50 ? 'high' : 'medium', icon: '📈',
+        title: `Spending up ${change.toFixed(0)}% vs last month`,
+        body: `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Watch your pace.`,
+        action: 'Review spending'
+      });
+    }
+  }
+  
+  // Budget consumption check (mid-month)
+  const bgt = (db.budgets||[]).find(b => b.active && b.currency === thisMonth.currency);
+  if (bgt && monthProgress >= 0.4 && monthProgress <= 0.7) {
+    const consumed = thisMonth.expense / bgt.limit;
+    if (consumed >= 0.7) {
+      insights.push({
+        id: 'velocity-budget', type: 'velocity',
+        priority: 'medium', icon: '⏱️',
+        title: `${(consumed*100).toFixed(0)}% of budget used at day ${dayOfMonth}`,
+        body: `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed — ${daysInMonth-dayOfMonth} days left.`,
+        action: 'Review spending'
+      });
+    }
+  }
+  
+  return insights;
+}
+
+function aiSavingRate() {
+  const insights = [];
+  const today = new Date();
+  const thisMk = today.toISOString().slice(0,7);
+  const totals = getMonthTotals(thisMk);
+  
+  if (totals.income <= 0) return insights;
+  
+  const savingRate = ((totals.income - totals.expense) / totals.income) * 100;
+  const dayOfMonth = today.getDate();
+  
+  // Check 3-month streak of net positive
+  let streak = 0;
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth()-i, 1);
+    const mk = d.toISOString().slice(0,7);
+    const t = getMonthTotals(mk);
+    if (t.income > 0 && t.income > t.expense) streak++;
+    else break;
+  }
+  
+  if (savingRate >= 30 && dayOfMonth >= 20) {
+    insights.push({
+      id: 'saverate-good', type: 'saverate',
+      priority: 'low', icon: '💎',
+      title: `Saving ${savingRate.toFixed(0)}% this month`,
+      body: `Net: ${fmt(totals.income-totals.expense, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streak >= 2 ? ` ${streak+1} months net positive — on a roll!` : ''}`,
+      action: null
+    });
+  } else if (savingRate < 0 && dayOfMonth >= 15) {
+    insights.push({
+      id: 'saverate-neg', type: 'saverate',
+      priority: 'high', icon: '⚠️',
+      title: `Spending more than earning this month`,
+      body: `Expenses ${fmt(totals.expense-totals.income, totals.currency)} over income. Review categories.`,
+      action: 'Review spending'
+    });
+  }
+  
+  return insights;
+}
+
+function aiContractMilestone() {
+  const insights = [];
+  const activeId = db.activeContractId;
+  const contract = activeId ? (db.contracts||[]).find(c=>c.id===activeId) : null;
+  if (!contract || !contract.milestones) return insights;
+  
+  const today = new Date();
+  for (const ms of contract.milestones) {
+    const msDate = new Date(ms.date);
+    const daysUntil = Math.round((msDate - today)/(1000*60*60*24));
+    
+    if (daysUntil > 0 && daysUntil <= 14) {
+      insights.push({
+        id: 'milestone-'+ms.date, type: 'milestone',
+        priority: daysUntil <= 3 ? 'medium' : 'low',
+        icon: '🎯',
+        title: `${ms.label} in ${daysUntil} days`,
+        body: ms.note || `Milestone date: ${msDate.toLocaleDateString('en',{month:'short',day:'numeric'})}.`,
+        action: 'Review contract tab'
+      });
+    }
+  }
+  return insights.slice(0,2);
+}
+
+function aiTransferActivity() {
+  const insights = [];
+  const today = new Date();
+  const thirtyAgo = new Date(today.getTime() - 30*24*60*60*1000);
+  const transfers = db.transactions.filter(t => 
+    !t.archived && t.type === 'transfer' && new Date(t.date) >= thirtyAgo
+  );
+  
+  if (transfers.length >= 8) {
+    insights.push({
+      id: 'transfer-many', type: 'transfer',
+      priority: 'low', icon: '🔁',
+      title: `${transfers.length} transfers in last 30 days`,
+      body: `Frequent moves between accounts. Consider consolidating to reduce friction or fees.`,
+      action: 'View Accounts'
+    });
+  }
+  return insights;
+}
+
+function aiWeeklyRecap() {
+  const insights = [];
+  const today = new Date();
+  // Only fire on Sundays
+  if (today.getDay() !== 0) return insights;
+  
+  const sevenAgo = new Date(today.getTime() - 7*24*60*60*1000);
+  const weekTxs = db.transactions.filter(t => 
+    !t.archived && !t.isSettlement && 
+    t.type !== 'external-in' && t.type !== 'external-out' &&
+    new Date(t.date) >= sevenAgo
+  );
+  
+  if (weekTxs.length === 0) return insights;
+  
+  let income = 0, expense = 0;
+  const catSpend = {};
+  for (const t of weekTxs) {
+    const amt = t.type === 'shared' ? (t.myShare || t.amount) : t.amount;
+    if (t.type === 'income') income += amt;
+    else if (t.type === 'expense' || t.type === 'shared') {
+      expense += amt;
+      const cat = getCategoryDisplay(t.categoryId);
+      const name = cat.name.replace(/^[^ ]+ /,'');
+      catSpend[name] = (catSpend[name]||0) + amt;
+    }
+  }
+  
+  const topCat = Object.entries(catSpend).sort((a,b)=>b[1]-a[1])[0];
+  const net = income - expense;
+  const currency = weekTxs[0].currency;
+  
+  insights.push({
+    id: 'weekly-recap', type: 'recap',
+    priority: 'low', icon: '📊',
+    title: `Week recap: Net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
+    body: `Earned ${fmt(income, currency)}, spent ${fmt(expense, currency)}.${topCat ? ` Top: ${topCat[0]} (${fmt(topCat[1], currency)}).` : ''}`,
+    action: 'View Analytics'
+  });
+  return insights;
+}
+
+function aiAtmFeeWaste() {
+  const insights = [];
+  const today = new Date();
+  const thirtyAgo = new Date(today.getTime() - 30*24*60*60*1000);
+  const atmCat = (db.categories?.expense||[]).find(c => c.name.toLowerCase().includes('atm') || c.id?.includes('atm'));
+  const atmTxs = db.transactions.filter(t => 
+    !t.archived && (t.type === 'expense') &&
+    new Date(t.date) >= thirtyAgo &&
+    (atmCat ? t.categoryId === atmCat.id : false)
+  );
+  if (atmTxs.length < 3) return insights;
+  
+  const total = atmTxs.reduce((s,t)=>s+t.amount,0);
+  if (total < 5) return insights;
+  
+  insights.push({
+    id: 'atm-waste', type: 'atm',
+    priority: 'low', icon: '💸',
+    title: `${atmTxs.length} ATM fees in 30 days`,
+    body: `Total: ${fmt(total, atmTxs[0].currency)}. Consider digital transfers (often free) for routine moves.`,
+    action: null
+  });
+  return insights;
+}
+
+function aiSmartSuggestion() {
+  const insights = [];
+  
+  // Suggestion 1: Many pending reimbursements
+  const pendingReimbs = db.transactions.filter(t => 
+    t.type === 'shared' && !t.archived && !t.settled
+  );
+  if (pendingReimbs.length >= 3) {
+    let total = 0;
+    for (const tx of pendingReimbs) {
+      const persons = tx.persons || [];
+      for (const p of persons) {
+        const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object') 
+          ? (tx.paidSoFar[p.name] || 0) : 0;
+        total += Math.max(0, (p.share || 0) - paid);
+      }
+    }
+    if (total > 0) {
+      insights.push({
+        id: 'suggest-reimb', type: 'suggestion',
+        priority: 'low', icon: '💡',
+        title: `${pendingReimbs.length} pending reimbursements`,
+        body: `Total receivable: ${fmt(total, pendingReimbs[0].currency)}. A quick follow-up could help.`,
+        action: 'Go to Reimbursements'
+      });
+    }
+  }
+  
+  return insights;
+}
+
+
+function renderAIPage() {
+  // Always re-run insights when opening the page (fresh data, no stale cache)
+  runAIAnalysis();
   const lastLabel = _aiLastRun ? new Date(_aiLastRun).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
-  const byType = ['budget','anomaly','payday','savings','recurring','fx','trend','cashflow','reimbursement'].reduce((o,t)=>({...o,[t]:_aiInsights.filter(i=>i.type===t)}),{});
+  const byType = ['balance','installment','velocity','saverate','milestone','suggestion','budget','anomaly','payday','savings','recurring','fx','trend','cashflow','reimbursement','transfer','recap','atm'].reduce((o,t)=>({...o,[t]:_aiInsights.filter(i=>i.type===t)}),{});
   const pColor = {high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
 
   function card(ins) {
@@ -9029,6 +9391,9 @@ function renderAIPage() {
       'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('recurring'),100); },
       'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
       'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+      'View Accounts': ()=>{ nav('accounts'); },
+      'View Installments': ()=>{ nav('installments'); },
+      'View Analytics': ()=>{ nav('analytics'); },
     };
     const navFn = ins.action && actionNav[ins.action] ? actionNav[ins.action] : null;
     const actionId = ins.id ? 'ai-act-'+ins.id.replace(/[^a-z0-9]/gi,'-') : '';
@@ -9054,26 +9419,25 @@ function renderAIPage() {
     return `<div style="margin-bottom:20px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:8px;font-weight:600">${icon} ${title}</div>${items.map(card).join('')}</div>`;
   }
 
-  const high = _aiInsights.filter(i=>i.priority==='high').length;
+  const high = _aiInsights.filter(i=>i.priority==='high' && !INLINE_AI_TYPES.has(i.type)).length;
   document.getElementById('page-content').innerHTML = `<div class="page-pad">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:12px;color:var(--text4)">Last: ${lastLabel} · Auto-runs Sundays</div>
       <button class="btn btn-primary btn-sm" onclick="runAIAnalysis();renderAIPage()">🔄 Analyze Now</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
-      <div style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-full);font-size:12px"><strong>${_aiInsights.length}</strong> insights</div>
+      <div style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-full);font-size:12px"><strong>${_aiInsights.filter(i=>!INLINE_AI_TYPES.has(i.type)).length}</strong> insights</div>
       ${high>0?`<div style="padding:8px 14px;background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-full);font-size:12px;color:var(--red)"><strong>${high}</strong> need attention</div>`:`<div style="padding:8px 14px;background:rgba(0,200,100,0.1);border:1px solid var(--green);border-radius:var(--r-full);font-size:12px;color:var(--green)">✅ All clear</div>`}
     </div>
-    ${_aiInsights.length===0?`<div class="empty-state"><div class="empty-icon">🤖</div><div class="empty-text">No insights yet</div><div style="font-size:12px;color:var(--text4)">Click "Analyze Now"</div></div>`:''}
-    ${section('Budget Intelligence','📈',byType.budget)}
-    ${section('Spending Anomalies','⚠️',byType.anomaly)}
+    ${_aiInsights.filter(i=>!INLINE_AI_TYPES.has(i.type)).length===0?`<div class="empty-state"><div class="empty-icon">🤖</div><div class="empty-text">No insights yet</div><div style="font-size:12px;color:var(--text4)">Spending insights now appear in the Analytics tab. Standalone reminders show here.</div></div>`:''}
+    ${section('Account Alerts','🏦',byType.balance)}
+    ${section('Installment Reminders','💳',byType.installment)}
+    ${section('Contract Milestones','🚩',byType.milestone)}
     ${section('Savings Pace','🎯',byType.savings)}
-    ${section('Cash Flow Forecast','🔮',byType.cashflow)}
-    ${section('FX Rate Advisor','💱',byType.fx)}
-    ${section('Reimbursement Nudges','🤝',byType.reimbursement)}
-    ${section('Category Trends','📊',byType.trend)}
     ${section('Payday Predictor','💰',byType.payday)}
-    ${section('Recurring Expenses','🔄',byType.recurring)}
+    ${section('Reimbursement Nudges','🤝',byType.reimbursement)}
+    ${section('Transfer Activity','🔁',byType.transfer)}
+    ${section('Smart Suggestions','💡',byType.suggestion)}
   </div>`;
 }
 
