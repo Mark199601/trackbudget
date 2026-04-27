@@ -8827,10 +8827,12 @@ function aiGetMonthsTxs(n) {
 
 function aiBudgetIntelligence() {
   const insights = [];
-  // Only run if user has active budgets set up
+  // Only run if user has active budgets AND at least 1 month of spending
   const activeBudgets = (db.budgets||[]).filter(b=>b.active);
   if (!activeBudgets.length) return insights;
   const months = aiGetMonthsTxs(3);
+  const hasSpending = months.some(m => m.txs.some(t => t.type==='expense'||t.type==='shared'));
+  if (!hasSpending) return insights;
   for (const bgt of activeBudgets) {
     const avgSpend = months.reduce((s,m)=>{
       return s + m.txs.filter(t=>(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
@@ -8839,7 +8841,8 @@ function aiBudgetIntelligence() {
     const ratio = avgSpend / bgt.limit;
     const sym = bgt.currency==='PHP'?'₱':'K';
     if (ratio > 1.1) insights.push({id:'budget-over-'+bgt.id,type:'budget',priority:'high',icon:'📈',title:`${bgt.location} budget consistently over`,body:`Average: ${sym}${avgSpend.toFixed(0)}/mo vs limit ${sym}${bgt.limit}. Consider raising to ${sym}${Math.ceil(avgSpend*1.05/50)*50}.`,action:'Review budget limit'});
-    else if (ratio < 0.75) insights.push({id:'budget-under-'+bgt.id,type:'budget',priority:'low',icon:'📉',title:`${bgt.location} budget has room`,body:`Spending ${sym}${avgSpend.toFixed(0)}/mo avg — ${Math.round((1-ratio)*100)}% below limit. Could reallocate ${sym}${Math.abs(avgSpend-bgt.limit).toFixed(0)} to savings.`,action:'Consider reallocating'});
+    // Only fire "has room" if there's actual meaningful spending (not K0)
+    else if (ratio < 0.75 && avgSpend > 0) insights.push({id:'budget-under-'+bgt.id,type:'budget',priority:'low',icon:'📉',title:`${bgt.location} budget has room`,body:`Spending ${sym}${avgSpend.toFixed(0)}/mo avg — ${Math.round((1-ratio)*100)}% below limit. Could reallocate ${sym}${Math.abs(avgSpend-bgt.limit).toFixed(0)} to savings.`,action:'Consider reallocating'});
   }
   return insights;
 }
@@ -8884,11 +8887,17 @@ function aiPaydayPredictor() {
 
 function aiSavingsPace() {
   const insights = [];
-  // Only run if user has an active contract
+  // Only run if user has an active contract with actual savings data
   const activeId = db.activeContractId;
   const activeContract = activeId ? (db.contracts||[]).find(c=>c.id===activeId) : null;
   if (!activeContract) return insights;
   const plan = db.settings?.investmentPlan;
+  // Check if any bucket has linked accounts or manual balance > 0
+  const hasData = (plan?.buckets||[]).some(b => {
+    const links = (plan?.bucketLinks||{})[b.id]||[];
+    return links.length > 0 || parseFloat(b.manualBalance||0) > 0;
+  });
+  if (!hasData) return insights;
   const startDate = new Date(activeContract.startDate || '2026-02-25');
   const endDate = new Date(activeContract.endDate || '2028-02-25');
   const today = new Date();
@@ -8936,9 +8945,9 @@ function aiRecurringDetector() {
 
 function aiFxAdvisor() {
   const insights = []; const history = db.fxHistory?.PGK||[];
-  // Need at least 2 remittance data points to give FX advice
+  // Need at least 3 rate history entries to give meaningful FX advice
   const remittances = db.transactions.filter(t=>t.type==='remittance'&&!t.archived);
-  if (history.length < 2 || remittances.length < 2) return insights;
+  if (history.length < 3 || remittances.length < 2) return insights;
   const rates = history.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(h=>h.rate);
   const last3Avg = rates.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,rates.length);
   const current = db.fxRates?.PGK||last3Avg;
@@ -8979,7 +8988,8 @@ function aiCashFlowForecast() {
   const daily = daysPassed > 0 ? spent/daysPassed : 0;
   const projected = spent + daily*daysLeft;
   const bgt = db.budgets?.find(b=>b.active&&b.currency==='PHP');
-  if (bgt) {
+  // Only fire if budget exists AND there's actual spending data this month
+  if (bgt && spent > 0 && daysPassed >= 3) {
     if (projected > bgt.limit*1.1) insights.push({id:'cashflow-over',type:'cashflow',priority:'high',icon:'🔮',title:'Projected to exceed budget',body:`At ₱${daily.toFixed(0)}/day, projected: ₱${projected.toFixed(0)} vs budget ₱${bgt.limit}.`,action:'Review spending'});
     else insights.push({id:'cashflow-ok',type:'cashflow',priority:'low',icon:'🔮',title:'Cash flow looks healthy',body:`Projected month-end: ₱${projected.toFixed(0)} (budget: ₱${bgt.limit}). Daily rate: ₱${daily.toFixed(0)}.`,action:null});
   }
