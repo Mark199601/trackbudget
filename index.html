@@ -832,8 +832,10 @@ function toPhp(amount, fromCurrency, snapshot) {
 // Convert tx amount to PHP using its own snapshot (historically stable)
 // Resolution order: tx.fxSnapshot → fxHistory at tx.date → current fxRates
 function txToPhp(tx) {
-  if (!tx || tx.currency === 'PHP') return tx?.amount || 0;
+  if (!tx) return 0;
+  // For shared, always use myShare regardless of currency
   const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+  if (tx.currency === 'PHP') return amt;
   // Remittance tx has explicit rate field — always use it
   if (tx.type === 'remittance' && tx.rate) return amt * tx.rate;
   // Prefer stored snapshot for historical stability
@@ -5816,7 +5818,10 @@ function renderAnalyticsOverview() {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
-      const amt = txToPhp(tx);
+      // shared: use myShare only
+      const amt = tx.type === 'shared'
+        ? toPhp(tx.myShare ?? tx.amount, tx.currency)
+        : txToPhp(tx);
       expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:''});
       expCats[name].total += amt;
       expTotal += amt;
@@ -5987,7 +5992,10 @@ function renderAnalyticsSpending() {
   const catTotals = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    const phpAmt = txToPhp(tx);
+    // shared: use myShare only (not totalBill)
+    const phpAmt = tx.type === 'shared'
+      ? toPhp(tx.myShare ?? tx.amount, tx.currency)
+      : txToPhp(tx);
     const parentName = cat.name.replace(/^[^ ]+ /,'');
     const parentIcon = cat.icon;
     const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
