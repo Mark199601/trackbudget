@@ -1145,6 +1145,7 @@ let db = (() => {
 })();
 
 let _isSavingToDrive = false;
+let _hasUnsavedChanges = false;
 function saveDB() {
   // Local save only — no Drive sync trigger
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
@@ -1153,6 +1154,8 @@ function saveDB() {
 function saveDBWithSync() {
   // Local save + trigger Drive sync (for actual data changes only)
   saveDB();
+  _hasUnsavedChanges = true;
+  if (db.settings.googleDriveConnected) setSyncStatus('unsaved');
   if (!_isSavingToDrive) autoSaveTrigger();
 }
 // ════════════════════════════════════════════════════════════
@@ -1352,8 +1355,11 @@ function renderPageHeader(page) {
   } else {
     r.innerHTML = '';
   }
-  // Always append theme toggle button
+  // Always append sync indicator + theme toggle
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  r.innerHTML += `<div id="sync-indicator" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text4);padding:4px 8px;border-radius:var(--r-full);border:1px solid var(--border2);cursor:default;white-space:nowrap">
+    <span id="sync-icon">☁️</span><span id="sync-label">–</span>
+  </div>`;
   r.innerHTML += `<button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme"
     style="background:none;border:1px solid var(--border2);border-radius:var(--r-full);width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all var(--transition)"
     onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
@@ -8082,6 +8088,8 @@ async function saveToDrive() {
     saveDB();
     closeSheet('gen');
     if (currentPage === 'dashboard') renderDashboard();
+    _lastSyncTime = Date.now();
+    setSyncStatus('saved');
     showToast(`✅ Saved: ${filename}`);
     await pruneOldBackups(folderId, 10);
   } catch(e) {
@@ -8257,6 +8265,7 @@ async function saveToDriveSilent() {
   if (!_gdriveAccessToken) return;
   if (_isSavingToDrive) return; // Prevent re-entry
   _isSavingToDrive = true;
+  setSyncStatus('saving');
   try {
     // Check token validity first — if expired, clear and bail silently
     const testRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + _gdriveAccessToken);
@@ -8286,13 +8295,64 @@ async function saveToDriveSilent() {
     db.settings.lastDriveSync = now.toISOString();
     db.settings.lastDriveBackupFile = filename;
     saveDB();
+    _lastSyncTime = Date.now();
+    _hasUnsavedChanges = false;
+    setSyncStatus('saved');
     await pruneOldBackups(folderId, 10);
   } catch(e) {
     console.warn('Auto-save to Drive failed:', e.message);
+    setSyncStatus('unsaved');
   } finally {
     _isSavingToDrive = false;
   }
 }
+
+// ── SYNC STATUS INDICATOR ──
+let _syncStatus = 'idle'; // idle | unsaved | saving | saved
+let _lastSyncTime = null;
+
+function setSyncStatus(status) {
+  _syncStatus = status;
+  updateSyncIndicator();
+}
+
+function updateSyncIndicator() {
+  const icon = document.getElementById('sync-icon');
+  const label = document.getElementById('sync-label');
+  if (!icon || !label) return;
+
+  if (!db.settings.googleDriveConnected) {
+    icon.textContent = '☁️';
+    label.textContent = 'No Drive';
+    label.style.color = 'var(--text4)';
+    return;
+  }
+
+  if (_syncStatus === 'unsaved') {
+    icon.textContent = '🟡';
+    label.textContent = 'Unsaved';
+    label.style.color = 'var(--amber)';
+  } else if (_syncStatus === 'saving') {
+    icon.textContent = '🔄';
+    label.textContent = 'Saving...';
+    label.style.color = 'var(--accent)';
+  } else if (_syncStatus === 'saved' && _lastSyncTime) {
+    const mins = Math.floor((Date.now() - _lastSyncTime) / 60000);
+    const timeStr = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`;
+    icon.textContent = '🟢';
+    label.textContent = `Saved ${timeStr}`;
+    label.style.color = 'var(--green)';
+  } else {
+    icon.textContent = '☁️';
+    label.textContent = '–';
+    label.style.color = 'var(--text4)';
+  }
+}
+
+// Update "X min ago" every minute
+setInterval(() => {
+  if (_syncStatus === 'saved') updateSyncIndicator();
+}, 60 * 1000);
 
 // Auto-save trigger (30s debounce)
 let _autoSaveTimer = null;
@@ -8533,6 +8593,13 @@ function initApp() {
     initTheme();
     initDeviceName();
     nav('dashboard');
+    // Try silent token refresh on app open (no popup)
+    if (db.settings.googleDriveConnected) {
+      ensureDriveToken(() => {
+        // Token refreshed silently — update indicator
+        if (_lastSyncTime) setSyncStatus('saved');
+      }, true); // silent = no popup
+    }
   }
   } catch(e) {
     console.error('TrackBudget init error:', e);
@@ -8554,10 +8621,18 @@ if (document.readyState === 'loading') {
 // Save to Drive immediately when app goes to background or tab closes
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
-    clearTimeout(_autoSaveTimer); // Cancel pending debounce
-    if (db.settings.googleDriveConnected && _gdriveAccessToken && !_isSavingToDrive) {
-      saveToDriveSilent(); // Fire immediately
+    clearTimeout(_autoSaveTimer);
+    if (_hasUnsavedChanges && db.settings.googleDriveConnected) {
+      if (_gdriveAccessToken && !_isSavingToDrive) {
+        // Token available — save silently
+        saveToDriveSilent();
+      }
+      // No token — unsaved indicator already shows 🟡, user will see on next open
     }
+  }
+  if (document.visibilityState === 'visible') {
+    // App came back to foreground — update sync time display
+    updateSyncIndicator();
   }
 });
 
