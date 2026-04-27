@@ -1578,7 +1578,7 @@ function generateInsights() {
 
   // Net positive
   if (curr.income > 0 && curr.expense > 0 && curr.net > 0) {
-    insights.push({icon:'✅',text:`You're <strong>${fmt(fromPhp(curr.net,'PHP'),'PHP')}</strong> net positive this month. Great job!`});
+    insights.push({icon:'✅',text:`You're <strong>${fmt(curr.net, db.displayCurrency||'PHP')}</strong> net positive this month. Great job!`});
   }
 
   if (insights.length === 0) insights.push({icon:'✨',text:`All clear — your finances look healthy this month! Keep it up.`});
@@ -5952,9 +5952,9 @@ function renderAnalyticsOverview() {
         ${period==='ytd'?'YTD OVERVIEW — '+currentYear:'MONTHLY OVERVIEW'}
       </div>
       <div style="display:flex;gap:4px;align-items:flex-end">${barChart}</div>
-      <div style="display:flex;gap:16px;margin-top:8px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text4)"><div style="width:10px;height:10px;background:var(--green);border-radius:2px"></div>Income</div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text4)"><div style="width:10px;height:10px;background:var(--red);border-radius:2px"></div>Expenses</div>
+      <div style="display:flex;gap:16px;margin-top:10px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:#39ff14;box-shadow:0 0 6px #39ff1499"></div>Income</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:#ff6b35;box-shadow:0 0 6px #ff6b3599"></div>Expenses</div>
       </div>
     </div>
   </div>`;
@@ -5963,47 +5963,80 @@ function renderAnalyticsOverview() {
 function buildPieChart(cats, total, prefix) {
   const entries = Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
   if (!entries.length || total === 0) {
-    return `<div style="text-align:center;color:var(--text4);font-size:12px;padding:20px 0">No data</div>`;
+    return `<div style="text-align:center;color:var(--text4);font-size:13px;padding:28px 0">No data yet ✦</div>`;
   }
   const disp = db.displayCurrency || 'PHP';
-  const r = 50, cx = 60, cy = 60;
+
+  // Gen Z donut — thick arc, gaps between slices, gradient-feel colors
+  const GZ_COLORS = [
+    '#a78bfa','#f472b6','#34d399','#fb923c','#60a5fa','#facc15','#e879f9','#4ade80'
+  ];
+  // Assign gen-z colors
+  let colorIdx = 0;
+  entries.forEach(([,v]) => { v.gzColor = GZ_COLORS[colorIdx++ % GZ_COLORS.length]; });
+
+  const cx = 70, cy = 70, R = 54, r = 34; // thick donut
+  const GAP_DEG = 2.5; // gap between slices
   let cumAngle = -90;
+
   const slices = entries.map(([name, v]) => {
     const pct = v.total / total;
-    const angle = pct * 360;
-    const startRad = cumAngle * Math.PI / 180;
-    const endRad = (cumAngle + angle) * Math.PI / 180;
-    const x1 = cx + r * Math.cos(startRad);
-    const y1 = cy + r * Math.sin(startRad);
-    const x2 = cx + r * Math.cos(endRad);
-    const y2 = cy + r * Math.sin(endRad);
+    const rawAngle = pct * 360;
+    const angle = Math.max(rawAngle - GAP_DEG, 1);
+    const startDeg = cumAngle + GAP_DEG / 2;
+    const endDeg = startDeg + angle;
+    const toRad = d => d * Math.PI / 180;
+    // Outer arc
+    const ox1 = cx + R * Math.cos(toRad(startDeg));
+    const oy1 = cy + R * Math.sin(toRad(startDeg));
+    const ox2 = cx + R * Math.cos(toRad(endDeg));
+    const oy2 = cy + R * Math.sin(toRad(endDeg));
+    // Inner arc
+    const ix1 = cx + r * Math.cos(toRad(endDeg));
+    const iy1 = cy + r * Math.sin(toRad(endDeg));
+    const ix2 = cx + r * Math.cos(toRad(startDeg));
+    const iy2 = cy + r * Math.sin(toRad(startDeg));
     const large = angle > 180 ? 1 : 0;
-    const path = angle >= 359.9
-      ? `M ${cx} ${cy} m -${r} 0 a ${r} ${r} 0 1 1 ${r*2} 0 a ${r} ${r} 0 1 1 -${r*2} 0`
-      : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-    cumAngle += angle;
-    return { path, color: v.color, name, total: v.total, pct: (pct*100).toFixed(1), icon: v.icon };
+    const path = `M ${ox1.toFixed(2)} ${oy1.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${ox2.toFixed(2)} ${oy2.toFixed(2)} L ${ix1.toFixed(2)} ${iy1.toFixed(2)} A ${r} ${r} 0 ${large} 0 ${ix2.toFixed(2)} ${iy2.toFixed(2)} Z`;
+    cumAngle += rawAngle;
+    return { path, color: v.gzColor, name, total: v.total, pct: (pct*100).toFixed(1), icon: v.icon };
   });
 
-  const svgSlices = slices.map(s =>
-    `<path d="${s.path}" fill="${s.color}" stroke="var(--bg2)" stroke-width="1.5" opacity="0.9"/>`
+  const svgSlices = slices.map((s,i) =>
+    `<path d="${s.path}" fill="${s.color}" opacity="0.92" style="filter:drop-shadow(0 1px 3px ${s.color}44)"/>`
   ).join('');
 
+  // Center: icon of biggest slice + amount
+  const top = slices[0];
+
+  // Legend: horizontal pill tags
   const legend = slices.slice(0,5).map(s =>
-    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-      <div style="width:10px;height:10px;border-radius:2px;background:${s.color};flex-shrink:0"></div>
-      <div style="font-size:11px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${s.icon} ${s.name}</div>
-      <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${s.pct}%</div>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:7px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 5px ${s.color}99"></div>
+        <span style="font-size:12px;color:var(--text)">${s.icon} ${s.name}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${fmt(s.total,disp)}</span>
+        <span style="font-size:10px;font-weight:700;color:${s.color};min-width:32px;text-align:right">${s.pct}%</span>
+      </div>
     </div>`
   ).join('');
 
-  return `<div style="display:flex;gap:12px;align-items:center">
-    <svg width="120" height="120" viewBox="0 0 120 120" style="flex-shrink:0">
-      ${svgSlices}
-      <circle cx="${cx}" cy="${cy}" r="22" fill="var(--bg2)"/>
-      <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="9" fill="var(--text3)" font-family="system-ui">${fmt(fromPhp(total,disp),disp)}</text>
-    </svg>
-    <div style="flex:1;min-width:0">${legend}${slices.length>5?`<div style="font-size:10px;color:var(--text4)">+${slices.length-5} more</div>`:''}</div>
+  return `<div>
+    <div style="display:flex;justify-content:center;margin-bottom:14px">
+      <svg width="140" height="140" viewBox="0 0 140 140" style="overflow:visible">
+        ${svgSlices}
+        <!-- Center hole content -->
+        <text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui" font-weight="500">${top.icon}</text>
+        <text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="9.5" fill="var(--text)" font-family="system-ui" font-weight="700">${fmt(total,disp)}</text>
+        <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="8" fill="var(--text4)" font-family="system-ui">${top.pct}% ${top.name.split(' ')[0]}</text>
+      </svg>
+    </div>
+    <div style="padding:0 4px">
+      ${legend}
+      ${slices.length>5?`<div style="font-size:10px;color:var(--text4);text-align:center;margin-top:6px">+${slices.length-5} more categories</div>`:''}
+    </div>
   </div>`;
 }
 
@@ -6154,8 +6187,8 @@ function renderAnalyticsTrends() {
       <div style="height:4px;background:var(--red);border-radius:2px;width:${(m.expense/maxVal*80).toFixed(1)}%"></div>
     </div>
     <div style="text-align:right;min-width:100px">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(fromPhp(m.income,disp),disp)}</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--red)">${fmt(fromPhp(m.expense,disp),disp)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(m.income,disp)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--red)">${fmt(m.expense,disp)}</div>
     </div>
   </div>`).join('');
 
