@@ -7874,6 +7874,13 @@ function initGoogleDrive() {
       db.settings.googleDriveConnected = true;
       db.settings.googleDriveEmail = db.settings.googleDriveEmail || 'Connected';
       saveDB();
+      // If a pending action after token (e.g. loadFromDrive), run it instead
+      if (window._pendingAfterToken) {
+        const pending = window._pendingAfterToken;
+        window._pendingAfterToken = null;
+        await pending();
+        return;
+      }
       showToast('✅ Google Drive connected!');
       closeSheet('gen');
       if (currentPage === 'dashboard') renderDashboard();
@@ -8189,18 +8196,21 @@ async function confirmLoadDriveBackup(fileId) {
 
 async function loadFromDrive() {
   if (!_gdriveAccessToken) {
-    showToast('Connecting to Drive...');
-    // Trigger token request — popup allowed for manual load
-    ensureDriveToken(() => {
-      // Small delay to ensure token is fully set before backup fetch
-      setTimeout(() => {
-        if (_gdriveAccessToken) {
-          showBackupPicker();
-        } else {
-          showToast('Token failed — try connecting Drive again');
-        }
-      }, 300);
-    }, false);
+    // No token — need to re-auth. Must be triggered directly from user tap (Android requires this)
+    if (typeof google === 'undefined' || !google.accounts) {
+      showToast('Google API not ready, try again');
+      return;
+    }
+    if (!_gdriveTokenClient) initGoogleDrive();
+    // Set callback to show backup picker after token received
+    window._pendingAfterToken = async () => { await showBackupPicker(); };
+    setTimeout(() => {
+      if (_gdriveTokenClient) {
+        _gdriveTokenClient.requestAccessToken({ prompt: '' });
+      } else {
+        showToast('Google API not ready, try again');
+      }
+    }, _gdriveTokenClient ? 0 : 600);
     return;
   }
   await showBackupPicker();
