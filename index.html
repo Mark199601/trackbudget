@@ -1257,16 +1257,20 @@ function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
   for (const t of txs) {
-    // Reimbursements received, loan repayments received, and loan payments made
-    // are NOT true income/expense — they are settlements. Exclude from totals.
+    // Settlements, external-in, external-out excluded from income/expense totals
     if (t.isSettlement) continue;
-    // Use snapshot-aware conversion (period-resolves from fxHistory)
-    const php = txToPhp(t);
-    if (t.type==='income') income += php;
-    else if (t.type==='expense' || t.type==='shared') expense += php;
+    if (t.type === 'external-in' || t.type === 'external-out') continue;
+    // Use direct amount when display currency matches tx currency (no double conversion)
+    const dispCurr = db.displayCurrency || 'PHP';
+    const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
+    const converted = t.currency === dispCurr ? amt : txToPhp({ ...t, amount: amt, type: t.type === 'shared' ? 'expense' : t.type });
+    if (t.type==='income') income += converted;
+    else if (t.type==='expense' || t.type==='shared') expense += converted;
     // Remittance, transfer, lend, borrow excluded from monthly income/expense totals
   }
-  return { income, expense, net: income-expense, currency:'PHP' };
+  // Return in display currency
+  return { income, expense, net: income-expense, currency: db.displayCurrency || 'PHP' };
+
 }
 
 function buildFxSnapshot(date) {
