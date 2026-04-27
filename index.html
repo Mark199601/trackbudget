@@ -8294,22 +8294,18 @@ async function saveToDriveSilent() {
   }
 }
 
-// Auto-save trigger (5 min idle)
+// Auto-save trigger (30s debounce)
 let _autoSaveTimer = null;
 function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
   clearTimeout(_autoSaveTimer);
   // 30-second debounce — saves once after 30s of inactivity
+  // IMPORTANT: Only saves if token already in memory — never triggers popup
   _autoSaveTimer = setTimeout(async () => {
     if (_gdriveAccessToken) {
-      // Token already available — save directly
       await saveToDriveSilent();
-    } else {
-      // Token missing — try silent re-auth (no popup)
-      ensureDriveToken(async () => {
-        await saveToDriveSilent();
-      }, true); // true = silent mode (no popup)
     }
+    // No token = skip silently. User must do a manual save to re-auth.
   }, 30 * 1000);
 }
 
@@ -8554,6 +8550,16 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
+// Save to Drive immediately when app goes to background or tab closes
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    clearTimeout(_autoSaveTimer); // Cancel pending debounce
+    if (db.settings.googleDriveConnected && _gdriveAccessToken && !_isSavingToDrive) {
+      saveToDriveSilent(); // Fire immediately
+    }
+  }
+});
 
 
 // ════════════════════════════════════════════════════════════
