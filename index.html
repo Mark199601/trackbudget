@@ -8826,8 +8826,12 @@ function aiGetMonthsTxs(n) {
 }
 
 function aiBudgetIntelligence() {
-  const insights = []; const months = aiGetMonthsTxs(3);
-  for (const bgt of (db.budgets||[]).filter(b=>b.active)) {
+  const insights = [];
+  // Only run if user has active budgets set up
+  const activeBudgets = (db.budgets||[]).filter(b=>b.active);
+  if (!activeBudgets.length) return insights;
+  const months = aiGetMonthsTxs(3);
+  for (const bgt of activeBudgets) {
     const avgSpend = months.reduce((s,m)=>{
       return s + m.txs.filter(t=>(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
         .reduce((ss,t)=>ss+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
@@ -8843,6 +8847,8 @@ function aiBudgetIntelligence() {
 function aiAnomalyDetection() {
   const insights = []; const months = aiGetMonthsTxs(4);
   const current = months[0]; const historical = months.slice(1);
+  // Need at least 2 months of historical data to detect anomalies
+  if (!historical.some(m=>m.txs.length>0)) return insights;
   const cats = {};
   for (const m of historical) for (const t of m.txs.filter(t=>t.type==='expense'||t.type==='shared')) {
     const cat = t.categoryId||'misc';
@@ -8878,8 +8884,14 @@ function aiPaydayPredictor() {
 
 function aiSavingsPace() {
   const insights = [];
+  // Only run if user has an active contract
+  const activeId = db.activeContractId;
+  const activeContract = activeId ? (db.contracts||[]).find(c=>c.id===activeId) : null;
+  if (!activeContract) return insights;
   const plan = db.settings?.investmentPlan;
-  const startDate = new Date('2026-02-25'); const endDate = new Date('2028-02-25'); const today = new Date();
+  const startDate = new Date(activeContract.startDate || '2026-02-25');
+  const endDate = new Date(activeContract.endDate || '2028-02-25');
+  const today = new Date();
   const progress = Math.max(0,Math.min(1,(today-startDate)/(endDate-startDate)));
   const targetNow = 970000 * progress;
   let actualTotal = 0;
@@ -8924,7 +8936,9 @@ function aiRecurringDetector() {
 
 function aiFxAdvisor() {
   const insights = []; const history = db.fxHistory?.PGK||[];
-  if (history.length < 2) return insights;
+  // Need at least 2 remittance data points to give FX advice
+  const remittances = db.transactions.filter(t=>t.type==='remittance'&&!t.archived);
+  if (history.length < 2 || remittances.length < 2) return insights;
   const rates = history.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(h=>h.rate);
   const last3Avg = rates.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,rates.length);
   const current = db.fxRates?.PGK||last3Avg;
