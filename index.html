@@ -8102,7 +8102,10 @@ async function checkDriveForBackup() {
 }
 
 async function showBackupPicker() {
-  if (!_gdriveAccessToken) return;
+  if (!_gdriveAccessToken) {
+    showToast('No Drive token — tap Load again');
+    return;
+  }
   try {
     showToast('Loading backups...');
     const folderId = await getOrCreateFolder();
@@ -8187,9 +8190,17 @@ async function confirmLoadDriveBackup(fileId) {
 async function loadFromDrive() {
   if (!_gdriveAccessToken) {
     showToast('Connecting to Drive...');
-    ensureDriveToken(async () => {
-      await showBackupPicker();
-    }, false); // Allow popup for manual load
+    // Trigger token request — popup allowed for manual load
+    ensureDriveToken(() => {
+      // Small delay to ensure token is fully set before backup fetch
+      setTimeout(() => {
+        if (_gdriveAccessToken) {
+          showBackupPicker();
+        } else {
+          showToast('Token failed — try connecting Drive again');
+        }
+      }, 300);
+    }, false);
     return;
   }
   await showBackupPicker();
