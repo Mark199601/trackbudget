@@ -4947,74 +4947,110 @@ function renderLoanList(direction) {
 function openLoanDetail(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
-  const remaining = loan.remaining || loan.amount;
+  const remaining = loan.remaining ?? loan.amount;
+  const pct = loan.amount > 0 ? Math.min(100, ((loan.amount - remaining) / loan.amount) * 100) : 0;
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===loan.currency?'selected':''}>${c}</option>`).join('');
   const sourceAcct = db.accounts.find(a=>a.id===loan.accountId);
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  const isLent = direction === 'lent';
+  const accentColor = isLent ? 'var(--amber)' : 'var(--red)';
+  const avatarLetters = loan.personName?.slice(0,2).toUpperCase() || '??';
 
   // Payment history
   const payments = getLoanPayments(loanId);
   const payHistHTML = payments.length > 0 ? `
-    <div style="margin-top:16px">
-      <div class="section-title" style="margin-bottom:8px">Payment History</div>
-      <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden">
-        ${payments.map(p => {
+    <div style="margin-top:4px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);padding:12px 0 8px">Payment History</div>
+      <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)">
+        ${payments.map((p,i) => {
           const destAcct = db.accounts.find(a=>a.id===p.accountId);
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
-            <div>
-              <div style="font-size:12px;font-weight:500">${p.notes||'Payment'}</div>
-              <div style="font-size:11px;color:var(--text3)">${fmtD(p.date)} → ${destAcct?.name||'Unknown'}</div>
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;${i<payments.length-1?'border-bottom:1px solid var(--border)':''};cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:14px">💸</div>
+              <div>
+                <div style="font-size:13px;font-weight:500">${p.notes||'Payment'}</div>
+                <div style="font-size:11px;color:var(--text3)">${fmtDFull(p.date)} · ${destAcct?.name||'?'}</div>
+              </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:6px">
               <div style="font-family:var(--mono);font-size:13px;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
-              <span style="font-size:10px;color:var(--text4)">✎</span>
+              <span style="font-size:10px;color:var(--text4)">›</span>
             </div>
           </div>`;
         }).join('')}
       </div>
     </div>` : '';
 
-  // Account options for repayment destination
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
-
-  openSheet('gen', loan.personName, `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div>
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em">Remaining</div>
-        <div style="font-size:28px;font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(remaining,loan.currency)}</div>
-        ${loan.currency!=='PHP'?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono)">≈ ₱${toPhp(remaining,loan.currency).toFixed(2)}</div>`:''}
+  openSheet('gen', '', `
+    <!-- Person header card -->
+    <div style="background:var(--bg2);border-radius:var(--r-lg);border:1px solid var(--border);padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="pool-avatar" style="width:44px;height:44px;font-size:16px;background:${isLent?'var(--amber-bg)':'var(--red-bg)'};">${avatarLetters}</div>
+          <div>
+            <div style="font-size:17px;font-weight:700">${loan.personName}</div>
+            <div style="font-size:11px;color:var(--text3)">${isLent?'Lent Out':'Borrowed'} · ${fmtDFull(loan.date)}</div>
+          </div>
+        </div>
+        ${loan.settled?`<span class="pill pill-green">✓ Settled</span>`:
+          `<span class="pill" style="background:${isLent?'var(--amber-bg)':'var(--red-bg)'};color:${accentColor}">${isLent?'Pending':'Owed'}</span>`}
       </div>
-      ${loan.settled?`<span class="pill pill-green">✓ Settled</span>`:''}
+
+      <!-- Amount display -->
+      <div style="text-align:center;padding:8px 0 12px">
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Remaining</div>
+        <div style="font-size:36px;font-family:var(--mono);font-weight:700;color:${accentColor}">${fmt(remaining,loan.currency)}</div>
+        ${loan.currency!=='PHP'?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ₱${toPhp(remaining,loan.currency).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
+      </div>
+
+      <!-- Progress bar -->
+      <div style="background:var(--bg4);border-radius:99px;height:6px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;border-radius:99px;background:${accentColor};width:${pct.toFixed(1)}%;transition:width 0.3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+        <span>${pct.toFixed(0)}% repaid</span>
+        <span>of ${fmt(loan.amount,loan.currency)}</span>
+      </div>
     </div>
-    <div class="detail-row"><div class="detail-label">Original</div><div class="detail-value" style="font-family:var(--mono)">${fmt(loan.amount,loan.currency)}</div></div>
-    ${sourceAcct?`<div class="detail-row"><div class="detail-label">${direction==='lent'?'From Account':'To Account'}</div><div class="detail-value">${sourceAcct.name}</div></div>`:''}
-    <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(loan.date)}</div></div>
-    ${loan.dueDate?`<div class="detail-row"><div class="detail-label">Due Date</div><div class="detail-value">${fmtDFull(loan.dueDate)} ${daysUntil(loan.dueDate)!==null?`(${daysUntil(loan.dueDate)}d)`:''}</div></div>`:''}
-    ${loan.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${loan.notes}</div></div>`:''}
+
+    <!-- Details card -->
+    <div style="background:var(--bg2);border-radius:var(--r-lg);border:1px solid var(--border);overflow:hidden;margin-bottom:12px">
+      ${sourceAcct?`<div class="detail-row" style="padding:12px 14px"><div class="detail-label">${isLent?'From Account':'To Account'}</div><div class="detail-value">${sourceAcct.name}</div></div>`:''}
+      ${loan.dueDate?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Due Date</div><div class="detail-value">${fmtDFull(loan.dueDate)} ${daysUntil(loan.dueDate)!==null?`<span style="color:${daysUntil(loan.dueDate)<3?'var(--red)':'var(--text3)'}">(${daysUntil(loan.dueDate)}d)</span>`:''}</div></div>`:''}
+      ${loan.notes?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Notes</div><div class="detail-value">${loan.notes}</div></div>`:''}
+    </div>
 
     ${payHistHTML}
 
     ${!loan.settled?`
-      <div style="margin-top:16px">
-        <div class="section-title" style="margin-bottom:8px">Record ${direction==='lent'?'Repayment Received':'Payment Made'}</div>
+      <!-- Record payment card -->
+      <div style="background:var(--bg2);border-radius:var(--r-lg);border:1px solid var(--border);padding:14px;margin-top:4px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:12px">
+          Record ${isLent?'Repayment Received':'Payment Made'}
+        </div>
         <div class="form-row fr2">
           <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="loan-pay-amt" placeholder="${remaining}" step="any"></div>
           <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="loan-pay-curr">${currOpts}</select></div>
         </div>
         <div class="form-group">
-          <label class="form-label">${direction==='lent'?'Receive Into Account':'Pay From Account'}</label>
+          <label class="form-label">${isLent?'Receive Into Account':'Pay From Account'}</label>
           <select class="form-input" id="loan-pay-acct">${acctOpts}</select>
         </div>
-        <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" id="loan-pay-notes" placeholder="e.g. Cash payment, GCash transfer"></div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-success btn-full" onclick="settleLoan('${loanId}','${direction}',false)">Partial Payment</button>
-          <button class="btn btn-primary" onclick="settleLoan('${loanId}','${direction}',true)">Settle All</button>
+        <div class="form-group">
+          <label class="form-label">Notes (optional)</label>
+          <input class="form-input" id="loan-pay-notes" placeholder="e.g. Cash payment, GCash transfer">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-success btn-full" style="flex:1" onclick="settleLoan('${loanId}','${direction}',false)">Partial Payment</button>
+          <button class="btn btn-primary" style="flex:1" onclick="settleLoan('${loanId}','${direction}',true)">Settle All</button>
         </div>
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-ghost btn-sm" onclick="editLoanFull('${loanId}','${direction}')">Edit Loan</button>
         <button class="btn btn-warning btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
       </div>
-    `:`<div style="margin-top:12px;display:flex;gap:8px">
+    `:`
+      <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-ghost btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
       </div>`}
   `);
