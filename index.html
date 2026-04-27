@@ -5967,14 +5967,14 @@ function buildPieChart(cats, total, prefix) {
 }
 
 function renderAnalyticsSpending() {
-  const disp = db.displayCurrency || 'PHP';
   const period = window._analyticsOverviewPeriod || 'ytd';
+  // Active currency view: PGK (PNG) or PHP (Pinas)
+  const view = window._spendingView || 'PGK';
   const now = new Date();
 
   // Determine month key(s) to show
   let mks = [];
   if (period === 'ytd') {
-    // All months this year up to current
     for (let i = 0; i <= now.getMonth(); i++) {
       mks.push(`${now.getFullYear()}-${String(i+1).padStart(2,'0')}`);
     }
@@ -5982,8 +5982,10 @@ function renderAnalyticsSpending() {
     mks = [period];
   }
 
+  // Filter by currency view — pure native, no conversion
   const txs = db.transactions.filter(t =>
     !t.archived && !t.isSettlement &&
+    t.currency === view &&
     mks.some(mk => t.date?.startsWith(mk)) &&
     (t.type==='expense' || t.type==='shared')
   );
@@ -5992,17 +5994,14 @@ function renderAnalyticsSpending() {
   const catTotals = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    // shared: use myShare only (not totalBill)
-    const phpAmt = tx.type === 'shared'
-      ? toPhp(tx.myShare ?? tx.amount, tx.currency)
-      : txToPhp(tx);
+    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
     const parentName = cat.name.replace(/^[^ ]+ /,'');
     const parentIcon = cat.icon;
     const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
     if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{} };
-    catTotals[parentName].total += phpAmt;
+    catTotals[parentName].total += amt;
     if (!catTotals[parentName].subs[subName]) catTotals[parentName].subs[subName] = { total:0, icon:cat.icon };
-    catTotals[parentName].subs[subName].total += phpAmt;
+    catTotals[parentName].subs[subName].total += amt;
   }
 
   const sorted = Object.entries(catTotals).sort((a,b)=>b[1].total-a[1].total);
@@ -6013,46 +6012,78 @@ function renderAnalyticsSpending() {
     ? `YTD ${now.getFullYear()}`
     : new Date(period+'-01').toLocaleString('en',{month:'long',year:'numeric'});
 
-  if (sorted.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">📊</div><div class="empty-text">No expense data for ${periodLabel}</div></div>`;
+  // iOS-style segmented control for PGK / PHP
+  const segmentedHTML = `
+    <div style="display:flex;background:var(--bg3);border-radius:10px;padding:3px;margin-bottom:16px;gap:3px">
+      <button onclick="setSpendingView('PGK')" style="flex:1;padding:8px 12px;border:none;border-radius:8px;background:${view==='PGK'?'var(--bg)':'transparent'};color:${view==='PGK'?'var(--text)':'var(--text3)'};font-size:13px;font-weight:${view==='PGK'?'600':'500'};cursor:pointer;transition:all 0.2s;box-shadow:${view==='PGK'?'0 1px 3px rgba(0,0,0,0.1)':'none'};display:flex;align-items:center;justify-content:center;gap:6px">
+        <span style="font-size:14px">🇵🇬</span> PNG <span style="font-size:11px;color:var(--text4);font-weight:500">PGK</span>
+      </button>
+      <button onclick="setSpendingView('PHP')" style="flex:1;padding:8px 12px;border:none;border-radius:8px;background:${view==='PHP'?'var(--bg)':'transparent'};color:${view==='PHP'?'var(--text)':'var(--text3)'};font-size:13px;font-weight:${view==='PHP'?'600':'500'};cursor:pointer;transition:all 0.2s;box-shadow:${view==='PHP'?'0 1px 3px rgba(0,0,0,0.1)':'none'};display:flex;align-items:center;justify-content:center;gap:6px">
+        <span style="font-size:14px">🇵🇭</span> Pinas <span style="font-size:11px;color:var(--text4);font-weight:500">PHP</span>
+      </button>
+    </div>`;
+
+  if (sorted.length === 0) {
+    return `<div class="page-pad">
+      ${segmentedHTML}
+      <div class="empty-state" style="padding:48px 16px;text-align:center">
+        <div class="empty-icon" style="font-size:48px;margin-bottom:12px">${view==='PGK'?'🇵🇬':'🇵🇭'}</div>
+        <div class="empty-text" style="color:var(--text3);font-size:14px">No ${view} expenses for ${periodLabel}</div>
+      </div>
+    </div>`;
+  }
 
   const bars = sorted.map(([name,v],i) => {
     const pct = total > 0 ? (v.total/total*100) : 0;
     const color = colors[i % colors.length];
     const subEntries = Object.entries(v.subs).sort((a,b)=>b[1].total-a[1].total);
-    const subRows = subEntries.length > 1 ? subEntries.map(([sName, sv]) => {
+    const hasSubs = subEntries.length > 1;
+    const subRows = hasSubs ? subEntries.map(([sName, sv]) => {
       const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
-      return `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0 3px 20px;border-bottom:1px solid var(--border)">
-        <span>${sv.icon} ${sName}</span>
-        <span style="font-family:var(--mono)">${fmt(fromPhp(sv.total,disp),disp)} <span style="color:var(--text4)">${sPct.toFixed(0)}%</span></span>
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text3);padding:8px 16px 8px 32px;border-top:1px solid var(--border)">
+        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${sName}</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:var(--mono);color:var(--text2)">${fmt(sv.total,view)}</span>
+          <span style="color:var(--text4);font-size:10px;min-width:28px;text-align:right">${sPct.toFixed(0)}%</span>
+        </span>
       </div>`;
     }).join('') : '';
 
-    return `<div style="margin-bottom:4px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">
-      <div style="padding:10px 12px;cursor:${subEntries.length>1?'pointer':'default'}" onclick="${subEntries.length>1?`toggleSpendingDrill('drill-${i}')`:''}" >
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-          <span style="font-weight:500">${v.icon} ${name}</span>
-          <span style="display:flex;align-items:center;gap:6px">
-            <span style="font-family:var(--mono)">${fmt(fromPhp(v.total,disp),disp)}</span>
-            <span style="color:var(--text4);font-size:11px">${pct.toFixed(0)}%</span>
-            ${subEntries.length>1?`<span style="font-size:10px;color:var(--text4)">▼</span>`:''}
-          </span>
+    return `<div style="margin-bottom:8px;background:var(--bg);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+      <div style="padding:14px 16px;cursor:${hasSubs?'pointer':'default'}" ${hasSubs?`onclick="toggleSpendingDrill('drill-${i}')"`:''}>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px">${v.icon}</div>
+            <span style="font-weight:600;font-size:14px;color:var(--text)">${name}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-family:var(--mono);font-weight:600;font-size:14px;color:var(--text)">${fmt(v.total,view)}</span>
+            <span style="color:var(--text4);font-size:11px;font-weight:500;min-width:32px;text-align:right">${pct.toFixed(0)}%</span>
+            ${hasSubs?`<span style="font-size:9px;color:var(--text4)">▼</span>`:''}
+          </div>
         </div>
-        <div style="height:5px;background:var(--bg5);border-radius:3px;overflow:hidden">
-          <div style="height:100%;border-radius:3px;background:${color};width:${pct.toFixed(1)}%"></div>
+        <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
+          <div style="height:100%;border-radius:99px;background:${color};width:${pct.toFixed(1)}%;transition:width 0.3s"></div>
         </div>
       </div>
-      ${subEntries.length>1?`<div id="drill-${i}" style="display:none;background:var(--bg3)">${subRows}</div>`:''}
+      ${hasSubs?`<div id="drill-${i}" style="display:none">${subRows}</div>`:''}
     </div>`;
   });
 
   return `<div class="page-pad">
-    <div class="metric-card" style="margin-bottom:16px">
-      <div class="metric-label">TOTAL EXPENSES — ${periodLabel.toUpperCase()}</div>
-      <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(total,disp),disp)}</div>
-      <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transactions · ${sorted.length} categories</div>
+    ${segmentedHTML}
+    <div style="background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid var(--border)">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;margin-bottom:6px">${view==='PGK'?'🇵🇬 PNG':'🇵🇭 Pinas'} EXPENSES — ${periodLabel.toUpperCase()}</div>
+      <div style="font-size:32px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:-0.02em">${fmt(total,view)}</div>
+      <div style="font-size:12px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
     <div>${bars.join('')}</div>
   </div>`;
+}
+
+function setSpendingView(view) {
+  window._spendingView = view;
+  if (typeof renderAnalytics === 'function') renderAnalytics();
 }
 
 function toggleSpendingDrill(id) {
