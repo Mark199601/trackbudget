@@ -1237,6 +1237,17 @@ function getNetWorth() {
   for (const l of db.loans.borrowed) {
     if (!l.settled) liabs += toPhp(l.remaining || l.amount, l.currency);
   }
+  // Shared tx outstanding reimbursements = receivables (asset)
+  for (const tx of db.transactions) {
+    if (tx.type !== 'shared' || tx.archived || tx.settled) continue;
+    const persons = tx.persons || [];
+    for (const p of persons) {
+      const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
+        ? (tx.paidSoFar[p.name] || 0) : 0;
+      const remaining = Math.max(0, (p.share || 0) - paid);
+      if (remaining > 0.01) assets += toPhp(remaining, tx.currency);
+    }
+  }
   return assets - liabs;
 }
 
@@ -1306,7 +1317,7 @@ function txAmountDisplay(tx) {
   if (tx.type==='borrow') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='transfer') return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='remittance') return {cls:'tx-neu', str:'📤 '+fmt(tx.amount,tx.currency)};
-  if (tx.type==='shared') return {cls:'tx-neg', str:'-'+fmt(tx.myShare||tx.amount, tx.currency)};
+  if (tx.type==='shared') return {cls:'tx-neg', str:'-'+fmt(tx.totalBill||tx.amount, tx.currency)};
   if (tx.type==='external-in') return {cls:'tx-pos', str:'📥 +'+fmt(tx.amount,tx.currency)};
   if (tx.type==='external-out') return {cls:'tx-neg', str:'📤 -'+fmt(tx.amount,tx.currency)};
   return {cls:'tx-neg', str:'-'+fmt(tx.amount,tx.currency)};
@@ -1745,6 +1756,21 @@ function renderDashboard() {
     totalAssets += phpVal;
     assetRows.push({ name: l.personName, type: 'Receivable', bal: l.remaining||l.amount, currency: l.currency, phpBal: phpVal });
   }
+  // Reimbursement receivables = assets
+  for (const tx of db.transactions) {
+    if (tx.type !== 'shared' || tx.archived || tx.settled) continue;
+    const persons = tx.persons || [];
+    for (const p of persons) {
+      const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
+        ? (tx.paidSoFar[p.name] || 0) : 0;
+      const remaining = Math.max(0, (p.share || 0) - paid);
+      if (remaining > 0.01) {
+        const phpVal = toPhp(remaining, tx.currency);
+        totalAssets += phpVal;
+        assetRows.push({ name: p.name + ' (Reimb.)', type: 'Receivable', bal: remaining, currency: tx.currency, phpBal: phpVal });
+      }
+    }
+  }
   // Add borrowed loans to liabilities
   for (const l of db.loans.borrowed.filter(l=>!l.settled)) {
     const phpVal = toPhp(l.remaining||l.amount, l.currency);
@@ -1946,21 +1972,54 @@ function renderTxRow(tx, showDate=false) {
     detail = acct.name;
   }
   if (tx.notes) detail += ` · ${tx.notes}`;
-  // For shared txs — show child settlements inline below
+  // For shared txs — show full breakdown: mark's share, each person's share + reimbursements
   let settlementRows = '';
   if (tx.type === 'shared') {
+    const profile = db.profile?.nickname || 'Me';
+    const myShare = tx.myShare ?? (tx.totalBill || tx.amount);
+    const cat = getCategoryDisplay(tx.categoryId);
+    const persons = tx.persons || [];
     const settlements = db.transactions.filter(t => t.parentId === tx.id && t.isAutoReimb);
-    if (settlements.length > 0) {
-      settlementRows = settlements.map(s => {
-        const sAmt = txAmountDisplay(s);
-        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
+
+    // Mark's share row
+    let breakdownHTML = `<div style="display:flex;align-items:center;gap:8px;padding:5px 12px 5px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text4)">▸</span>
+      <span style="font-size:12px;color:var(--text2);flex:1">${profile}'s share <span style="font-size:10px;color:var(--text4)">(${cat.name.replace(/^[^ ]+ /,'')})</span></span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--red)">-${fmt(myShare, tx.currency)}</span>
+    </div>`;
+
+    // Each other person's share + their reimbursements
+    for (const p of persons) {
+      const personReibs = settlements.filter(s => s.reimbPerson === p.name);
+      const totalReimbursed = personReibs.reduce((s, r) => s + (r.amount || 0), 0);
+      const remaining = Math.max(0, (p.share || 0) - totalReimbursed);
+
+      breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:5px 12px 5px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text4)">▸</span>
+        <span style="font-size:12px;color:var(--text2);flex:1">${p.name}'s share</span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(p.share||0, tx.currency)}</span>
+      </div>`;
+
+      // Reimbursement rows for this person
+      for (const r of personReibs) {
+        breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 64px;background:var(--bg3);border-bottom:1px solid var(--border)">
           <span style="font-size:11px;color:var(--text4)">↳</span>
-          <span style="font-size:12px;color:var(--green);flex:1">💰 Reimb. from ${s.reimbPerson||'?'}</span>
-          <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(s.amount,s.currency)}</span>
-          <span style="font-size:10px;color:var(--green)">✓</span>
+          <span style="font-size:12px;color:var(--green);flex:1">Reimbursed</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(r.amount, r.currency)} ✓</span>
         </div>`;
-      }).join('');
+      }
+
+      // Remaining if any
+      if (remaining > 0.01) {
+        breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 64px;background:var(--bg3);border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text4)">↳</span>
+          <span style="font-size:12px;color:var(--amber);flex:1">Remaining</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--amber)">${fmt(remaining, tx.currency)}</span>
+        </div>`;
+      }
     }
+
+    settlementRows = breakdownHTML;
   }
 
   return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
