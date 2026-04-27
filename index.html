@@ -5822,17 +5822,19 @@ function renderAnalyticsOverview() {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
-      // shared: use myShare only
-      const amt = tx.type === 'shared'
-        ? toPhp(tx.myShare ?? tx.amount, tx.currency)
-        : txToPhp(tx);
+      const dispCurr = db.displayCurrency || 'PHP';
+      const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+      // Same-currency shortcut — avoid double conversion
+      const amt = tx.currency === dispCurr ? rawAmt : toPhp(rawAmt, tx.currency);
       expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:''});
       expCats[name].total += amt;
       expTotal += amt;
-    } else if (tx.type === 'income') {
+    } else if (tx.type === 'income' && !tx.isSettlement && !tx.isAutoReimb) {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
-      const amt = txToPhp(tx);
+      // Same-currency shortcut — avoid double conversion
+      const dispCurr = db.displayCurrency || 'PHP';
+      const amt = tx.currency === dispCurr ? tx.amount : txToPhp(tx);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:''});
       incCats[name].total += amt;
       incTotal += amt;
@@ -5887,12 +5889,12 @@ function renderAnalyticsOverview() {
     <div class="form-row fr2" style="margin-bottom:12px">
       <div class="metric-card">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value" style="color:var(--green)">${fmt(fromPhp(curr.income,disp),disp)}</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(curr.income,disp)}</div>
         ${chgBadge(incomeChg)}
       </div>
       <div class="metric-card">
         <div class="metric-label">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(curr.expense,disp),disp)}</div>
+        <div class="metric-value" style="color:var(--red)">${fmt(curr.expense,disp)}</div>
         ${chgBadge(expChg)}
       </div>
     </div>
@@ -5904,7 +5906,7 @@ function renderAnalyticsOverview() {
       </div>
       <div class="metric-card">
         <div class="metric-label">DAILY AVG SPEND</div>
-        <div class="metric-value">${fmt(fromPhp(curr.expense/daysInMetricMonth,disp),disp)}</div>
+        <div class="metric-value">${fmt(curr.expense/daysInMetricMonth,disp)}</div>
         <div style="font-size:11px;color:var(--text4)">${period==='ytd'?'this month':metricLabel.split(' ')[0]}</div>
       </div>
     </div>
