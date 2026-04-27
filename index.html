@@ -1972,54 +1972,64 @@ function renderTxRow(tx, showDate=false) {
     detail = acct.name;
   }
   if (tx.notes) detail += ` · ${tx.notes}`;
-  // For shared txs — show full breakdown: mark's share, each person's share + reimbursements
+  // For shared txs — iOS-style clean breakdown card
   let settlementRows = '';
   if (tx.type === 'shared') {
     const profile = db.profile?.nickname || 'Me';
     const myShare = tx.myShare ?? (tx.totalBill || tx.amount);
-    const cat = getCategoryDisplay(tx.categoryId);
     const persons = tx.persons || [];
     const settlements = db.transactions.filter(t => t.parentId === tx.id && t.isAutoReimb);
+    const totalPeople = persons.length + 1;
 
-    // Mark's share row
-    let breakdownHTML = `<div style="display:flex;align-items:center;gap:8px;padding:5px 12px 5px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
-      <span style="font-size:11px;color:var(--text4)">▸</span>
-      <span style="font-size:12px;color:var(--text2);flex:1">${profile}'s share <span style="font-size:10px;color:var(--text4)">(${cat.name.replace(/^[^ ]+ /,'')})</span></span>
-      <span style="font-family:var(--mono);font-size:12px;color:var(--red)">-${fmt(myShare, tx.currency)}</span>
-    </div>`;
+    // Build person pill rows
+    let personRows = '';
 
-    // Each other person's share + their reimbursements
+    // Mark's row
+    personRows += `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);flex-shrink:0">${profile.slice(0,2).toUpperCase()}</div>
+          <span style="font-size:12px;font-weight:500;color:var(--text)">${profile} <span style="font-size:10px;font-weight:400;color:var(--text4)">(you)</span></span>
+        </div>
+        <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--red)">-${fmt(myShare, tx.currency)}</span>
+      </div>`;
+
+    // Other persons
     for (const p of persons) {
       const personReibs = settlements.filter(s => s.reimbPerson === p.name);
       const totalReimbursed = personReibs.reduce((s, r) => s + (r.amount || 0), 0);
       const remaining = Math.max(0, (p.share || 0) - totalReimbursed);
+      const fullyPaid = remaining <= 0.01;
 
-      breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:5px 12px 5px 48px;background:var(--bg3);border-bottom:1px solid var(--border)">
-        <span style="font-size:11px;color:var(--text4)">▸</span>
-        <span style="font-size:12px;color:var(--text2);flex:1">${p.name}'s share</span>
-        <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(p.share||0, tx.currency)}</span>
-      </div>`;
+      const statusBadge = fullyPaid
+        ? `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">Paid ✓</span>`
+        : totalReimbursed > 0
+          ? `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--amber-bg);color:var(--amber);font-weight:600">Partial</span>`
+          : `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--bg4);color:var(--text4);font-weight:600">Pending</span>`;
 
-      // Reimbursement rows for this person
-      for (const r of personReibs) {
-        breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 64px;background:var(--bg3);border-bottom:1px solid var(--border)">
-          <span style="font-size:11px;color:var(--text4)">↳</span>
-          <span style="font-size:12px;color:var(--green);flex:1">Reimbursed</span>
-          <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(r.amount, r.currency)} ✓</span>
+      personRows += `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:26px;height:26px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text3);flex-shrink:0">${p.name.slice(0,2).toUpperCase()}</div>
+              <div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:12px;font-weight:500;color:var(--text)">${p.name}</span>
+                  ${statusBadge}
+                </div>
+                ${totalReimbursed > 0 && !fullyPaid ? `<div style="font-size:10px;color:var(--text4);margin-top:2px">Paid ${fmt(totalReimbursed, tx.currency)} · owes ${fmt(remaining, tx.currency)}</div>` : ''}
+                ${fullyPaid ? `<div style="font-size:10px;color:var(--green);margin-top:2px">Fully reimbursed</div>` : ''}
+              </div>
+            </div>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(p.share||0, tx.currency)}</span>
+          </div>
         </div>`;
-      }
-
-      // Remaining if any
-      if (remaining > 0.01) {
-        breakdownHTML += `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 4px 64px;background:var(--bg3);border-bottom:1px solid var(--border)">
-          <span style="font-size:11px;color:var(--text4)">↳</span>
-          <span style="font-size:12px;color:var(--amber);flex:1">Remaining</span>
-          <span style="font-family:var(--mono);font-size:12px;color:var(--amber)">${fmt(remaining, tx.currency)}</span>
-        </div>`;
-      }
     }
 
-    settlementRows = breakdownHTML;
+    settlementRows = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:0 12px;overflow:hidden">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;padding:8px 0 4px">Split (${totalPeople} people)</div>
+      ${personRows}
+    </div>`;
   }
 
   return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
@@ -4114,8 +4124,12 @@ function confirmDeleteChildReimb(childId, parentId) {
 
   saveDBWithSync();
   closeDlg();
+  // Re-render current page so transaction list updates immediately
+  if (currentPage === 'transactions') renderTransactions();
+  else if (currentPage === 'dashboard') renderDashboard();
+  else if (currentPage === 'reimbursements') renderReimbursementsPage();
   setTimeout(() => openTxDetail(parentId), 100);
-  showToast('Settlement deleted — Mike now shows as pending');
+  showToast('Settlement deleted — reverted to pending');
 }
 
 function restoreTx(txId) {
