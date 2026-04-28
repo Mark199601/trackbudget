@@ -158,7 +158,9 @@ option{background:var(--bg3);color:var(--text)}
 .form-row{display:grid;gap:10px}
 .fr2{grid-template-columns:1fr 1fr}.fr2-always{display:grid;gap:10px;grid-template-columns:1fr 1fr}
 .fr3{grid-template-columns:1fr 1fr 1fr}
-@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}.fr2-always{grid-template-columns:1fr 1fr!important}}
+.fr4-resp{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
+.stat-month-grid{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
+@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}.fr2-always{grid-template-columns:1fr 1fr!important}.fr4-resp{grid-template-columns:1fr 1fr!important}.stat-month-grid{grid-template-columns:1fr 1fr!important}}
 .form-hint{font-size:11px;color:var(--text3);margin-top:5px}
 
 .type-toggle{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
@@ -5919,7 +5921,7 @@ function renderAnalyticsOverview() {
     </div>
 
     <!-- Metric cards -->
-    <div class="fr2-always" style="margin-bottom:12px">
+    <div class="fr4-resp" style="margin-bottom:16px">
       <div class="metric-card">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
         <div class="metric-value" style="color:var(--green)">${fmt(curr.income,disp)}</div>
@@ -5930,8 +5932,6 @@ function renderAnalyticsOverview() {
         <div class="metric-value" style="color:var(--red)">${fmt(curr.expense,disp)}</div>
         ${chgBadge(expChg)}
       </div>
-    </div>
-    <div class="fr2-always" style="margin-bottom:16px">
       <div class="metric-card">
         <div class="metric-label">SAVINGS RATE</div>
         <div class="metric-value">${curr.income>0?Math.round((1-curr.expense/curr.income)*100):0}%</div>
@@ -5944,18 +5944,67 @@ function renderAnalyticsOverview() {
       </div>
     </div>
 
-    <!-- Chart -->
-    <div class="card">
-      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">
-        ${period==='ytd'?'YTD OVERVIEW — '+currentYear:'MONTHLY OVERVIEW'}
-      </div>
-      <div style="display:flex;gap:4px;align-items:flex-end">${barChart}</div>
-      <div style="display:flex;gap:16px;margin-top:10px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:#39ff14;box-shadow:0 0 6px #39ff1499"></div>Income</div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:#ff6b35;box-shadow:0 0 6px #ff6b3599"></div>Expenses</div>
-      </div>
-    </div>
     ${renderInlineInsights(['saverate','cashflow','recap'])}
+
+    <!-- Monthly stat cards -->
+    ${(()=>{
+      // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
+      const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
+      if (activeMonths.length === 0) return '';
+      // Show most recent first
+      const sorted = [...activeMonths].reverse();
+      const cards = sorted.map(m => {
+        const net = m.income - m.expense;
+        const isActive = m.key === metricMk;
+        const isPositive = net > 0;
+        const isZeroNet = net === 0;
+        // Sign formatting iOS-style: +₱X / −₱X (using minus sign U+2212)
+        const sign = isPositive ? '+' : (net < 0 ? '−' : '');
+        const netDisplay = sign + fmt(Math.abs(net), disp);
+        const netColor = isZeroNet ? 'var(--text3)' : (isPositive ? 'var(--green)' : 'var(--red)');
+        // Bottom label: "Saved X%" if positive savings, "Spent X%" if no income/over
+        let bottomLabel = '';
+        let progressPct = 0;
+        if (m.income > 0) {
+          const savedPct = Math.max(0, Math.round((1 - m.expense/m.income) * 100));
+          if (savedPct > 0) {
+            bottomLabel = `Saved ${savedPct}%`;
+            progressPct = savedPct;
+          } else {
+            const overPct = Math.round((m.expense/m.income) * 100);
+            bottomLabel = `Spent ${overPct}%`;
+            progressPct = Math.min(overPct, 100);
+          }
+        } else if (m.expense > 0) {
+          bottomLabel = 'Spent 100%';
+          progressPct = 100;
+        }
+        // Progress bar segments (10 cells)
+        const filled = Math.round(progressPct / 10);
+        const isOverflow = progressPct > 100;
+        const barColor = isPositive ? 'var(--green)' : (m.income > 0 && progressPct > 0 ? 'var(--amber)' : 'var(--red)');
+        const segments = Array.from({length:10}, (_,i) => 
+          `<div style="flex:1;height:4px;border-radius:2px;background:${i < filled ? barColor : 'var(--border2)'};opacity:${i < filled ? '1' : '0.5'}"></div>`
+        ).join('');
+        return `<div style="background:var(--bg2);border:1px solid ${isActive?'var(--accent)':'var(--border)'};border-radius:var(--r-md);padding:14px;${isActive?'box-shadow:0 0 0 1px var(--accent)':''}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:var(--text4);text-transform:uppercase">${m.label}</div>
+            ${isActive ? '<div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>' : ''}
+          </div>
+          <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${netColor};letter-spacing:-0.02em;margin-bottom:12px">${netDisplay}</div>
+          <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
+          <div style="font-size:11px;color:var(--text3)">${bottomLabel}</div>
+        </div>`;
+      }).join('');
+      const headerLabel = period === 'ytd' ? `YTD ${currentYear}` : 'Recent Months';
+      return `<div class="card" style="padding:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">${headerLabel}</div>
+          <div style="font-size:11px;color:var(--text4)">${activeMonths.length} mo</div>
+        </div>
+        <div class="stat-month-grid">${cards}</div>
+      </div>`;
+    })()}
   </div>`;
 }
 
