@@ -5175,8 +5175,6 @@ function settleLoan(loanId, direction, full) {
     if (full || loan.remaining <= 0.001) { loan.settled=true; loan.settledDate=payDate; loan.remaining=0; }
 
     // Create child settlement transaction linked to this loan
-    // direction=lent: money comes back to you (income type, isSettlement)
-    // direction=borrowed: money goes out (expense type, isSettlement)
     db.transactions.push({
       id: genId(),
       type: direction==='lent' ? 'income' : 'expense',
@@ -5188,8 +5186,8 @@ function settleLoan(loanId, direction, full) {
       time: payTime,
       notes: payNotes || `${full?'Full':'Partial'} repayment — ${loan.personName}`,
       fxSnapshot: buildFxSnapshot(payDate),
-      parentId: loanId,         // linked to loan record
-      isSettlement: true,       // excluded from income/expense analytics
+      parentId: loanId,
+      isSettlement: true,
       isLoanPayment: true,
       loanDirection: direction,
       createdAt: new Date().toISOString(),
@@ -5313,16 +5311,31 @@ function archiveLoan(loanId, direction) {
   const loan = loans.splice(idx,1)[0];
   loan.archivedAt = today(); loan.direction = direction;
   db.archivedLoans.push(loan);
+
+  // Cascade-archive ALL linked transactions:
+  // - Parent loan tx (isLoanTx + loanId match)
+  // - Loan payments (isLoanPayment + parentId === loanId)
+  // - Auto forex gain/loss children (isAutoForex with parentId pointing to parent loan tx)
+  if (!Array.isArray(db.archivedTransactions)) db.archivedTransactions = [];
+  // Find parent loan tx id(s) so we can find their forex children
+  const parentLoanTxIds = db.transactions.filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id);
+  const archiveStamp = new Date().toISOString();
+  db.transactions = db.transactions.filter(t => {
+    const isParent = t.isLoanTx && t.loanId === loanId;
+    const isPayment = t.isLoanPayment && t.parentId === loanId;
+    const isForexChild = t.isAutoForex && parentLoanTxIds.includes(t.parentId);
+    if (isParent || isPayment || isForexChild) {
+      db.archivedTransactions.push({ ...t, archived: true, archivedAt: archiveStamp, cascadedFrom: 'loan:'+loanId });
+      return false; // remove from active
+    }
+    return true;
+  });
+
   saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
 }
 
 function openLoanArchiveSheet() {
-  const archivedLent = db.loans.lent.filter(l=>l.archived);
-  const archivedBorrowed = db.loans.borrowed.filter(l=>l.archived);
-  const all = [
-    ...archivedLent.map(l=>({...l,direction:'lent'})),
-    ...archivedBorrowed.map(l=>({...l,direction:'borrowed'}))
-  ].sort((a,b)=>b.date.localeCompare(a.date));
+  const all = (db.archivedLoans || []).slice().sort((a,b)=>(b.archivedAt||b.date||'').localeCompare(a.archivedAt||a.date||''));
 
   if (all.length === 0) {
     openDlg('Loan Archive',
@@ -5338,7 +5351,7 @@ function openLoanArchiveSheet() {
         <div style="font-size:13px;font-weight:500">${l.personName||'Unknown'}</div>
         <div style="font-size:11px;color:var(--text4)">${l.direction==='lent'?'Lent':'Borrowed'} · ${fmtD(l.date)} · ${fmt(l.amount,l.currency)}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="restoreLoan('${l.id}','${l.direction}')">↩ Restore</button>
+      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="restoreLoan('${l.id}')">↩ Restore</button>
     </div>`).join('');
 
   openSheet('gen', `Loan Archive (${all.length})`,
@@ -5346,26 +5359,37 @@ function openLoanArchiveSheet() {
   );
 }
 
-function restoreLoan(loanId, direction) {
+function restoreLoan(loanId) {
+  // Find loan in archivedLoans
+  const idx = (db.archivedLoans||[]).findIndex(l => l.id === loanId);
+  if (idx < 0) { showToast('Loan not found in archive'); return; }
+  const loan = db.archivedLoans.splice(idx, 1)[0];
+  const direction = loan.direction || 'lent';
+  delete loan.archivedAt;
+  delete loan.archived;
+  // Push back into the appropriate list
   const list = direction === 'lent' ? db.loans.lent : db.loans.borrowed;
-  const loan = list.find(l => l.id === loanId);
-  if (!loan) return;
-  loan.archived = false;
-  // Restore all associated loan payment transactions
-  const payments = (db.archivedTransactions||[]).filter(t => t.isLoanPayment && t.loanId === loanId);
-  for (const p of payments) {
-    const idx = db.archivedTransactions.findIndex(t => t.id === p.id);
-    if (idx >= 0) {
-      const restored = db.archivedTransactions.splice(idx, 1)[0];
-      delete restored.archivedAt;
-      delete restored.cascadedFrom;
-      db.transactions.push(restored);
+  list.push(loan);
+
+  // Restore all linked archived transactions (parent loan tx, payments, forex children)
+  if (Array.isArray(db.archivedTransactions)) {
+    const cascadeKey = 'loan:'+loanId;
+    const toRestore = db.archivedTransactions.filter(t => t.cascadedFrom === cascadeKey);
+    for (const t of toRestore) {
+      const i = db.archivedTransactions.findIndex(x => x.id === t.id);
+      if (i >= 0) {
+        const restored = db.archivedTransactions.splice(i, 1)[0];
+        delete restored.archived;
+        delete restored.archivedAt;
+        delete restored.cascadedFrom;
+        db.transactions.push(restored);
+      }
     }
   }
+
   saveDBWithSync();
-  // Snappy — re-render archive sheet
-  openLoanArchiveSheet();
-  showToast(`↩ Loan restored${payments.length > 0 ? ' + ' + payments.length + ' payments' : ''}`);
+  renderLoans();
+  showToast('Loan restored');
 }
 
 function renderLoanArchive() {
@@ -5373,13 +5397,18 @@ function renderLoanArchive() {
 
   let html = `<div class="page-pad">`;
   for (const l of db.archivedLoans) {
-    const payments = getLoanPayments(l.id);
+    // Get archived payments + any forex children associated with this loan's parent tx
+    const archivedTx = db.archivedTransactions || [];
+    const parentTxIds = archivedTx.filter(t => t.isLoanTx && t.loanId === l.id).map(t => t.id);
+    const payments = archivedTx.filter(t => t.parentId === l.id && t.isLoanPayment);
+    const forexChildren = archivedTx.filter(t => t.isAutoForex && parentTxIds.includes(t.parentId));
+    const linkedCount = payments.length + forexChildren.length;
     html += `<div class="loan-card" style="opacity:0.8;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-size:14px;font-weight:600">${l.personName}</div>
           <div style="font-size:11px;color:var(--text3)">${l.direction==='lent'?'Lent Out':'Borrowed'} · ${fmtDFull(l.date)}</div>
-          ${payments.length>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${payments.length} payment${payments.length>1?'s':''}</div>`:''}
+          ${linkedCount>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${payments.length} payment${payments.length===1?'':'s'}${forexChildren.length>0?' · '+forexChildren.length+' forex':''}</div>`:''}
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--mono)">${fmt(l.amount,l.currency)}</div>
@@ -5394,6 +5423,7 @@ function renderLoanArchive() {
           </div>`).join('')}
         </div>`:''}
       <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-ghost btn-sm" onclick="restoreLoan('${l.id}')">↩ Restore</button>
         <button class="btn btn-danger btn-sm" onclick="deleteLoanPerm('${l.id}')">Delete All</button>
       </div>
     </div>`;
@@ -5411,30 +5441,49 @@ function deleteLoanPerm(loanId) {
 }
 
 function confirmDeleteLoan(loanId) {
+  // Find parent loan tx ids (in both active and archived) for cascade cleanup of forex children
+  const parentLoanTxIds = [
+    ...db.transactions.filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id),
+    ...(db.archivedTransactions||[]).filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id),
+  ];
   // Remove from archivedLoans
   db.archivedLoans = db.archivedLoans.filter(l=>l.id!==loanId);
   // Remove parent loan transaction (isLoanTx)
   db.transactions = db.transactions.filter(t=>!(t.isLoanTx && t.loanId===loanId));
-  db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.isLoanTx && t.loanId===loanId));
+  db.archivedTransactions = (db.archivedTransactions||[]).filter(t=>!(t.isLoanTx && t.loanId===loanId));
   // Remove all linked child payment transactions
   db.transactions = db.transactions.filter(t=>!(t.parentId===loanId && t.isLoanPayment));
   db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.parentId===loanId && t.isLoanPayment));
+  // Remove auto forex children (parentId points to parent loan tx)
+  db.transactions = db.transactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
+  db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
   saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
 }
 
 function openAddLoan(direction='lent') {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${a.name} (${a.currency})</option>`).join('');
   openSheet('gen', direction==='lent'?'Add Loan Out':'Add Debt', `
     <div class="form-group"><label class="form-label">${direction==='lent'?'Lent To':'Borrowed From'} *</label><input class="form-input" id="nl-person" placeholder="Person's name"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="nl-amount" placeholder="0.00" step="any"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nl-currency">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()"></div>
+      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nl-currency" onchange="updateAddLoanFx()">${currOpts}</select></div>
     </div>
     <div class="form-group">
       <label class="form-label">${direction==='lent'?'From Account (source of funds) *':'To Account (where money went) *'}</label>
-      <select class="form-input" id="nl-account">${acctOpts}</select>
+      <select class="form-input" id="nl-account" onchange="updateAddLoanFx()">${acctOpts}</select>
     </div>
+    <div id="nl-snapshot-row" style="display:none;align-items:center;gap:8px;margin-bottom:8px">
+      <input type="checkbox" id="nl-use-snapshot" checked onchange="updateAddLoanFx()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <label for="nl-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
+    </div>
+    <div id="nl-custom-rate-row" style="display:none;margin-bottom:8px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Agreed rate (1 <span id="nl-rate-curr">PGK</span> = ? PHP)</label>
+        <input class="form-input" type="number" id="nl-custom-rate" placeholder="Enter agreed rate" step="any" oninput="updateAddLoanFx()">
+      </div>
+    </div>
+    <div id="nl-fx-preview" style="display:none;font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px"></div>
     <div class="form-row fr3">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
       <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
@@ -5443,6 +5492,64 @@ function openAddLoan(direction='lent') {
     <div class="form-group"><label class="form-label">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
     <button class="btn btn-primary btn-full" onclick="saveAddLoan('${direction}')">Add ${direction==='lent'?'Loan':'Debt'}</button>
   `);
+  // Stash direction on form so updateAddLoanFx can read it
+  requestAnimationFrame(() => {
+    const personEl = document.getElementById('nl-person');
+    if (personEl) personEl.dataset.direction = direction;
+    updateAddLoanFx();
+  });
+}
+
+function updateAddLoanFx() {
+  const personEl = document.getElementById('nl-person');
+  if (!personEl) return;
+  const direction = personEl.dataset.direction || 'lent';
+  const loanCurr = document.getElementById('nl-currency')?.value || 'PHP';
+  const acctSel = document.getElementById('nl-account');
+  const acctOpt = acctSel?.options[acctSel.selectedIndex];
+  const acctCurr = acctOpt?.dataset?.curr || 'PHP';
+  const snapRow = document.getElementById('nl-snapshot-row');
+  const customRow = document.getElementById('nl-custom-rate-row');
+  const previewBox = document.getElementById('nl-fx-preview');
+  const useSnapshot = document.getElementById('nl-use-snapshot')?.checked !== false;
+  // Same currency = no FX consideration, hide everything
+  if (loanCurr === acctCurr) {
+    if (snapRow) snapRow.style.display = 'none';
+    if (customRow) customRow.style.display = 'none';
+    if (previewBox) previewBox.style.display = 'none';
+    return;
+  }
+  // Cross-currency = show snapshot toggle
+  if (snapRow) snapRow.style.display = 'flex';
+  if (customRow) customRow.style.display = useSnapshot ? 'none' : 'block';
+  // Update rate label: foreign side
+  const foreignCurr = (loanCurr === 'PHP') ? acctCurr : (acctCurr === 'PHP' ? loanCurr : loanCurr);
+  const lbl = document.getElementById('nl-rate-curr');
+  if (lbl) lbl.textContent = foreignCurr;
+  // Live preview of forex impact when using custom rate
+  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
+  if (!useSnapshot && amount > 0 && customRate > 0 && previewBox) {
+    // Compute snapshot vs agreed PHP value of the loan amount
+    const snapshotPhp = (loanCurr === 'PHP') ? amount : amount * (db.fxRates[loanCurr] || 1);
+    const agreedPhp = (loanCurr === 'PHP') ? amount : amount * customRate;
+    const snapshotRate = (loanCurr === 'PHP') ? (db.fxRates[acctCurr] || 1) : (db.fxRates[loanCurr] || 1);
+    const diff = snapshotPhp - agreedPhp;
+    // For lent: gain if you sent LESS PHP than market value (agreed PHP < snapshot PHP)
+    // For borrowed: gain if you received MORE PHP than market value (agreed PHP < snapshot PHP)
+    // Both cases: gain when diff > 0 (snapshot > agreed)
+    const isGain = diff > 0;
+    const absDiff = Math.abs(diff);
+    if (absDiff >= 0.01) {
+      previewBox.style.display = 'block';
+      previewBox.innerHTML = `<div style="color:var(--text3)">Snapshot: 1 ${foreignCurr} = ₱${snapshotRate.toFixed(4)} · Agreed: 1 ${foreignCurr} = ₱${customRate.toFixed(4)}</div>
+        <div style="color:${isGain?'var(--green)':'var(--red)'};font-weight:600;margin-top:4px">→ Forex ${isGain?'gain':'loss'}: ₱${absDiff.toFixed(2)}</div>`;
+    } else {
+      previewBox.style.display = 'none';
+    }
+  } else if (previewBox) {
+    previewBox.style.display = 'none';
+  }
 }
 
 function saveAddLoan(direction) {
@@ -5458,27 +5565,102 @@ function saveAddLoan(direction) {
   const notes = document.getElementById('nl-notes')?.value?.trim() || '';
   const loanId = genId();
 
-  const list = direction==='lent' ? db.loans.lent : db.loans.borrowed;
-  list.push({ id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, time, dueDate, notes, settled:false });
+  const acct = db.accounts.find(a=>a.id===accountId);
+  const acctCurr = acct?.currency || 'PHP';
+  const isCrossCurrency = currency !== acctCurr;
+  const useSnapshot = document.getElementById('nl-use-snapshot')?.checked !== false;
+  const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
+  const useCustom = isCrossCurrency && !useSnapshot && customRate > 0;
 
-  // Create parent loan transaction to affect account balance
+  // Compute actual amount that moves through the source account (in account currency)
+  // Default: snapshot conversion
+  let txAmount = amount;
+  let txCurrency = currency;
+  let forexDiffPhp = 0; // gain (+) or loss (−), in PHP
+  if (isCrossCurrency) {
+    if (useCustom) {
+      // Custom agreed rate (1 foreign = X PHP)
+      const foreignCurr = (currency === 'PHP') ? acctCurr : (acctCurr === 'PHP' ? currency : currency);
+      // PHP value at agreed rate (this is what physically moves)
+      let agreedPhp;
+      if (currency === 'PHP') agreedPhp = amount;
+      else if (currency === foreignCurr) agreedPhp = amount * customRate;
+      else agreedPhp = convert(amount, currency, 'PHP');
+      // PHP value at snapshot rate (true market value)
+      const snapshotPhp = convert(amount, currency, 'PHP');
+      // The transaction posts in the account's currency at the AGREED PHP value
+      txAmount = (acctCurr === 'PHP') ? agreedPhp : convert(agreedPhp, 'PHP', acctCurr);
+      txCurrency = acctCurr;
+      // Forex diff: snapshot − agreed
+      // For lent: gave LESS PHP than market value of commitment → GAIN
+      // For borrowed: received LESS PHP than market value of commitment → LOSS
+      const rawDiff = snapshotPhp - agreedPhp;
+      forexDiffPhp = direction === 'lent' ? rawDiff : -rawDiff;
+      forexDiffPhp = Math.round(forexDiffPhp * 100) / 100;
+    } else {
+      // Snapshot mode: convert amount to account currency at current rate
+      txAmount = convert(amount, currency, acctCurr);
+      txCurrency = acctCurr;
+    }
+  }
+
+  const list = direction==='lent' ? db.loans.lent : db.loans.borrowed;
+  // Store the loan in its commitment currency (e.g., 150 PGK)
+  // Also record the agreed rate so it's traceable
+  const loanRecord = { id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, time, dueDate, notes, settled:false };
+  if (useCustom) loanRecord.agreedRate = customRate;
+  list.push(loanRecord);
+
+  // Create parent loan transaction to affect account balance (in ACCOUNT currency at agreed/snapshot value)
+  const parentTxId = genId();
   db.transactions.push({
-    id: genId(),
+    id: parentTxId,
     type: direction==='lent' ? 'income' : 'expense', // placeholder type for balance calc
-    amount, currency,
+    amount: txAmount,
+    currency: txCurrency,
     accountId,
     date, time,
-    notes: `${direction==='lent'?'Lent to':'Borrowed from'} ${person}`,
+    notes: useCustom
+      ? `${direction==='lent'?'Lent to':'Borrowed from'} ${person} — ${amount} ${currency} @ ${customRate}`
+      : `${direction==='lent'?'Lent to':'Borrowed from'} ${person}`,
     fxSnapshot: buildFxSnapshot(date),
     parentId: null,
-    isLoanTx: true,           // flag for getAcctBalance
-    loanId,                   // link back to loan record
+    isLoanTx: true,
+    loanId,
     loanDirection: direction,
-    isSettlement: true,       // excluded from income/expense analytics
+    isSettlement: true,
     createdAt: new Date().toISOString(),
   });
 
-  saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan added!');
+  // Auto-create forex gain/loss child transaction at lend time if custom rate creates a diff
+  if (Math.abs(forexDiffPhp) >= 0.01) {
+    const forexAcct = (acctCurr === 'PHP') ? acct
+      : db.accounts.find(a=>!a.archived && a.currency==='PHP')
+      || acct;
+    if (forexAcct) {
+      const isGain = forexDiffPhp > 0;
+      db.transactions.push({
+        id: genId(),
+        type: isGain ? 'income' : 'expense',
+        amount: Math.abs(forexDiffPhp),
+        currency: 'PHP',
+        categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
+        accountId: forexAcct.id,
+        date, time,
+        notes: `Forex ${isGain?'gain':'loss'} from ${direction==='lent'?'lending to':'borrowing from'} ${person} (${currency} @ ${customRate} vs snapshot)`,
+        fxSnapshot: buildFxSnapshot(date),
+        parentId: parentTxId,
+        isAutoForex: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  saveDBWithSync();
+  closeSheet('gen');
+  renderLoans();
+  const fxNote = Math.abs(forexDiffPhp) >= 0.01 ? ` · Forex ${forexDiffPhp>0?'gain':'loss'}: ₱${Math.abs(forexDiffPhp).toFixed(2)}` : '';
+  showToast(`${direction==='lent'?'Loan':'Debt'} added!${fxNote}`);
 }
 
 // ════════════════════════════════════════════════════════════
