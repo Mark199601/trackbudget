@@ -156,9 +156,9 @@ input,select,textarea{font-family:var(--font)}
 select.form-input{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2358586a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 option{background:var(--bg3);color:var(--text)}
 .form-row{display:grid;gap:10px}
-.fr2{grid-template-columns:1fr 1fr}
+.fr2{grid-template-columns:1fr 1fr}.fr2-always{display:grid;gap:10px;grid-template-columns:1fr 1fr}
 .fr3{grid-template-columns:1fr 1fr 1fr}
-@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}}
+@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}.fr2-always{grid-template-columns:1fr 1fr!important}}
 .form-hint{font-size:11px;color:var(--text3);margin-top:5px}
 
 .type-toggle{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
@@ -5906,8 +5906,6 @@ function renderAnalyticsOverview() {
         ${selectorOpts}
       </select>
     </div>
-    ${renderInlineInsights(['saverate','cashflow','recap'])}
-
     <!-- Pie Charts -->
     <div class="form-row fr2" style="margin-bottom:16px">
       <div class="card" style="padding:14px">
@@ -5921,7 +5919,7 @@ function renderAnalyticsOverview() {
     </div>
 
     <!-- Metric cards -->
-    <div class="form-row fr2" style="margin-bottom:12px">
+    <div class="fr2-always" style="margin-bottom:12px">
       <div class="metric-card">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
         <div class="metric-value" style="color:var(--green)">${fmt(curr.income,disp)}</div>
@@ -5933,7 +5931,7 @@ function renderAnalyticsOverview() {
         ${chgBadge(expChg)}
       </div>
     </div>
-    <div class="form-row fr2" style="margin-bottom:16px">
+    <div class="fr2-always" style="margin-bottom:16px">
       <div class="metric-card">
         <div class="metric-label">SAVINGS RATE</div>
         <div class="metric-value">${curr.income>0?Math.round((1-curr.expense/curr.income)*100):0}%</div>
@@ -5957,6 +5955,7 @@ function renderAnalyticsOverview() {
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:#ff6b35;box-shadow:0 0 6px #ff6b3599"></div>Expenses</div>
       </div>
     </div>
+    ${renderInlineInsights(['saverate','cashflow','recap'])}
   </div>`;
 }
 
@@ -6151,8 +6150,8 @@ function renderAnalyticsSpending() {
       <div style="font-size:32px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:-0.02em">${fmt(total,view)}</div>
       <div style="font-size:12px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
-    ${renderInlineInsights(['velocity','anomaly','atm'])}
     <div>${bars.join('')}</div>
+    ${renderInlineInsights(['velocity','anomaly','atm'])}
   </div>`;
 }
 
@@ -6193,8 +6192,8 @@ function renderAnalyticsTrends() {
   </div>`).join('');
 
   return `<div class="page-pad">
-    ${renderInlineInsights(['recurring','budget','trend'])}
     <div class="card">${rows}</div>
+    ${renderInlineInsights(['recurring','budget','trend'])}
   </div>`;
 }
 
@@ -6260,7 +6259,6 @@ function renderAnalyticsForex() {
   if (currencies.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">💱</div><div class="empty-text">No tracked currencies</div></div>`;
 
   let html = '<div class="page-pad">';
-  html += renderInlineInsights(['fx']);
   for (const curr of currencies) {
     const history = (db.fxHistory[curr] || []).slice(-12);
     const currentRate = db.fxRates[curr] || 0;
@@ -6297,6 +6295,7 @@ function renderAnalyticsForex() {
       </div>
     </div>`;
   }
+  html += renderInlineInsights(['fx']);
   html += `<button class="btn btn-ghost btn-sm" onclick="nav('settings')">Update FX Rates →</button></div>`;
   return html;
 }
