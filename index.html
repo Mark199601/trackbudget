@@ -6076,9 +6076,9 @@ function buildPieChart(cats, total, prefix) {
       <svg width="140" height="140" viewBox="0 0 140 140" style="overflow:visible">
         ${svgSlices}
         <!-- Center hole content -->
-        <text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui" font-weight="500">${top.icon}</text>
-        <text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="9.5" fill="var(--text)" font-family="system-ui" font-weight="700">${fmt(total,disp)}</text>
-        <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="8" fill="var(--text4)" font-family="system-ui">${top.pct}% ${top.name.split(' ')[0]}</text>
+        <text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui" font-weight="500">${top.icon}</text>
+        <text x="${cx}" y="${cy+9}" text-anchor="middle" font-size="9.5" fill="var(--text)" font-family="system-ui" font-weight="700">${fmt(total,disp)}</text>
+        <text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="8" fill="var(--text4)" font-family="system-ui">Total</text>
       </svg>
     </div>
     <div style="padding:0 4px">
@@ -6642,15 +6642,24 @@ function renderContractTab() {
     </div>`;
   }
 
-  // Bucket system (per-contract)
-  const BUCKET_DEFS = [
-    { id:'maya_self',  name:'Maya Savings (mine)', rate:'10% p.a. boosted', monthly: Math.round(monthly*8000/45000),  cap:100000, color:'var(--green)' },
-    { id:'maya_bibi',  name:'Maya Savings (Bibi)',  rate:'10% p.a. boosted', monthly: Math.round(monthly*8000/45000),  cap:100000, color:'var(--green)' },
-    { id:'maya_goals', name:'Maya Personal Goals',  rate:'4–8% tiered',      monthly: Math.round(monthly*12000/45000), cap:500000, color:'var(--teal)' },
-    { id:'banko',      name:'BPI BanKo',             rate:'5% p.a. flat',     monthly: Math.round(monthly*17000/45000), cap:null,   color:'var(--blue)' },
-    { id:'dragonfi',   name:'DragonFi REITs',        rate:'~6% dividend',     monthly: Math.round(monthly*2000/45000),  cap:null,   color:'var(--amber)' },
-    { id:'binance',    name:'Binance',               rate:'Variable / high risk', monthly: 2000,                        cap:null,   color:'var(--purple)' },
+  // ── Bucket system (per-contract, customizable) ──
+  // Migration: if this contract has no bucketDefs yet, seed with legacy defaults
+  const LEGACY_BUCKET_DEFS = [
+    { id:'maya_self',  name:'Maya Savings (mine)', rate:'10% p.a. boosted', monthly: Math.round(monthly*8000/45000),  cap:100000, color:'#2dd98a' },
+    { id:'maya_bibi',  name:'Maya Savings (Bibi)',  rate:'10% p.a. boosted', monthly: Math.round(monthly*8000/45000),  cap:100000, color:'#2dd98a' },
+    { id:'maya_goals', name:'Maya Personal Goals',  rate:'4–8% tiered',      monthly: Math.round(monthly*12000/45000), cap:500000, color:'#22d4c8' },
+    { id:'banko',      name:'BPI BanKo',             rate:'5% p.a. flat',     monthly: Math.round(monthly*17000/45000), cap:null,   color:'#4a8cf0' },
+    { id:'dragonfi',   name:'DragonFi REITs',        rate:'~6% dividend',     monthly: Math.round(monthly*2000/45000),  cap:null,   color:'#f0a832' },
+    { id:'binance',    name:'Binance',               rate:'Variable / high risk', monthly: 2000,                        cap:null,   color:'#b07ef0' },
   ];
+  if (!Array.isArray(active.bucketDefs)) {
+    active.bucketDefs = LEGACY_BUCKET_DEFS.map(b => ({...b}));
+    saveDBWithSync();
+  }
+  // Sort: alphabetical by default; preserve manual order if user dragged
+  const BUCKET_DEFS = active.bucketManualOrder
+    ? [...active.bucketDefs]
+    : [...active.bucketDefs].sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
 
   const getBucketBalance = (b) => {
     const links = active.bucketLinks || {};
@@ -6660,7 +6669,8 @@ function renderContractTab() {
   };
 
   const allAccounts = db.accounts.filter(a=>!a.archived);
-  const bucketsHTML = BUCKET_DEFS.map(b=>{
+  const editMode = window._bucketEditMode === activeId;
+  const bucketsHTML = BUCKET_DEFS.map((b, idx)=>{
     const linked = (active.bucketLinks||{})[b.id] || [];
     const val = getBucketBalance(b);
     const isLinked = linked.length > 0;
@@ -6669,23 +6679,38 @@ function renderContractTab() {
     const diff = val - expectedNow;
     const statusTxt = expectedNow>0?(diff>=0?`+${fmt(Math.round(diff),'PHP')} ahead`:`${fmt(Math.round(Math.abs(diff)),'PHP')} behind`):'—';
     const statusColor = diff>=0?'var(--green)':'var(--red)';
+    // Gauge color: red if behind expected pace, green if on/ahead. If no expectation yet (early), use neutral.
+    const gaugeColor = expectedNow>0 ? (diff>=0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)';
     const linkedNames = linked.map(id=>db.accounts.find(a=>a.id===id)?.name||id).join(', ');
     const checkboxes = allAccounts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${linked.includes(a.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${a.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
       <span style="flex:1;color:var(--text2)">${a.name}</span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${a.currency} · ${fmt(getAcctBalance(a.id),a.currency)}</span>
     </label>`).join('');
-    return `<div class="card" style="margin-bottom:8px">
+    const editControls = editMode ? `
+      <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">✎</button>
+        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">🗑</button>
+      </div>` : '';
+    const dragHandle = editMode ? `<div draggable="true" ondragstart="bucketDragStart(event,'${b.id}')" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')" style="cursor:grab;color:var(--text4);font-size:14px;padding:0 6px 0 0;user-select:none" title="Drag to reorder">⋮⋮</div>` : '';
+    return `<div class="card" style="margin-bottom:8px${editMode?';border:1px dashed var(--border2)':''}" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div><div style="font-size:13px;font-weight:600">${b.name}</div>
-        <div style="font-size:11px;color:var(--text3)">${b.rate} · ₱${b.monthly.toLocaleString()}/mo${b.cap?' · cap '+fmt(b.cap,'PHP'):''}</div></div>
-        <div style="text-align:right">
+        <div style="display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0">
+          ${dragHandle}
+          <div style="width:10px;height:10px;border-radius:50%;background:${b.color};flex-shrink:0;margin-top:5px;box-shadow:0 0 4px ${b.color}66"></div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:13px;font-weight:600">${b.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${b.rate||'—'} · ₱${(b.monthly||0).toLocaleString()}/mo${b.cap?' · cap '+fmt(b.cap,'PHP'):''}</div>
+          </div>
+        </div>
+        ${editControls}
+        <div style="text-align:right;margin-left:8px">
           <div style="font-family:var(--mono);font-size:14px;font-weight:600">${isLinked?fmt(Math.round(val),'PHP'):'—'}</div>
           <div style="font-size:11px;color:${statusColor}">${statusTxt}</div>
         </div>
       </div>
       <div style="margin-bottom:8px;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">
-        <div style="height:100%;border-radius:2px;background:${b.color};width:${bPct.toFixed(1)}%;transition:width 0.4s"></div>
+        <div style="height:100%;border-radius:2px;background:${gaugeColor};width:${bPct.toFixed(1)}%;transition:width 0.4s"></div>
       </div>
       ${isLinked
         ?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Linked: <span style="color:var(--accent)">${linkedNames}</span></div>`
@@ -6809,8 +6834,21 @@ function renderContractTab() {
     ${whatIfHTML}
     ${runwayHTML}
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:8px">Per-bucket balances</div>
-    ${bucketsHTML}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:8px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Per-bucket balances</div>
+      <div style="display:flex;gap:6px">
+        ${(window._bucketEditMode===activeId && active.bucketManualOrder)?`<button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="resortBucketsAZ('${activeId}')" title="Re-sort alphabetically">A→Z</button>`:''}
+        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="openBucketSheet('${activeId}',null)">+ Add</button>
+        <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;${window._bucketEditMode===activeId?'color:var(--accent)':''}" onclick="toggleBucketEditMode('${activeId}')">${window._bucketEditMode===activeId?'Done':'Edit list'}</button>
+      </div>
+    </div>
+    ${BUCKET_DEFS.length===0
+      ? `<div class="card" style="text-align:center;padding:24px 16px;margin-bottom:14px">
+          <div style="font-size:13px;color:var(--text3);margin-bottom:6px">No buckets yet</div>
+          <div style="font-size:11px;color:var(--text4);margin-bottom:14px">Add a bucket to track where your savings go</div>
+          <button class="btn btn-primary btn-sm" onclick="openBucketSheet('${activeId}',null)">+ Add bucket</button>
+        </div>`
+      : bucketsHTML}
 
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:8px;margin-top:8px">Milestones</div>
     <div class="card" style="margin-bottom:14px">${milestonesHTML||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No milestones set</div>'}</div>
@@ -6821,9 +6859,12 @@ function renderContractTab() {
 
 function computeContractActual(contract) {
   if (!contract) return 0;
-  const BUCKET_DEFS = ['maya_self','maya_bibi','maya_goals','banko','dragonfi','binance'];
+  // Use the contract's own bucket definitions (post-migration); fall back to legacy ids if absent
+  const bucketIds = Array.isArray(contract.bucketDefs) && contract.bucketDefs.length
+    ? contract.bucketDefs.map(b=>b.id)
+    : ['maya_self','maya_bibi','maya_goals','banko','dragonfi','binance'];
   let total = 0;
-  for (const bid of BUCKET_DEFS) {
+  for (const bid of bucketIds) {
     const linked = (contract.bucketLinks||{})[bid] || [];
     if (linked.length > 0) {
       total += linked.reduce((s,id) => {
@@ -7106,6 +7147,198 @@ function saveContractBucket(contractId, bucketId, val) {
   if (!c.buckets) c.buckets={};
   c.buckets[bucketId]=parseFloat(val)||0;
   saveDBWithSync();
+}
+
+// ── Bucket definition management (per-contract, customizable) ──
+function toggleBucketEditMode(contractId) {
+  window._bucketEditMode = window._bucketEditMode === contractId ? null : contractId;
+  renderPlanning();
+}
+
+const BUCKET_PRESET_COLORS = [
+  {hex:'#2dd98a', name:'Green'},
+  {hex:'#22d4c8', name:'Teal'},
+  {hex:'#4a8cf0', name:'Blue'},
+  {hex:'#f0a832', name:'Amber'},
+  {hex:'#b07ef0', name:'Purple'},
+  {hex:'#f0565a', name:'Red'},
+];
+
+function openBucketSheet(contractId, bucketId) {
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c) return;
+  if (!Array.isArray(c.bucketDefs)) c.bucketDefs = [];
+  const isEdit = !!bucketId;
+  const b = isEdit ? c.bucketDefs.find(x=>x.id===bucketId) : null;
+  if (isEdit && !b) return;
+  const initColor = b?.color || BUCKET_PRESET_COLORS[0].hex;
+  const swatches = BUCKET_PRESET_COLORS.map(p=>`
+    <button type="button" data-hex="${p.hex}" onclick="pickBucketColor('${p.hex}')" 
+      style="width:32px;height:32px;border-radius:50%;border:${initColor.toLowerCase()===p.hex.toLowerCase()?'3px solid var(--accent)':'2px solid var(--border)'};background:${p.hex};cursor:pointer;padding:0;flex-shrink:0;box-shadow:0 1px 4px ${p.hex}55"
+      title="${p.name}"></button>`).join('');
+  const eyedropperSupported = typeof window.EyeDropper === 'function';
+  openSheet('gen', isEdit?'Edit bucket':'Add bucket', `
+    <input type="hidden" id="bk-cid" value="${contractId}">
+    <input type="hidden" id="bk-bid" value="${bucketId||''}">
+    <div class="form-group">
+      <label class="form-label">Name *</label>
+      <input class="form-input" id="bk-name" type="text" placeholder="e.g., GCash GSave" value="${b?.name?.replace(/"/g,'&quot;')||''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rate label</label>
+      <input class="form-input" id="bk-rate" type="text" placeholder="e.g., 4% p.a." value="${b?.rate?.replace(/"/g,'&quot;')||''}">
+    </div>
+    <div class="form-row fr2" style="margin-bottom:14px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Monthly (₱) *</label>
+        <input class="form-input" id="bk-monthly" type="number" step="100" min="0" placeholder="0" value="${b?.monthly||''}">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Cap (₱) — optional</label>
+        <input class="form-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap" value="${b?.cap||''}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Color</label>
+      <div id="bk-swatches" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${swatches}</div>
+      <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Or custom hex</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:0 4px 0 10px;flex:1">
+          <span style="color:var(--text4);font-family:var(--mono);font-size:13px">#</span>
+          <input class="form-input" id="bk-hex" type="text" maxlength="6" placeholder="7c6df0" value="${initColor.replace('#','')}"
+            style="border:none;background:transparent;padding:8px 4px;font-family:var(--mono);text-transform:lowercase"
+            oninput="onBucketHexInput(this.value)">
+        </div>
+        <div id="bk-preview" style="width:36px;height:36px;border-radius:var(--r-md);background:${initColor};border:1px solid var(--border);flex-shrink:0;box-shadow:0 1px 4px ${initColor}55"></div>
+        ${eyedropperSupported?`<button type="button" class="btn btn-ghost btn-sm" onclick="bucketEyedropper()" title="Pick color from screen" style="padding:8px 10px;font-size:14px">💧</button>`:''}
+      </div>
+      <input type="hidden" id="bk-color" value="${initColor}">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeSheet('gen')">Cancel</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveBucketDef()">${isEdit?'Save changes':'Add bucket'}</button>
+    </div>
+  `);
+}
+
+function pickBucketColor(hex) {
+  document.getElementById('bk-color').value = hex;
+  document.getElementById('bk-hex').value = hex.replace('#','');
+  const prev = document.getElementById('bk-preview');
+  if (prev) { prev.style.background = hex; prev.style.boxShadow = `0 1px 4px ${hex}55`; }
+  // Update swatch selection rings
+  document.querySelectorAll('#bk-swatches button').forEach(btn => {
+    const match = btn.dataset.hex.toLowerCase() === hex.toLowerCase();
+    btn.style.border = match ? '3px solid var(--accent)' : '2px solid var(--border)';
+  });
+}
+
+function onBucketHexInput(raw) {
+  // Accept with or without #, accept 3 or 6 chars
+  let v = (raw||'').trim().replace(/^#/,'').toLowerCase();
+  // Expand 3-digit shorthand
+  if (/^[0-9a-f]{3}$/.test(v)) v = v.split('').map(ch=>ch+ch).join('');
+  const hexInput = document.getElementById('bk-hex');
+  const prev = document.getElementById('bk-preview');
+  if (/^[0-9a-f]{6}$/.test(v)) {
+    const hex = '#'+v;
+    document.getElementById('bk-color').value = hex;
+    if (prev) { prev.style.background = hex; prev.style.boxShadow = `0 1px 4px ${hex}55`; }
+    if (hexInput) hexInput.style.borderColor = '';
+    // Sync swatch rings
+    document.querySelectorAll('#bk-swatches button').forEach(btn => {
+      const match = btn.dataset.hex.toLowerCase() === hex.toLowerCase();
+      btn.style.border = match ? '3px solid var(--accent)' : '2px solid var(--border)';
+    });
+  } else if (v.length > 0) {
+    if (hexInput) hexInput.style.borderColor = 'var(--red)';
+  }
+}
+
+async function bucketEyedropper() {
+  if (typeof window.EyeDropper !== 'function') {
+    showToast('Eyedropper not supported in this browser');
+    return;
+  }
+  try {
+    const ed = new window.EyeDropper();
+    const result = await ed.open();
+    if (result?.sRGBHex) pickBucketColor(result.sRGBHex.toLowerCase());
+  } catch(e) {
+    // User cancelled — silent
+  }
+}
+
+function saveBucketDef() {
+  const cid = document.getElementById('bk-cid').value;
+  const bid = document.getElementById('bk-bid').value;
+  const c = (db.contracts||[]).find(x=>x.id===cid);
+  if (!c) return;
+  if (!Array.isArray(c.bucketDefs)) c.bucketDefs = [];
+  const name = document.getElementById('bk-name').value.trim();
+  const rate = document.getElementById('bk-rate').value.trim();
+  const monthly = parseFloat(document.getElementById('bk-monthly').value)||0;
+  const capRaw = document.getElementById('bk-cap').value.trim();
+  const cap = capRaw === '' ? null : (parseFloat(capRaw)||null);
+  const color = document.getElementById('bk-color').value || '#2dd98a';
+  if (!name) { showToast('Name is required'); return; }
+  if (monthly <= 0) { showToast('Monthly amount required'); return; }
+  if (bid) {
+    // Edit existing
+    const b = c.bucketDefs.find(x=>x.id===bid);
+    if (!b) return;
+    b.name = name; b.rate = rate; b.monthly = monthly; b.cap = cap; b.color = color;
+  } else {
+    // Add new
+    c.bucketDefs.push({ id: 'bk_'+genId(), name, rate, monthly, cap, color });
+  }
+  saveDBWithSync();
+  closeSheet('gen');
+  renderPlanning();
+  showToast(bid?'Bucket updated':'Bucket added');
+}
+
+function deleteBucket(contractId, bucketId) {
+  if (!confirm('Delete this bucket? Linked accounts and manual balance for this bucket will also be cleared.')) return;
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c) return;
+  c.bucketDefs = (c.bucketDefs||[]).filter(b=>b.id!==bucketId);
+  if (c.buckets) delete c.buckets[bucketId];
+  if (c.bucketLinks) delete c.bucketLinks[bucketId];
+  saveDBWithSync();
+  renderPlanning();
+  showToast('Bucket deleted');
+}
+
+// Drag-and-drop reorder
+function bucketDragStart(e, bucketId) {
+  e.dataTransfer.setData('text/plain', bucketId);
+  e.dataTransfer.effectAllowed = 'move';
+}
+function bucketDrop(e, contractId, targetBucketId) {
+  e.preventDefault();
+  const sourceId = e.dataTransfer.getData('text/plain');
+  if (!sourceId || sourceId === targetBucketId) return;
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c || !Array.isArray(c.bucketDefs)) return;
+  const arr = c.bucketDefs;
+  const fromIdx = arr.findIndex(b=>b.id===sourceId);
+  const toIdx = arr.findIndex(b=>b.id===targetBucketId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = arr.splice(fromIdx,1);
+  arr.splice(toIdx,0,moved);
+  c.bucketManualOrder = true;
+  saveDBWithSync();
+  renderPlanning();
+}
+
+function resortBucketsAZ(contractId) {
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c) return;
+  c.bucketManualOrder = false;
+  saveDBWithSync();
+  renderPlanning();
+  showToast('Sorted A→Z');
 }
 
 function saveContractMonthly(contractId, val) {
@@ -9024,9 +9257,9 @@ function aiSavingsPace() {
   if (!activeContract) return insights;
   const plan = db.settings?.investmentPlan;
   // Check if any bucket has linked accounts or manual balance > 0
-  const hasData = (plan?.buckets||[]).some(b => {
+  const hasData = (Array.isArray(plan?.bucketDefs)?plan.bucketDefs:[]).some(b => {
     const links = (plan?.bucketLinks||{})[b.id]||[];
-    return links.length > 0 || parseFloat(b.manualBalance||0) > 0;
+    return links.length > 0 || parseFloat((plan?.buckets||{})[b.id]||0) > 0;
   });
   if (!hasData) return insights;
   const startDate = new Date(activeContract.startDate || '2026-02-25');
@@ -9036,10 +9269,11 @@ function aiSavingsPace() {
   const targetNow = 970000 * progress;
   let actualTotal = 0;
   if (plan) {
-    for (const b of (plan.buckets||[])) {
+    const defs = Array.isArray(plan.bucketDefs) ? plan.bucketDefs : [];
+    for (const b of defs) {
       const links = (plan.bucketLinks||{})[b.id]||[];
       if (links.length > 0) for (const id of links) actualTotal += Math.max(0, toPhp(getAcctBalance(id), db.accounts.find(a=>a.id===id)?.currency||'PHP'));
-      else actualTotal += parseFloat(b.manualBalance||0);
+      else actualTotal += parseFloat((plan.buckets||{})[b.id]||0);
     }
   }
   const gap = targetNow - actualTotal;
