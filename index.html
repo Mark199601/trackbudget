@@ -354,6 +354,27 @@ option{background:var(--bg3);color:var(--text)}
 .tracked-chip-remove{cursor:pointer;opacity:0.6;font-size:13px}
 .tracked-chip-remove:hover{opacity:1}
 
+/* ── CATEGORY PICKER (Gen Z grid + Recent + accordion) ── */
+.cat-picker-wrap{margin-bottom:8px}
+.cat-section-label{font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px;display:flex;align-items:center;gap:6px}
+.cat-section-label:first-child{margin-top:0}
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.cat-tile{aspect-ratio:1/1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;cursor:pointer;transition:transform 0.15s,background 0.15s,border-color 0.15s}
+.cat-tile:hover{background:var(--accent-bg);border-color:var(--accent);transform:scale(1.03)}
+.cat-tile:active{transform:scale(0.97)}
+.cat-tile-icon{font-size:24px;line-height:1}
+.cat-tile-name{font-size:10px;font-weight:500;color:var(--text2);text-align:center;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cat-group{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:6px;overflow:hidden}
+.cat-group-header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.cat-group.open .cat-group-header{background:var(--bg3)}
+.cat-group-icon{font-size:18px}
+.cat-group-name{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+.cat-group-chevron{font-size:18px;color:var(--text4);transition:transform 0.2s;line-height:1}
+.cat-group.open .cat-group-chevron{transform:rotate(90deg)}
+.cat-group-body{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
+.cat-group.open .cat-group-body{display:block}
+@media(max-width:380px){.cat-tile-icon{font-size:20px}.cat-tile-name{font-size:9px}}
+
 /* ── TOGGLE ── */
 .toggle{position:relative;width:44px;height:24px;flex-shrink:0}
 .toggle input{opacity:0;width:0;height:0}
@@ -1006,10 +1027,10 @@ function defaultDB() {
           {id:'sc-office',name:'Office Supplies',icon:'📎',archived:false},
         ]},
         {id:'c-financial',name:'Financial',icon:'💱',archived:false,subcats:[
-          {id:'sc-remittance',name:'Remittance',icon:'📤',archived:false},
-          {id:'sc-externalin',name:'External In',icon:'📥',archived:false},
-          {id:'sc-externalout',name:'External Out',icon:'📤',archived:false},
-          {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false},
+          {id:'sc-remittance',name:'Remittance',icon:'📤',archived:false,autoOnly:true},
+          {id:'sc-externalin',name:'External In',icon:'📥',archived:false,autoOnly:true},
+          {id:'sc-externalout',name:'External Out',icon:'📤',archived:false,autoOnly:true},
+          {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false,autoOnly:true},
           {id:'sc-misc',name:'Miscellaneous',icon:'📌',archived:false},
         ]},
       ],
@@ -1021,7 +1042,7 @@ function defaultDB() {
         ]},
         {id:'c-returns',name:'Returns & Gains',icon:'📈',archived:false,subcats:[
           {id:'sc-investreturns',name:'Investment Returns',icon:'📈',archived:false},
-          {id:'sc-forexgain',name:'Forex Gain',icon:'📊',archived:false},
+          {id:'sc-forexgain',name:'Forex Gain',icon:'📊',archived:false,autoOnly:true},
           {id:'sc-dividends',name:'Dividends',icon:'💵',archived:false},
         ]},
         {id:'c-otherincome',name:'Other Income',icon:'💰',archived:false,subcats:[
@@ -1058,6 +1079,15 @@ let db = (() => {
     if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
     if (!parsed.recurringTxs) parsed.recurringTxs = [];
     if (!parsed.targets) parsed.targets = [];
+    // Migration: mark system-only subcategories as autoOnly (hidden from manual picker)
+    const AUTO_ONLY_IDS = new Set(['sc-remittance','sc-externalin','sc-externalout','sc-forexloss','sc-forexgain','sc-remittancefee']);
+    for (const type of ['expense','income']) {
+      for (const cat of (parsed.categories?.[type] || [])) {
+        for (const sc of (cat.subcats || [])) {
+          if (AUTO_ONLY_IDS.has(sc.id) && !sc.autoOnly) sc.autoOnly = true;
+        }
+      }
+    }
     if (!parsed.investments) parsed.investments = [];
     if (!parsed.reimbursements) parsed.reimbursements = [];
     if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
@@ -2066,6 +2096,7 @@ let _addState = { type:'expense', step:1, catId:null, subCatId:null };
 
 function openAddSheet(prefill={}) {
   _addState = { type: prefill.type||'expense', step:1, catId:null, subCatId:null, prefill };
+  window._catGroupOpen = null;
   openSheet('add','Add Transaction','');
   renderAddSheet();
 }
@@ -2165,27 +2196,101 @@ function setAddType(type) {
   _addState.step = 1;
   _addState.catId = null;
   _addState.subCatId = null;
+  window._catGroupOpen = null;
   _sharedPersons = [];
   renderAddSheet();
 }
 
 function renderCatPicker(forType) {
-  const cats = db.categories[forType].filter(c=>!c.archived);
-  let html = `<div style="margin-bottom:12px"><div class="section-title" style="margin-bottom:10px">Select Category</div>`;
+  const cats = (db.categories[forType] || []).filter(c=>!c.archived);
+  // Compute "Recent" — top 4 most-used subcategoryIds in last 30 days for this type
+  // Excludes auto-only subcats and uses subCategoryId from transactions
+  const cutoffMs = Date.now() - 30*24*60*60*1000;
+  const usageMap = {};
+  for (const tx of db.transactions) {
+    if (tx.archived || tx.isSettlement || tx.isAutoForex || tx.isAutoReimb) continue;
+    if (tx.type !== forType) continue;
+    if (!tx.subCategoryId) continue;
+    if (tx.date) {
+      const t = new Date(tx.date + 'T00:00').getTime();
+      if (isNaN(t) || t < cutoffMs) continue;
+    }
+    usageMap[tx.subCategoryId] = (usageMap[tx.subCategoryId] || 0) + 1;
+  }
+  // Map subCategoryId → {sc, parentCat} for lookup
+  const scIndex = {};
   for (const cat of cats) {
-    const subcats = (cat.subcats||[]).filter(sc=>!sc.archived);
-    html += `<div style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);cursor:pointer;font-size:13px;font-weight:600;border:1px solid var(--border)" onclick="pickCat('${cat.id}')">
-        <span style="font-size:18px">${cat.icon}</span> ${cat.name}
+    for (const sc of (cat.subcats||[])) {
+      if (sc.archived || sc.autoOnly) continue;
+      scIndex[sc.id] = { sc, cat };
+    }
+  }
+  const recentIds = Object.entries(usageMap)
+    .filter(([id]) => scIndex[id]) // only show ones still available + not auto-only
+    .sort((a,b) => b[1] - a[1])
+    .slice(0,4)
+    .map(([id]) => id);
+  // Fallback: if no recent, pick first 4 from first non-empty group
+  let fallbackTiles = [];
+  if (recentIds.length === 0) {
+    for (const cat of cats) {
+      const subs = (cat.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
+      if (subs.length >= 4) { fallbackTiles = subs.slice(0,4); break; }
+    }
+  }
+
+  const tileFor = (sc, cat) => `<div class="cat-tile" onclick="pickSubCat('${cat.id}','${sc.id}')">
+    <div class="cat-tile-icon">${sc.icon}</div>
+    <div class="cat-tile-name">${sc.name}</div>
+  </div>`;
+
+  let html = '';
+
+  // Recent section
+  if (recentIds.length > 0) {
+    html += `<div class="cat-section-label">🕐 Recent</div>
+      <div class="cat-grid">${recentIds.map(id => tileFor(scIndex[id].sc, scIndex[id].cat)).join('')}</div>`;
+  } else if (fallbackTiles.length > 0) {
+    // Show suggested tiles only if user has no transactions yet
+    html += `<div class="cat-section-label">✨ Suggested</div>
+      <div class="cat-grid">${fallbackTiles.map(sc => tileFor(sc, cats.find(c=>c.subcats?.includes(sc)) || cats[0])).join('')}</div>`;
+  }
+
+  // All categories — collapsible groups (accordion)
+  html += `<div class="cat-section-label">All categories</div>`;
+  for (const cat of cats) {
+    const subs = (cat.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
+    if (subs.length === 0) continue;
+    const isOpen = window._catGroupOpen === cat.id;
+    html += `<div class="cat-group${isOpen?' open':''}" data-group="${cat.id}">
+      <div class="cat-group-header" onclick="toggleCatGroup('${cat.id}')">
+        <span class="cat-group-icon">${cat.icon}</span>
+        <span class="cat-group-name">${cat.name}</span>
+        <span class="cat-group-chevron">›</span>
       </div>
-      ${subcats.length>0?`<div style="padding-left:12px;margin-top:4px;display:flex;flex-direction:column;gap:3px">${subcats.map(sc=>`
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg2);border-radius:var(--r-sm);cursor:pointer;font-size:13px;border:1px solid var(--border)" onclick="pickSubCat('${cat.id}','${sc.id}')">
-          <span style="font-size:15px">${sc.icon}</span> ${sc.name}
-        </div>`).join('')}</div>`:''}
+      <div class="cat-group-body">
+        <div class="cat-grid" style="margin-bottom:0;margin-top:8px">
+          ${subs.map(sc => tileFor(sc, cat)).join('')}
+        </div>
+      </div>
     </div>`;
   }
-  html += `</div>`;
-  return html;
+
+  return `<div class="cat-picker-wrap">${html}</div>`;
+}
+
+function toggleCatGroup(catId) {
+  // Accordion: only one open at a time
+  if (window._catGroupOpen === catId) {
+    window._catGroupOpen = null;
+  } else {
+    window._catGroupOpen = catId;
+  }
+  // Update DOM directly without full re-render to preserve scroll position
+  document.querySelectorAll('.cat-group').forEach(g => {
+    if (g.dataset.group === window._catGroupOpen) g.classList.add('open');
+    else g.classList.remove('open');
+  });
 }
 
 function pickCat(catId) {
@@ -7307,6 +7412,7 @@ function saveContractWizard() {
     status: 'active',
     buckets: {},
     bucketLinks: {},
+    bucketDefs: [],
     milestones: [
       { label:'Contract start', date:startDate, note:'Day 1 begins' },
       { label:`Month ${Math.round(totalMonths/2)}`, date: (() => { const d=new Date(startDate+'T00:00:00'); d.setMonth(d.getMonth()+Math.round(totalMonths/2)); return d.toISOString().split('T')[0]; })(), note:'Midpoint review' },
