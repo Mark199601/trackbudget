@@ -1294,21 +1294,19 @@ function getNetWorth() {
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
+  const dispCurr = db.displayCurrency || 'PHP';
   for (const t of txs) {
     // Settlements, external-in, external-out excluded from income/expense totals
     if (t.isSettlement) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
-    // Use direct amount when display currency matches tx currency (no double conversion)
-    const dispCurr = db.displayCurrency || 'PHP';
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
-    const converted = t.currency === dispCurr ? amt : txToPhp({ ...t, amount: amt, type: t.type === 'shared' ? 'expense' : t.type });
+    // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
+    const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
     if (t.type==='income') income += converted;
     else if (t.type==='expense' || t.type==='shared') expense += converted;
     // Remittance, transfer, lend, borrow excluded from monthly income/expense totals
   }
-  // Return in display currency
-  return { income, expense, net: income-expense, currency: db.displayCurrency || 'PHP' };
-
+  return { income, expense, net: income-expense, currency: dispCurr };
 }
 
 function buildFxSnapshot(date) {
@@ -6230,23 +6228,22 @@ function renderAnalyticsOverview() {
   );
   const expCats = {}, incCats = {};
   let expTotal = 0, incTotal = 0;
+  const dispCurr = db.displayCurrency || 'PHP';
   for (const tx of allTxs) {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
-      const dispCurr = db.displayCurrency || 'PHP';
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-      // Same-currency shortcut — avoid double conversion
-      const amt = tx.currency === dispCurr ? rawAmt : toPhp(rawAmt, tx.currency);
+      // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
+      const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
       expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:''});
       expCats[name].total += amt;
       expTotal += amt;
     } else if (tx.type === 'income' && !tx.isSettlement && !tx.isAutoReimb) {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
-      // Same-currency shortcut — avoid double conversion
-      const dispCurr = db.displayCurrency || 'PHP';
-      const amt = tx.currency === dispCurr ? tx.amount : txToPhp(tx);
+      // Convert to display currency
+      const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:''});
       incCats[name].total += amt;
       incTotal += amt;
