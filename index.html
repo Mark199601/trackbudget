@@ -5429,8 +5429,9 @@ function openAddLoan(direction='lent') {
       <label class="form-label">${direction==='lent'?'From Account (source of funds) *':'To Account (where money went) *'}</label>
       <select class="form-input" id="nl-account">${acctOpts}</select>
     </div>
-    <div class="form-row fr2">
+    <div class="form-row fr3">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
+      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
       <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
     </div>
     <div class="form-group"><label class="form-label">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
@@ -5446,12 +5447,13 @@ function saveAddLoan(direction) {
   if (!accountId) { showToast('Select an account'); return; }
   const currency = document.getElementById('nl-currency')?.value || 'PHP';
   const date = parseInputDate(document.getElementById('nl-date')?.value) || today();
+  const time = document.getElementById('nl-time')?.value || nowTime();
   const dueDate = parseInputDate(document.getElementById('nl-due')?.value) || null;
   const notes = document.getElementById('nl-notes')?.value?.trim() || '';
   const loanId = genId();
 
   const list = direction==='lent' ? db.loans.lent : db.loans.borrowed;
-  list.push({ id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, dueDate, notes, settled:false });
+  list.push({ id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, time, dueDate, notes, settled:false });
 
   // Create parent loan transaction to affect account balance
   db.transactions.push({
@@ -5459,7 +5461,7 @@ function saveAddLoan(direction) {
     type: direction==='lent' ? 'income' : 'expense', // placeholder type for balance calc
     amount, currency,
     accountId,
-    date, time: nowTime(),
+    date, time,
     notes: `${direction==='lent'?'Lent to':'Borrowed from'} ${person}`,
     fxSnapshot: buildFxSnapshot(date),
     parentId: null,
