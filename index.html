@@ -5131,6 +5131,10 @@ function openLoanDetail(loanId, direction) {
           <label class="form-label">${isLent?'Receive Into Account':'Pay From Account'}</label>
           <select class="form-input" id="loan-pay-acct">${acctOpts}</select>
         </div>
+        <div class="form-row fr2">
+          <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="loan-pay-date" value="${today()}"></div>
+          <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="loan-pay-time" value="${nowTime()}"></div>
+        </div>
         <div class="form-group">
           <label class="form-label">Notes (optional)</label>
           <input class="form-input" id="loan-pay-notes" placeholder="e.g. Cash payment, GCash transfer">
@@ -5165,8 +5169,10 @@ function settleLoan(loanId, direction, full) {
     if (!payAcctId) { showToast('Select an account'); return; }
 
     const payAmtInLoanCurr = convert(payAmt, payCurr, loan.currency);
+    const payDate = parseInputDate(document.getElementById('loan-pay-date')?.value) || today();
+    const payTime = document.getElementById('loan-pay-time')?.value || nowTime();
     loan.remaining = Math.max(0, remaining - payAmtInLoanCurr);
-    if (full || loan.remaining <= 0.001) { loan.settled=true; loan.settledDate=today(); loan.remaining=0; }
+    if (full || loan.remaining <= 0.001) { loan.settled=true; loan.settledDate=payDate; loan.remaining=0; }
 
     // Create child settlement transaction linked to this loan
     // direction=lent: money comes back to you (income type, isSettlement)
@@ -5178,10 +5184,10 @@ function settleLoan(loanId, direction, full) {
       currency: payCurr,
       categoryId: direction==='lent' ? 'sc-investreturns' : 'sc-misc',
       accountId: payAcctId,
-      date: today(),
-      time: nowTime(),
+      date: payDate,
+      time: payTime,
       notes: payNotes || `${full?'Full':'Partial'} repayment — ${loan.personName}`,
-      fxSnapshot: buildFxSnapshot(today()),
+      fxSnapshot: buildFxSnapshot(payDate),
       parentId: loanId,         // linked to loan record
       isSettlement: true,       // excluded from income/expense analytics
       isLoanPayment: true,
