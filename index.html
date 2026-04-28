@@ -809,9 +809,9 @@ function fmt(amt, code, sign=false) {
   const f=a>=1000?a.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):a.toFixed(2);
   return (sign?(amt>=0?'+':'-'):'') + s + f;
 }
-function fmtD(d) { return new Date(d+'T12:00').toLocaleDateString('en',{month:'short',day:'numeric'}); }
-function fmtDFull(d) { return new Date(d+'T12:00').toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'}); }
-function fmtMonth(d) { return new Date(d+'T12:00').toLocaleDateString('en',{month:'long',year:'numeric'}); }
+function fmtD(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'short',day:'numeric'}); }
+function fmtDFull(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'}); }
+function fmtMonth(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'long',year:'numeric'}); }
 function today() { return new Date().toISOString().split('T')[0]; }
 function nowTime() { return new Date().toTimeString().slice(0,5); }
 function daysUntil(ds) { if(!ds)return null; const d=new Date(ds+'T12:00'),n=new Date(); n.setHours(0,0,0,0); return Math.ceil((d-n)/86400000); }
@@ -1161,6 +1161,12 @@ function saveDBWithSync() {
   _hasUnsavedChanges = true;
   if (db.settings.googleDriveConnected) setSyncStatus('unsaved');
   if (!_isSavingToDrive) autoSaveTrigger();
+  // Throttled storage health check (at most every 30s)
+  const now = Date.now();
+  if (!window._lastStorageCheck || (now - window._lastStorageCheck) > 30000) {
+    window._lastStorageCheck = now;
+    try { checkStorageHealth(); } catch(e) {}
+  }
 }
 // ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
@@ -1364,7 +1370,7 @@ function nav(page) {
 function renderPageHeader(page) {
   const r = document.getElementById('ph-right');
   if (page==='dashboard') {
-    r.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add</button>`;
+    r.innerHTML = renderDeviceIndicator();
   } else if (page==='accounts') {
     r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`;
   } else if (page==='targets') {
@@ -1616,7 +1622,7 @@ function checkAlerts() {
 
   // Idle accounts (60 days)
   for (const acct of db.accounts.filter(a=>!a.archived)) {
-    const txs = db.transactions.filter(t=>t.accountId===acct.id||t.fromAccountId===acct.id||t.toAccountId===acct.id).sort((a,b)=>b.date.localeCompare(a.date));
+    const txs = db.transactions.filter(t=>t.accountId===acct.id||t.fromAccountId===acct.id||t.toAccountId===acct.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''));
     const lastDate = txs[0]?.date;
     if (lastDate) {
       const daysOld = Math.floor((now - new Date(lastDate+'T12:00')) / 86400000);
@@ -1701,7 +1707,7 @@ function renderDashboard() {
   }
 
   // Recent transactions
-  const recentTxs = [...db.transactions].filter(t=>!t.archived).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt||'')).slice(0,8);
+  const recentTxs = [...db.transactions].filter(t=>!t.archived).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
     `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions yet</div></div>`;
 
@@ -3177,7 +3183,7 @@ function renderTxLog() {
     if (_txFilter === 'all') return true;
     if (_txFilter === 'loans') return !!(t.isLoanTx || t.isLoanPayment);
     return t.type === _txFilter;
-  }).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||'').localeCompare(a.createdAt||''));
+  }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
 
   // Group by date
   const groups = {};
@@ -3880,14 +3886,16 @@ function saveEditTransfer(txId) {
   const oldDate = tx.date;
   const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
-  tx.fromAccountId = document.getElementById('etf-from').value;
-  tx.toAccountId = document.getElementById('etf-to').value;
+  tx.fromAccountId = document.getElementById('etf-from').value || tx.fromAccountId;
+  tx.toAccountId = document.getElementById('etf-to').value || tx.toAccountId;
   tx.amount = parseFloat(document.getElementById('etf-amount').value) || tx.amount;
-  tx.currency = document.getElementById('etf-currency').value;
-  tx.date = document.getElementById('etf-date').value;
-  tx.time = document.getElementById('etf-time').value;
+  tx.currency = document.getElementById('etf-currency').value || tx.currency;
+  const newTfDate = document.getElementById('etf-date').value;
+  const newTfTime = document.getElementById('etf-time').value;
+  if (newTfDate) tx.date = newTfDate;
+  if (newTfTime) tx.time = newTfTime;
   tx.notes = document.getElementById('etf-notes').value.trim();
-  if (tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date);
+  if (tx.date && tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date);
 
   const toAcct2 = db.accounts.find(a=>a.id===tx.toAccountId);
   const isCross = toAcct2 && tx.currency !== toAcct2.currency;
@@ -7407,6 +7415,31 @@ function renderProfileTab() {
         <div class="sr-right">→</div>
       </div>
     </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Snapshots & Storage</div>
+      <div class="settings-row" onclick="showSnapshotPicker()">
+        <div class="sr-left"><div class="sr-icon">📸</div><div><div class="sr-text">Snapshots</div><div class="sr-sub">${db.settings.googleDriveConnected?'Labeled restore points · max 20':'Connect Drive to enable'}</div></div></div>
+        <div class="sr-right">→</div>
+      </div>
+      ${db.settings.googleDriveConnected?`<div class="settings-row" onclick="openSnapshotSavePrompt()">
+        <div class="sr-left"><div class="sr-icon">📸</div><div><div class="sr-text">Save Snapshot Now</div><div class="sr-sub">Create a restore point with a label</div></div></div>
+        <div class="sr-right">→</div>
+      </div>`:''}
+      ${(()=>{ 
+        const u = getStorageUsage();
+        const color = u.pct >= 80 ? 'var(--red)' : u.pct >= 60 ? 'var(--amber)' : 'var(--green)';
+        return `<div style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:500">Local storage</div>
+            <div style="font-size:12px;color:${color};font-family:var(--mono)">${u.pct.toFixed(0)}% · ${u.mb.toFixed(2)} MB</div>
+          </div>
+          <div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden">
+            <div style="height:100%;background:${color};width:${u.pct.toFixed(1)}%;transition:width 0.4s;border-radius:3px"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text4);margin-top:6px">${u.pct >= 80 ? '⚠ Auto-saves to Drive when over 80%' : '~5 MB browser limit · safe headroom'}</div>
+        </div>`;
+      })()}
+    </div>
   </div>`;
 }
 
@@ -8364,6 +8397,7 @@ function confirmDisconnectDrive() {
   _gdriveAccessToken = null;
   _gdriveFolderId = null;
   _gdriveBackupsFolderId = null;
+  Object.keys(_gdriveSubfolderCache).forEach(k => delete _gdriveSubfolderCache[k]);
   saveDB(); closeDlg(); closeSheet('gen'); renderSettings(); showToast('Drive disconnected');
 }
 
@@ -8519,6 +8553,41 @@ async function getOrCreateFolder() {
   return _gdriveBackupsFolderId;
 }
 
+// Generic helper for any subfolder under TrackBudget root (snapshots, exports, receipts, reports)
+const _gdriveSubfolderCache = {};
+async function getOrCreateSubfolder(subfolderName) {
+  if (_gdriveSubfolderCache[subfolderName]) return _gdriveSubfolderCache[subfolderName];
+  // Ensure root folder exists (reuses logic from getOrCreateFolder)
+  if (!_gdriveFolderId) {
+    const search = await driveRequest('GET',
+      `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
+    );
+    if (search.files && search.files.length > 0) {
+      _gdriveFolderId = search.files[0].id;
+    } else {
+      const folder = await driveRequest('POST',
+        'https://www.googleapis.com/drive/v3/files',
+        { name: GDRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }
+      );
+      _gdriveFolderId = folder.id;
+    }
+  }
+  // Find or create the requested subfolder
+  const search = await driveRequest('GET',
+    `https://www.googleapis.com/drive/v3/files?q=name='${subfolderName}' and '${_gdriveFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
+  );
+  if (search.files && search.files.length > 0) {
+    _gdriveSubfolderCache[subfolderName] = search.files[0].id;
+  } else {
+    const folder = await driveRequest('POST',
+      'https://www.googleapis.com/drive/v3/files',
+      { name: subfolderName, mimeType: 'application/vnd.google-apps.folder', parents: [_gdriveFolderId] }
+    );
+    _gdriveSubfolderCache[subfolderName] = folder.id;
+  }
+  return _gdriveSubfolderCache[subfolderName];
+}
+
 async function saveToDrive() {
   if (!_gdriveAccessToken) {
     ensureDriveToken(() => saveToDrive());
@@ -8581,6 +8650,228 @@ async function pruneOldBackups(folderId, keepCount) {
       await driveRequest('DELETE', `https://www.googleapis.com/drive/v3/files/${f.id}`);
     }
   } catch(e) { console.warn('Prune failed:', e); }
+}
+
+// ── SNAPSHOTS (manual labeled restore points in Drive/Snapshots) ──
+function openSnapshotSavePrompt() {
+  if (!db.settings.googleDriveConnected) {
+    showToast('Connect Google Drive first');
+    return;
+  }
+  const txCount = db.transactions.filter(t=>!t.archived).length;
+  const acctCount = db.accounts.filter(a=>!a.archived).length;
+  const dateStr = fmtDFull(today());
+  const defaultLabel = `${dateStr} · ${txCount} txs · ${acctCount} accts`;
+  openDlg('📸 Save Snapshot',
+    `<div style="font-size:13px;color:var(--text3);margin-bottom:12px">A snapshot is a labeled restore point saved to Google Drive. You can restore it anytime.</div>
+     <div class="form-group">
+       <label class="form-label">Label (optional)</label>
+       <input class="form-input" id="snap-label" type="text" placeholder="${defaultLabel.replace(/"/g,'&quot;')}" maxlength="80">
+       <div style="font-size:11px;color:var(--text4);margin-top:4px">Leave blank to use default label above</div>
+     </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="saveSnapshotConfirm()">📸 Save Snapshot</button>`
+  );
+  setTimeout(()=>document.getElementById('snap-label')?.focus(), 100);
+}
+
+async function saveSnapshotConfirm() {
+  const labelRaw = document.getElementById('snap-label')?.value?.trim() || '';
+  const txCount = db.transactions.filter(t=>!t.archived).length;
+  const acctCount = db.accounts.filter(a=>!a.archived).length;
+  const dateStr = fmtDFull(today());
+  const label = labelRaw || `${dateStr} · ${txCount} txs · ${acctCount} accts`;
+  closeDlg();
+  await saveSnapshotToDrive(label);
+}
+
+async function saveSnapshotToDrive(label) {
+  if (!_gdriveAccessToken) {
+    ensureDriveToken(() => saveSnapshotToDrive(label));
+    return;
+  }
+  try {
+    showToast('Saving snapshot... 📸');
+    const folderId = await getOrCreateSubfolder('Snapshots');
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    // Sanitize label for filename — keep readable but safe
+    const safeLabel = (label||'snapshot').replace(/[\\/:*?"<>|]/g,'_').slice(0,60);
+    const filename = `snapshot_${stamp}_${safeLabel}.json`;
+    const snapData = {
+      ...db,
+      _backupMeta: {
+        savedAt: now.toISOString(),
+        version: '3.0',
+        type: 'snapshot',
+        label: label,
+        deviceName: getDeviceName(),
+        browser: getBrowserName(),
+        txCount: db.transactions.length,
+        acctCount: db.accounts.filter(a => !a.archived).length
+      }
+    };
+    const content = JSON.stringify(snapData, null, 2);
+    const metadata = { name: filename, parents: [folderId] };
+    const formData = new FormData();
+    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    formData.append('file', new Blob([content], { type: 'application/json' }));
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      { method:'POST', headers:{'Authorization':'Bearer '+_gdriveAccessToken}, body: formData });
+    if (!res.ok) throw new Error('Upload failed: ' + await res.text());
+    showToast(`✅ Snapshot saved: ${label}`);
+    await pruneSnapshots(folderId, 20);
+    if (currentPage === 'settings') renderSettings();
+  } catch(e) {
+    showToast('Snapshot save failed: ' + (e.message||'unknown'));
+    console.error(e);
+  }
+}
+
+async function pruneSnapshots(folderId, keepCount) {
+  try {
+    const files = await driveRequest('GET',
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime)`
+    );
+    if (!files.files || files.files.length <= keepCount) return;
+    const toDelete = files.files.slice(keepCount);
+    for (const f of toDelete) {
+      await driveRequest('DELETE', `https://www.googleapis.com/drive/v3/files/${f.id}`);
+    }
+  } catch(e) { console.warn('Snapshot prune failed:', e); }
+}
+
+async function showSnapshotPicker() {
+  if (!db.settings.googleDriveConnected) {
+    showToast('Connect Google Drive first');
+    return;
+  }
+  if (!_gdriveAccessToken) {
+    ensureDriveToken(() => showSnapshotPicker());
+    return;
+  }
+  try {
+    showToast('Loading snapshots...');
+    const folderId = await getOrCreateSubfolder('Snapshots');
+    const files = await driveRequest('GET',
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20`
+    );
+    if (!files.files || files.files.length === 0) {
+      openDlg('📸 Snapshots',
+        `<div style="text-align:center;padding:24px;color:var(--text4)">
+           <div style="font-size:32px;margin-bottom:8px">📸</div>
+           <div style="font-size:13px">No snapshots yet</div>
+           <div style="font-size:11px;margin-top:6px">Snapshots are labeled restore points you create manually.</div>
+         </div>`,
+        `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>
+         <button class="btn btn-primary btn-sm" onclick="closeDlg();openSnapshotSavePrompt()">📸 Save First Snapshot</button>`
+      );
+      return;
+    }
+    const rows = files.files.map(f => {
+      // Parse label out of filename: snapshot_YYYY-MM-DD_HH-MM-SS_label.json
+      const m = f.name.match(/^snapshot_[\d-_]+_(.+)\.json$/);
+      const labelGuess = m ? m[1].replace(/_/g,' ') : f.name;
+      const d = new Date(f.createdTime);
+      const pad = n => String(n).padStart(2,'0');
+      const dateLabel = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const sizeKb = f.size ? (f.size/1024).toFixed(1)+' KB' : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);gap:10px">
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="confirmRestoreSnapshot('${f.id}','${labelGuess.replace(/'/g,'&apos;')}')">
+          <div style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📸 ${labelGuess}</div>
+          <div style="font-size:11px;color:var(--text4);margin-top:2px" id="snap-meta-${f.id}">${dateLabel} · ${sizeKb}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteSnapshot('${f.id}','${labelGuess.replace(/'/g,'&apos;')}')" title="Delete">🗑</button>
+      </div>`;
+    }).join('');
+    openDlg('📸 Snapshots',
+      `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${files.files.length} of 20 max · Tap a snapshot to restore</div>
+       <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden;max-height:380px;overflow-y:auto">${rows}</div>`,
+      `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>
+       <button class="btn btn-primary btn-sm" onclick="closeDlg();openSnapshotSavePrompt()">📸 New Snapshot</button>`
+    );
+  } catch(e) {
+    showToast('Load failed: ' + (e.message||'unknown'));
+    console.error(e);
+  }
+}
+
+function confirmRestoreSnapshot(fileId, label) {
+  openDlg('Restore Snapshot?',
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:8px">This will <strong style="color:var(--red)">replace</strong> your current data with:</div>
+     <div style="background:var(--bg3);padding:10px 12px;border-radius:var(--r-md);font-size:12px;font-family:var(--mono)">📸 ${label}</div>
+     <div style="font-size:11px;color:var(--text4);margin-top:10px">⚠️ Your current data will be auto-saved as a snapshot first (named "Before restore") so you can undo this.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="closeDlg();restoreSnapshotNow('${fileId}','${label.replace(/'/g,'&apos;')}')">Restore</button>`
+  );
+}
+
+async function restoreSnapshotNow(fileId, label) {
+  try {
+    // Auto-snapshot current state first as safety net
+    showToast('Saving current state...');
+    await saveSnapshotToDrive('Before restore — ' + (label||'').slice(0,40));
+    showToast('Restoring snapshot...');
+    const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    if (!data || typeof data !== 'object') throw new Error('Invalid snapshot file');
+    // Strip metadata before applying
+    const restored = {...data};
+    delete restored._backupMeta;
+    db = restored;
+    saveDB();
+    showToast('✅ Snapshot restored');
+    nav('dashboard');
+  } catch(e) {
+    showToast('Restore failed: ' + (e.message||'unknown'));
+    console.error(e);
+  }
+}
+
+function deleteSnapshot(fileId, label) {
+  openDlg('Delete Snapshot?',
+    `<div style="font-size:13px;color:var(--text2)">Permanently delete <strong>📸 ${label}</strong>?</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="closeDlg();deleteSnapshotNow('${fileId}')">Delete</button>`
+  );
+}
+
+async function deleteSnapshotNow(fileId) {
+  try {
+    await driveRequest('DELETE', `https://www.googleapis.com/drive/v3/files/${fileId}`);
+    showToast('Snapshot deleted');
+    showSnapshotPicker(); // refresh list
+  } catch(e) {
+    showToast('Delete failed');
+  }
+}
+
+// ── Storage health monitoring ──
+function getStorageUsage() {
+  let bytes = 0;
+  try {
+    for (const k in localStorage) {
+      if (Object.prototype.hasOwnProperty.call(localStorage, k)) {
+        bytes += (localStorage[k]?.length || 0) + k.length;
+      }
+    }
+  } catch(e) { return { bytes:0, mb:0, pct:0 }; }
+  const mb = bytes / (1024*1024);
+  // Most browsers ~5MB localStorage limit
+  const pct = Math.min(100, (mb / 5) * 100);
+  return { bytes, mb, pct };
+}
+
+function checkStorageHealth() {
+  const u = getStorageUsage();
+  if (u.pct >= 80) {
+    // Warn + force-save to Drive immediately (bypass debounce)
+    showToast(`⚠ Storage ${u.pct.toFixed(0)}% — saving to Drive now`, 4000);
+    if (db.settings?.googleDriveConnected && _gdriveAccessToken && !_isSavingToDrive) {
+      saveToDriveSilent().catch(()=>{});
+    }
+  }
+  return u;
 }
 
 async function checkDriveForBackup() {
@@ -8915,6 +9206,96 @@ function getDeviceName() {
   return localStorage.getItem('tb_device_name') || detectDeviceType();
 }
 
+// ── Device activity tracking (lightweight session log) ──
+function getDeviceIcon(deviceType) {
+  if (!deviceType) return '💻';
+  const t = deviceType.toLowerCase();
+  if (t.includes('iphone') || t.includes('android phone')) return '📱';
+  if (t.includes('ipad') || t.includes('tablet')) return '📟';
+  if (t.includes('mac') || t.includes('windows') || t.includes('linux') || t.includes('chromebook')) return '💻';
+  return '💻';
+}
+
+function getBrowserName() {
+  const ua = navigator.userAgent;
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) return 'Chrome';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return 'Safari';
+  if (/OPR\//.test(ua)) return 'Opera';
+  return 'Browser';
+}
+
+function trackDeviceActivity() {
+  if (!db.settings) db.settings = {};
+  const now = new Date().toISOString();
+  const device = getDeviceName();
+  const browser = getBrowserName();
+  // Update "current/last" entry
+  db.settings.lastActiveDevice = { device, browser, at: now };
+  // Append/update history (keep last 10, dedupe consecutive same device+browser within 1 hour)
+  if (!Array.isArray(db.settings.deviceHistory)) db.settings.deviceHistory = [];
+  const hist = db.settings.deviceHistory;
+  const last = hist[0];
+  const sameSession = last && last.device === device && last.browser === browser
+    && (new Date(now) - new Date(last.at)) < 60*60*1000;
+  if (sameSession) {
+    last.at = now; // just bump timestamp
+  } else {
+    hist.unshift({ device, browser, at: now });
+    if (hist.length > 10) hist.length = 10;
+  }
+}
+
+function relativeTime(iso) {
+  if (!iso) return '—';
+  const t = new Date(iso);
+  if (isNaN(t)) return '—';
+  const diff = (Date.now() - t.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+  return fmtDFull(iso.split('T')[0]);
+}
+
+function renderDeviceIndicator() {
+  const last = db.settings?.lastActiveDevice;
+  const device = last?.device || getDeviceName();
+  const browser = last?.browser || getBrowserName();
+  const when = last?.at ? relativeTime(last.at) : 'now';
+  const icon = getDeviceIcon(device);
+  const tooltip = `${device} · ${browser} · ${when}`;
+  return `<button class="btn btn-ghost btn-sm" onclick="openDeviceHistory()" title="${tooltip}" 
+    style="padding:6px 10px;font-size:14px;display:flex;align-items:center;gap:6px"
+    aria-label="${tooltip}">
+    <span>${icon}</span>
+    <span style="font-size:11px;color:var(--text3);font-weight:500">${when}</span>
+  </button>`;
+}
+
+function openDeviceHistory() {
+  const hist = db.settings?.deviceHistory || [];
+  const current = db.settings?.lastActiveDevice;
+  const rows = hist.length === 0
+    ? '<div style="text-align:center;padding:24px;color:var(--text4);font-size:13px">No history yet</div>'
+    : hist.map((h, i) => {
+        const isCurrent = current && i === 0 && h.device === current.device && h.browser === current.browser;
+        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)${isCurrent?';background:var(--accent-bg)':''}">
+          <div style="font-size:20px">${getDeviceIcon(h.device)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500">${h.device}${isCurrent?' <span style="font-size:10px;color:var(--accent);margin-left:4px">● current</span>':''}</div>
+            <div style="font-size:11px;color:var(--text4)">${h.browser} · ${relativeTime(h.at)}</div>
+          </div>
+        </div>`;
+      }).join('');
+  openDlg('📱 Device History',
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Last 10 sessions on this account</div>
+     <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden;max-height:360px;overflow-y:auto">${rows}</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`
+  );
+}
+
 // ── THEME SYSTEM ──
 function initTheme() {
   const saved = localStorage.getItem('tb_theme') || 'dark';
@@ -9064,6 +9445,7 @@ function initApp() {
     checkAlerts();
     initTheme();
     initDeviceName();
+    trackDeviceActivity();
     nav('dashboard');
     // Try silent token refresh on app open (no popup)
     if (db.settings.googleDriveConnected) {
