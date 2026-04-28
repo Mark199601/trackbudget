@@ -5577,20 +5577,19 @@ function updateAddLoanFx() {
       return;
     }
     const agreedAcctAmt = amount * customRate;
-    // Forex impact in PHP:
-    // For lent: gain when snapshot value > agreed value (you gave less than market)
-    // For borrowed: gain when agreed value > snapshot value (you owe less than market)
-    // Convert both to PHP for the diff
-    const snapshotPhp = snapshotAcctAmt * acctToPhp; // amount × snapshot in PHP
-    const agreedPhp = agreedAcctAmt * acctToPhp;     // amount × agreed in PHP
+    const snapshotPhp = snapshotAcctAmt * acctToPhp;
+    const agreedPhp = agreedAcctAmt * acctToPhp;
     const rawDiff = snapshotPhp - agreedPhp;
     const forexDiffPhp = isLent ? rawDiff : -rawDiff;
     const isGain = forexDiffPhp > 0;
     const absDiff = Math.abs(forexDiffPhp);
     previewBox.style.display = 'block';
-    previewBox.innerHTML = `<div style="color:var(--text2)">${verb} <strong>${acctName}</strong>: ${amount} ${loanCurr} × ${customRate} = <span style="font-family:var(--mono);font-weight:600">${fmt(agreedAcctAmt, acctCurr)}</span></div>
-      <div style="font-size:11px;color:var(--text4);margin-top:4px">Snapshot rate: ${snapshotRate.toFixed(4)} · ${fmt(snapshotAcctAmt, acctCurr)} at market</div>
-      ${absDiff >= 0.01 ? `<div style="margin-top:6px;color:${isGain?'var(--green)':'var(--red)'};font-weight:600">→ Forex ${isGain?'gain':'loss'}: ₱${absDiff.toFixed(2)}</div>` : ''}`;
+    const overallVerb = isLent ? 'Overall deduction from' : 'Overall deposit into';
+    const adjustVerb = isLent ? 'Forex gain → +' : 'Forex loss → −';
+    const netVerb = isLent ? 'Actual deduction' : 'Actual deposit';
+    previewBox.innerHTML = `<div style="color:var(--text2)">${overallVerb} <strong>${acctName}</strong>: ${amount} ${loanCurr} × ${snapshotRate.toFixed(4)} = <span style="font-family:var(--mono);font-weight:600">${fmt(snapshotAcctAmt, acctCurr)}</span></div>
+      ${absDiff >= 0.01 ? `<div style="margin-top:6px;color:${isGain?'var(--green)':'var(--red)'}">${isGain?'Forex gain':'Forex loss'}: <span style="font-family:var(--mono);font-weight:600">₱${absDiff.toFixed(2)}</span></div>` : ''}
+      ${absDiff >= 0.01 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--text2)">${netVerb}: ${amount} ${loanCurr} × ${customRate} = <span style="font-family:var(--mono);font-weight:600">${fmt(agreedAcctAmt, acctCurr)}</span></div>` : ''}`;
   }
 }
 
@@ -5622,25 +5621,28 @@ function saveAddLoan(direction) {
   const snapshotRate = loanToPhp / acctToPhp; // 1 loanCurr = X acctCurr
 
   // Compute amount that posts to the account (in account currency)
+  // Strategy: parent loan tx always posts at SNAPSHOT value (true market deduction)
+  //           forex gain/loss child nets it back to agreed value
+  // This way: net account impact = agreed value, but loan receivable = snapshot value
+  //           and forex gain/loss is explicitly visible in transactions
   let txAmount;
   let forexDiffPhp = 0;
   if (!isCrossCurrency) {
     txAmount = amount;
-  } else if (useCustom) {
-    // Agreed rate determines what physically moves
-    txAmount = amount * customRate;
-    // Forex impact in PHP: difference between snapshot and agreed account-currency amounts, valued in PHP
-    const snapshotAcctAmt = amount * snapshotRate;
-    const agreedAcctAmt = txAmount;
-    const diffInAcctCurr = snapshotAcctAmt - agreedAcctAmt;
-    const diffInPhp = diffInAcctCurr * acctToPhp;
-    // For lent: gain if agreed < snapshot (you sent less than market value)
-    // For borrowed: gain if agreed > snapshot (you owe less than market value of received funds)
-    forexDiffPhp = isLent ? diffInPhp : -diffInPhp;
-    forexDiffPhp = Math.round(forexDiffPhp * 100) / 100;
   } else {
-    // Snapshot conversion
+    // Always post snapshot value to the account
     txAmount = amount * snapshotRate;
+    if (useCustom) {
+      // Forex impact = snapshot value − agreed value (in account currency, then PHP)
+      const snapshotAcctAmt = txAmount;
+      const agreedAcctAmt = amount * customRate;
+      const diffInAcctCurr = snapshotAcctAmt - agreedAcctAmt;
+      const diffInPhp = diffInAcctCurr * acctToPhp;
+      // For lent: gain if snapshot > agreed (you "gave less" since gain comes back as income)
+      // For borrowed: loss if snapshot > agreed (you owe back more market value than received)
+      forexDiffPhp = isLent ? diffInPhp : -diffInPhp;
+      forexDiffPhp = Math.round(forexDiffPhp * 100) / 100;
+    }
   }
 
   const list = isLent ? db.loans.lent : db.loans.borrowed;
