@@ -2138,6 +2138,8 @@ function renderAddSheet() {
     setTimeout(() => {
       if (document.getElementById('tf-date')?.value) dtUpdate('tf-date','date');
       if (document.getElementById('tf-time')?.value) dtUpdate('tf-time','time');
+      // Initial state — sync visibility of FX rows based on default account selection
+      updateTransferPreview();
     }, 0);
     return;
   }
@@ -2824,7 +2826,7 @@ function renderTransferForm() {
       <span style="color:var(--text3)">To Account receives: </span><span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
       <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <div id="tf-snapshot-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <input type="checkbox" id="tf-use-snapshot" checked onchange="updateTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
       <label for="tf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
     </div>
@@ -2925,12 +2927,30 @@ function updateTransferPreview() {
   const toAmountEl = document.getElementById('tf-toamount');
 
   const txCurr = document.getElementById('tf-currency')?.value;
-  const useSnapshot = document.getElementById('tf-use-snapshot')?.checked !== false;
+  const useSnapshotEl = document.getElementById('tf-use-snapshot');
+  const snapRow = document.getElementById('tf-snapshot-row');
   const customRateRow = document.getElementById('tf-custom-rate-row');
   const customCurrLabel = document.getElementById('tf-custom-curr-label');
 
-  // Show/hide custom rate input
-  if (customRateRow) customRateRow.style.display = useSnapshot ? 'none' : 'block';
+  // Detect if this is a cross-currency transfer
+  const fromCurr = fromAcct?.currency;
+  const toCurr2 = toAcct?.currency;
+  const isCrossCurrency = fromAcct && toAcct && (fromCurr !== toCurr2 || (txCurr && txCurr !== fromCurr));
+
+  // Same-currency transfers don't need FX toggle — hide both rows entirely
+  if (!isCrossCurrency) {
+    if (snapRow) snapRow.style.display = 'none';
+    if (customRateRow) customRateRow.style.display = 'none';
+    // Also force snapshot mode so any stale state clears
+    if (useSnapshotEl && !useSnapshotEl.checked) useSnapshotEl.checked = true;
+  } else {
+    if (snapRow) snapRow.style.display = 'flex';
+  }
+
+  const useSnapshot = useSnapshotEl?.checked !== false;
+
+  // Show/hide custom rate input (only relevant when cross-currency)
+  if (customRateRow) customRateRow.style.display = (isCrossCurrency && !useSnapshot) ? 'block' : 'none';
   if (customCurrLabel && txCurr && txCurr !== 'PHP') customCurrLabel.textContent = txCurr;
 
   // Show To Account receives preview
@@ -3879,11 +3899,26 @@ function updateEditTransferPreview() {
   const toId = document.getElementById('etf-to')?.value;
   const amount = parseFloat(document.getElementById('etf-amount')?.value) || 0;
   const txCurr = document.getElementById('etf-currency')?.value;
-  const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
+  const useSnapshotEl = document.getElementById('etf-use-snapshot');
+  const snapRow = document.getElementById('etf-snapshot-row');
   const customRateRow = document.getElementById('etf-custom-rate-row');
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   const toAcct = db.accounts.find(a=>a.id===toId);
-  if (customRateRow) customRateRow.style.display = useSnapshot ? 'none' : 'block';
+
+  // Detect cross-currency
+  const isCrossCurrency = fromAcct && toAcct && (fromAcct.currency !== toAcct.currency || (txCurr && txCurr !== fromAcct.currency));
+
+  // Same-currency → hide FX rows, force snapshot mode to clear stale state
+  if (!isCrossCurrency) {
+    if (snapRow) snapRow.style.display = 'none';
+    if (customRateRow) customRateRow.style.display = 'none';
+    if (useSnapshotEl && !useSnapshotEl.checked) useSnapshotEl.checked = true;
+  } else {
+    if (snapRow) snapRow.style.display = 'flex';
+  }
+
+  const useSnapshot = useSnapshotEl?.checked !== false;
+  if (customRateRow) customRateRow.style.display = (isCrossCurrency && !useSnapshot) ? 'block' : 'none';
   const currLabel = document.getElementById('etf-custom-curr-label');
   if (currLabel && txCurr && txCurr !== 'PHP') currLabel.textContent = txCurr;
   const previewDiv = document.getElementById('etf-toamount-preview');
@@ -3961,7 +3996,7 @@ function openEditTransfer(txId) {
       <span style="color:var(--text3)">To Account receives: </span><span id="etf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
       <span id="etf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <div id="etf-snapshot-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <input type="checkbox" id="etf-use-snapshot" ${hasCustomRate?'':'checked'} onchange="updateEditTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
       <label for="etf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
     </div>
