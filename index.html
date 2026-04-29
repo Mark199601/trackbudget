@@ -6432,14 +6432,14 @@ function buildPieChart(cats, total, prefix) {
   // Center: icon of biggest slice + amount
   const top = slices[0];
 
-  // Legend: horizontal pill tags
-  const legend = slices.slice(0,5).map(s =>
+  // Legend: scrollable list — all categories visible
+  const legend = slices.map(s =>
     `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:7px">
+      <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
         <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 5px ${s.color}99"></div>
-        <span style="font-size:12px;color:var(--text)">${s.icon} ${s.name}</span>
+        <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.icon} ${s.name}</span>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${fmt(s.total,disp)}</span>
         <span style="font-size:10px;font-weight:700;color:${s.color};min-width:32px;text-align:right">${s.pct}%</span>
       </div>
@@ -6457,8 +6457,7 @@ function buildPieChart(cats, total, prefix) {
       </svg>
     </div>
     <div style="padding:0 4px">
-      ${legend}
-      ${slices.length>5?`<div style="font-size:10px;color:var(--text4);text-align:center;margin-top:6px">+${slices.length-5} more categories</div>`:''}
+      <div style="max-height:240px;overflow-y:auto;padding-right:4px">${legend}</div>
     </div>
   </div>`;
 }
@@ -6487,7 +6486,7 @@ function renderAnalyticsSpending() {
     (t.type==='expense' || t.type==='shared')
   );
 
-  // Group by parent category with subcategory drill-down
+  // Group by parent category with subcategory drill-down + track transactions
   const catTotals = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
@@ -6495,8 +6494,9 @@ function renderAnalyticsSpending() {
     const parentName = cat.name.replace(/^[^ ]+ /,'');
     const parentIcon = cat.icon;
     const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
-    if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{} };
+    if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{}, txs:[] };
     catTotals[parentName].total += amt;
+    catTotals[parentName].txs.push(tx);
     if (!catTotals[parentName].subs[subName]) catTotals[parentName].subs[subName] = { total:0, icon:cat.icon };
     catTotals[parentName].subs[subName].total += amt;
   }
@@ -6504,6 +6504,11 @@ function renderAnalyticsSpending() {
   const sorted = Object.entries(catTotals).sort((a,b)=>b[1].total-a[1].total);
   const total = sorted.reduce((s,[,v])=>s+v.total,0);
   const colors = ['var(--accent)','var(--red)','var(--amber)','var(--green)','var(--teal)','var(--purple)','var(--blue)'];
+  // Display currency for the "total in display currency" countercheck
+  const dispCurr = db.displayCurrency || 'PHP';
+  const totalInDisp = view === dispCurr ? total : convert(total, view, dispCurr);
+  // YTD has too many txs to expand; only monthly view shows the tx breakdown
+  const isYTD = period === 'ytd';
 
   const periodLabel = period === 'ytd'
     ? `YTD ${now.getFullYear()}`
@@ -6535,6 +6540,10 @@ function renderAnalyticsSpending() {
     const color = colors[i % colors.length];
     const subEntries = Object.entries(v.subs).sort((a,b)=>b[1].total-a[1].total);
     const hasSubs = subEntries.length > 1;
+    // For YTD, no transaction breakdown (too many). For monthly, show transactions.
+    const showTxBreakdown = !isYTD && v.txs.length > 0;
+    const expandable = hasSubs || showTxBreakdown;
+
     const subRows = hasSubs ? subEntries.map(([sName, sv]) => {
       const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text3);padding:8px 16px 8px 32px;border-top:1px solid var(--border)">
@@ -6546,8 +6555,27 @@ function renderAnalyticsSpending() {
       </div>`;
     }).join('') : '';
 
+    // Transaction breakdown (monthly only) — newest first
+    const txRows = showTxBreakdown ? [...v.txs]
+      .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
+      .map(tx => {
+        const acct = db.accounts.find(a => a.id === tx.accountId);
+        const acctName = acct?.name || '—';
+        const txAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+        const dateLabel = fmtD(tx.date);
+        return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:9px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
+            <span style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</span>
+            ${tx.notes ? `<span style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tx.notes}</span>` : ''}
+          </div>
+          <span style="font-family:var(--mono);color:var(--red);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px">−${fmt(txAmt, tx.currency)}</span>
+        </div>`;
+      }).join('') : '';
+
+    const expandedContent = (hasSubs ? subRows : '') + (showTxBreakdown ? txRows : '');
+
     return `<div style="margin-bottom:8px;background:var(--bg);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-      <div style="padding:14px 16px;cursor:${hasSubs?'pointer':'default'}" ${hasSubs?`onclick="toggleSpendingDrill('drill-${i}')"`:''}>
+      <div style="padding:14px 16px;cursor:${expandable?'pointer':'default'}" ${expandable?`onclick="toggleSpendingDrill('drill-${i}')"`:''}>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:10px">
             <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px">${v.icon}</div>
@@ -6556,14 +6584,14 @@ function renderAnalyticsSpending() {
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-family:var(--mono);font-weight:600;font-size:14px;color:var(--text)">${fmt(v.total,view)}</span>
             <span style="color:var(--text4);font-size:11px;font-weight:500;min-width:32px;text-align:right">${pct.toFixed(0)}%</span>
-            ${hasSubs?`<span style="font-size:9px;color:var(--text4)">▼</span>`:''}
+            ${expandable?`<span style="font-size:9px;color:var(--text4)" id="drill-${i}-arrow">▼</span>`:''}
           </div>
         </div>
         <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
           <div style="height:100%;border-radius:99px;background:${color};width:${pct.toFixed(1)}%;transition:width 0.3s"></div>
         </div>
       </div>
-      ${hasSubs?`<div id="drill-${i}" style="display:none">${subRows}</div>`:''}
+      ${expandable?`<div id="drill-${i}" style="display:none">${expandedContent}</div>`:''}
     </div>`;
   });
 
@@ -6572,6 +6600,7 @@ function renderAnalyticsSpending() {
     <div style="background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid var(--border)">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;margin-bottom:6px">${view==='PGK'?'🇵🇬 PNG':'🇵🇭 Pinas'} EXPENSES — ${periodLabel.toUpperCase()}</div>
       <div style="font-size:32px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:-0.02em">${fmt(total,view)}</div>
+      ${view !== dispCurr ? `<div style="font-size:13px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:12px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
     <div>${bars.join('')}</div>
@@ -6586,7 +6615,16 @@ function setSpendingView(view) {
 
 function toggleSpendingDrill(id) {
   const el = document.getElementById(id);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el) {
+    const isOpen = el.style.display === 'none' ? false : true;
+    el.style.display = isOpen ? 'none' : 'block';
+    const arrow = document.getElementById(id + '-arrow');
+    if (arrow) {
+      arrow.style.transition = 'transform 0.2s';
+      arrow.style.display = 'inline-block';
+      arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+  }
 }
 
 function renderAnalyticsTrends() {
