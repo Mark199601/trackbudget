@@ -132,6 +132,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .card-ghost{background:var(--bg3);border-radius:var(--r-md);padding:12px}
 .tap-shrink{transition:transform var(--transition)}
 .tap-shrink:active{transform:scale(0.97)}
+
+/* iOS-style loading overlay */
+#app-loading{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:rgba(6,6,13,0.45);backdrop-filter:blur(10px) saturate(120%);-webkit-backdrop-filter:blur(10px) saturate(120%);opacity:0;pointer-events:none;transition:opacity 0.18s ease}
+#app-loading.show{opacity:1;pointer-events:auto}
+.app-loading-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-lg);padding:24px 28px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:160px;box-shadow:0 12px 48px rgba(0,0,0,0.4)}
+.app-loading-spinner{width:32px;height:32px;border-radius:50%;border:3px solid var(--bg4);border-top-color:var(--accent);animation:appSpin 0.8s linear infinite}
+.app-loading-msg{font-size:13px;color:var(--text2);font-weight:500;text-align:center}
+@keyframes appSpin{to{transform:rotate(360deg)}}
+
+/* Skeleton shimmer for loading lists */
+.skel{background:linear-gradient(90deg,var(--bg3) 25%,var(--bg4) 50%,var(--bg3) 75%);background-size:200% 100%;animation:skelShimmer 1.2s ease-in-out infinite;border-radius:var(--r-sm)}
+@keyframes skelShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;transition:all var(--transition);position:relative;overflow:hidden}
 .metric-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow)}
 .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px;font-weight:500}
@@ -267,11 +279,14 @@ option{background:var(--bg3);color:var(--text)}
 .tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 20px;gap:0;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
 .tab-bar::-webkit-scrollbar{display:none}
 .tab-btn{padding:12px 14px;border:none;background:transparent;color:var(--text3);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all var(--transition)}
+.tab-btn:hover{color:var(--text2)}
+.tab-btn:active{transform:scale(0.96)}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 
 .filter-chips{display:flex;gap:6px;padding:12px 20px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
 .filter-chips::-webkit-scrollbar{display:none}
 .chip{padding:6px 13px;border-radius:var(--r-full);border:1px solid var(--border2);background:transparent;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all var(--transition)}
+.chip:active{transform:scale(0.94)}
 .chip.active{border-color:var(--accent);background:var(--accent-bg);color:var(--accent)}
 
 /* ── SHEETS & MODALS — FIXED PC BUG ── */
@@ -336,7 +351,9 @@ option{background:var(--bg3);color:var(--text)}
 .acct-balance{font-family:var(--mono);font-size:20px;font-weight:500;margin-top:4px}
 
 /* ── SETTINGS ROW ── */
-.settings-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition),transform var(--transition);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:var(--r-sm)}
+.settings-row:hover{background:var(--bg3)}
+.settings-row:active{transform:scale(0.98);background:var(--accent-bg)}
 .settings-row:last-child{border-bottom:none}
 .sr-left{display:flex;align-items:center;gap:12px}
 .sr-icon{width:34px;height:34px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
@@ -345,7 +362,8 @@ option{background:var(--bg3);color:var(--text)}
 .sr-right{color:var(--text4);font-size:12px;display:flex;align-items:center;gap:6px}
 
 /* ── LOAN CARDS ── */
-.loan-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px;margin-bottom:8px;cursor:pointer;transition:border-color var(--transition)}
+.loan-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px;margin-bottom:8px;cursor:pointer;transition:border-color var(--transition),transform var(--transition),box-shadow var(--transition)}
+.loan-card:active{transform:scale(0.985)}
 .loan-card:hover{border-color:var(--border2)}
 .loan-progress{height:3px;background:var(--bg5);border-radius:2px;overflow:hidden;margin-top:10px}
 .loan-progress-fill{height:100%;border-radius:2px}
@@ -441,12 +459,26 @@ option{background:var(--bg3);color:var(--text)}
 @media(max-width:768px){.page-pad{padding:16px}}
 .page-anim{animation:pageFadeIn 0.28s cubic-bezier(0.32,0.72,0,1)}
 @keyframes pageFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+@keyframes qaPopUp{from{opacity:0;transform:translateX(-50%) translateY(20px) scale(0.92)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
+@keyframes qaPopDown{from{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}to{opacity:0;transform:translateX(-50%) translateY(10px) scale(0.96)}}
+@keyframes qaSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.tab-content-anim{animation:tabFade 0.18s ease-out}
+@keyframes tabFade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+.tab-anim-from-right{animation:slideFromRight 0.22s cubic-bezier(0.32,0.72,0,1)}
+.tab-anim-from-left{animation:slideFromLeft 0.22s cubic-bezier(0.32,0.72,0,1)}
+@keyframes slideFromRight{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideFromLeft{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
+[data-swiping="1"]{will-change:transform}
 @media(min-width:1024px){.page-pad{padding:24px}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .page-anim{animation:fadeUp 0.18s ease}
-.empty-state{text-align:center;padding:48px 20px;color:var(--text3)}
-.empty-icon{font-size:36px;margin-bottom:12px;opacity:0.4}
-.empty-text{font-size:14px;margin-bottom:16px}
+.empty-state{text-align:center;padding:56px 24px;color:var(--text3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.empty-icon{font-size:42px;margin-bottom:8px;opacity:0.5;filter:saturate(0.6)}
+.empty-text{font-size:14px;color:var(--text2);font-weight:500;margin-bottom:4px}
+.empty-state .btn{margin-top:16px}
+.empty-sub{font-size:12px;color:var(--text4);max-width:280px;line-height:1.5;margin-top:4px}
 .detail-row{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
 .detail-row:last-child{border-bottom:none}
 .detail-label{color:var(--text3);flex-shrink:0;margin-right:12px}
@@ -548,7 +580,7 @@ option{background:var(--bg3);color:var(--text)}
       <button class="bn-item" id="bn-transactions" onclick="nav('transactions')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Txns
       </button>
-      <button class="bn-add" onclick="openAddSheet()">
+      <button class="bn-add" id="bn-add-btn" onclick="handleQuickAddTap()" oncontextmenu="event.preventDefault();showQuickAddMenu();return false">
         <div class="bn-add-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>Add
       </button>
       <button class="bn-item" id="bn-accounts" onclick="nav('accounts')">
@@ -1246,6 +1278,23 @@ function showToast(msg, dur=2200) {
   setTimeout(()=>t.classList.remove('show'), dur);
 }
 
+// iOS-style loading overlay for long async ops
+function showLoading(msg='Loading...') {
+  let el = document.getElementById('app-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-loading';
+    el.innerHTML = `<div class="app-loading-card"><div class="app-loading-spinner"></div><div class="app-loading-msg"></div></div>`;
+    document.body.appendChild(el);
+  }
+  el.querySelector('.app-loading-msg').textContent = msg;
+  requestAnimationFrame(()=>el.classList.add('show'));
+}
+function hideLoading() {
+  const el = document.getElementById('app-loading');
+  if (el) el.classList.remove('show');
+}
+
 function getAcctBalance(acctId) {
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) return 0;
@@ -1415,6 +1464,10 @@ let currentPage = 'dashboard';
 function nav(page) {
   // Close mobile sidebar if open
   closeMobileSidebar();
+  // Clear sticky transient state when leaving certain pages
+  if (currentPage === 'transactions' && page !== 'transactions') {
+    window._txSearchQuery = '';
+  }
   currentPage = page;
   const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
@@ -1475,6 +1528,48 @@ function closeSheet(sheetId) {
   document.getElementById(sheetId+'-sheet').classList.remove('open');
 }
 
+// Swipe-down to dismiss sheets (mobile only)
+function attachSwipeDismiss(sheetId) {
+  const sheet = document.getElementById(sheetId+'-sheet');
+  if (!sheet || sheet._swipeAttached) return;
+  sheet._swipeAttached = true;
+  let startY = 0, deltaY = 0, isDragging = false, startTime = 0;
+  const handleEl = sheet.querySelector('.sheet-handle');
+  const headerEl = sheet.querySelector('.sheet-header');
+  const dragZones = [handleEl, headerEl].filter(Boolean);
+  dragZones.forEach(zone => {
+    zone.addEventListener('touchstart', e => {
+      if (window.innerWidth >= 1024) return; // desktop = no swipe
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      startTime = Date.now();
+      sheet.style.transition = 'none';
+    }, {passive:true});
+    zone.addEventListener('touchmove', e => {
+      if (!isDragging) return;
+      deltaY = e.touches[0].clientY - startY;
+      if (deltaY < 0) deltaY = deltaY * 0.3; // rubber-band on upward
+      sheet.style.transform = `translateY(${deltaY}px)`;
+    }, {passive:true});
+    zone.addEventListener('touchend', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      sheet.style.transition = '';
+      const elapsed = Date.now() - startTime;
+      const velocity = deltaY / elapsed;
+      const sheetHeight = sheet.offsetHeight;
+      // Dismiss if dragged more than 25% OR fast flick down
+      if (deltaY > sheetHeight * 0.25 || velocity > 0.6) {
+        sheet.style.transform = '';
+        closeSheet(sheetId);
+      } else {
+        sheet.style.transform = '';
+      }
+      deltaY = 0;
+    });
+  });
+}
+
 function openDlg(title, html, footer='') {
   document.getElementById('dlg-title').textContent = title;
   document.getElementById('dlg-body').innerHTML = html;
@@ -1499,6 +1594,11 @@ function wireEvents() {
   document.getElementById('add-overlay').addEventListener('click', () => closeSheet('add'));
   document.getElementById('gen-overlay').addEventListener('click', () => closeSheet('gen'));
   document.getElementById('dlg-overlay').addEventListener('click', (e) => { if(e.target===e.currentTarget)closeDlg(); });
+  // Swipe-down dismiss (mobile)
+  attachSwipeDismiss('add');
+  attachSwipeDismiss('gen');
+  // Long-press on bottom-nav add button → quick action menu
+  wireQuickAddLongPress();
 }
 // Event delegation for dynamically rendered content
 document.addEventListener('click', function(e) {
@@ -1954,6 +2054,49 @@ function renderDashboard() {
 
     ${metricsHTML}
 
+    ${(()=>{
+      // ── TODAY'S PULSE — live counter for today's transactions ──
+      const tdy = today();
+      const todayTxs = db.transactions.filter(t => !t.archived && t.date === tdy && !t.isSettlement && !t.isAutoForex && !t.isAutoReimb);
+      if (todayTxs.length === 0) {
+        return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📅</div>
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Today's Pulse</div>
+            <div style="font-size:13px;color:var(--text2)">No transactions yet today</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>`;
+      }
+      let todayInc = 0, todayExp = 0;
+      for (const t of todayTxs) {
+        const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
+        const inDisp = t.currency === disp ? amt : convert(amt, t.currency, disp);
+        if (t.type === 'income') todayInc += inDisp;
+        else if (t.type === 'expense' || t.type === 'shared') todayExp += inDisp;
+      }
+      const todayNet = todayInc - todayExp;
+      const netCls = todayNet > 0 ? 'var(--green)' : todayNet < 0 ? 'var(--red)' : 'var(--text3)';
+      const netSign = todayNet > 0 ? '+' : todayNet < 0 ? '−' : '';
+      return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;position:relative">
+            <span style="position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">${todayTxs.length}</span>
+            📅
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Today's Pulse</div>
+            <div style="font-size:13px;color:var(--text2)">${todayTxs.length} transaction${todayTxs.length>1?'s':''} · <span style="color:${netCls};font-weight:600;font-family:var(--mono)">${netSign}${fmt(Math.abs(todayNet),disp)}</span></div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        ${todayInc > 0 || todayExp > 0 ? `<div style="display:flex;gap:6px;margin-top:10px">
+          ${todayInc > 0 ? `<div style="flex:1;background:rgba(45,217,138,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">In</span> <span style="color:var(--green);font-family:var(--mono);font-weight:600;float:right">${fmt(todayInc,disp)}</span></div>` : ''}
+          ${todayExp > 0 ? `<div style="flex:1;background:rgba(240,86,90,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">Out</span> <span style="color:var(--red);font-family:var(--mono);font-weight:600;float:right">${fmt(todayExp,disp)}</span></div>` : ''}
+        </div>` : ''}
+      </div>`;
+    })()}
+
     ${insightHTML?`<div style="margin-bottom:16px">${insightHTML}</div>`:''}
 
     ${budgetHTML?`<div style="margin-bottom:16px">
@@ -2102,9 +2245,28 @@ function renderTxRow(tx, showDate=false) {
         </div>`;
     }
 
-    settlementRows = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:0 12px;overflow:hidden">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;padding:8px 0 4px">Split (${totalPeople} people)</div>
-      ${personRows}
+    // Compute summary for collapsed state
+    const totalReimb = settlements.reduce((s,r)=>s+(r.amount||0),0);
+    const totalOwed = persons.reduce((s,p)=>s+(p.share||0),0);
+    const totalRemaining = Math.max(0, totalOwed - totalReimb);
+    const summaryBadge = totalRemaining <= 0.01 && totalOwed > 0
+      ? `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">All Paid ✓</span>`
+      : totalReimb > 0
+        ? `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--amber-bg);color:var(--amber);font-weight:600">Partial</span>`
+        : `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--bg4);color:var(--text4);font-weight:600">Pending</span>`;
+
+    const breakdownId = 'split-' + tx.id;
+    settlementRows = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+      <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Split (${totalPeople} people)</span>
+          ${summaryBadge}
+        </div>
+        <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="${breakdownId}" style="display:none;padding:0 12px;border-top:1px solid var(--border)">
+        ${personRows}
+      </div>
     </div>`;
   }
 
@@ -2131,6 +2293,83 @@ function openAddSheet(prefill={}) {
   window._catGroupOpen = null;
   openSheet('add','Add Transaction','');
   renderAddSheet();
+}
+
+// ── QUICK-ADD: tap = expense; long-press / right-click = action menu ──
+let _quickAddPressTimer = null;
+let _quickAddLongPressed = false;
+
+function handleQuickAddTap() {
+  // If long-press triggered, ignore the synthesized click
+  if (_quickAddLongPressed) {
+    _quickAddLongPressed = false;
+    return;
+  }
+  openAddSheet();
+}
+
+function showQuickAddMenu() {
+  // Slight haptic-style scale flash on the FAB
+  const btn = document.getElementById('bn-add-btn');
+  if (btn) {
+    btn.style.transform = 'scale(0.92)';
+    setTimeout(() => { btn.style.transform = ''; }, 150);
+  }
+  // Build a bottom-anchored radial-ish menu
+  const items = [
+    { type: 'expense',  icon: '💸', label: 'Expense',   color: 'var(--red)'    },
+    { type: 'income',   icon: '📈', label: 'Income',    color: 'var(--green)'  },
+    { type: 'transfer', icon: '↔️', label: 'Transfer',  color: 'var(--accent)' },
+    { type: 'shared',   icon: '🤝', label: 'Shared',    color: 'var(--amber)'  },
+    { type: 'remittance',icon:'📤', label: 'Remittance',color: 'var(--accent3,var(--accent))' },
+  ];
+  const itemHTML = items.map((it,i)=>`<div onclick="closeQuickAddMenu();setTimeout(()=>{openAddSheet();setTimeout(()=>setAddType('${it.type}'),60)},80)" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-radius:var(--r-md);transition:background var(--transition);animation:qaSlideIn 0.${24+i*2}s cubic-bezier(0.32,0.72,0,1) ${i*0.04}s both" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+    <div style="width:42px;height:42px;border-radius:50%;background:${it.color}22;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${it.icon}</div>
+    <div style="font-size:15px;font-weight:600;color:var(--text)">${it.label}</div>
+  </div>`).join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'qa-menu-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,13,0.55);backdrop-filter:blur(8px) saturate(150%);-webkit-backdrop-filter:blur(8px) saturate(150%);z-index:9998;animation:fadeIn 0.18s ease';
+  overlay.onclick = closeQuickAddMenu;
+  const sheet = document.createElement('div');
+  sheet.id = 'qa-menu-sheet';
+  sheet.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:8px;box-shadow:0 12px 40px rgba(0,0,0,0.3);z-index:9999;min-width:240px;animation:qaPopUp 0.32s cubic-bezier(0.32,1.4,0.5,1)';
+  sheet.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;padding:8px 16px 4px">Quick add</div>${itemHTML}`;
+  document.body.appendChild(overlay);
+  document.body.appendChild(sheet);
+}
+
+function closeQuickAddMenu() {
+  const overlay = document.getElementById('qa-menu-overlay');
+  const sheet = document.getElementById('qa-menu-sheet');
+  if (sheet) { sheet.style.animation = 'qaPopDown 0.16s ease forwards'; setTimeout(()=>sheet.remove(), 160); }
+  if (overlay) { overlay.style.animation = 'fadeOut 0.16s ease forwards'; setTimeout(()=>overlay.remove(), 160); }
+}
+
+// Wire long-press (touch + mouse) on the bn-add button
+function wireQuickAddLongPress() {
+  const btn = document.getElementById('bn-add-btn');
+  if (!btn) return;
+  const start = (e) => {
+    _quickAddLongPressed = false;
+    if (_quickAddPressTimer) clearTimeout(_quickAddPressTimer);
+    _quickAddPressTimer = setTimeout(() => {
+      _quickAddLongPressed = true;
+      showQuickAddMenu();
+      // Haptic feedback if available
+      if (navigator.vibrate) try { navigator.vibrate(15); } catch(e) {}
+    }, 450);
+  };
+  const cancel = () => {
+    if (_quickAddPressTimer) { clearTimeout(_quickAddPressTimer); _quickAddPressTimer = null; }
+  };
+  btn.addEventListener('touchstart', start, { passive: true });
+  btn.addEventListener('touchend', cancel);
+  btn.addEventListener('touchmove', cancel);
+  btn.addEventListener('touchcancel', cancel);
+  btn.addEventListener('mousedown', start);
+  btn.addEventListener('mouseup', cancel);
+  btn.addEventListener('mouseleave', cancel);
 }
 
 function syncAddCurrencyDelayed() {
@@ -3329,15 +3568,51 @@ function renderTxLog() {
   const filters = ['all','expense','income','shared','transfer','loans'];
   const chipHTML = filters.map(f=>`<div class="chip ${_txFilter===f?'active':''}" onclick="setTxFilter('${f}')">${f==='all'?'All':f==='loans'?'Loans':f.charAt(0).toUpperCase()+f.slice(1)}</div>`).join('');
 
+  // Smart search query
+  const searchQuery = (window._txSearchQuery || '').trim().toLowerCase();
+  const searchActive = searchQuery.length > 0;
+  const searchAsNumber = parseFloat(searchQuery);
+  const searchIsNumeric = !isNaN(searchAsNumber) && isFinite(searchAsNumber);
+
   const txs = db.transactions.filter(t=> {
-    if (t.archived || !t.date || !t.date.startsWith(_txMonth)) return false;
+    if (t.archived) return false;
+    // When searching, ignore month filter (search across ALL transactions)
+    if (!searchActive) {
+      if (!t.date || !t.date.startsWith(_txMonth)) return false;
+    }
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
     if (t.isLoanPayment && _txFilter !== 'loans') return false;
     // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
     if (t.isAutoReimb) return false;
-    if (_txFilter === 'all') return true;
-    if (_txFilter === 'loans') return !!(t.isLoanTx || t.isLoanPayment);
-    return t.type === _txFilter;
+    // Type filter (still applies during search)
+    if (_txFilter !== 'all') {
+      if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
+      else if (t.type !== _txFilter) return false;
+    }
+    // Search match — check notes, amount, account name, category name
+    if (searchActive) {
+      const notes = (t.notes || '').toLowerCase();
+      const acct = db.accounts.find(a=>a.id===t.accountId);
+      const fromAcct = db.accounts.find(a=>a.id===t.fromAccountId);
+      const toAcct = db.accounts.find(a=>a.id===t.toAccountId);
+      const acctName = (acct?.name || fromAcct?.name || '').toLowerCase();
+      const toAcctName = (toAcct?.name || '').toLowerCase();
+      const cat = getCategoryDisplay(t.categoryId);
+      const catName = (cat?.name || '').toLowerCase();
+      const subName = (cat?.subName || '').toLowerCase();
+      // Numeric match: tolerance of ±0.5 for amount comparisons
+      const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
+      const amountMatch = searchIsNumeric && Math.abs((amt || 0) - searchAsNumber) < 0.5;
+      // Text matches
+      const textMatch = notes.includes(searchQuery)
+        || acctName.includes(searchQuery)
+        || toAcctName.includes(searchQuery)
+        || catName.includes(searchQuery)
+        || subName.includes(searchQuery)
+        || (t.currency || '').toLowerCase().includes(searchQuery);
+      if (!amountMatch && !textMatch) return false;
+    }
+    return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
 
   // Group by date
@@ -3359,14 +3634,34 @@ function renderTxLog() {
     txHTML += dayTxs.map(tx=>renderTxRow(tx)).join('');
   }
 
-  if (!txHTML) txHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions this month</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
+  if (!txHTML) {
+    txHTML = searchActive
+      ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
+      : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
+  }
 
-  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
-      <select class="form-input" style="flex:1;max-width:200px;padding:7px 12px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
-      <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} txns</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
+  // When search is active, hide month selector since we search across all months
+  const monthRow = searchActive
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
+        <span style="font-size:12px;color:var(--accent);font-weight:600">🔍 Searching all months</span>
+        <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} match${txs.length!==1?'es':''}</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
+      </div>`
+    : `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
+        <select class="form-input" style="flex:1;max-width:200px;padding:7px 12px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
+        <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} txns</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
+      </div>`;
+
+  return `${monthRow}
+    <div style="padding:8px 16px;display:flex;gap:8px;align-items:center">
+      <div style="flex:1;position:relative">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.5"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input type="text" id="tx-search-input" class="form-input" value="${searchQuery.replace(/"/g, '&quot;')}" placeholder="Search notes, amount, account, category…" oninput="onTxSearchInput(this.value)" style="padding:8px 32px 8px 32px;font-size:13px">
+        ${searchActive ? `<button onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0;line-height:1">×</button>` : ''}
+      </div>
     </div>
-    <div style="padding:8px 16px;border-bottom:1px solid var(--border)">
+    <div style="padding:0 16px 8px 16px;border-bottom:1px solid var(--border)">
       <div class="type-dd-wrap" style="position:relative" id="txfilter-container">
         <div onclick="toggleTxFilterDd()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:13px;font-weight:500;user-select:none">
           <div style="display:flex;align-items:center;gap:6px">
@@ -3387,6 +3682,31 @@ function renderTxLog() {
       </div>
     </div>
     <div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
+}
+
+// ── SMART SEARCH HELPERS ──
+let _txSearchDebounce = null;
+function onTxSearchInput(val) {
+  // Debounce: re-render only after 180ms of no typing
+  window._txSearchQuery = val;
+  if (_txSearchDebounce) clearTimeout(_txSearchDebounce);
+  _txSearchDebounce = setTimeout(() => {
+    renderTransactions();
+    // Restore focus to the search input after re-render
+    const input = document.getElementById('tx-search-input');
+    if (input) {
+      input.focus();
+      // Place cursor at end
+      const len = input.value.length;
+      try { input.setSelectionRange(len, len); } catch(e) {}
+    }
+  }, 180);
+}
+
+function clearTxSearch() {
+  window._txSearchQuery = '';
+  if (_txSearchDebounce) clearTimeout(_txSearchDebounce);
+  renderTransactions();
 }
 
 function toggleTxFilterDd() {
@@ -6143,7 +6463,86 @@ function renderAnalytics() {
   else if (_analyticsTab==='wealth') content = renderAnalyticsWealth();
   else if (_analyticsTab==='external') content = renderAnalyticsExternal();
   else content = renderAnalyticsForex();
-  document.getElementById('page-content').innerHTML = tabsHTML + content;
+  // Use swipe direction to decide animation class
+  const dir = window._analyticsSwipeDir || 'none';
+  const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
+  document.getElementById('page-content').innerHTML = tabsHTML + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
+  // Reset swipe direction after one render
+  window._analyticsSwipeDir = 'none';
+  // Wire up swipe gestures (mobile only)
+  attachAnalyticsSwipe();
+}
+
+const ANALYTICS_TABS = ['overview','spending','trends','wealth','forex','external'];
+
+function attachAnalyticsSwipe() {
+  const pane = document.getElementById('analytics-swipe-pane');
+  if (!pane) return;
+  // Disable on desktop (≥1024px) — clicking tabs is faster there
+  if (window.innerWidth >= 1024) return;
+  let startX = 0, startY = 0, startT = 0, dragging = false, locked = false;
+  const onStart = (e) => {
+    const t = e.touches ? e.touches[0] : e;
+    startX = t.clientX; startY = t.clientY; startT = Date.now();
+    dragging = true; locked = false;
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    const t = e.touches ? e.touches[0] : e;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    // Lock direction once movement exceeds 8px
+    if (!locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      // Only treat as horizontal swipe if X dominates Y by 1.5x
+      if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+        locked = true;
+        pane.dataset.swiping = '1';
+      } else {
+        // Vertical scroll — abort
+        dragging = false;
+        return;
+      }
+    }
+    if (locked) {
+      // Visual: subtle drag with rubber band at edges
+      const idx = ANALYTICS_TABS.indexOf(_analyticsTab);
+      const atStart = idx === 0 && dx > 0;
+      const atEnd = idx === ANALYTICS_TABS.length - 1 && dx < 0;
+      const drag = (atStart || atEnd) ? dx * 0.25 : dx * 0.6;
+      pane.style.transform = `translateX(${drag}px)`;
+      pane.style.transition = 'none';
+      e.preventDefault?.();
+    }
+  };
+  const onEnd = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    if (!locked) return;
+    pane.dataset.swiping = '';
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    const dx = t.clientX - startX;
+    const dt = Date.now() - startT;
+    const velocity = Math.abs(dx) / Math.max(dt, 1);
+    const threshold = pane.offsetWidth * 0.25;
+    const idx = ANALYTICS_TABS.indexOf(_analyticsTab);
+    // Spring back to current position first
+    pane.style.transition = 'transform 0.18s cubic-bezier(0.32,0.72,0,1)';
+    pane.style.transform = '';
+    // Decide if swipe should change tab
+    if ((Math.abs(dx) > threshold || velocity > 0.5)) {
+      if (dx < 0 && idx < ANALYTICS_TABS.length - 1) {
+        window._analyticsSwipeDir = 'left'; // swiped left → next tab slides in from right
+        setAnalyticsTab(ANALYTICS_TABS[idx + 1]);
+      } else if (dx > 0 && idx > 0) {
+        window._analyticsSwipeDir = 'right'; // swiped right → prev tab slides in from left
+        setAnalyticsTab(ANALYTICS_TABS[idx - 1]);
+      }
+    }
+  };
+  pane.addEventListener('touchstart', onStart, { passive: true });
+  pane.addEventListener('touchmove', onMove, { passive: false });
+  pane.addEventListener('touchend', onEnd, { passive: true });
+  pane.addEventListener('touchcancel', onEnd, { passive: true });
 }
 
 function setAnalyticsTab(t) { _analyticsTab=t; renderAnalytics(); }
@@ -6727,9 +7126,249 @@ function renderAnalyticsTrends() {
   </div>`).join('');
 
   return `<div class="page-pad">
+    ${renderSpendingHeatmap(disp)}
     <div class="card">${rows}</div>
     ${renderInlineInsights(['recurring','budget','trend'])}
   </div>`;
+}
+
+// ── SPENDING CALENDAR HEATMAP ──
+// GitHub contribution-style grid showing last 365 days of expense activity
+function renderSpendingHeatmap(disp) {
+  const today = new Date();
+  const todayKey = today.toISOString().split('T')[0];
+  // 53 weeks × 7 days = 371 cells, we'll align so today is in the rightmost column
+  const NUM_WEEKS = 53;
+  const totalDays = NUM_WEEKS * 7;
+  // Compute end date (today) and start date
+  const endDate = new Date(today);
+  // Align end of grid to next Saturday so today's row is complete
+  const dayOfWeek = endDate.getDay(); // 0 = Sunday
+  const daysToEnd = 6 - dayOfWeek; // pad to next Saturday
+  endDate.setDate(endDate.getDate() + daysToEnd);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - totalDays + 1);
+
+  // Aggregate expenses per day (in display currency)
+  const dayMap = {};
+  for (const tx of db.transactions) {
+    if (tx.archived) continue;
+    if (tx.isSettlement || tx.isAutoForex || tx.isAutoReimb) continue;
+    if (tx.type !== 'expense' && tx.type !== 'shared') continue;
+    if (!tx.date) continue;
+    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+    const inDisp = tx.currency === disp ? amt : convert(amt, tx.currency, disp);
+    if (!dayMap[tx.date]) dayMap[tx.date] = { total: 0, count: 0 };
+    dayMap[tx.date].total += inDisp;
+    dayMap[tx.date].count += 1;
+  }
+
+  // Find max for color scaling (use 90th percentile to avoid outliers dominating)
+  const allTotals = Object.values(dayMap).map(d=>d.total).sort((a,b)=>a-b);
+  const p90 = allTotals.length > 0 ? allTotals[Math.floor(allTotals.length * 0.9)] : 1;
+  const maxScale = Math.max(p90, 1);
+
+  // Build grid: columns are weeks (Sunday at top, Saturday at bottom)
+  const cells = [];
+  const monthLabels = []; // {weekIdx, label}
+  let prevMonth = -1;
+  for (let w = 0; w < NUM_WEEKS; w++) {
+    for (let d = 0; d < 7; d++) {
+      const dateOffset = w * 7 + d;
+      const cellDate = new Date(startDate);
+      cellDate.setDate(cellDate.getDate() + dateOffset);
+      const key = cellDate.toISOString().split('T')[0];
+      const isFuture = cellDate > today;
+      const dayData = dayMap[key];
+      const total = dayData?.total || 0;
+      // Determine color level (0-4)
+      let level = 0;
+      if (total > 0) {
+        const ratio = total / maxScale;
+        if (ratio >= 0.75) level = 4;
+        else if (ratio >= 0.5) level = 3;
+        else if (ratio >= 0.25) level = 2;
+        else level = 1;
+      }
+      // Track first cell of each month for label
+      if (d === 0) {
+        const m = cellDate.getMonth();
+        if (m !== prevMonth) {
+          monthLabels.push({ weekIdx: w, label: cellDate.toLocaleString('en', {month:'short'}) });
+          prevMonth = m;
+        }
+      }
+      cells.push({
+        w, d, key, total, count: dayData?.count || 0, level, isFuture,
+        isToday: key === todayKey,
+      });
+    }
+  }
+
+  // Compute stats
+  const activeDays = Object.keys(dayMap).length;
+  const totalSpent = Object.values(dayMap).reduce((s,d)=>s+d.total, 0);
+  const maxDay = Object.entries(dayMap).reduce((max, [k,v]) =>
+    v.total > (max.v?.total || 0) ? {k, v} : max, {});
+  // Longest streak of consecutive days with expense
+  const sortedDates = Object.keys(dayMap).sort();
+  let maxStreak = 0, curStreak = 0, lastDate = null;
+  for (const d of sortedDates) {
+    const dt = new Date(d);
+    if (lastDate) {
+      const diff = (dt - lastDate) / 86400000;
+      if (diff === 1) curStreak++;
+      else curStreak = 1;
+    } else curStreak = 1;
+    if (curStreak > maxStreak) maxStreak = curStreak;
+    lastDate = dt;
+  }
+  // Current streak (consecutive days up to today including today or yesterday)
+  let currentStreak = 0;
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+  let cursor = dayMap[todayKey] ? new Date(today) : (dayMap[yest.toISOString().split('T')[0]] ? yest : null);
+  while (cursor) {
+    const ckey = cursor.toISOString().split('T')[0];
+    if (dayMap[ckey]) {
+      currentStreak++;
+      cursor = new Date(cursor); cursor.setDate(cursor.getDate() - 1);
+    } else break;
+  }
+
+  const cellSize = 11; // px
+  const cellGap = 2;
+  const colWidth = cellSize + cellGap;
+  const rowHeight = cellSize + cellGap;
+  const gridWidth = NUM_WEEKS * colWidth;
+  const gridHeight = 7 * rowHeight;
+
+  // Render cells as SVG rects for performance
+  const cellRects = cells.map(c => {
+    const x = c.w * colWidth;
+    const y = c.d * rowHeight;
+    let fill;
+    if (c.isFuture) fill = 'transparent';
+    else if (c.level === 0) fill = 'var(--bg4)';
+    else if (c.level === 1) fill = 'rgba(124,109,240,0.25)';
+    else if (c.level === 2) fill = 'rgba(124,109,240,0.5)';
+    else if (c.level === 3) fill = 'rgba(124,109,240,0.75)';
+    else fill = 'var(--accent)';
+    const stroke = c.isToday ? 'var(--accent3)' : 'transparent';
+    const strokeWidth = c.isToday ? 1.5 : 0;
+    if (c.isFuture) return `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${fill}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,2" opacity="0.3"/>`;
+    return `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" style="cursor:pointer" onclick="showHeatmapDay('${c.key}')" onmouseover="showHeatmapTooltip(event,'${c.key}',${c.total.toFixed(2)},${c.count})" onmouseout="hideHeatmapTooltip()"><title>${fmtDFull(c.key)}: ${c.count===0?'No expense':fmt(c.total,disp)+' · '+c.count+' tx'}</title></rect>`;
+  }).join('');
+
+  // Month labels along top
+  const monthLabelEls = monthLabels.map(ml => {
+    const x = ml.weekIdx * colWidth;
+    return `<text x="${x}" y="-4" font-size="10" fill="var(--text4)" font-family="system-ui">${ml.label}</text>`;
+  }).join('');
+
+  // Day labels (Sun, Mon, etc.) — only show every other one to save space
+  const dayNames = ['Sun','','Tue','','Thu','','Sat'];
+  const dayLabelEls = dayNames.map((n,i) => n
+    ? `<text x="-26" y="${i * rowHeight + 9}" font-size="9" fill="var(--text4)" font-family="system-ui">${n}</text>`
+    : ''
+  ).join('');
+
+  return `<div class="card" style="padding:16px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Spending Heatmap</div>
+        <div style="font-size:11px;color:var(--text3)">Last 12 months · darker = higher spend</div>
+      </div>
+      <div style="display:flex;gap:14px;font-size:10px">
+        <div style="text-align:center"><div style="color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">Active</div><div style="font-family:var(--mono);font-weight:600;color:var(--text);font-size:13px;margin-top:2px">${activeDays}d</div></div>
+        <div style="text-align:center"><div style="color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">Streak</div><div style="font-family:var(--mono);font-weight:600;color:var(--accent);font-size:13px;margin-top:2px">${currentStreak}🔥</div></div>
+        <div style="text-align:center"><div style="color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">Max day</div><div style="font-family:var(--mono);font-weight:600;color:var(--red);font-size:13px;margin-top:2px">${maxDay.v?fmt(maxDay.v.total,disp):'—'}</div></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;padding:14px 4px 4px;margin:0 -4px;-webkit-overflow-scrolling:touch">
+      <svg width="${gridWidth + 32}" height="${gridHeight + 24}" style="display:block">
+        <g transform="translate(28, 18)">
+          ${monthLabelEls}
+          ${dayLabelEls}
+          ${cellRects}
+        </g>
+      </svg>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:6px;font-size:10px;color:var(--text4)">
+      <span>Less</span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:var(--bg4)"></span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:rgba(124,109,240,0.25)"></span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:rgba(124,109,240,0.5)"></span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:rgba(124,109,240,0.75)"></span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:var(--accent)"></span>
+      <span>More</span>
+    </div>
+    <div id="heatmap-tooltip" style="position:fixed;display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;font-size:11px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:1000;pointer-events:none;white-space:nowrap"></div>
+  </div>`;
+}
+
+function showHeatmapTooltip(e, dateKey, total, count) {
+  const tip = document.getElementById('heatmap-tooltip');
+  if (!tip) return;
+  const disp = db.displayCurrency || 'PHP';
+  tip.innerHTML = count === 0
+    ? `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--text4);margin-top:2px">No expenses</div>`
+    : `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--red);font-family:var(--mono);margin-top:2px">${fmt(total, disp)}</div><div style="color:var(--text4);font-size:10px;margin-top:1px">${count} transaction${count>1?'s':''} · tap to view</div>`;
+  tip.style.display = 'block';
+  // Position above cursor
+  const rect = e.target.getBoundingClientRect();
+  tip.style.left = Math.max(8, rect.left - 60) + 'px';
+  tip.style.top = (rect.top - tip.offsetHeight - 8) + 'px';
+}
+
+function hideHeatmapTooltip() {
+  const tip = document.getElementById('heatmap-tooltip');
+  if (tip) tip.style.display = 'none';
+}
+
+function showHeatmapDay(dateKey) {
+  hideHeatmapTooltip();
+  const dayTxs = db.transactions.filter(t => !t.archived && t.date === dateKey && !t.isSettlement && !t.isAutoForex && !t.isAutoReimb)
+    .sort((a,b) => (b.time||'').localeCompare(a.time||''));
+  if (dayTxs.length === 0) {
+    showToast('No transactions on ' + fmtDFull(dateKey));
+    return;
+  }
+  const disp = db.displayCurrency || 'PHP';
+  const rows = dayTxs.map(tx => {
+    const acct = db.accounts.find(a=>a.id===tx.accountId);
+    const acctName = acct?.name || '—';
+    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+    const isExp = tx.type === 'expense' || tx.type === 'shared';
+    const isInc = tx.type === 'income';
+    const sign = isExp ? '−' : isInc ? '+' : '';
+    const color = isExp ? 'var(--red)' : isInc ? 'var(--green)' : 'var(--text2)';
+    const subCat = getCategoryDisplay(tx.categoryId);
+    return `<div onclick="closeDlg();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:13px;color:var(--text);font-weight:500">${subCat.icon} ${subCat.subName||subCat.name}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:2px">${acctName}${tx.notes?' · '+tx.notes:''}${tx.time?' · '+tx.time:''}</div>
+      </div>
+      <span style="font-family:var(--mono);font-size:13px;color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${sign}${fmt(amt,tx.currency)}</span>
+    </div>`;
+  }).join('');
+  // Compute day total
+  let dayExp = 0, dayInc = 0;
+  for (const tx of dayTxs) {
+    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+    const inDisp = tx.currency === disp ? amt : convert(amt, tx.currency, disp);
+    if (tx.type === 'expense' || tx.type === 'shared') dayExp += inDisp;
+    else if (tx.type === 'income') dayInc += inDisp;
+  }
+  const summary = `<div style="display:flex;gap:8px;margin-bottom:10px">
+    ${dayExp>0?`<div style="flex:1;background:rgba(240,86,90,0.08);border-radius:var(--r-sm);padding:8px 10px;font-size:11px"><span style="color:var(--text4)">Out</span> <span style="color:var(--red);font-family:var(--mono);font-weight:600;float:right">${fmt(dayExp,disp)}</span></div>`:''}
+    ${dayInc>0?`<div style="flex:1;background:rgba(45,217,138,0.08);border-radius:var(--r-sm);padding:8px 10px;font-size:11px"><span style="color:var(--text4)">In</span> <span style="color:var(--green);font-family:var(--mono);font-weight:600;float:right">${fmt(dayInc,disp)}</span></div>`:''}
+  </div>`;
+  openDlg(`📅 ${fmtDFull(dateKey)}`,
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${dayTxs.length} transaction${dayTxs.length>1?'s':''}</div>
+     ${summary}
+     <div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden;max-height:340px;overflow-y:auto">${rows}</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`
+  );
 }
 
 function renderAnalyticsWealth() {
@@ -9073,7 +9712,7 @@ async function saveToDrive() {
     return;
   }
   try {
-    showToast('Saving to Drive... ☁');
+    showLoading('Saving to Drive...');
     const folderId = await getOrCreateFolder();
     const now = new Date();
     const pad = n => String(n).padStart(2,'0');
@@ -9110,9 +9749,11 @@ async function saveToDrive() {
     if (currentPage === 'dashboard') renderDashboard();
     _lastSyncTime = Date.now();
     setSyncStatus('saved');
+    hideLoading();
     showToast(`✅ Saved: ${filename}`);
     await pruneOldBackups(folderId, 10);
   } catch(e) {
+    hideLoading();
     showToast('Save failed: ' + e.message);
     console.error(e);
   }
@@ -9170,7 +9811,7 @@ async function saveSnapshotToDrive(label) {
     return;
   }
   try {
-    showToast('Saving snapshot... 📸');
+    showLoading('Saving snapshot...');
     const folderId = await getOrCreateSubfolder('Snapshots');
     const now = new Date();
     const pad = n => String(n).padStart(2,'0');
@@ -9199,10 +9840,12 @@ async function saveSnapshotToDrive(label) {
     const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
       { method:'POST', headers:{'Authorization':'Bearer '+_gdriveAccessToken}, body: formData });
     if (!res.ok) throw new Error('Upload failed: ' + await res.text());
+    hideLoading();
     showToast(`✅ Snapshot saved: ${label}`);
     await pruneSnapshots(folderId, 20);
     if (currentPage === 'settings') renderSettings();
   } catch(e) {
+    hideLoading();
     showToast('Snapshot save failed: ' + (e.message||'unknown'));
     console.error(e);
   }
@@ -9231,11 +9874,12 @@ async function showSnapshotPicker() {
     return;
   }
   try {
-    showToast('Loading snapshots...');
+    showLoading('Loading snapshots...');
     const folderId = await getOrCreateSubfolder('Snapshots');
     const files = await driveRequest('GET',
       `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20`
     );
+    hideLoading();
     if (!files.files || files.files.length === 0) {
       openDlg('📸 Snapshots',
         `<div style="text-align:center;padding:24px;color:var(--text4)">
@@ -9271,6 +9915,7 @@ async function showSnapshotPicker() {
        <button class="btn btn-primary btn-sm" onclick="closeDlg();openSnapshotSavePrompt()">📸 New Snapshot</button>`
     );
   } catch(e) {
+    hideLoading();
     showToast('Load failed: ' + (e.message||'unknown'));
     console.error(e);
   }
@@ -9288,10 +9933,10 @@ function confirmRestoreSnapshot(fileId, label) {
 
 async function restoreSnapshotNow(fileId, label) {
   try {
+    showLoading('Saving current state...');
     // Auto-snapshot current state first as safety net
-    showToast('Saving current state...');
     await saveSnapshotToDrive('Before restore — ' + (label||'').slice(0,40));
-    showToast('Restoring snapshot...');
+    showLoading('Restoring snapshot...');
     const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
     if (!data || typeof data !== 'object') throw new Error('Invalid snapshot file');
     // Strip metadata before applying
@@ -9299,9 +9944,11 @@ async function restoreSnapshotNow(fileId, label) {
     delete restored._backupMeta;
     db = restored;
     saveDB();
+    hideLoading();
     showToast('✅ Snapshot restored');
     nav('dashboard');
   } catch(e) {
+    hideLoading();
     showToast('Restore failed: ' + (e.message||'unknown'));
     console.error(e);
   }
@@ -9400,11 +10047,12 @@ async function showBackupPicker() {
     return;
   }
   try {
-    showToast('Loading backups...');
+    showLoading('Loading backups...');
     const folderId = await getOrCreateFolder();
     const files = await driveRequest('GET',
       `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'trackbudget' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=10`
     );
+    hideLoading();
     if (!files.files || files.files.length === 0) {
       showToast('No backups found in Drive.');
       return;
@@ -9446,6 +10094,7 @@ async function showBackupPicker() {
     });
 
   } catch(e) {
+    hideLoading();
     const msg = e.message || 'Unknown error';
     if (msg.includes('401') || msg.includes('403')) {
       showToast('Session expired — tap Load again to re-connect');
@@ -9460,7 +10109,7 @@ async function showBackupPicker() {
 async function confirmLoadDriveBackup(fileId) {
   try {
     closeDlg();
-    showToast('Loading backup...');
+    showLoading('Loading backup...');
     const backup = await driveRequest('GET',
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     );
@@ -9473,9 +10122,11 @@ async function confirmLoadDriveBackup(fileId) {
     Object.assign(db, backup);
     Object.assign(db.settings, driveSettings);
     saveDBWithSync();
+    hideLoading();
     showToast('✅ Backup loaded! Reloading...');
     setTimeout(() => location.reload(), 1200);
   } catch(e) {
+    hideLoading();
     showToast('Load failed: ' + e.message);
   }
 }
