@@ -6236,16 +6236,18 @@ function renderAnalyticsOverview() {
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
       // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
       const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
-      expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:''});
+      expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
       expCats[name].total += amt;
+      expCats[name].txs.push(tx);
       expTotal += amt;
     } else if (tx.type === 'income' && !tx.isSettlement && !tx.isAutoReimb) {
       const cat = getCategoryDisplay(tx.categoryId);
       const name = cat.name.replace(/^[^ ]+ /,'');
       // Convert to display currency
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
-      incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:''});
+      incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
       incCats[name].total += amt;
+      incCats[name].txs.push(tx);
       incTotal += amt;
     }
   }
@@ -6283,11 +6285,11 @@ function renderAnalyticsOverview() {
     <div class="form-row fr2" style="margin-bottom:16px">
       <div class="card" style="padding:14px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Expenses by Category</div>
-        ${buildPieChart(expCats, expTotal, 'exp')}
+        ${buildPieChart(expCats, expTotal, 'exp', period)}
       </div>
       <div class="card" style="padding:14px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Income by Category</div>
-        ${buildPieChart(incCats, incTotal, 'inc')}
+        ${buildPieChart(incCats, incTotal, 'inc', period)}
       </div>
     </div>
 
@@ -6379,12 +6381,13 @@ function renderAnalyticsOverview() {
   </div>`;
 }
 
-function buildPieChart(cats, total, prefix) {
+function buildPieChart(cats, total, prefix, period) {
   const entries = Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
   if (!entries.length || total === 0) {
     return `<div style="text-align:center;color:var(--text4);font-size:13px;padding:28px 0">No data yet ✦</div>`;
   }
   const disp = db.displayCurrency || 'PHP';
+  const isMonthly = period && period !== 'ytd';
 
   // Gen Z donut — thick arc, gaps between slices, gradient-feel colors
   const GZ_COLORS = [
@@ -6422,7 +6425,7 @@ function buildPieChart(cats, total, prefix) {
     const large = angle > 180 ? 1 : 0;
     const path = `M ${ox1.toFixed(2)} ${oy1.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${ox2.toFixed(2)} ${oy2.toFixed(2)} L ${ix1.toFixed(2)} ${iy1.toFixed(2)} A ${r} ${r} 0 ${large} 0 ${ix2.toFixed(2)} ${iy2.toFixed(2)} Z`;
     cumAngle += rawAngle;
-    return { path, color: v.gzColor, name, total: v.total, pct: (pct*100).toFixed(1), icon: v.icon };
+    return { path, color: v.gzColor, name, total: v.total, pct: (pct*100).toFixed(1), icon: v.icon, txs: v.txs || [] };
   });
 
   const svgSlices = slices.map((s,i) =>
@@ -6433,18 +6436,45 @@ function buildPieChart(cats, total, prefix) {
   const top = slices[0];
 
   // Legend: scrollable list — all categories visible
-  const legend = slices.map(s =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
-        <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 5px ${s.color}99"></div>
-        <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.icon} ${s.name}</span>
+  // Monthly view: rows are clickable, expand to show transactions
+  // YTD view: flat rows (no dropdown — too many txs to be useful)
+  const legend = slices.map((s, i) => {
+    const drillId = `pie-${prefix}-${i}`;
+    const canExpand = isMonthly && s.txs.length > 0;
+    const txRows = canExpand ? [...s.txs]
+      .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
+      .map(tx => {
+        const acct = db.accounts.find(a => a.id === tx.accountId);
+        const acctName = acct?.name || '—';
+        const txAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+        const dateLabel = fmtD(tx.date);
+        const isExpense = tx.type === 'expense' || tx.type === 'shared';
+        const sign = isExpense ? '−' : '+';
+        const amtColor = isExpense ? 'var(--red)' : 'var(--green)';
+        return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px 8px 22px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1">
+            <span style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</span>
+            ${tx.notes ? `<span style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tx.notes}</span>` : ''}
+          </div>
+          <span style="font-family:var(--mono);color:${amtColor};font-weight:500;font-size:11px;flex-shrink:0;margin-left:6px">${sign}${fmt(txAmt, tx.currency)}</span>
+        </div>`;
+      }).join('') : '';
+
+    return `<div style="border-bottom:1px solid var(--border)">
+      <div ${canExpand?`onclick="toggleSpendingDrill('${drillId}')"`:''} style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;${canExpand?'cursor:pointer':''}">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
+          <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 5px ${s.color}99"></div>
+          <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.icon} ${s.name}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${fmt(s.total,disp)}</span>
+          <span style="font-size:10px;font-weight:700;color:${s.color};min-width:32px;text-align:right">${s.pct}%</span>
+          ${canExpand ? `<span style="font-size:8px;color:var(--text4);transition:transform 0.2s;display:inline-block" id="${drillId}-arrow">▼</span>` : ''}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${fmt(s.total,disp)}</span>
-        <span style="font-size:10px;font-weight:700;color:${s.color};min-width:32px;text-align:right">${s.pct}%</span>
-      </div>
-    </div>`
-  ).join('');
+      ${canExpand ? `<div id="${drillId}" style="display:none;padding-bottom:4px">${txRows}</div>` : ''}
+    </div>`;
+  }).join('');
 
   return `<div>
     <div style="display:flex;justify-content:center;margin-bottom:14px">
