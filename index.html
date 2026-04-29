@@ -156,9 +156,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media(max-width:1023px){.g4{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.g3{grid-template-columns:1fr 1fr}}
 
-.hero-card{border-radius:var(--r-xl);padding:24px;position:relative;overflow:hidden;background:linear-gradient(135deg,#1a0d3d 0%,#2a1659 45%,#1a0d3d 100%);box-shadow:var(--shadow-purple)}
-.hero-card::before{content:'';position:absolute;top:-80px;left:-80px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(157,142,255,0.18) 0%,transparent 65%);pointer-events:none}
-.hero-card::after{content:'';position:absolute;bottom:-100px;right:-60px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(124,109,240,0.16) 0%,transparent 70%);pointer-events:none}
+.hero-card{border-radius:var(--r-xl);padding:24px;position:relative;overflow:hidden;background:linear-gradient(180deg,#1a2235 0%,#141a2a 50%,#0f1320 100%);box-shadow:0 4px 16px rgba(10,12,20,0.3)}
+.hero-card::before{content:'';position:absolute;top:-60px;right:-40px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(80,100,150,0.06) 0%,transparent 65%);pointer-events:none}
+.hero-card::after{content:'';position:absolute;bottom:-80px;left:-60px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(70,90,140,0.05) 0%,transparent 70%);pointer-events:none}
 .hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:rgba(244,242,255,0.65);margin-bottom:10px;font-weight:500;position:relative;z-index:1}
 .hero-amount{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-1.8px;color:#fff;line-height:1;position:relative;z-index:1}
 .hero-currency{font-size:0.55em;color:rgba(255,255,255,0.7);margin-right:2px;font-weight:500;vertical-align:0.18em;letter-spacing:0}
@@ -2323,7 +2323,7 @@ function showQuickAddMenu() {
     { type: 'shared',   icon: '🤝', label: 'Shared',    color: 'var(--amber)'  },
     { type: 'remittance',icon:'📤', label: 'Remittance',color: 'var(--accent3,var(--accent))' },
   ];
-  const itemHTML = items.map((it,i)=>`<div onclick="closeQuickAddMenu();setTimeout(()=>{openAddSheet();setTimeout(()=>setAddType('${it.type}'),60)},80)" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-radius:var(--r-md);transition:background var(--transition);animation:qaSlideIn 0.${24+i*2}s cubic-bezier(0.32,0.72,0,1) ${i*0.04}s both" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+  const itemHTML = items.map((it,i)=>`<div onclick="closeQuickAddMenu();setTimeout(()=>openAddSheet({type:'${it.type}'}),100)" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;border-radius:var(--r-md);transition:background var(--transition);animation:qaSlideIn 0.${24+i*2}s cubic-bezier(0.32,0.72,0,1) ${i*0.04}s both" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
     <div style="width:42px;height:42px;border-radius:50%;background:${it.color}22;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${it.icon}</div>
     <div style="font-size:15px;font-weight:600;color:var(--text)">${it.label}</div>
   </div>`).join('');
@@ -3636,7 +3636,7 @@ function renderTxLog() {
 
   if (!txHTML) {
     txHTML = searchActive
-      ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
+      ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]))}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
       : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
   }
 
@@ -3686,25 +3686,29 @@ function renderTxLog() {
 
 // ── SMART SEARCH HELPERS ──
 let _txSearchDebounce = null;
+let _txSearchCursorPos = null;
 function onTxSearchInput(val) {
   // Debounce: re-render only after 180ms of no typing
   window._txSearchQuery = val;
+  // Capture cursor position before debounce fires
+  const inputNow = document.getElementById('tx-search-input');
+  _txSearchCursorPos = inputNow ? inputNow.selectionStart : null;
   if (_txSearchDebounce) clearTimeout(_txSearchDebounce);
   _txSearchDebounce = setTimeout(() => {
     renderTransactions();
-    // Restore focus to the search input after re-render
+    // Restore focus + cursor position after re-render
     const input = document.getElementById('tx-search-input');
     if (input) {
       input.focus();
-      // Place cursor at end
-      const len = input.value.length;
-      try { input.setSelectionRange(len, len); } catch(e) {}
+      const pos = _txSearchCursorPos != null ? _txSearchCursorPos : input.value.length;
+      try { input.setSelectionRange(pos, pos); } catch(e) {}
     }
   }, 180);
 }
 
 function clearTxSearch() {
   window._txSearchQuery = '';
+  _txSearchCursorPos = null;
   if (_txSearchDebounce) clearTimeout(_txSearchDebounce);
   renderTransactions();
 }
@@ -6469,80 +6473,23 @@ function renderAnalytics() {
   document.getElementById('page-content').innerHTML = tabsHTML + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
-  // Wire up swipe gestures (mobile only)
+  // (Swipe handler is currently disabled — kept as no-op for safety)
   attachAnalyticsSwipe();
+  // If Trends tab is active, scroll the heatmap to far right (most recent)
+  if (_analyticsTab === 'trends') {
+    requestAnimationFrame(() => {
+      const wrap = document.getElementById('heatmap-scroll-wrap');
+      if (wrap) wrap.scrollLeft = wrap.scrollWidth;
+    });
+  }
 }
 
 const ANALYTICS_TABS = ['overview','spending','trends','wealth','forex','external'];
 
 function attachAnalyticsSwipe() {
-  const pane = document.getElementById('analytics-swipe-pane');
-  if (!pane) return;
-  // Disable on desktop (≥1024px) — clicking tabs is faster there
-  if (window.innerWidth >= 1024) return;
-  let startX = 0, startY = 0, startT = 0, dragging = false, locked = false;
-  const onStart = (e) => {
-    const t = e.touches ? e.touches[0] : e;
-    startX = t.clientX; startY = t.clientY; startT = Date.now();
-    dragging = true; locked = false;
-  };
-  const onMove = (e) => {
-    if (!dragging) return;
-    const t = e.touches ? e.touches[0] : e;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    // Lock direction once movement exceeds 8px
-    if (!locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      // Only treat as horizontal swipe if X dominates Y by 1.5x
-      if (Math.abs(dx) > Math.abs(dy) * 1.5) {
-        locked = true;
-        pane.dataset.swiping = '1';
-      } else {
-        // Vertical scroll — abort
-        dragging = false;
-        return;
-      }
-    }
-    if (locked) {
-      // Visual: subtle drag with rubber band at edges
-      const idx = ANALYTICS_TABS.indexOf(_analyticsTab);
-      const atStart = idx === 0 && dx > 0;
-      const atEnd = idx === ANALYTICS_TABS.length - 1 && dx < 0;
-      const drag = (atStart || atEnd) ? dx * 0.25 : dx * 0.6;
-      pane.style.transform = `translateX(${drag}px)`;
-      pane.style.transition = 'none';
-      e.preventDefault?.();
-    }
-  };
-  const onEnd = (e) => {
-    if (!dragging) return;
-    dragging = false;
-    if (!locked) return;
-    pane.dataset.swiping = '';
-    const t = e.changedTouches ? e.changedTouches[0] : e;
-    const dx = t.clientX - startX;
-    const dt = Date.now() - startT;
-    const velocity = Math.abs(dx) / Math.max(dt, 1);
-    const threshold = pane.offsetWidth * 0.25;
-    const idx = ANALYTICS_TABS.indexOf(_analyticsTab);
-    // Spring back to current position first
-    pane.style.transition = 'transform 0.18s cubic-bezier(0.32,0.72,0,1)';
-    pane.style.transform = '';
-    // Decide if swipe should change tab
-    if ((Math.abs(dx) > threshold || velocity > 0.5)) {
-      if (dx < 0 && idx < ANALYTICS_TABS.length - 1) {
-        window._analyticsSwipeDir = 'left'; // swiped left → next tab slides in from right
-        setAnalyticsTab(ANALYTICS_TABS[idx + 1]);
-      } else if (dx > 0 && idx > 0) {
-        window._analyticsSwipeDir = 'right'; // swiped right → prev tab slides in from left
-        setAnalyticsTab(ANALYTICS_TABS[idx - 1]);
-      }
-    }
-  };
-  pane.addEventListener('touchstart', onStart, { passive: true });
-  pane.addEventListener('touchmove', onMove, { passive: false });
-  pane.addEventListener('touchend', onEnd, { passive: true });
-  pane.addEventListener('touchcancel', onEnd, { passive: true });
+  // Disabled per user request — swipe was conflicting with horizontal scroll inside content
+  // (e.g., calendar heatmap on Trends tab). Tab navigation now via click only.
+  return;
 }
 
 function setAnalyticsTab(t) { _analyticsTab=t; renderAnalytics(); }
@@ -7135,13 +7082,20 @@ function renderAnalyticsTrends() {
 // ── SPENDING CALENDAR HEATMAP ──
 // GitHub contribution-style grid showing last 365 days of expense activity
 function renderSpendingHeatmap(disp) {
-  const today = new Date();
-  const todayKey = today.toISOString().split('T')[0];
+  // Helper: format Date as local YYYY-MM-DD (NOT UTC)
+  const localDateKey = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const todayDate = new Date();
+  const todayKey = localDateKey(todayDate);
   // 53 weeks × 7 days = 371 cells, we'll align so today is in the rightmost column
   const NUM_WEEKS = 53;
   const totalDays = NUM_WEEKS * 7;
   // Compute end date (today) and start date
-  const endDate = new Date(today);
+  const endDate = new Date(todayDate);
   // Align end of grid to next Saturday so today's row is complete
   const dayOfWeek = endDate.getDay(); // 0 = Sunday
   const daysToEnd = 6 - dayOfWeek; // pad to next Saturday
@@ -7177,8 +7131,8 @@ function renderSpendingHeatmap(disp) {
       const dateOffset = w * 7 + d;
       const cellDate = new Date(startDate);
       cellDate.setDate(cellDate.getDate() + dateOffset);
-      const key = cellDate.toISOString().split('T')[0];
-      const isFuture = cellDate > today;
+      const key = localDateKey(cellDate);
+      const isFuture = cellDate > todayDate;
       const dayData = dayMap[key];
       const total = dayData?.total || 0;
       // Determine color level (0-4)
@@ -7225,10 +7179,10 @@ function renderSpendingHeatmap(disp) {
   }
   // Current streak (consecutive days up to today including today or yesterday)
   let currentStreak = 0;
-  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
-  let cursor = dayMap[todayKey] ? new Date(today) : (dayMap[yest.toISOString().split('T')[0]] ? yest : null);
+  const yest = new Date(todayDate); yest.setDate(yest.getDate() - 1);
+  let cursor = dayMap[todayKey] ? new Date(todayDate) : (dayMap[localDateKey(yest)] ? yest : null);
   while (cursor) {
-    const ckey = cursor.toISOString().split('T')[0];
+    const ckey = localDateKey(cursor);
     if (dayMap[ckey]) {
       currentStreak++;
       cursor = new Date(cursor); cursor.setDate(cursor.getDate() - 1);
@@ -7284,7 +7238,7 @@ function renderSpendingHeatmap(disp) {
         <div style="text-align:center"><div style="color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">Max day</div><div style="font-family:var(--mono);font-weight:600;color:var(--red);font-size:13px;margin-top:2px">${maxDay.v?fmt(maxDay.v.total,disp):'—'}</div></div>
       </div>
     </div>
-    <div style="overflow-x:auto;padding:14px 4px 4px;margin:0 -4px;-webkit-overflow-scrolling:touch">
+    <div id="heatmap-scroll-wrap" style="overflow-x:auto;padding:14px 4px 4px;margin:0 -4px;-webkit-overflow-scrolling:touch">
       <svg width="${gridWidth + 32}" height="${gridHeight + 24}" style="display:block">
         <g transform="translate(28, 18)">
           ${monthLabelEls}
@@ -7314,10 +7268,20 @@ function showHeatmapTooltip(e, dateKey, total, count) {
     ? `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--text4);margin-top:2px">No expenses</div>`
     : `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--red);font-family:var(--mono);margin-top:2px">${fmt(total, disp)}</div><div style="color:var(--text4);font-size:10px;margin-top:1px">${count} transaction${count>1?'s':''} · tap to view</div>`;
   tip.style.display = 'block';
-  // Position above cursor
+  tip.style.visibility = 'hidden';
+  // Force layout to get accurate measurements after innerHTML change
   const rect = e.target.getBoundingClientRect();
-  tip.style.left = Math.max(8, rect.left - 60) + 'px';
-  tip.style.top = (rect.top - tip.offsetHeight - 8) + 'px';
+  const tipH = tip.offsetHeight;
+  const tipW = tip.offsetWidth;
+  // Clamp to viewport edges
+  const vw = window.innerWidth;
+  let left = rect.left + rect.width/2 - tipW/2;
+  left = Math.max(8, Math.min(left, vw - tipW - 8));
+  let top = rect.top - tipH - 8;
+  if (top < 8) top = rect.bottom + 8; // flip to below if no room above
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+  tip.style.visibility = 'visible';
 }
 
 function hideHeatmapTooltip() {
@@ -9533,7 +9497,14 @@ function initGoogleDrive() {
     scope: GDRIVE_SCOPES,
     callback: async (tokenResponse) => {
       if (tokenResponse.error) {
-        showToast('Google Sign In failed: ' + tokenResponse.error);
+        const errMap = {
+          'popup_closed_by_user': 'Sign-in cancelled',
+          'access_denied': 'Access denied — accept the permissions to continue',
+          'popup_blocked_by_browser': 'Pop-up blocked — allow pop-ups for this site',
+          'idpiframe_initialization_failed': 'Browser blocking Google sign-in — try allowing third-party cookies',
+        };
+        const friendly = errMap[tokenResponse.error] || tokenResponse.error;
+        showToast('⚠ Drive sign-in failed: ' + friendly, 5000);
         return;
       }
       _gdriveAccessToken = tokenResponse.access_token;
@@ -10395,13 +10366,87 @@ function renderDeviceIndicator() {
   const browser = last?.browser || getBrowserName();
   const when = last?.at ? relativeTime(last.at) : 'now';
   const icon = getDeviceIcon(device);
-  const tooltip = `${device} · ${browser} · ${when}`;
-  return `<button class="btn btn-ghost btn-sm" onclick="openDeviceHistory()" title="${tooltip}" 
+  const connected = db.settings?.googleDriveConnected;
+  const cloudIcon = connected ? '☁️' : '☁︎';
+  const tooltip = connected
+    ? `Drive: synced ${when} · tap for backups · ${device} · ${browser}`
+    : `Drive: not connected · tap to connect · ${device} · ${browser}`;
+  return `<button class="btn btn-ghost btn-sm" onclick="openSyncShortcuts()" title="${tooltip}"
     style="padding:6px 10px;font-size:14px;display:flex;align-items:center;gap:6px"
     aria-label="${tooltip}">
-    <span>${icon}</span>
+    <span style="opacity:${connected?'1':'0.5'}">${cloudIcon}</span>
     <span style="font-size:11px;color:var(--text3);font-weight:500">${when}</span>
   </button>`;
+}
+
+// Drive backups sheet — launched when user taps the sync time pill in the header.
+// Combines: Save / Load (active backups) + access to Snapshots + device history fallback.
+function openSyncShortcuts() {
+  const connected = db.settings?.googleDriveConnected;
+  const last = db.settings?.lastActiveDevice;
+  const device = last?.device || getDeviceName();
+  const browser = last?.browser || getBrowserName();
+  const when = last?.at ? relativeTime(last.at) : 'now';
+  const icon = getDeviceIcon(device);
+  const histCount = (db.settings?.deviceHistory || []).length;
+
+  let driveBlock;
+  if (!connected) {
+    driveBlock = `
+      <div style="text-align:center;padding:18px 0 16px">
+        <div style="font-size:42px;margin-bottom:10px">☁️</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px">Sync with Google Drive</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5">Backups will go to <code style="background:var(--bg3);padding:1px 6px;border-radius:4px">TrackBudget/Backups</code> in your Drive.</div>
+        <button onclick="closeSheet('gen');setTimeout(connectDrive,150)" style="display:inline-flex;align-items:center;gap:10px;padding:11px 22px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
+          Sign in with Google
+        </button>
+        <div style="font-size:11px;color:var(--text4);margin-top:14px;line-height:1.5">Login not working? Make sure third-party cookies and pop-ups are allowed for this site.</div>
+      </div>`;
+  } else {
+    const email = db.settings.googleDriveEmail || 'Connected';
+    const lastSync = db.settings.lastDriveSync
+      ? relativeTime(db.settings.lastDriveSync)
+      : 'never';
+    driveBlock = `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(45,217,138,0.08);border:1px solid rgba(45,217,138,0.2);border-radius:var(--r-md);margin-bottom:14px">
+        <span style="font-size:22px">☁️</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--green)">Drive Connected</div>
+          <div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${email}</div>
+          <div style="font-size:11px;color:var(--text4)">Last sync: ${lastSync}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">Backups · TrackBudget/Backups</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');setTimeout(saveToDrive,120)">☁ Save to Drive now</button>
+        <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(loadFromDrive,120)">📥 Load from Drive</button>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin:18px 0 8px">Snapshots</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(openSnapshotSavePrompt,120)">📸 Save labeled snapshot</button>
+        <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(showSnapshotPicker,120)">📂 Browse snapshots</button>
+      </div>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Disconnect</div>
+        <button class="btn btn-ghost btn-full" style="color:var(--red)" onclick="closeSheet('gen');setTimeout(disconnectDrive,120)">🔌 Disconnect Drive</button>
+      </div>`;
+  }
+
+  openSheet('gen','Drive Sync', `
+    ${driveBlock}
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">This device</div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md)">
+        <div style="font-size:18px">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500">${device}</div>
+          <div style="font-size:11px;color:var(--text4)">${browser} · active ${when}</div>
+        </div>
+      </div>
+      ${histCount > 1 ? `<button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:12px" onclick="closeSheet('gen');setTimeout(openDeviceHistory,120)">View device history (${histCount})</button>` : ''}
+    </div>
+  `);
 }
 
 function openDeviceHistory() {
