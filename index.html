@@ -1582,42 +1582,42 @@ function generateInsights() {
       t.currency===bgt.currency
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
     const pct = spent / bgt.limit;
-    if (pct > 1) insights.push({icon:'🔴',text:`<strong>${bgt.location} budget exceeded</strong> — spent ${sym(bgt.currency)}${spent.toFixed(0)} of ${sym(bgt.currency)}${bgt.limit} limit this month.`});
-    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
+    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${sym(bgt.currency)}${spent.toFixed(0)} of ${sym(bgt.currency)}${bgt.limit} limit this month.`});
+    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
   }
 
   // MoM change
   if (prev.expense > 0) {
     const chg = ((curr.expense - prev.expense) / prev.expense) * 100;
-    if (chg > 25) insights.push({icon:'📈',text:`Expenses up <strong>${chg.toFixed(0)}%</strong> vs last month. Consider reviewing discretionary spending.`});
+    if (chg > 25) insights.push({icon:'📈',urgent:true,text:`Expenses up <strong>${chg.toFixed(0)}%</strong> vs last month. Consider reviewing discretionary spending.`});
   }
 
   // Salary FX reminder
   const recentSalary = db.transactions.filter(t=>t.type==='income'&&!t.isSettlement&&t.date&&t.date.startsWith(mk)).slice(-1)[0];
   if (recentSalary && recentSalary.currency !== 'PHP') {
-    insights.push({icon:'💱',text:`Salary received in <strong>${recentSalary.currency}</strong> — update your PHP exchange rate for accurate tracking.`});
+    insights.push({icon:'💱',urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your PHP exchange rate for accurate tracking.`});
   }
 
   // Drive sync reminder
   if (!db.settings.lastDriveSync || new Date()-new Date(db.settings.lastDriveSync) > 86400000*2) {
-    insights.push({icon:'☁️',text:`Backup is <strong>overdue</strong> — last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
+    insights.push({icon:'☁️',urgent:true,text:`Backup is <strong>overdue</strong> — last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
   }
 
   // Loan deadline
   const urgentLoans = [...db.loans.lent, ...db.loans.borrowed].filter(l=>!l.settled&&l.dueDate&&daysUntil(l.dueDate)!==null&&daysUntil(l.dueDate)<=7);
-  for (const l of urgentLoans) insights.push({icon:'🤝',text:`Loan <strong>${l.personName}</strong> due in ${daysUntil(l.dueDate)} day(s) — ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
+  for (const l of urgentLoans) insights.push({icon:'🤝',urgent:true,text:`Loan <strong>${l.personName}</strong> due in ${daysUntil(l.dueDate)} day(s) — ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
 
   // No income this month
   if (dayOfMonth > 10 && curr.income === 0) {
-    insights.push({icon:'💰',text:`No income recorded yet this month. Remember to log your salary or other income.`});
+    insights.push({icon:'💰',urgent:true,text:`No income recorded yet this month. Remember to log your salary or other income.`});
   }
 
-  // Net positive
+  // Net positive (positive vibes — NOT urgent)
   if (curr.income > 0 && curr.expense > 0 && curr.net > 0) {
-    insights.push({icon:'✅',text:`You're <strong>${fmt(curr.net, db.displayCurrency||'PHP')}</strong> net positive this month. Great job!`});
+    insights.push({icon:'✅',urgent:false,text:`You're <strong>${fmt(curr.net, db.displayCurrency||'PHP')}</strong> net positive this month. Great job!`});
   }
 
-  if (insights.length === 0) insights.push({icon:'✨',text:`All clear — your finances look healthy this month! Keep it up.`});
+  if (insights.length === 0) insights.push({icon:'✨',urgent:false,text:`All clear — your finances look healthy this month! Keep it up.`});
   return insights;
 }
 
@@ -1750,18 +1750,18 @@ function renderDashboard() {
     </div>`;
   }
 
-  // Insights cards
-  const insightHTML = insights.map((ins,i)=>`
-    <div class="ai-card" style="${i>0?'margin-top:8px':''}">
-      <div class="ai-dot">${ins.icon}</div>
-      <div style="flex:1">
-        <div class="ai-text">${ins.text}</div>
-        ${ins.actions?`<div class="ai-actions">
-          <button class="btn btn-ghost btn-sm" onclick="openDriveSheet()">☁ Save to Drive</button>
-          <button class="btn btn-ghost btn-sm" onclick="openDriveLoad()">📥 Load from Drive</button>
-        </div>`:''}
-      </div>
-    </div>`).join('');
+  // Insights — only show pill if there are urgent ones, navigates to AI Insights
+  let insightHTML = '';
+  const urgentInsights = insights.filter(i => i.urgent);
+  if (urgentInsights.length > 0) {
+    const count = urgentInsights.length;
+    const previewIcon = urgentInsights[0].icon;
+    insightHTML = `<div onclick="nav('ai')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border:1px solid var(--amber-bg,var(--border));border-left:3px solid var(--amber);border-radius:var(--r-md);cursor:pointer;user-select:none;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${previewIcon}</div>
+      <div style="flex:1;font-size:13px;color:var(--text)"><strong>${count} insight${count>1?'s':''}</strong> need${count>1?'':'s'} attention</div>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.5;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>`;
+  }
 
   // Assets & Liabilities
   const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
@@ -1826,19 +1826,7 @@ function renderDashboard() {
 
   // Assets & Liabilities now rendered inside hero card
 
-  // Sync status
-  const syncOk = db.settings.lastDriveSync && new Date()-new Date(db.settings.lastDriveSync) < 86400000;
-  const syncHTML = `<div class="sync-bar">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="sync-dot ${syncOk?'sync-dot-ok':'sync-dot-warn'}"></div>
-      <span style="font-size:12px;color:var(--text3)">Drive: ${db.settings.googleDriveConnected ? (syncOk?'Synced':'Sync due') : 'Not connected'}</span>
-      ${db.settings.lastDriveSync?`<span style="font-size:11px;color:var(--text4)">${fmtDFull(db.settings.lastDriveSync.split('T')[0])}</span>`:''}
-    </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-ghost btn-sm" onclick="openDriveSheet()" style="padding:5px 10px;font-size:11px">☁ Save</button>
-      <button class="btn btn-ghost btn-sm" onclick="openDriveLoad()" style="padding:5px 10px;font-size:11px">📥 Load</button>
-    </div>
-  </div>`;
+  // Sync bar removed — sync indicator is in page header, Load is in Settings
 
 
   // 4-metric grid
@@ -1918,9 +1906,7 @@ function renderDashboard() {
 
     ${metricsHTML}
 
-    ${syncHTML}
-
-    <div style="margin-bottom:16px">${insightHTML}</div>
+    ${insightHTML?`<div style="margin-bottom:16px">${insightHTML}</div>`:''}
 
     ${budgetHTML?`<div style="margin-bottom:16px">
       <div class="section-hdr"><div class="section-title">Budget Tracker</div><span class="section-action" onclick="nav('settings')">Manage</span></div>
@@ -6655,6 +6641,15 @@ function toggleSpendingDrill(id) {
       arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
     }
   }
+}
+
+function toggleDashInsights() {
+  const body = document.getElementById('dash-insights-body');
+  const arrow = document.getElementById('dash-insights-arrow');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
 function renderAnalyticsTrends() {
