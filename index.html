@@ -4358,7 +4358,7 @@ function openEditTransfer(txId) {
   let existingCustomRate = '';
   if (tx.toAmount != null && toAcct && tx.currency !== toAcct.currency) {
     const derivedRate = tx.currency === 'PHP' ? tx.amount / tx.toAmount : tx.toAmount / tx.amount;
-    if (Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = derivedRate.toFixed(4);
+    if (Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = String(derivedRate);
   }
   const hasCustomRate = existingCustomRate !== '';
   openSheet('gen','Edit Transfer',`
@@ -7416,47 +7416,138 @@ function renderAnalyticsWealth() {
 
 function renderAnalyticsForex() {
   const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
-  if (currencies.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">💱</div><div class="empty-text">No tracked currencies</div></div>`;
+  if (currencies.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">💱</div><div class="empty-text">No tracked currencies</div><div class="empty-sub">Add currencies in Settings → FX Rates</div></div>`;
+
+  // Build last 12 months
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+      label: d.toLocaleString('en',{month:'short'}),
+      year: d.getFullYear()
+    });
+  }
 
   let html = '<div class="page-pad">';
+
   for (const curr of currencies) {
-    const history = (db.fxHistory[curr] || []).slice(-12);
+    const history = db.fxHistory[curr] || [];
     const currentRate = db.fxRates[curr] || 0;
-    const firstRate = history[0]?.rate || currentRate;
-    const chg = firstRate > 0 ? ((currentRate-firstRate)/firstRate*100) : 0;
-
-    let sparkline = '';
-    if (history.length > 1) {
-      const max = Math.max(...history.map(h=>h.rate));
-      const min = Math.min(...history.map(h=>h.rate));
-      const range = max - min || 1;
-      const pts = history.map((h,i)=>{
-        const x = (i/(history.length-1)*180).toFixed(1);
-        const y = (30 - ((h.rate-min)/range*28)).toFixed(1);
-        return `${x},${y}`;
-      }).join(' ');
-      sparkline = `<svg viewBox="0 0 180 32" style="width:90px;height:24px"><polyline points="${pts}" fill="none" stroke="${chg>=0?'var(--green)':'var(--red)'}" stroke-width="1.5"/></svg>`;
-    }
-
     const currInfo = CURRENCIES.find(c=>c.code===curr) || {flag:'💵',name:curr};
-    html += `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+
+    // Map each month to a rate using closest available snapshot
+    const monthRates = months.map(m => {
+      const entries = history.filter(h => h.date && h.date.startsWith(m.key));
+      if (entries.length > 0) return entries[entries.length - 1].rate;
+      const before = history.filter(h => h.date && h.date < m.key + '-32');
+      if (before.length > 0) return before[before.length - 1].rate;
+      return null;
+    });
+
+    // Forward-fill nulls with last known rate
+    let lastKnown = currentRate;
+    const filledRates = [...monthRates].reverse().map(r => {
+      if (r !== null) { lastKnown = r; return r; }
+      return lastKnown;
+    }).reverse();
+    filledRates[filledRates.length - 1] = currentRate;
+
+    const validRates = filledRates.filter(r => r > 0);
+    const minRate = Math.min(...validRates);
+    const maxRate = Math.max(...validRates);
+    const range = maxRate - minRate || currentRate * 0.01 || 1;
+    const firstRate = filledRates[0] || currentRate;
+    const chg = firstRate > 0 ? ((currentRate - firstRate) / firstRate * 100) : 0;
+    const chgPos = chg >= 0;
+    const color = chgPos ? 'var(--green)' : 'var(--red)';
+    const colorRgb = chgPos ? '22,163,74' : '220,38,38';
+
+    const W = 320, H = 88, padL = 8, padR = 8, padT = 12, padB = 22;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    const pts = filledRates.map((r, i) => ({
+      x: +(padL + (i / (months.length - 1)) * chartW).toFixed(1),
+      y: +(padT + chartH - ((r - minRate) / range * chartH)).toFixed(1),
+      r, m: months[i]
+    }));
+
+    const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
+    const areaPath = `M${pts[0].x},${(padT + chartH).toFixed(1)} ` + pts.map(p => `L${p.x},${p.y}`).join(' ') + ` L${pts[pts.length-1].x},${(padT + chartH).toFixed(1)} Z`;
+    const lastPt = pts[pts.length - 1];
+    const maxIdx = filledRates.indexOf(maxRate);
+    const minIdx = filledRates.indexOf(minRate);
+
+    // Month labels — Jan + every 3rd + last
+    const labelEls = pts.map((p, i) => {
+      const showYear = p.m.label === 'Jan';
+      if (i % 3 !== 0 && i !== pts.length - 1) return '';
+      const isLast = i === pts.length - 1;
+      const txt = showYear ? `${p.m.label} '${String(p.m.year).slice(2)}` : p.m.label;
+      return `<text x="${p.x}" y="${H - 4}" text-anchor="middle" font-size="8" fill="${isLast?'var(--accent)':'var(--text4)'}" font-family="system-ui" font-weight="${isLast?'600':'400'}">${txt}</text>`;
+    }).join('');
+
+    // Gridlines at min/max
+    const gridTop = (padT).toFixed(1);
+    const gridBot = (padT + chartH).toFixed(1);
+
+    html += `<div class="card" style="margin-bottom:14px;padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">${currInfo.flag}</span>
+          <span style="font-size:22px">${currInfo.flag}</span>
           <div>
-            <div style="font-size:14px;font-weight:600">${curr}</div>
-            <div style="font-size:11px;color:var(--text3)">1 ${curr} = <span style="font-family:var(--mono);color:var(--text)">₱${currentRate.toFixed(4)}</span></div>
+            <div style="font-size:15px;font-weight:700;letter-spacing:-0.3px">${curr} <span style="font-size:11px;font-weight:400;color:var(--text3)">${currInfo.name||''}</span></div>
+            <div style="font-size:12px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</span></div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          ${sparkline}
-          <span class="pill ${chg>=0?'pill-green':'pill-red'}">${chg>=0?'+':''}${chg.toFixed(1)}%</span>
+        <div style="text-align:right">
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:${color};letter-spacing:-0.5px">${chgPos?'+':''}${chg.toFixed(2)}%</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:1px">past 12 months</div>
+        </div>
+      </div>
+
+      <div style="margin:0 -4px">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="fg-${curr}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgb(${colorRgb})" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="rgb(${colorRgb})" stop-opacity="0.01"/>
+            </linearGradient>
+          </defs>
+          <line x1="${padL}" y1="${gridTop}" x2="${W-padR}" y2="${gridTop}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+          <line x1="${padL}" y1="${gridBot}" x2="${W-padR}" y2="${gridBot}" stroke="var(--border)" stroke-width="0.5"/>
+          <path d="${areaPath}" fill="url(#fg-${curr})"/>
+          <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="${lastPt.x}" cy="${lastPt.y}" r="3.5" fill="${color}" stroke="var(--bg2)" stroke-width="2"/>
+          ${labelEls}
+        </svg>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">₱${maxRate.toFixed(4)}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[maxIdx]?.label} ${months[maxIdx]?.year}</div>
+        </div>
+        <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:1px">per 1 ${curr}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">₱${minRate.toFixed(4)}</div>
+          <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[minIdx]?.label} ${months[minIdx]?.year}</div>
         </div>
       </div>
     </div>`;
   }
+
   html += renderInlineInsights(['fx']);
-  html += `<button class="btn btn-ghost btn-sm" onclick="nav('settings')">Update FX Rates →</button></div>`;
+  html += `<button class="btn btn-ghost btn-sm" onclick="nav('settings')" style="margin-top:4px">Update FX Rates →</button></div>`;
   return html;
 }
 
@@ -8642,56 +8733,86 @@ function renderFXTab() {
   const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
 
   let html = `<div class="page-pad">
-    <div class="ai-card" style="margin-bottom:16px">
-      <div class="ai-dot">💡</div>
-      <div class="ai-text">FX rates are anchored by <strong>Remittance</strong> events. Each entry is a rate period — all transactions in foreign currency use the latest rate on or before their date. Edit a rate to retroactively recompute PHP equivalents.</div>
-    </div>`;
+    <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend.</div>`;
 
   for (const c of currencies) {
-    const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵'};
+    const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵',name:c};
     const history = (db.fxHistory[c] || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
     const current = db.fxRates[c] || 1;
+    const prev = history[1]?.rate;
+    const chg = prev ? ((current-prev)/prev*100) : null;
+    const chgColor = chg === null ? 'var(--text4)' : chg >= 0 ? 'var(--green)' : 'var(--red)';
+    const chgTxt = chg !== null ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : '';
 
-    html += `<div class="card" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:18px">${info.flag}</span>
+    html += `<div class="card tap-shrink" style="margin-bottom:10px;cursor:pointer" onclick="openFxHistoryPage('${c}')">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">${info.flag}</span>
           <div>
-            <div style="font-size:15px;font-weight:600">${c}</div>
-            <div style="font-size:11px;color:var(--text3)">Current: 1 ${c} = ₱${current.toFixed(4)}</div>
+            <div style="font-size:15px;font-weight:600;letter-spacing:-0.3px">${c}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${current.toFixed(4)}</span></div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="openAddFxHistoryDlg('${c}')" style="font-size:12px">+ Add Rate</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="text-align:right">
+            ${chgTxt ? `<div style="font-size:12px;font-weight:600;color:${chgColor}">${chgTxt}</div>` : ''}
+            <div style="font-size:10px;color:var(--text4);margin-top:1px">Rate History (${history.length})</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Rate History (${history.length})</div>`;
-
-    if (history.length === 0) {
-      html += `<div style="padding:12px;text-align:center;color:var(--text4);font-size:12px">No rate history. Log a Remittance or add manually.</div>`;
-    } else {
-      html += history.map((entry, i) => {
-        const sourceIcon = entry.source === 'remittance' ? '📤' : entry.source === 'baseline' ? '🌱' : '✏️';
-        const sourceLabel = entry.source || 'manual';
-        const isLatest = i === 0;
-        return `<div class="fx-history-row" style="display:flex;align-items:center;gap:8px;padding:10px;border-top:1px solid var(--border);${isLatest?'background:var(--bg3)':''}">
-          <span style="font-size:14px" title="${sourceLabel}">${sourceIcon}</span>
-          <div style="flex:1;min-width:0">
-            <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${c}" data-idx="${i}" style="font-size:12px;padding:5px 8px;width:140px">
-          </div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <span style="color:var(--text3);font-size:12px">₱</span>
-            <input class="form-input fx-hist-rate" type="number" step="any" value="${entry.rate}" data-curr="${c}" data-idx="${i}" style="width:90px;padding:5px 8px;text-align:right;font-size:13px">
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${c}', ${i})" style="font-size:11px;padding:4px 8px">Save</button>
-          ${entry.source !== 'baseline' ? `<button class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${c}', ${i})" style="color:var(--red);font-size:14px;padding:4px 6px">×</button>` : ''}
-        </div>`;
-      }).join('');
-    }
-
-    html += `</div>`;
+    </div>`;
   }
 
   html += `</div>`;
   return html;
+}
+
+function openFxHistoryPage(currency) {
+  const info = CURRENCIES.find(x=>x.code===currency)||{flag:'💵',name:currency};
+
+  function buildBody() {
+    // Always read fresh from db (not captured at call time)
+    const current = db.fxRates[currency] || 1;
+    const history = (db.fxHistory[currency] || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
+    const rows = history.length === 0
+      ? `<div style="padding:24px;text-align:center;color:var(--text4);font-size:13px">No rate history yet.<br>Log a Remittance or add manually.</div>`
+      : history.map((entry, i) => {
+          const sourceIcon = entry.source==='remittance'?'📤':entry.source==='baseline'?'🌱':'✏️';
+          const isLatest = i===0;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--border);${isLatest?'background:var(--accent-bg)':''}">
+            <span style="font-size:13px;flex-shrink:0">${sourceIcon}</span>
+            <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 8px;flex:1;min-width:0;max-width:140px">
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <span style="color:var(--text3);font-size:12px">₱</span>
+              <input class="form-input fx-hist-rate" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px">
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${currency}',${i})" style="font-size:11px;padding:4px 8px;flex-shrink:0">Save</button>
+            ${entry.source!=='baseline'?`<button class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${currency}',${i})" style="color:var(--red);font-size:14px;padding:4px 6px;flex-shrink:0">×</button>`:''}
+          </div>`;
+        }).join('');
+
+    openSheet('gen', `${info.flag} ${currency} — Rate History`,
+      `<div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Current Rate</div>
+            <div style="font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:-0.5px">1 ${currency} = <span style="color:var(--accent)">₱${current}</span></div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openAddFxHistoryDlg('${currency}')">+ Add Rate</button>
+        </div>
+        <div style="overflow-y:auto;max-height:50dvh">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);padding:10px 16px 6px;font-weight:600">Rate History (${history.length})</div>
+          ${rows}
+        </div>
+        <div style="padding:12px 16px;font-size:11px;color:var(--text4);line-height:1.5;border-top:1px solid var(--border)">
+          💡 Each entry covers transactions from its date until the next entry. Edit a rate to retroactively recompute FX snapshots.
+        </div>
+      </div>`
+    );
+  }
+
+  buildBody();
 }
 
 function openAddFxHistoryDlg(currency) {
@@ -8720,6 +8841,7 @@ function confirmAddFxHistory(currency) {
   saveDBWithSync();
   closeDlg();
   renderSettings();
+  openFxHistoryPage(currency);
   showToast(`${currency} rate added for ${date}`);
 }
 
@@ -8830,10 +8952,12 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
     }
     saveDBWithSync();
     renderSettings();
+    openFxHistoryPage(currency);
     showToast(`Rate updated & ${updated} tx snapshots recomputed`);
   } else {
     saveDBWithSync();
     renderSettings();
+    openFxHistoryPage(currency);
     showToast('Rate updated (snapshots unchanged)');
   }
 }
@@ -8864,6 +8988,7 @@ function confirmDeleteFxHistory(currency, idx) {
   saveDBWithSync();
   closeDlg();
   renderSettings();
+  openFxHistoryPage(currency);
   showToast('Rate entry deleted');
 }
 
