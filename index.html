@@ -148,16 +148,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .metric-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow)}
 .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .metric-value{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-0.6px;color:var(--text)}
-.metric-num{font-size:clamp(11px,2.6vw,16px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.02em}
+.metric-num{font-size:clamp(10px,2.2vw,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:480px){
   .metric-card{padding:10px 11px}
-  .metric-label{font-size:9.5px;letter-spacing:0.05em;margin-bottom:5px}
-  .metric-num{font-size:clamp(10px,3.2vw,14px)}
-  .metric-sub{font-size:9.5px}
+  .metric-label{font-size:9px;letter-spacing:0.04em;margin-bottom:4px}
+  .metric-num{font-size:clamp(10px,3vw,13px)}
+  .metric-sub{font-size:9px}
 }
 @media(max-width:360px){
-  .metric-card{padding:9px 9px}
-  .metric-num{font-size:clamp(9.5px,3vw,12px)}
+  .metric-num{font-size:clamp(9px,2.8vw,11px)}
 }
 .metric-sub{font-size:11px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .metric-grid{display:grid;gap:10px}
@@ -1994,25 +1993,25 @@ function renderDashboard() {
   const debtsCount = db.loans.borrowed.filter(l=>!l.settled).length;
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
   const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px">
-    <div class="metric-card" style="cursor:pointer;min-width:0" onclick="nav('accounts')">
-      <div class="metric-label">Cash & Wallets</div>
-      <div class="metric-value metric-num">${fmt(fromPhp(cashTotal,disp),disp)}</div>
-      <div class="metric-sub">${cashAcctCount} accounts</div>
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('accounts')">
+      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">CASH &amp; WALLETS</div>
+      <div class="metric-num" style="font-family:var(--mono);font-weight:700;color:var(--text);letter-spacing:-0.02em">${fmt(fromPhp(cashTotal,disp),disp)}</div>
+      <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${cashAcctCount} accounts<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="cursor:pointer;min-width:0" onclick="nav('loans')">
-      <div class="metric-label">Loans Out</div>
-      <div class="metric-value metric-num" style="color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
-      <div class="metric-sub">${loansOutCount} active</div>
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
+      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">LOANS OUT</div>
+      <div class="metric-num" style="font-family:var(--mono);font-weight:700;color:var(--amber);letter-spacing:-0.02em">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
+      <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${loansOutCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="cursor:pointer;min-width:0" onclick="nav('loans')">
-      <div class="metric-label">Debts</div>
-      <div class="metric-value metric-num" style="color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
-      <div class="metric-sub">${debtsCount} active</div>
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
+      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">DEBTS</div>
+      <div class="metric-num" style="font-family:var(--mono);font-weight:700;color:var(--red);letter-spacing:-0.02em">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
+      <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${debtsCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="cursor:pointer;min-width:0" onclick="nav('transactions')">
-      <div class="metric-label">Txns This Month</div>
-      <div class="metric-value metric-num">${txnsThisMonth}</div>
-      <div class="metric-sub">transactions</div>
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('transactions')">
+      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">TXNS THIS MONTH</div>
+      <div class="metric-num" style="font-family:var(--mono);font-weight:700;color:var(--text);letter-spacing:-0.02em">${txnsThisMonth}</div>
+      <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">transactions<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
   </div>`;
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
