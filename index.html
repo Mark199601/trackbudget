@@ -547,7 +547,7 @@ option{background:var(--bg3);color:var(--text)}
     </div>
     <div class="sb-section">Overview</div>
     <div class="sb-item active" id="sn-dashboard" onclick="nav('dashboard')"><div class="si-icon">⊞</div>Dashboard</div>
-    <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon">📊</div>Analytics</div>
+    <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon">📊</div>Analytics<span class="si-badge" id="analytics-badge" style="display:none">!</span></div>
     <div class="sb-item" id="sn-ai" onclick="nav('ai')"><div class="si-icon">🤖</div>AI Insights<span class="si-badge" id="ai-badge" style="display:none">!</span></div>
     <div class="sb-item" id="sn-installments" onclick="nav('installments')"><div class="si-icon">💳</div>Installments</div>
     <div class="sb-divider"></div>
@@ -1825,6 +1825,16 @@ function checkAlerts() {
   const loanAlerts = _alertCache.filter(a=>a.type==='loan').length;
   const loansBadge = document.getElementById('loans-badge');
   if (loansBadge) { loansBadge.style.display = loanAlerts>0?'':'none'; loansBadge.textContent=loanAlerts; }
+
+  // Update analytics badge — show when any budget exceeded
+  const budgetAlerts = db.budgets.filter(b=>b.active).filter(bgt=>{
+    const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
+      .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
+    return spent > bgt.limit;
+  }).length;
+  const analyticsBadge = document.getElementById('analytics-badge');
+  if (analyticsBadge) { analyticsBadge.style.display = budgetAlerts>0?'':'none'; analyticsBadge.textContent='!'; }
+
   return _alertCache;
 }
 
@@ -1910,6 +1920,54 @@ function renderDashboard() {
         <span>${a.msg}</span>
       </div>`).join('')}
     </div>`;
+  }
+
+  // Onboarding checklist — appears only if any step is incomplete AND not dismissed
+  const dismissedOnboarding = localStorage.getItem('tb_onboard_dismissed') === '1';
+  let onboardChecklistHTML = '';
+  if (!dismissedOnboarding) {
+    const steps = [
+      { id:'profile', label:'Set your nickname & country', done: !!(db.profile?.nickname && db.profile?.country), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'profile\'),50)' },
+      { id:'accounts', label:'Add your first account', done: db.accounts.filter(a=>!a.archived).length > 0, action: 'nav(\'accounts\')' },
+      { id:'fx', label:'Set FX rates for tracked currencies', done: db.trackedCurrencies.filter(c=>c!=='PHP').every(c=>(db.fxRates[c]||0)>0), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'fx\'),50)' },
+      { id:'firsttx', label:'Log your first transaction', done: db.transactions.filter(t=>!t.archived).length > 0, action: 'openAddSheet()' },
+      { id:'budget', label:'Set a monthly budget', done: db.budgets.filter(b=>b.active).length > 0, action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'budgets\'),50)' },
+      { id:'drive', label:'Connect Google Drive (optional)', done: !!db.settings?.googleDriveConnected, action: 'openDriveSheet()', optional: true }
+    ];
+    const doneCount = steps.filter(s=>s.done).length;
+    const totalCount = steps.length;
+    const allDone = doneCount === totalCount;
+    if (!allDone) {
+      const pct = (doneCount / totalCount * 100).toFixed(0);
+      onboardChecklistHTML = `<div style="margin-bottom:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">
+        <div onclick="toggleOnboardChecklist()" style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative">
+            <svg width="36" height="36" viewBox="0 0 36 36" style="position:absolute;inset:0;transform:rotate(-90deg)">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="var(--bg4)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="${(pct*0.94).toFixed(1)} 100" stroke-linecap="round"/>
+            </svg>
+            <span style="font-size:11px;font-weight:700;color:var(--accent);font-family:var(--mono)">${doneCount}/${totalCount}</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">Get started with TrackBudget</div>
+            <div style="font-size:11px;color:var(--text3)">${pct}% complete · ${totalCount-doneCount} step${(totalCount-doneCount)===1?'':'s'} left</div>
+          </div>
+          <svg id="onboard-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="onboard-body" style="display:none;border-top:1px solid var(--border)">
+          ${steps.map(s=>`<div onclick="${s.done?'':s.action}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:${s.done?'default':'pointer'};${s.done?'opacity:0.65':''}" ${!s.done?'onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'transparent\'"':''}>
+            <div style="width:20px;height:20px;border-radius:50%;background:${s.done?'var(--green)':'var(--bg4)'};border:1.5px solid ${s.done?'var(--green)':'var(--border2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              ${s.done?'<svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
+            </div>
+            <div style="flex:1;font-size:12.5px;color:${s.done?'var(--text3)':'var(--text)'};${s.done?'text-decoration:line-through':''}">${s.label}${s.optional?' <span style="font-size:10px;color:var(--text4)">(optional)</span>':''}</div>
+            ${!s.done?'<svg width="12" height="12" viewBox="0 0 14 14" fill="none" style="opacity:0.4"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
+          </div>`).join('')}
+          <div style="padding:10px 14px;text-align:center">
+            <button onclick="dismissOnboardChecklist()" class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--text4)">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    }
   }
 
   // Insights — only show pill if there are urgent ones, navigates to AI Insights
@@ -2026,6 +2084,7 @@ function renderDashboard() {
     </div>
   </div>`;
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
+    ${onboardChecklistHTML}
     ${alertsHTML}
     <div class="hero-card" style="margin-bottom:16px">
       <div class="hero-label">Net Worth</div>
@@ -3595,12 +3654,21 @@ function renderTxLog() {
   const searchActive = searchQuery.length > 0;
   const searchAsNumber = parseFloat(searchQuery);
   const searchIsNumeric = !isNaN(searchAsNumber) && isFinite(searchAsNumber);
+  const dateFrom = window._txDateFrom || null;
+  const dateTo = window._txDateTo || null;
+  const dateRangeActive = !!(dateFrom || dateTo);
 
   const txs = db.transactions.filter(t=> {
     if (t.archived) return false;
-    // When searching, ignore month filter (search across ALL transactions)
-    if (!searchActive) {
+    // When searching OR date range active, ignore month filter
+    if (!searchActive && !dateRangeActive) {
       if (!t.date || !t.date.startsWith(_txMonth)) return false;
+    }
+    // Date range filter
+    if (dateRangeActive) {
+      if (!t.date) return false;
+      if (dateFrom && t.date < dateFrom) return false;
+      if (dateTo && t.date > dateTo) return false;
     }
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
     if (t.isLoanPayment && _txFilter !== 'loans') return false;
@@ -3682,7 +3750,20 @@ function renderTxLog() {
         <input type="text" id="tx-search-input" class="form-input" value="${searchQuery.replace(/"/g, '&quot;')}" placeholder="Search notes, amount, account, category…" oninput="onTxSearchInput(this.value)" style="padding:8px 32px 8px 32px;font-size:13px">
         ${searchActive ? `<button onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0;line-height:1">×</button>` : ''}
       </div>
+      <button onclick="toggleTxDateRange()" class="btn btn-ghost btn-sm" style="padding:8px 10px;font-size:12px;${(window._txDateFrom||window._txDateTo)?'color:var(--accent);border-color:var(--accent)':''}" title="Date range filter">📅</button>
     </div>
+    ${(window._txDateRangeOpen||window._txDateFrom||window._txDateTo) ? `
+    <div style="padding:0 16px 10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px">
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:3px">From</label>
+        <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="padding:6px 8px;font-size:12px">
+      </div>
+      <div style="flex:1;min-width:120px">
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:3px">To</label>
+        <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="padding:6px 8px;font-size:12px">
+      </div>
+      ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="margin-top:14px;padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
+    </div>` : ''}
     <div style="padding:0 16px 8px 16px;border-bottom:1px solid var(--border)">
       <div class="type-dd-wrap" style="position:relative" id="txfilter-container">
         <div onclick="toggleTxFilterDd()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:13px;font-weight:500;user-select:none">
@@ -3732,6 +3813,22 @@ function clearTxSearch() {
   window._txSearchQuery = '';
   _txSearchCursorPos = null;
   if (_txSearchDebounce) clearTimeout(_txSearchDebounce);
+  renderTransactions();
+}
+
+function toggleTxDateRange() {
+  window._txDateRangeOpen = !window._txDateRangeOpen;
+  renderTransactions();
+}
+function setTxDateRange(which, val) {
+  if (which === 'from') window._txDateFrom = val || null;
+  else if (which === 'to') window._txDateTo = val || null;
+  renderTransactions();
+}
+function clearTxDateRange() {
+  window._txDateFrom = null;
+  window._txDateTo = null;
+  window._txDateRangeOpen = false;
   renderTransactions();
 }
 
@@ -5567,30 +5664,66 @@ function openLoanDetail(loanId, direction) {
   const accentColor = isLent ? 'var(--amber)' : 'var(--red)';
   const avatarLetters = loan.personName?.slice(0,2).toUpperCase() || '??';
 
-  // Payment history
+  // Payment history with timeline + running balance
   const payments = getLoanPayments(loanId);
-  const payHistHTML = payments.length > 0 ? `
+  const payHistHTML = payments.length > 0 ? (() => {
+    // Compute running balance (chronological)
+    const sortedAsc = [...payments].sort((a,b)=>a.date.localeCompare(b.date));
+    let bal = loan.amount;
+    const timeline = sortedAsc.map((p)=>{ bal -= p.amount; return { ...p, balAfter: bal }; });
+    // Display newest first
+    timeline.reverse();
+    return `
     <div style="margin-top:4px">
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);padding:12px 0 8px">Payment History</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 0 8px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Payment Timeline · ${payments.length}</div>
+        <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">Total paid: ${fmt(loan.amount-remaining, loan.currency)}</div>
+      </div>
       <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)">
-        ${payments.map((p,i) => {
+        ${timeline.map((p,i) => {
           const destAcct = db.accounts.find(a=>a.id===p.accountId);
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;${i<payments.length-1?'border-bottom:1px solid var(--border)':''};cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:32px;height:32px;border-radius:50%;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:14px">💸</div>
-              <div>
-                <div style="font-size:13px;font-weight:500">${p.notes||'Payment'}</div>
-                <div style="font-size:11px;color:var(--text3)">${fmtDFull(p.date)} · ${destAcct?.name||'?'}</div>
+          const isLast = i === timeline.length - 1;
+          const balPct = loan.amount > 0 ? (p.balAfter/loan.amount*100) : 0;
+          return `<div style="position:relative;${i<timeline.length-1?'border-bottom:1px solid var(--border)':''}">
+            <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
+              <!-- Timeline dot + line -->
+              <div style="position:relative;flex-shrink:0;width:24px;display:flex;flex-direction:column;align-items:center;padding-top:4px">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--green);border:2px solid var(--bg2);box-shadow:0 0 0 1px var(--border);z-index:1"></div>
+                ${!isLast?`<div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:1.5px;height:100%;background:var(--border)"></div>`:''}
               </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="font-family:var(--mono);font-size:13px;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
-              <span style="font-size:10px;color:var(--text4)">›</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                  <div style="font-size:13px;font-weight:600">${fmtDFull(p.date)}</div>
+                  <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+                  <div style="font-size:11px;color:var(--text3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.notes||'Payment'} · ${destAcct?.name||'?'}</div>
+                  <div style="font-size:10px;color:var(--text4);font-family:var(--mono);flex-shrink:0">Bal: ${fmt(p.balAfter,loan.currency)}</div>
+                </div>
+                <!-- Mini progress bar -->
+                <div style="margin-top:5px;height:3px;background:var(--bg4);border-radius:99px;overflow:hidden">
+                  <div style="height:100%;width:${(100-balPct).toFixed(1)}%;background:var(--green);transition:width 0.3s"></div>
+                </div>
+              </div>
             </div>
           </div>`;
         }).join('')}
+        <!-- Origination row -->
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-top:1px solid var(--border);background:var(--bg3);opacity:0.85">
+          <div style="position:relative;flex-shrink:0;width:24px;display:flex;flex-direction:column;align-items:center;padding-top:4px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${accentColor};border:2px solid var(--bg2);box-shadow:0 0 0 1px var(--border)"></div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <div style="font-size:12px;font-weight:600;color:var(--text2)">${fmtDFull(loan.date)} · Loan ${isLent?'lent':'borrowed'}</div>
+              <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${accentColor}">${fmt(loan.amount,loan.currency)}</div>
+            </div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px">Original principal</div>
+          </div>
+        </div>
       </div>
-    </div>` : '';
+    </div>`;
+  })() : '';
 
   openSheet('gen', '', `
     <!-- Person header card -->
@@ -7068,6 +7201,21 @@ function toggleDashInsights() {
   if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
+function toggleOnboardChecklist() {
+  const body = document.getElementById('onboard-body');
+  const arrow = document.getElementById('onboard-arrow');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+function dismissOnboardChecklist() {
+  localStorage.setItem('tb_onboard_dismissed', '1');
+  showToast('Checklist dismissed');
+  if (currentPage === 'dashboard') renderDashboard();
+}
+
 function renderAnalyticsTrends() {
   const disp = db.displayCurrency || 'PHP';
   const months = [];
@@ -7683,23 +7831,128 @@ function renderRecurringTab() {
   if (db.recurringTxs.length === 0) {
     html += `<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">No recurring transactions</div></div>`;
   }
+  const todayStr = today();
   for (const r of [...active, ...inactive]) {
-    html += `<div class="card" style="margin-bottom:8px;cursor:pointer;opacity:${r.active?1:0.6}" onclick="editRecurring('${r.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="display:flex;align-items:center;gap:10px">
+    const isDue = r.active && r.nextDate && r.nextDate <= todayStr;
+    const isOverdue = r.active && r.nextDate && r.nextDate < todayStr;
+    html += `<div class="card" style="margin-bottom:8px;opacity:${r.active?1:0.6};${isDue?'border-color:var(--amber);background:linear-gradient(180deg,var(--amber-bg) 0%,transparent 100%)':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="editRecurring('${r.id}')">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
           <span style="font-size:20px">${getCategoryDisplay(r.categoryId).icon}</span>
-          <div><div style="font-size:13px;font-weight:600">${r.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${r.frequency} · ${fmt(r.amount,r.currency)}</div></div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:600">${r.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${r.frequency} · ${fmt(r.amount,r.currency)}</div>
+          </div>
         </div>
-        <div style="text-align:right">
-          ${r.nextDate?`<div style="font-size:12px;color:var(--text3)">Next: ${fmtD(r.nextDate)}</div>`:''}
+        <div style="text-align:right;flex-shrink:0">
+          ${r.nextDate?`<div style="font-size:12px;color:${isOverdue?'var(--amber)':isDue?'var(--accent)':'var(--text3)'};font-weight:${isDue?'600':'400'}">${isOverdue?'Overdue':'Next'}: ${fmtD(r.nextDate)}</div>`:''}
           <span class="pill ${r.active?'pill-green':'pill-gray'}">${r.active?'Active':'Paused'}</span>
         </div>
       </div>
+      ${isDue?`<div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();logRecurringNow('${r.id}')" style="flex:1;font-size:12px">⚡ Log Now</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();skipRecurring('${r.id}')" style="font-size:12px">Skip</button>
+      </div>`:''}
     </div>`;
   }
   html += `<button class="pool-add-btn" onclick="openAddRecurring()">+ Add Recurring</button></div>`;
   return html;
+}
+
+function advanceRecurringNextDate(r) {
+  if (!r.nextDate) return;
+  const d = new Date(r.nextDate + 'T12:00');
+  switch (r.frequency) {
+    case 'Daily': d.setDate(d.getDate() + 1); break;
+    case 'Weekly': d.setDate(d.getDate() + 7); break;
+    case 'Bi-weekly': d.setDate(d.getDate() + 14); break;
+    case 'Monthly': d.setMonth(d.getMonth() + 1); break;
+    case 'Quarterly': d.setMonth(d.getMonth() + 3); break;
+    case 'Yearly': d.setFullYear(d.getFullYear() + 1); break;
+    default: d.setMonth(d.getMonth() + 1);
+  }
+  r.nextDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function logRecurringNow(id) {
+  const r = db.recurringTxs.find(x => x.id === id);
+  if (!r) return;
+  // Need to know which account — use the first account in the matching currency, or prompt
+  const matchingAccts = db.accounts.filter(a => !a.archived && a.currency === r.currency);
+  if (matchingAccts.length === 0) {
+    showToast(`No ${r.currency} account found — add one first`);
+    return;
+  }
+  // If multiple accts, prompt user; if one, use it directly
+  if (matchingAccts.length === 1) {
+    finalizeRecurringLog(r, matchingAccts[0].id);
+  } else {
+    const acctOpts = matchingAccts.map(a=>`<option value="${a.id}">${a.name} (${fmt(getAcctBalance(a.id),a.currency)})</option>`).join('');
+    openDlg(`Log: ${r.name}`,
+      `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">${fmt(r.amount,r.currency)} · ${getCategoryDisplay(r.categoryId).icon} ${getCategoryDisplay(r.categoryId).name}</div>
+      <div class="form-group"><label class="form-label">From Account</label><select class="form-input" id="rec-acct">${acctOpts}</select></div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="rec-date" value="${today()}"></div>`,
+      `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+       <button class="btn btn-primary btn-sm" onclick="confirmLogRecurring('${id}')">Log</button>`
+    );
+  }
+}
+
+function confirmLogRecurring(id) {
+  const r = db.recurringTxs.find(x => x.id === id);
+  if (!r) return;
+  const acctId = document.getElementById('rec-acct')?.value;
+  const date = document.getElementById('rec-date')?.value || today();
+  if (!acctId) { showToast('Pick an account'); return; }
+  finalizeRecurringLog(r, acctId, date);
+  closeDlg();
+}
+
+function finalizeRecurringLog(r, acctId, date) {
+  // Detect if income or expense based on category type
+  let txType = 'expense';
+  for (const cat of db.categories.income) {
+    if (cat.id === r.categoryId || (cat.subcats||[]).some(sc=>sc.id===r.categoryId)) { txType = 'income'; break; }
+  }
+  const tx = {
+    id: 'tx-' + genId(),
+    type: txType,
+    amount: r.amount,
+    currency: r.currency,
+    categoryId: r.categoryId,
+    accountId: acctId,
+    date: date || today(),
+    time: nowTime(),
+    notes: `Recurring: ${r.name}`,
+    recurringId: r.id,
+    fxSnapshot: buildFxSnapshot(date || today()),
+    createdAt: new Date().toISOString(),
+    archived: false
+  };
+  db.transactions.push(tx);
+  advanceRecurringNextDate(r);
+  saveDBWithSync();
+  renderPlanning();
+  showToast(`✅ Logged ${r.name} · Next: ${fmtD(r.nextDate)}`);
+}
+
+function skipRecurring(id) {
+  const r = db.recurringTxs.find(x => x.id === id);
+  if (!r) return;
+  openDlg(`Skip ${r.name}?`,
+    `<div style="font-size:13px;color:var(--text2)">Move next due date forward without logging a transaction. Next: ${fmtD(r.nextDate)}</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-warning btn-sm" onclick="confirmSkipRecurring('${id}')">Skip</button>`
+  );
+}
+function confirmSkipRecurring(id) {
+  const r = db.recurringTxs.find(x => x.id === id);
+  if (!r) return;
+  advanceRecurringNextDate(r);
+  saveDBWithSync();
+  closeDlg();
+  renderPlanning();
+  showToast(`Skipped — next: ${fmtD(r.nextDate)}`);
 }
 
 function openAddRecurring() {
@@ -8593,6 +8846,23 @@ function renderProfileTab() {
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:12px">Appearance</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${[
+          ['auto','🌗','Auto','6am-6pm light'],
+          ['light','☀️','Light','Always bright'],
+          ['dark','🌙','Dark','Always dim']
+        ].map(([val,icon,label,sub])=>{
+          const active = (db.settings.themeMode==='auto'&&val==='auto') || (db.settings.themeMode!=='auto'&&db.settings.theme===val);
+          return `<div onclick="setThemeMode('${val}')" style="padding:12px 8px;border:1.5px solid ${active?'var(--accent)':'var(--border)'};background:${active?'var(--accent-bg)':'var(--bg2)'};border-radius:var(--r-md);cursor:pointer;text-align:center;transition:all var(--transition);${active?'box-shadow:0 0 0 3px var(--accent-glow)':''}">
+            <div style="font-size:22px;margin-bottom:4px">${icon}</div>
+            <div style="font-size:12px;font-weight:600;color:${active?'var(--accent)':'var(--text)'}">${label}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px">${sub}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
       <div class="section-title" style="margin-bottom:12px">Tracked Currencies</div>
       <div class="tracked-chips" style="margin-bottom:12px">
         ${db.trackedCurrencies.map(c=>{
@@ -9004,7 +9274,38 @@ function saveAllFxRates() { saveDBWithSync(); showToast('FX rates saved!'); }
 
 function renderBudgetsTab() {
   return `<div class="page-pad">
-    ${db.budgets.map(b=>`<div class="card" style="margin-bottom:10px">
+    ${db.budgets.map(b=>{
+      const allocs = b.allocations || {};
+      const allocCount = Object.keys(allocs).length;
+      const totalAllocated = Object.values(allocs).reduce((s,v)=>s+(parseFloat(v)||0),0);
+      const allocPct = b.limit > 0 ? (totalAllocated/b.limit*100) : 0;
+      const mk = currMonthKey();
+
+      // Compute spending per allocated category for this month
+      const subRows = allocCount > 0 ? Object.entries(allocs).map(([catId, limit])=>{
+        const limAmt = parseFloat(limit) || 0;
+        const cat = getCategoryDisplay(catId);
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===b.currency).reduce((s,t)=>{
+          // Match parent category
+          const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
+          if (!txCat || txCat.id !== catId) return s;
+          return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
+        },0);
+        const pct = limAmt > 0 ? Math.min(spent/limAmt*100, 100) : 0;
+        const overBgt = spent > limAmt;
+        const barColor = overBgt ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--accent)';
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px"><span>${cat.icon}</span><span>${cat.name.replace(/^[^ ]+ /,'')}</span>${overBgt?'<span style="color:var(--red);font-size:10px">⚠</span>':''}</div>
+            <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(b.currency)}${limAmt.toFixed(0)}</span></div>
+          </div>
+          <div style="height:4px;background:var(--bg5);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div>
+          </div>
+        </div>`;
+      }).join('') : '';
+
+      return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div><div style="font-size:14px;font-weight:600">${getFlag(b.location)} ${b.location}</div>
         <div style="font-size:11px;color:var(--text3)">${b.currency} budget</div></div>
@@ -9013,9 +9314,294 @@ function renderBudgetsTab() {
       <div class="form-group"><label class="form-label">Monthly Limit (${sym(b.currency)})</label>
         <input class="form-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value)">
       </div>
-    </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-bottom:${allocCount?'14':'0'}px">
+        <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
+        ${allocCount?`<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="clearAllocations('${b.id}')">Clear</button>`:''}
+      </div>
+      ${allocCount > 0 ? `<div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600">Sub-budgets (${allocCount})</div>
+          <div style="font-size:10px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${b.limit.toFixed(0)} <span>(${allocPct.toFixed(0)}%)</span></div>
+        </div>
+        ${subRows}
+      </div>` : ''}
+    </div>`;}).join('')}
     <button class="pool-add-btn" onclick="openAddBudget()">+ Add Budget</button>
   </div>`;
+}
+
+function clearAllocations(bgtId) {
+  openDlg('Clear sub-budgets?',
+    `<div style="font-size:13px;color:var(--text2)">This will remove all category allocations for this budget. The overall monthly limit stays unchanged.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmClearAllocations('${bgtId}')">Clear</button>`
+  );
+}
+function confirmClearAllocations(bgtId) {
+  const b = db.budgets.find(x=>x.id===bgtId);
+  if (b) { b.allocations = {}; saveDBWithSync(); closeDlg(); renderSettings(); showToast('Sub-budgets cleared'); }
+}
+
+// ─── OFFLINE AI BUDGET ALLOCATION ───
+function aiAnalyzeSpending(currency) {
+  // Look back up to 12 months, but use 3 or 6 per category based on data quality
+  const now = new Date();
+  const lookbackMonths = [];
+  for (let i = 1; i <= 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    lookbackMonths.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  // lookbackMonths[0] = most recent past month, [11] = oldest
+
+  // Get all expense/shared txs in the lookback window for this currency
+  const allTxs = db.transactions.filter(t =>
+    !t.archived && !t.isSettlement && !t.isLoanTx &&
+    t.currency === currency &&
+    (t.type === 'expense' || t.type === 'shared') &&
+    t.date && lookbackMonths.includes(t.date.slice(0,7))
+  );
+
+  // Group by parent category, per month
+  const catData = {}; // { catId: { monthly: {mk: total}, name, icon, occurrences } }
+  for (const tx of allTxs) {
+    const parentCat = db.categories.expense.find(c =>
+      c.id === tx.categoryId || (c.subcats||[]).some(sc => sc.id === tx.categoryId)
+    );
+    if (!parentCat) continue;
+    const catId = parentCat.id;
+    const mk = tx.date.slice(0,7);
+    const amt = tx.type === 'shared' ? (tx.myShare || tx.amount) : tx.amount;
+    if (!catData[catId]) catData[catId] = { monthly: {}, name: parentCat.name, icon: parentCat.icon, occurrences: 0 };
+    catData[catId].monthly[mk] = (catData[catId].monthly[mk] || 0) + amt;
+    catData[catId].occurrences++;
+  }
+
+  // For each category, compute statistics + decide allocation
+  const results = [];
+  for (const [catId, data] of Object.entries(catData)) {
+    // Skip rare: appeared in fewer than 2 months over the entire 12-month window
+    const monthsActive = Object.keys(data.monthly).length;
+    if (monthsActive < 2) continue;
+
+    // Decide lookback per category — use 3 if frequent (active 3+ of last 3), else 6
+    const last3 = lookbackMonths.slice(0,3);
+    const last6 = lookbackMonths.slice(0,6);
+    const monthsInLast3 = last3.filter(mk => data.monthly[mk] !== undefined).length;
+    const monthsInLast6 = last6.filter(mk => data.monthly[mk] !== undefined).length;
+
+    let usedMonths, lookbackLabel;
+    if (monthsInLast3 >= 2) {
+      usedMonths = last3;
+      lookbackLabel = '3mo';
+    } else if (monthsInLast6 >= 3) {
+      usedMonths = last6;
+      lookbackLabel = '6mo';
+    } else {
+      continue; // not enough data
+    }
+
+    const amounts = usedMonths.map(mk => data.monthly[mk] || 0).filter(v => v > 0);
+    if (amounts.length === 0) continue;
+
+    const sum = amounts.reduce((s,v)=>s+v, 0);
+    const avg = sum / amounts.length;
+    const sorted = [...amounts].sort((a,b)=>a-b);
+    const median = sorted.length % 2 === 0
+      ? (sorted[sorted.length/2-1] + sorted[sorted.length/2]) / 2
+      : sorted[Math.floor(sorted.length/2)];
+
+    // Volatility (coefficient of variation)
+    const variance = amounts.reduce((s,v)=>s+(v-avg)**2, 0) / amounts.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = avg > 0 ? stdDev / avg : 0;
+
+    // Trend — compare first half vs second half
+    const mid = Math.floor(amounts.length/2);
+    const firstHalf = amounts.slice(0, mid).reduce((s,v)=>s+v,0) / Math.max(mid, 1);
+    const secondHalf = amounts.slice(mid).reduce((s,v)=>s+v,0) / (amounts.length - mid);
+    const trendPct = firstHalf > 0 ? ((secondHalf - firstHalf) / firstHalf * 100) : 0;
+
+    // Frequency in usedMonths window
+    const frequency = amounts.length / usedMonths.length;
+
+    // Classify: NEED vs WANT
+    // Heuristics:
+    //  - Mandatory keywords in name → need
+    //  - Low CV (< 0.25) + frequency >= 0.66 (active in 2/3+ months) → need
+    //  - Otherwise → want
+    const NEED_KEYWORDS = /rent|utilit|bill|water|electric|internet|wifi|transport|grocer|fuel|gas|tuition|loan|insur|mortgage|phone|medic|salary/i;
+    const isNeedByName = NEED_KEYWORDS.test(data.name);
+    const isNeedByPattern = cv < 0.25 && frequency >= 0.66;
+    const isNeed = isNeedByName || isNeedByPattern;
+
+    // Predicted amount = median + buffer
+    // Stable (low cv) → smaller buffer; volatile → bigger
+    let buffer;
+    if (cv < 0.15) buffer = 1.05;       // very stable
+    else if (cv < 0.30) buffer = 1.10;  // stable
+    else if (cv < 0.50) buffer = 1.20;  // moderate
+    else buffer = 1.30;                  // volatile
+    const predicted = Math.ceil(median * buffer);
+
+    let reason;
+    if (isNeedByName) reason = 'essential by name';
+    else if (isNeedByPattern) reason = 'fixed pattern (stable + monthly)';
+    else if (cv < 0.30) reason = 'stable spending';
+    else if (cv < 0.50) reason = 'moderate variance';
+    else reason = 'volatile spending';
+
+    results.push({
+      catId, name: data.name, icon: data.icon,
+      avg, median, predicted, cv, frequency, trendPct,
+      isNeed, reason,
+      usedMonths: usedMonths.length,
+      lookbackLabel,
+      monthsActive
+    });
+  }
+
+  // Sort: needs first, then by predicted amount desc
+  results.sort((a,b) => {
+    if (a.isNeed !== b.isNeed) return a.isNeed ? -1 : 1;
+    return b.predicted - a.predicted;
+  });
+
+  return results;
+}
+
+function aiAllocateBudget(bgtId, results, totalLimit) {
+  // First pass: sum needs at full predicted
+  const needs = results.filter(r => r.isNeed);
+  const wants = results.filter(r => !r.isNeed);
+  const needsTotal = needs.reduce((s,r)=>s+r.predicted, 0);
+  const wantsTotal = wants.reduce((s,r)=>s+r.predicted, 0);
+
+  const allocations = {};
+  let warning = null;
+
+  // Reserve 5% buffer for unexpected
+  const usableBudget = totalLimit * 0.95;
+
+  if (needsTotal >= usableBudget) {
+    // Needs alone exceed budget — proportionally scale needs, zero wants
+    const scale = usableBudget / needsTotal;
+    needs.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
+    warning = `⚠ Your essential spending (${sym(db.budgets.find(b=>b.id===bgtId)?.currency||'PHP')}${needsTotal.toFixed(0)}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
+  } else {
+    // Needs at full
+    needs.forEach(r => { allocations[r.catId] = r.predicted; });
+    // Wants share remaining
+    const remaining = usableBudget - needsTotal;
+    if (wantsTotal > remaining) {
+      const scale = remaining / wantsTotal;
+      wants.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
+      warning = `Your past spending exceeds budget. Wants reduced to ${(scale*100).toFixed(0)}% of historical.`;
+    } else {
+      wants.forEach(r => { allocations[r.catId] = r.predicted; });
+    }
+  }
+
+  return { allocations, warning, needsTotal, wantsTotal, usableBudget };
+}
+
+function openAiAllocate(bgtId) {
+  const bgt = db.budgets.find(b => b.id === bgtId);
+  if (!bgt) return;
+
+  showLoading('Analyzing your spending pattern...');
+  setTimeout(() => {
+    try {
+      const results = aiAnalyzeSpending(bgt.currency);
+      hideLoading();
+
+      if (results.length === 0) {
+        openDlg('Not enough data',
+          `<div style="font-size:13px;color:var(--text2);line-height:1.6">AI needs at least 2 months of ${bgt.currency} expense data per category to allocate. Log more transactions and try again.</div>`,
+          `<button class="btn btn-primary btn-sm" onclick="closeDlg()">OK</button>`
+        );
+        return;
+      }
+
+      const { allocations, warning, needsTotal, wantsTotal, usableBudget } = aiAllocateBudget(bgtId, results, bgt.limit);
+      window._pendingAllocations = { bgtId, allocations, results };
+
+      const rows = results.map(r => {
+        const allocated = allocations[r.catId] || 0;
+        const flag = r.isNeed ? '🛡️' : '🎯';
+        const flagLabel = r.isNeed ? 'Need' : 'Want';
+        const flagColor = r.isNeed ? 'var(--accent)' : 'var(--text3)';
+        return `<div style="padding:10px;border-bottom:1px solid var(--border);background:${r.isNeed?'var(--accent-bg)':'transparent'}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+              <span style="font-size:16px">${r.icon}</span>
+              <span style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${r.name.replace(/^[^ ]+ /,'')}</span>
+              <span style="font-size:9px;padding:1px 6px;border-radius:99px;background:${r.isNeed?'var(--accent-bg)':'var(--bg4)'};color:${flagColor};font-weight:600">${flag} ${flagLabel}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="color:var(--text3);font-size:12px">${sym(bgt.currency)}</span>
+              <input type="number" class="form-input alloc-input" data-cat="${r.catId}" value="${allocated}" style="width:80px;padding:4px 6px;text-align:right;font-size:13px">
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text4);margin-left:24px;line-height:1.4">
+            Past avg: ${sym(bgt.currency)}${r.avg.toFixed(0)} · median: ${sym(bgt.currency)}${r.median.toFixed(0)} · ${r.lookbackLabel} · ${r.reason}
+            ${Math.abs(r.trendPct)>15?` · ${r.trendPct>0?'↑':'↓'} ${Math.abs(r.trendPct).toFixed(0)}%`:''}
+          </div>
+        </div>`;
+      }).join('');
+
+      const totalAlloc = Object.values(allocations).reduce((s,v)=>s+v, 0);
+      const remaining = bgt.limit - totalAlloc;
+
+      openDlg(`🤖 AI Allocation — ${bgt.location}`,
+        `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Analyzed last 3-6 months. Needs allocated first, wants share the rest. Edit any value before applying.</div>
+        ${warning ? `<div style="font-size:11px;color:var(--amber);background:var(--amber-bg);padding:8px 10px;border-radius:6px;margin-bottom:10px;line-height:1.4">${warning}</div>` : ''}
+        <div style="background:var(--bg3);border-radius:8px;overflow:hidden;max-height:50dvh;overflow-y:auto;margin-bottom:10px">${rows}</div>
+        <div id="alloc-summary" style="display:flex;justify-content:space-between;font-size:12px;padding:8px 10px;background:var(--bg3);border-radius:6px;font-family:var(--mono)">
+          <span>Allocated: <strong>${sym(bgt.currency)}${totalAlloc.toFixed(0)}</strong></span>
+          <span>Budget: ${sym(bgt.currency)}${bgt.limit.toFixed(0)}</span>
+          <span>Buffer: <strong style="color:${remaining<0?'var(--red)':'var(--green)'}">${remaining>=0?'+':''}${sym(bgt.currency)}${remaining.toFixed(0)}</strong></span>
+        </div>`,
+        `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+         <button class="btn btn-primary btn-sm" onclick="confirmAiAllocate('${bgtId}')">Apply</button>`
+      );
+
+      // Wire live update of summary as user edits inputs
+      setTimeout(() => {
+        const sym_ = sym(bgt.currency);
+        document.querySelectorAll('.alloc-input').forEach(inp => {
+          inp.addEventListener('input', () => {
+            const inputs = document.querySelectorAll('.alloc-input');
+            let total = 0;
+            inputs.forEach(i => { total += parseFloat(i.value) || 0; });
+            const remain = bgt.limit - total;
+            const summ = document.getElementById('alloc-summary');
+            if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span><span>Budget: ${sym_}${bgt.limit.toFixed(0)}</span><span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
+          });
+        });
+      }, 50);
+    } catch(e) {
+      hideLoading();
+      console.error(e);
+      showToast('AI allocation failed: ' + e.message);
+    }
+  }, 200);
+}
+
+function confirmAiAllocate(bgtId) {
+  const bgt = db.budgets.find(b => b.id === bgtId);
+  if (!bgt) return;
+  // Read final values from inputs
+  const finalAlloc = {};
+  document.querySelectorAll('.alloc-input').forEach(inp => {
+    const cat = inp.dataset.cat;
+    const val = parseFloat(inp.value) || 0;
+    if (val > 0) finalAlloc[cat] = val;
+  });
+  bgt.allocations = finalAlloc;
+  saveDBWithSync();
+  closeDlg();
+  renderSettings();
+  showToast(`✅ ${Object.keys(finalAlloc).length} categories allocated`);
 }
 
 function toggleBudget(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.active=val;saveDBWithSync();} }
@@ -10621,22 +11207,66 @@ function openDeviceHistory() {
 // ── THEME SYSTEM ──
 function initTheme() {
   const saved = localStorage.getItem('tb_theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+  const mode = localStorage.getItem('tb_theme_mode') || 'manual'; // 'manual' or 'auto'
   db.settings = db.settings || {};
   db.settings.theme = saved;
+  db.settings.themeMode = mode;
+  if (mode === 'auto') {
+    applyAutoTheme();
+    // Re-apply every 30 minutes to catch sunrise/sunset transitions
+    if (window._themeAutoInterval) clearInterval(window._themeAutoInterval);
+    window._themeAutoInterval = setInterval(applyAutoTheme, 30 * 60 * 1000);
+  } else {
+    document.documentElement.setAttribute('data-theme', saved);
+  }
+}
+
+function applyAutoTheme() {
+  // Auto: light from 6am-6pm, dark otherwise
+  const h = new Date().getHours();
+  const next = (h >= 6 && h < 18) ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('tb_theme', next);
+  if (db.settings) db.settings.theme = next;
+  // Update icon if present
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+}
+
+function setThemeMode(mode) {
+  // mode: 'auto' | 'dark' | 'light'
+  if (mode === 'auto') {
+    localStorage.setItem('tb_theme_mode', 'auto');
+    db.settings.themeMode = 'auto';
+    applyAutoTheme();
+    if (window._themeAutoInterval) clearInterval(window._themeAutoInterval);
+    window._themeAutoInterval = setInterval(applyAutoTheme, 30 * 60 * 1000);
+  } else {
+    localStorage.setItem('tb_theme_mode', 'manual');
+    localStorage.setItem('tb_theme', mode);
+    db.settings.themeMode = 'manual';
+    db.settings.theme = mode;
+    document.documentElement.setAttribute('data-theme', mode);
+    if (window._themeAutoInterval) { clearInterval(window._themeAutoInterval); window._themeAutoInterval = null; }
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) btn.textContent = mode === 'dark' ? '☀️' : '🌙';
+  }
+  saveDBWithSync();
+  if (currentPage === 'settings') renderSettings();
+  showToast(mode === 'auto' ? '🌗 Auto theme (6am-6pm light)' : (mode === 'dark' ? '🌙 Dark mode' : '☀️ Light mode'));
 }
 
 function toggleTheme() {
+  // If currently auto, switch to opposite of current applied theme
+  const mode = localStorage.getItem('tb_theme_mode') || 'manual';
+  if (mode === 'auto') {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    setThemeMode(current === 'dark' ? 'light' : 'dark');
+    return;
+  }
   const current = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('tb_theme', next);
-  db.settings.theme = next;
-  saveDBWithSync();
-  // Update toggle button icon
-  const btn = document.getElementById('theme-toggle-btn');
-  if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
-  if (currentPage === 'settings') renderSettings();
+  setThemeMode(next);
 }
 
 // Initialize Google Drive on page load
@@ -10769,6 +11399,22 @@ function initApp() {
     initDeviceName();
     trackDeviceActivity();
     nav('dashboard');
+    // Budget exceeded toast on load (once per day)
+    setTimeout(() => {
+      const mk = currMonthKey();
+      const exceeded = db.budgets.filter(b=>b.active).filter(bgt=>{
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
+          .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
+        return spent > bgt.limit;
+      });
+      const lastBudgetToast = localStorage.getItem('tb_last_budget_toast');
+      const today = new Date().toISOString().split('T')[0];
+      if (exceeded.length > 0 && lastBudgetToast !== today) {
+        localStorage.setItem('tb_last_budget_toast', today);
+        const names = exceeded.map(b=>b.location).join(', ');
+        showToast(`⚠️ Budget exceeded: ${names}`, 4000);
+      }
+    }, 1500);
     // Try silent token refresh on app open (no popup)
     if (db.settings.googleDriveConnected) {
       ensureDriveToken(() => {
@@ -10911,6 +11557,25 @@ function aiBudgetIntelligence() {
     if (ratio > 1.1) insights.push({id:'budget-over-'+bgt.id,type:'budget',priority:'high',icon:'📈',title:`${bgt.location} budget consistently over`,body:`Average: ${sym}${avgSpend.toFixed(0)}/mo vs limit ${sym}${bgt.limit}. Consider raising to ${sym}${Math.ceil(avgSpend*1.05/50)*50}.`,action:'Review budget limit'});
     // Only fire "has room" if there's actual meaningful spending (not K0)
     else if (ratio < 0.75 && avgSpend > 0) insights.push({id:'budget-under-'+bgt.id,type:'budget',priority:'low',icon:'📉',title:`${bgt.location} budget has room`,body:`Spending ${sym}${avgSpend.toFixed(0)}/mo avg — ${Math.round((1-ratio)*100)}% below limit. Could reallocate ${sym}${Math.abs(avgSpend-bgt.limit).toFixed(0)} to savings.`,action:'Consider reallocating'});
+
+    // Sub-budget allocations (per category)
+    if (bgt.allocations && Object.keys(bgt.allocations).length > 0) {
+      const mk = currMonthKey();
+      for (const [catId, limit] of Object.entries(bgt.allocations)) {
+        const limAmt = parseFloat(limit) || 0;
+        if (limAmt <= 0) continue;
+        const cat = db.categories.expense.find(c=>c.id===catId);
+        if (!cat) continue;
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{
+          const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
+          if (!txCat || txCat.id !== catId) return s;
+          return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
+        },0);
+        const subRatio = spent / limAmt;
+        const catName = cat.name.replace(/^[^ ]+ /,'');
+        if (subRatio > 1) insights.push({id:'sub-bgt-over-'+bgt.id+'-'+catId,type:'budget',priority:'medium',icon:'⚠️',title:`${catName} over allocation`,body:`Spent ${sym}${spent.toFixed(0)} of ${sym}${limAmt.toFixed(0)} (${(subRatio*100).toFixed(0)}%) sub-budget for ${bgt.location}.`,action:'Review allocation'});
+      }
+    }
   }
   return insights;
 }
