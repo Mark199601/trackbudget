@@ -11120,7 +11120,11 @@ function openEditCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   if (!cat) return;
   openDlg(`Edit: ${cat.name}`,
-    `<div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${cat.name}"></div>`,
+    `<div class="form-group"><label class="form-label">Icon</label>
+      <div class="emoji-trigger" onclick="toggleInlineEmoji('ec-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="ec-emoji-display">${cat.icon||'📌'}</span><span>Change icon</span></div>
+      <div id="ec-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('ec-emoji-display')}</div>
+     </div>
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${cat.name}"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-warning btn-sm" onclick="toggleArchiveCat('${catId}','${forType}')">${cat.archived?'Restore':'Archive'}</button>
      <button class="btn btn-primary btn-sm" onclick="saveEditCat('${catId}','${forType}')">Save</button>`
@@ -11131,6 +11135,8 @@ function saveEditCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   if (cat) {
     cat.name = document.getElementById('ec-name')?.value?.trim()||cat.name;
+    const newIcon = document.getElementById('ec-emoji-display')?.textContent?.trim();
+    if (newIcon) cat.icon = newIcon;
     saveDBWithSync(); closeDlg(); renderSettings(); showToast('Saved!');
   }
 }
@@ -11197,7 +11203,11 @@ function openEditSubCat(catId, subId, forType) {
   const sc = cat?.subcats?.find(s=>s.id===subId);
   if (!sc) return;
   openDlg(`Edit: ${sc.name}`,
-    `<div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${sc.name}"></div>`,
+    `<div class="form-group"><label class="form-label">Icon</label>
+      <div class="emoji-trigger" onclick="toggleInlineEmoji('esc-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="esc-emoji-display">${sc.icon||cat?.icon||'📌'}</span><span>Change icon</span></div>
+      <div id="esc-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('esc-emoji-display')}</div>
+     </div>
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${sc.name}"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-warning btn-sm" onclick="toggleArchiveSubCat('${catId}','${subId}','${forType}')">${sc.archived?'Restore':'Archive'}</button>
      <button class="btn btn-primary btn-sm" onclick="saveEditSubCat('${catId}','${subId}','${forType}')">Save</button>`
@@ -11207,7 +11217,12 @@ function openEditSubCat(catId, subId, forType) {
 function saveEditSubCat(catId, subId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   const sc = cat?.subcats?.find(s=>s.id===subId);
-  if (sc) { sc.name = document.getElementById('esc-name')?.value?.trim()||sc.name; saveDBWithSync(); closeDlg(); renderSettings(); }
+  if (sc) {
+    sc.name = document.getElementById('esc-name')?.value?.trim()||sc.name;
+    const newIcon = document.getElementById('esc-emoji-display')?.textContent?.trim();
+    if (newIcon) sc.icon = newIcon;
+    saveDBWithSync(); closeDlg(); renderSettings();
+  }
 }
 
 function toggleArchiveSubCat(catId, subId, forType) {
