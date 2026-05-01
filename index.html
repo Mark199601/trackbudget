@@ -148,7 +148,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .metric-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow)}
 .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .metric-value{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-0.6px;color:var(--text)}
-.metric-num{font-size:15px;white-space:nowrap;overflow:hidden;line-height:1.3}
+.metric-num{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 @media(max-width:480px){
   .metric-card{padding:10px 11px}
   .metric-label{font-size:9px;letter-spacing:0.04em;margin-bottom:4px}
@@ -1256,6 +1256,7 @@ let db = (() => {
     if (parsed.contracts.length === 0 && parsed.settings?.investmentPlan) {
       const plan = parsed.settings.investmentPlan;
       const migratedId = 'contract-png-2026';
+      const migrationDate = today(); // dynamic — records when migration actually ran
       parsed.contracts.push({
         id: migratedId,
         location: 'Papua New Guinea',
@@ -1280,7 +1281,8 @@ let db = (() => {
         savingsStreak: 0,
         lastCheckin: null,
         checkinHistory: [],
-        createdAt: '2026-02-25',
+        createdAt: migrationDate,
+        wasAutoMigrated: true, // flag for migration banner
       });
       parsed.activeContractId = migratedId;
     }
@@ -1960,6 +1962,22 @@ function renderDashboard() {
     </div>`;
   }
 
+  // Migration banner — shows once when an old investmentPlan was auto-migrated to a contract
+  let migrationBannerHTML = '';
+  const migrationDismissed = localStorage.getItem('tb_migration_banner_dismissed') === '1';
+  const autoMigratedContract = db.contracts?.find(c => c.wasAutoMigrated);
+  if (autoMigratedContract && !migrationDismissed) {
+    migrationBannerHTML = `
+      <div style="margin-bottom:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-left:4px solid var(--amber);border-radius:var(--r-md);padding:12px 14px;display:flex;align-items:flex-start;gap:10px">
+        <div style="font-size:20px;flex-shrink:0">🔄</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:3px">Contract auto-created from your old investment plan</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.5">Your previous savings plan was migrated to a PNG Contract (Feb 2026 – Feb 2028). Please review it in <span onclick="nav('planning')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Planning → Contracts</span> and confirm the dates, target, and bucket links are correct.</div>
+        </div>
+        <button onclick="dismissMigrationBanner()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0;line-height:1;flex-shrink:0">×</button>
+      </div>`;
+  }
+
   // Onboarding checklist — appears only if any step is incomplete AND not dismissed
   const dismissedOnboarding = localStorage.getItem('tb_onboard_dismissed') === '1';
   let onboardChecklistHTML = '';
@@ -2122,6 +2140,7 @@ function renderDashboard() {
     </div>
   </div>`;
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
+    ${migrationBannerHTML}
     ${onboardChecklistHTML}
     ${alertsHTML}
     <div class="hero-card" style="margin-bottom:16px">
@@ -3061,6 +3080,7 @@ function submitRemittance() {
     // Record in fxHistory
     if (!db.fxHistory[currency]) db.fxHistory[currency] = [];
     db.fxHistory[currency].push({ date, rate, source: 'remittance' });
+    if (db.fxHistory[currency].length > 500) db.fxHistory[currency] = db.fxHistory[currency].slice(-500);
     // Update current fxRates to this latest
     db.fxRates[currency] = rate;
 
@@ -5083,7 +5103,12 @@ function restoreTx(txId) {
       return;
     }
     // Parent no longer in archive — allow restoring child on its own
+    // Clean all parent-link metadata so it behaves as a standalone tx
     delete txData.cascadedFrom;
+    delete txData.parentId;
+    delete txData.isAutoForex;
+    delete txData.isAutoReimb;
+    delete txData.isAutoFee;
   }
 
   // Restore the parent
@@ -5145,10 +5170,8 @@ function promptArchiveDelete(txId, txName, childCount) {
 function confirmDeleteTx(txId) {
   // Delete the tx itself
   db.archivedTransactions = db.archivedTransactions.filter(t => t.id !== txId);
-  // Cascade-delete all children that were archived together with this parent
-  const before = db.archivedTransactions.length;
-  db.archivedTransactions = db.archivedTransactions.filter(t => t.cascadedFrom !== txId);
-  const deleted = before - db.archivedTransactions.length;
+  // Cascade-delete all children archived with this parent (cascadedFrom) OR linked via parentId
+  db.archivedTransactions = db.archivedTransactions.filter(t => t.cascadedFrom !== txId && t.parentId !== txId);
   saveDBWithSync();
   closeDlg();
   // Snappy — if archive sheet is open, re-render it; else render transactions
@@ -7503,6 +7526,11 @@ function toggleDashInsights() {
   if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
+function dismissMigrationBanner() {
+  localStorage.setItem('tb_migration_banner_dismissed', '1');
+  renderDashboard();
+}
+
 function toggleOnboardChecklist() {
   const body = document.getElementById('onboard-body');
   const arrow = document.getElementById('onboard-arrow');
@@ -9407,6 +9435,7 @@ function confirmAddFxHistory(currency) {
   if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
   if (!db.fxHistory[currency]) db.fxHistory[currency] = [];
   db.fxHistory[currency].push({ date, rate, source: 'manual' });
+  if (db.fxHistory[currency].length > 500) db.fxHistory[currency] = db.fxHistory[currency].slice(-500);
   // Update current rate if this is the latest date
   const sorted = db.fxHistory[currency].slice().sort((a,b)=>b.date.localeCompare(a.date));
   db.fxRates[currency] = sorted[0].rate;
@@ -11922,22 +11951,35 @@ function aiPaydayPredictor() {
 
 function aiSavingsPace() {
   const insights = [];
-  // Only run if user has an active contract with actual savings data
+  // Guard 1: Active contract must exist with valid date range AND createdAt timestamp
   const activeId = db.activeContractId;
   const activeContract = activeId ? (db.contracts||[]).find(c=>c.id===activeId) : null;
   if (!activeContract) return insights;
+  if (!activeContract.createdAt) return insights; // Don't fire on auto-migrated contracts without explicit creation
+  if (!activeContract.startDate || !activeContract.endDate) return insights;
+
+  const startDate = new Date(activeContract.startDate);
+  const endDate = new Date(activeContract.endDate);
+  if (isNaN(startDate) || isNaN(endDate) || endDate <= startDate) return insights;
+
   const plan = db.settings?.investmentPlan;
-  // Check if any bucket has linked accounts or manual balance > 0
-  const hasData = (Array.isArray(plan?.bucketDefs)?plan.bucketDefs:[]).some(b => {
+  // Guard 2 (config check): Must have at least one bucket configured with linked acct or manual balance
+  const hasConfig = (Array.isArray(plan?.bucketDefs)?plan.bucketDefs:[]).some(b => {
     const links = (plan?.bucketLinks||{})[b.id]||[];
     return links.length > 0 || parseFloat((plan?.buckets||{})[b.id]||0) > 0;
   });
-  if (!hasData) return insights;
-  const startDate = new Date(activeContract.startDate || '2026-02-25');
-  const endDate = new Date(activeContract.endDate || '2028-02-25');
+  if (!hasConfig) return insights;
+
   const today = new Date();
-  const progress = Math.max(0,Math.min(1,(today-startDate)/(endDate-startDate)));
-  const targetNow = 970000 * progress;
+  const totalMs = endDate - startDate;
+  const elapsedMs = today - startDate;
+  const totalDays = Math.max(1, Math.round(totalMs / 86400000));
+  const elapsedDays = Math.max(0, Math.round(elapsedMs / 86400000));
+  const progress = Math.max(0, Math.min(1, elapsedMs / totalMs));
+  // Use contract's dynamic target (fallback to legacy ₱970k for backward compat with old contracts)
+  const targetAmount = parseFloat(activeContract.targetAmount) || 970000;
+  const targetNow = targetAmount * progress;
+
   let actualTotal = 0;
   if (plan) {
     const defs = Array.isArray(plan.bucketDefs) ? plan.bucketDefs : [];
@@ -11947,14 +11989,48 @@ function aiSavingsPace() {
       else actualTotal += parseFloat((plan.buckets||{})[b.id]||0);
     }
   }
+
+  // Guard 3 (data check, post-compute): Must have meaningful actual savings to compare against
+  if (actualTotal <= 0) return insights;
+
   const gap = targetNow - actualTotal;
-  const monthlyGoal = plan?.monthlyGoal||45000;
-  const remainingMonths = (endDate-today)/(1000*60*60*24*30);
+  // Use contract's monthlyGoal first, then plan's, then legacy fallback
+  const monthlyGoal = parseFloat(activeContract.monthlyGoal) || parseFloat(plan?.monthlyGoal) || 45000;
+  const remainingMonths = Math.max(0, (endDate-today)/(1000*60*60*24*30));
   const projected = actualTotal + monthlyGoal*remainingMonths;
+  const fmtPHP = (n) => n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  // Pace percentages for relative thresholds (more meaningful than absolute pesos)
+  const expectedPct = progress * 100;
+  const actualPct = targetAmount > 0 ? (actualTotal / targetAmount) * 100 : 0;
+  const dayCounter = `Day ${elapsedDays} of ${totalDays}`;
+  const paceLine = `At ${actualPct.toFixed(1)}%, should be at ${expectedPct.toFixed(1)}% by today.`;
+
   if (gap > 5000) {
-    insights.push({id:'savings-behind',type:'savings',priority:gap>50000?'high':'medium',icon:'🎯',title:`₱${gap.toLocaleString('en-US',{maximumFractionDigits:0})} behind savings target`,body:`Expected by now: ₱${targetNow.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}. Actual: ₱${actualTotal.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}. ${projected>=970000?'✅ Still on track for ₱970k.':'⚠️ May not reach ₱970k at current pace.'}`,action:'Review contract tab'});
+    // Relative threshold: gap as % of what should be saved by now
+    const gapPctOfExpected = targetNow > 0 ? (gap / targetNow) : 0;
+    const priority = gapPctOfExpected > 0.30 ? 'high' : gapPctOfExpected > 0.10 ? 'medium' : 'low';
+    insights.push({
+      id:'savings-behind', type:'savings', priority, icon:'🎯',
+      title:`₱${fmtPHP(gap)} behind savings target`,
+      body:`${dayCounter}. ${paceLine} Expected: ₱${fmtPHP(targetNow)}. Actual: ₱${fmtPHP(actualTotal)}. ${projected>=targetAmount?`✅ Still on track for ₱${fmtPHP(targetAmount)}.`:`⚠️ May not reach ₱${fmtPHP(targetAmount)} at current pace.`}`,
+      action:'Review contract tab'
+    });
+  } else if (gap < -5000) {
+    // Significantly ahead of pace
+    insights.push({
+      id:'savings-ahead', type:'savings', priority:'low', icon:'🚀',
+      title:`₱${fmtPHP(Math.abs(gap))} ahead of savings pace`,
+      body:`${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}. Keep going!`,
+      action:null
+    });
   } else {
-    insights.push({id:'savings-ok',type:'savings',priority:'low',icon:'✅',title:'Savings on track!',body:`₱${Math.abs(gap).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')} ${gap<=0?'ahead of':'behind'} pace. Projected: ₱${projected.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}.`,action:null});
+    // Within ±₱5,000 of expected pace
+    insights.push({
+      id:'savings-ok', type:'savings', priority:'low', icon:'✅',
+      title:'Savings exactly on pace',
+      body:`${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}.`,
+      action:null
+    });
   }
   return insights;
 }
