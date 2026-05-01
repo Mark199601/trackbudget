@@ -240,6 +240,24 @@ option{background:var(--bg3);color:var(--text)}
 
 .tx-item{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer;transition:background var(--transition)}
 .tx-item:hover{background:var(--bg3)}
+
+/* ── BULK SELECT MODE (Batch B #6) ── */
+.txrow-wrap{position:relative;-webkit-user-select:none;user-select:none}
+.txrow-wrap.bulk-mode .tx-item{padding-left:44px;cursor:pointer}
+.tx-bulk-check{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;border:2px solid var(--border2);background:var(--bg2);display:none;align-items:center;justify-content:center;z-index:5;pointer-events:none}
+.txrow-wrap.bulk-mode .tx-bulk-check{display:flex}
+.txrow-wrap.bulk-selected .tx-bulk-check{background:var(--accent);border-color:var(--accent)}
+.txrow-wrap.bulk-selected .tx-bulk-check svg{display:block}
+.tx-bulk-check svg{display:none}
+.txrow-wrap.bulk-selected .tx-item{background:var(--accent-bg)}
+.txrow-wrap[data-bulk-eligible="0"].bulk-mode .tx-item{opacity:0.45}
+.txrow-wrap[data-bulk-eligible="0"].bulk-mode .tx-bulk-check{border-color:var(--border);background:transparent}
+.bulk-toolbar{position:sticky;top:0;z-index:50;background:var(--accent);color:#fff;display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.bulk-toolbar .bt-count{flex:1;font-weight:600}
+.bulk-toolbar button{background:rgba(255,255,255,0.15);border:none;color:#fff;padding:6px 12px;border-radius:var(--r-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px}
+.bulk-toolbar button:hover{background:rgba(255,255,255,0.25)}
+.bulk-toolbar button.bt-danger:hover{background:var(--red)}
+.bulk-toolbar .bt-x{background:transparent;font-size:18px;padding:2px 8px}
 .tx-icon{width:36px;height:36px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .tx-icon-expense{background:var(--red-bg)}
 .tx-icon-income{background:var(--green-bg)}
@@ -1386,6 +1404,12 @@ function getAcctBalance(acctId) {
     }
     else if (tx.type === 'external-in' && tx.accountId === acctId) bal += tx.amount;
     else if (tx.type === 'external-out' && tx.accountId === acctId) bal -= tx.amount;
+    // Balance Correction (Batch B #5) — direct adjustment to bring app balance in line with reality
+    else if (tx.type === 'correction' && tx.accountId === acctId) {
+      const corrAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      if (tx.direction === 'up') bal += corrAmt;
+      else if (tx.direction === 'down') bal -= corrAmt;
+    }
   }
   return bal;
 }
@@ -1498,6 +1522,11 @@ function txAmountDisplay(tx) {
   if (tx.type==='shared') return {cls:'tx-neg', str:'-'+fmt(tx.totalBill||tx.amount, tx.currency)};
   if (tx.type==='external-in') return {cls:'tx-pos', str:'📥 +'+fmt(tx.amount,tx.currency)};
   if (tx.type==='external-out') return {cls:'tx-neg', str:'📤 -'+fmt(tx.amount,tx.currency)};
+  if (tx.type==='correction') {
+    const sign = tx.direction === 'up' ? '+' : '-';
+    const cls = tx.direction === 'up' ? 'tx-pos' : 'tx-neg';
+    return {cls, str: '⚖️ ' + sign + fmt(tx.amount, tx.currency)};
+  }
   return {cls:'tx-neg', str:'-'+fmt(tx.amount,tx.currency)};
 }
 
@@ -1513,6 +1542,8 @@ function nav(page) {
   // Clear sticky transient state when leaving certain pages
   if (currentPage === 'transactions' && page !== 'transactions') {
     window._txSearchQuery = '';
+    // Exit bulk mode when leaving transactions page
+    if (_txBulkMode) { _txBulkMode = false; _txBulkSet.clear(); }
   }
   currentPage = page;
   const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
@@ -2253,6 +2284,197 @@ function renderTxRow(tx, showDate=false) {
   const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
   const amtD = txAmountDisplay(tx);
 
+  // Build the actual tx row HTML (returned at the end as `body`)
+  const body = renderTxRowBody(tx, showDate, acct, amtD);
+
+  // ── Wrap with bulk-mode-aware container (Batch B #6) ──
+  const eligible = isBulkEligible(tx) ? '1' : '0';
+  const selected = _txBulkSet.has(tx.id);
+  const wrapClasses = ['txrow-wrap'];
+  if (_txBulkMode) wrapClasses.push('bulk-mode');
+  if (selected) wrapClasses.push('bulk-selected');
+  const checkSvg = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return `<div class="${wrapClasses.join(' ')}" data-tx-id="${tx.id}" data-bulk-eligible="${eligible}"
+    onmousedown="txRowPressStart(event,'${tx.id}')" onmouseup="txRowPressEnd(event,'${tx.id}')" onmouseleave="txRowPressCancel()"
+    ontouchstart="txRowPressStart(event,'${tx.id}')" ontouchend="txRowPressEnd(event,'${tx.id}')" ontouchcancel="txRowPressCancel()"
+    onclick="txRowClickIntercept(event,'${tx.id}')">
+    <div class="tx-bulk-check">${checkSvg}</div>
+    ${body}
+  </div>`;
+}
+
+// Returns true if this tx can be selected in bulk mode (auto-children/loan txs blocked)
+function isBulkEligible(tx) {
+  if (!tx) return false;
+  if (tx.isAutoForex) return false;
+  if (tx.isAutoReimb) return false;
+  if (tx.isAutoFee) return false;
+  if (tx.isSettlement) return false;
+  if (tx.isLoanTx) return false;
+  if (tx.isLoanPayment) return false;
+  return true;
+}
+
+// ── BULK PRESS HANDLERS (Batch B #6) ──
+function txRowPressStart(ev, txId) {
+  // Don't fire on right-click
+  if (ev.type === 'mousedown' && ev.button !== 0) return;
+  // Bulk mode only available on the Transactions page (where the toolbar can render)
+  if (currentPage !== 'transactions') return;
+  _txLongPressFired = false;
+  if (_txLongPressTimer) { clearTimeout(_txLongPressTimer); _txLongPressTimer = null; }
+  _txLongPressTimer = setTimeout(() => {
+    const tx = db.transactions.find(t => t.id === txId);
+    if (!tx || !isBulkEligible(tx)) {
+      // Long-press on non-eligible row: still enter bulk mode but don't pre-select it
+      if (!_txBulkMode) {
+        _txBulkMode = true;
+        _txBulkSet.clear();
+        _txLongPressFired = true;
+        if (navigator.vibrate) try { navigator.vibrate(15); } catch(e){}
+        renderTransactions();
+      }
+      return;
+    }
+    if (!_txBulkMode) {
+      _txBulkMode = true;
+      _txBulkSet.clear();
+    }
+    _txBulkSet.add(txId);
+    _txLongPressFired = true;
+    if (navigator.vibrate) try { navigator.vibrate(15); } catch(e){}
+    renderTransactions();
+  }, TX_BULK_LONGPRESS_MS);
+}
+
+function txRowPressEnd(ev, txId) {
+  if (_txLongPressTimer) { clearTimeout(_txLongPressTimer); _txLongPressTimer = null; }
+}
+
+function txRowPressCancel() {
+  if (_txLongPressTimer) { clearTimeout(_txLongPressTimer); _txLongPressTimer = null; }
+}
+
+function txRowClickIntercept(ev, txId) {
+  // If long-press just fired, suppress the click (browser fires click after touchend)
+  if (_txLongPressFired) {
+    _txLongPressFired = false;
+    ev.preventDefault();
+    ev.stopPropagation();
+    return;
+  }
+  // In bulk mode, click toggles selection (if eligible)
+  if (_txBulkMode) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const tx = db.transactions.find(t => t.id === txId);
+    if (!tx || !isBulkEligible(tx)) {
+      showToast('💡 Auto-generated entries can\'t be bulk-selected');
+      return;
+    }
+    if (_txBulkSet.has(txId)) _txBulkSet.delete(txId);
+    else _txBulkSet.add(txId);
+    if (_txBulkSet.size === 0) {
+      // Auto-exit bulk mode if all deselected
+      _txBulkMode = false;
+    }
+    renderTransactions();
+  }
+  // Outside bulk mode: let the inner tx-item onclick handle navigation
+}
+
+function exitTxBulkMode() {
+  _txBulkMode = false;
+  _txBulkSet.clear();
+  if (currentPage === 'transactions') renderTransactions();
+}
+
+function bulkSelectAllVisible() {
+  const rows = document.querySelectorAll('.txrow-wrap[data-bulk-eligible="1"]');
+  rows.forEach(r => {
+    const id = r.getAttribute('data-tx-id');
+    if (id) _txBulkSet.add(id);
+  });
+  renderTransactions();
+}
+
+function bulkArchiveTxns() {
+  const ids = Array.from(_txBulkSet);
+  if (ids.length === 0) { showToast('No transactions selected'); return; }
+  openDlg('Archive Selected?',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      Archive <strong>${ids.length} transaction${ids.length>1?'s':''}</strong>? Linked auto-generated children (forex / reimbursement / fees) will also be archived.
+      <div style="margin-top:8px;color:var(--text3);font-size:12px">You can restore them anytime from the Archive tab.</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBulkArchive()">📦 Archive ${ids.length}</button>`
+  );
+}
+
+function confirmBulkArchive() {
+  const ids = Array.from(_txBulkSet);
+  let archived = 0, cascaded = 0;
+  for (const id of ids) {
+    const idx = db.transactions.findIndex(t => t.id === id);
+    if (idx < 0) continue;
+    const tx = db.transactions.splice(idx, 1)[0];
+    tx.archivedAt = today();
+    db.archivedTransactions.push(tx);
+    archived++;
+    // Cascade auto-children by parentId
+    const children = db.transactions.filter(t => t.parentId === id);
+    for (const child of children) {
+      const ci = db.transactions.findIndex(t => t.id === child.id);
+      if (ci >= 0) {
+        const c = db.transactions.splice(ci, 1)[0];
+        c.archivedAt = today();
+        c.cascadedFrom = id;
+        db.archivedTransactions.push(c);
+        cascaded++;
+      }
+    }
+  }
+  saveDBWithSync();
+  closeDlg();
+  exitTxBulkMode();
+  showToast(cascaded > 0 ? `Archived ${archived} (+ ${cascaded} linked)` : `Archived ${archived} transactions`);
+}
+
+function bulkDeleteTxns() {
+  const ids = Array.from(_txBulkSet);
+  if (ids.length === 0) { showToast('No transactions selected'); return; }
+  openDlg('Delete Permanently?',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      <strong>Permanently delete ${ids.length} transaction${ids.length>1?'s':''}?</strong>
+      <div style="margin-top:8px;color:var(--amber)">⚠️ This cannot be undone. Linked auto-generated children will also be deleted.</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmBulkDelete()">🗑️ Delete ${ids.length}</button>`
+  );
+}
+
+function confirmBulkDelete() {
+  const ids = Array.from(_txBulkSet);
+  let deleted = 0, cascaded = 0;
+  for (const id of ids) {
+    // Cascade-delete children first by parentId
+    const childrenToDelete = db.transactions.filter(t => t.parentId === id);
+    for (const child of childrenToDelete) {
+      const ci = db.transactions.findIndex(t => t.id === child.id);
+      if (ci >= 0) { db.transactions.splice(ci, 1); cascaded++; }
+    }
+    // Then the parent itself
+    const idx = db.transactions.findIndex(t => t.id === id);
+    if (idx >= 0) { db.transactions.splice(idx, 1); deleted++; }
+  }
+  saveDBWithSync();
+  closeDlg();
+  exitTxBulkMode();
+  showToast(cascaded > 0 ? `Deleted ${deleted} (+ ${cascaded} linked)` : `Deleted ${deleted} transactions`);
+}
+
+function renderTxRowBody(tx, showDate, acct, amtD) {
+
   // ── isLoanTx: parent loan transaction (Borrowed / Lent Out) ──
   if (tx.isLoanTx) {
     const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
@@ -2268,7 +2490,7 @@ function renderTxRow(tx, showDate=false) {
             </span>`;
           }).join('')}
         </div>` : '';
-    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+    return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon ${iconBg}">${icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
@@ -2288,7 +2510,7 @@ function renderTxRow(tx, showDate=false) {
       ? `${tx.loanDirection==='lent'?'Repayment from':'Payment to'} ${parentLoan.personName}`
       : (tx.notes || 'Loan Payment');
     const cat = getCategoryDisplay(tx.categoryId);
-    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+    return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
@@ -2296,6 +2518,24 @@ function renderTxRow(tx, showDate=false) {
       </div>
       <div class="tx-right">
         <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
+        ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
+      </div>
+    </div>`;
+  }
+
+  // ── Balance Correction (Batch B #5) — special inline render ──
+  if (tx.type === 'correction') {
+    const dirLabel = tx.direction === 'up' ? 'Increase' : 'Decrease';
+    const dirColor = tx.direction === 'up' ? 'tx-pos' : 'tx-neg';
+    const sign = tx.direction === 'up' ? '+' : '-';
+    return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
+      <div class="tx-icon" style="background:var(--bg4);color:var(--text2)">⚖️</div>
+      <div class="tx-meta">
+        <div class="tx-name">Balance Correction</div>
+        <div class="tx-detail">${acct.name} · ${dirLabel}${tx.notes?' · '+tx.notes:''}</div>
+      </div>
+      <div class="tx-right">
+        <div class="tx-amount ${dirColor}">${sign}${fmt(tx.amount,tx.currency)}</div>
         ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
       </div>
     </div>`;
@@ -2310,7 +2550,7 @@ function renderTxRow(tx, showDate=false) {
     const to = getAccountDisplay(tx.toAccountId);
     detail = `${from.name} → ${to.name}`;
     // Override name to "Transfer"
-    return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+    return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
         <div class="tx-name">Transfer</div>
@@ -2408,7 +2648,7 @@ function renderTxRow(tx, showDate=false) {
     </div>`;
   }
 
-  return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+  return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
       <div class="tx-name">${cat.name.replace(/^[^ ]+ /,'')}</div>
@@ -3057,6 +3297,36 @@ function getLatestFxRate(currency) {
   return db.fxRates?.[currency] || 1;
 }
 
+// ── Forex P&L account (Batch B #4) — dedicated ledger for forex gains/losses ──
+// Auto-created on first cross-currency transfer with custom rate.
+// Keeps account balances clean: parent.toAmount = ACTUAL received, forex diff lands here.
+function getOrCreateForexPnlAcct() {
+  // Look for existing tagged account first
+  let acct = db.accounts.find(a => a.isForexPnl);
+  if (acct) return acct;
+  // Fall back to name match (in case flag was lost)
+  acct = db.accounts.find(a => a.name === 'Forex P&L' && a.currency === 'PHP');
+  if (acct) {
+    acct.isForexPnl = true; // re-tag
+    return acct;
+  }
+  // Auto-create
+  acct = {
+    id: 'acct-forexpnl-' + genId(),
+    name: 'Forex P&L',
+    type: 'Other',
+    currency: 'PHP',
+    initialBalance: 0,
+    note: 'Auto-tracks forex gains/losses from cross-currency transfers',
+    alertThreshold: null,
+    archived: false,
+    lastTxDate: null,
+    isForexPnl: true,
+  };
+  db.accounts.push(acct);
+  return acct;
+}
+
 function submitRemittance() {
   try {
     const fromId = document.getElementById('rem-from-acct')?.value;
@@ -3239,10 +3509,17 @@ function renderTransferForm() {
       <label for="tf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
     </div>
     <div id="tf-custom-rate-row" style="display:none;margin-bottom:8px">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Transaction rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
-        <input class="form-input" type="number" id="tf-custom-rate" placeholder="Enter transaction rate" step="any" oninput="updateTransferPreview()">
+      <div class="form-row fr2" style="margin-bottom:6px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
+          <input class="form-input" type="number" id="tf-toamount" placeholder="0.00" step="any" oninput="onTfToAmountInput()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:11px">Or rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
+          <input class="form-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()">
+        </div>
       </div>
+      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either field — the other auto-fills.</div>
     </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
     <div class="form-group">
@@ -3317,9 +3594,65 @@ function syncTransferCurrency() {
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   const currSel = document.getElementById('tf-currency');
   if (fromAcct && currSel) currSel.value = fromAcct.currency;
-  // Reset toamount when from account changes
+  // Reset toamount + rate when from account changes
   const toAmountEl = document.getElementById('tf-toamount');
   if (toAmountEl) toAmountEl.value = '';
+  const rateEl = document.getElementById('tf-custom-rate');
+  if (rateEl) rateEl.value = '';
+}
+
+// ── Bidirectional sync (Batch B #4) — typing toAmount derives rate ──
+function onTfToAmountInput() {
+  const amount = parseFloat(document.getElementById('tf-amount')?.value) || 0;
+  const toAmount = parseFloat(document.getElementById('tf-toamount')?.value) || 0;
+  const txCurr = document.getElementById('tf-currency')?.value;
+  const toId = document.getElementById('tf-to')?.value;
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const rateEl = document.getElementById('tf-custom-rate');
+  if (!rateEl || !toAcct || amount <= 0 || toAmount <= 0) {
+    if (rateEl) rateEl.value = '';
+    updateTransferPreview();
+    return;
+  }
+  // Rate is always expressed as "1 foreign = X PHP"
+  // If sending foreign → PHP: rate = toAmount(PHP) / amount(foreign)
+  // If sending PHP → foreign: rate = amount(PHP) / toAmount(foreign)
+  let rate;
+  if (txCurr !== 'PHP' && toAcct.currency === 'PHP') {
+    rate = toAmount / amount;
+  } else if (txCurr === 'PHP' && toAcct.currency !== 'PHP') {
+    rate = amount / toAmount;
+  } else {
+    // Same currency or non-PHP-pair — fallback
+    rate = toAmount / amount;
+  }
+  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  updateTransferPreview();
+}
+
+// Typing rate derives toAmount
+function onTfCustomRateInput() {
+  const amount = parseFloat(document.getElementById('tf-amount')?.value) || 0;
+  const rate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+  const txCurr = document.getElementById('tf-currency')?.value;
+  const toId = document.getElementById('tf-to')?.value;
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const toAmountEl = document.getElementById('tf-toamount');
+  if (!toAmountEl || !toAcct || amount <= 0 || rate <= 0) {
+    if (toAmountEl) toAmountEl.value = '';
+    updateTransferPreview();
+    return;
+  }
+  let toAmount;
+  if (txCurr !== 'PHP' && toAcct.currency === 'PHP') {
+    toAmount = amount * rate;
+  } else if (txCurr === 'PHP' && toAcct.currency !== 'PHP') {
+    toAmount = amount / rate;
+  } else {
+    toAmount = amount * rate;
+  }
+  toAmountEl.value = (Math.round(toAmount * 100) / 100).toString();
+  updateTransferPreview();
 }
 
 function updateTransferPreview() {
@@ -3360,6 +3693,9 @@ function updateTransferPreview() {
   // Show/hide custom rate input (only relevant when cross-currency)
   if (customRateRow) customRateRow.style.display = (isCrossCurrency && !useSnapshot) ? 'block' : 'none';
   if (customCurrLabel && txCurr && txCurr !== 'PHP') customCurrLabel.textContent = txCurr;
+  // Update toAmount currency label (Batch B #4)
+  const toAmountCurrLabel = document.getElementById('tf-toamount-curr-label');
+  if (toAmountCurrLabel && toAcct) toAmountCurrLabel.textContent = toAcct.currency;
 
   // Show To Account receives preview
   const previewDiv = document.getElementById('tf-toamount-preview');
@@ -3382,7 +3718,8 @@ function updateTransferPreview() {
         hint.textContent = '';
       }
     }
-    previewDiv.style.display = 'block';
+    // In custom mode, the paired input row IS the source of truth — hide read-only preview
+    previewDiv.style.display = (!useSnapshot && isCrossCurrency) ? 'none' : 'block';
 
     // Forex gain/loss preview when custom rate used
     const fxPreview = document.getElementById('tf-forex-preview');
@@ -3557,27 +3894,41 @@ function submitTransfer() {
   const toAcct2 = db.accounts.find(a=>a.id===toId);
   const useSnapshot = document.getElementById('tf-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+  const userToAmount = parseFloat(document.getElementById('tf-toamount')?.value) || 0;
   const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
   let toAmount = null;
-  let forexDiff = 0;
+  let forexDiff = 0; // in PHP — for child forex tx
   if (isCross) {
-    if (!useSnapshot && customRate > 0) {
+    if (!useSnapshot && (customRate > 0 || userToAmount > 0)) {
+      // Batch B #4: parent.toAmount = ACTUAL received (user's input)
+      // Snapshot toAmount = what would be received at fair (snapshot) rate
       const foreignCurr = currency !== 'PHP' ? currency : toAcct2.currency;
       const snapshotRate = getLatestFxRate(foreignCurr);
-      if (currency === 'PHP') {
-        // Sending PHP → receiving PGK
-        // Parent: toAmount always based on SNAPSHOT (what recipient gets at fair rate)
-        toAmount = Math.round((amount / snapshotRate) * 10000) / 10000;
-        // Child forex: result1 - (toAmount × transactionRate)
-        // result1 = amount (PHP sent)
-        // = amount - (toAmount × transactionRate)
-        forexDiff = Math.round((amount - (toAmount * customRate)) * 100) / 100;
+      const snapshotToAmount = currency === 'PHP'
+        ? amount / snapshotRate           // PHP → foreign
+        : amount * snapshotRate;          // foreign → PHP
+
+      // Use whichever the user provided. If only rate was typed, derive toAmount
+      // from rate; if only toAmount, it's already there.
+      let actualToAmount;
+      if (userToAmount > 0) {
+        actualToAmount = userToAmount;
+      } else if (customRate > 0) {
+        actualToAmount = currency === 'PHP' ? amount / customRate : amount * customRate;
       } else {
-        // Sending PGK → receiving PHP
-        // Parent: toAmount based on snapshot
-        toAmount = Math.round(amount * snapshotRate * 100) / 100;
-        // Child forex: result1 - (amount × transactionRate)
-        forexDiff = Math.round((toAmount - (amount * customRate)) * 100) / 100;
+        actualToAmount = snapshotToAmount;
+      }
+
+      toAmount = Math.round(actualToAmount * 100) / 100;
+
+      // forexDiff in PHP = (actual - snapshot) × snapRate(toCurr→PHP) when foreign↔PHP
+      if (toAcct2.currency === 'PHP') {
+        // Receiving PHP — diff is already in PHP
+        forexDiff = Math.round((toAmount - snapshotToAmount) * 100) / 100;
+      } else {
+        // Receiving foreign — convert diff to PHP
+        const diffInForeign = toAmount - snapshotToAmount;
+        forexDiff = Math.round(diffInForeign * snapshotRate * 100) / 100;
       }
     } else {
       toAmount = convert(amount, currency, toAcct2.currency);
@@ -3632,30 +3983,24 @@ function submitTransfer() {
   }
 
 
-  // Auto-log forex gain/loss if custom rate used — account: PHP side of the transfer
-  if (forexDiff !== 0 && !useSnapshot && customRate > 0) {
-    const fromAcctF2 = db.accounts.find(a=>a.id===fromId);
-    const toAcctF2 = db.accounts.find(a=>a.id===toId);
-    const forexAcct2 = (fromAcctF2?.currency==='PHP' ? fromAcctF2 : null)
-      || (toAcctF2?.currency==='PHP' ? toAcctF2 : null)
-      || db.accounts.find(a=>!a.archived && a.currency==='PHP')
-      || db.accounts.find(a=>!a.archived);
-    if (forexAcct2) {
-      db.transactions.push({
-        id: genId(),
-        type: forexDiff > 0 ? 'income' : 'expense',
-        amount: Math.abs(forexDiff),
-        currency: 'PHP',
-        accountId: forexAcct2.id,
-        categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
-        date, time: time||nowTime(),
-        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (transaction rate vs snapshot)`,
-        fxSnapshot: buildFxSnapshot(date),
-        parentId,
-        isAutoForex: true,
-        createdAt: new Date().toISOString()
-      });
-    }
+  // Auto-log forex gain/loss if custom rate used — Batch B #4: routes to dedicated Forex P&L account
+  // This keeps the destination account balance clean (toAmount = ACTUAL received).
+  if (forexDiff !== 0 && !useSnapshot && (customRate > 0 || userToAmount > 0)) {
+    const forexAcct2 = getOrCreateForexPnlAcct();
+    db.transactions.push({
+      id: genId(),
+      type: forexDiff > 0 ? 'income' : 'expense',
+      amount: Math.abs(forexDiff),
+      currency: 'PHP',
+      accountId: forexAcct2.id,
+      categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
+      date, time: time||nowTime(),
+      notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+      fxSnapshot: buildFxSnapshot(date),
+      parentId,
+      isAutoForex: true,
+      createdAt: new Date().toISOString()
+    });
   }
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   if (fromAcct) fromAcct.lastTxDate = date;
@@ -3679,6 +4024,13 @@ function submitTransfer() {
 let _txTab = 'log';
 let _txFilter = 'all';
 let _txMonth = currMonthKey();
+
+// ── BULK SELECT MODE (Batch B #6) ──
+let _txBulkMode = false;
+let _txBulkSet = new Set();
+let _txLongPressTimer = null;
+let _txLongPressFired = false;
+const TX_BULK_LONGPRESS_MS = 480;
 
 function renderTransactions() {
   const tabsHTML = `<div class="tab-bar">
@@ -3801,7 +4153,17 @@ function renderTxLog() {
         <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
       </div>`;
 
-  return `${monthRow}
+  // ── BULK TOOLBAR (Batch B #6) — shown when bulk mode active ──
+  const bulkToolbar = _txBulkMode ? `
+    <div class="bulk-toolbar">
+      <button class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
+      <span class="bt-count">${_txBulkSet.size} selected</span>
+      <button onclick="bulkSelectAllVisible()" title="Select all visible">All</button>
+      <button onclick="bulkArchiveTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>📦 Archive</button>
+      <button class="bt-danger" onclick="bulkDeleteTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🗑️ Delete</button>
+    </div>` : '';
+
+  return `${bulkToolbar}${monthRow}
     <div style="padding:8px 16px;display:flex;gap:8px;align-items:center">
       <div style="flex:1;position:relative">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.5"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -4689,6 +5051,47 @@ function saveEditTx(txId) {
   showToast('Changes saved!');
 }
 
+// ── Bidirectional sync for Edit Transfer (Batch B #4) ──
+function onEtfToAmountInput() {
+  const amount = parseFloat(document.getElementById('etf-amount')?.value) || 0;
+  const toAmount = parseFloat(document.getElementById('etf-toamount')?.value) || 0;
+  const txCurr = document.getElementById('etf-currency')?.value;
+  const toId = document.getElementById('etf-to')?.value;
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const rateEl = document.getElementById('etf-custom-rate');
+  if (!rateEl || !toAcct || amount <= 0 || toAmount <= 0) {
+    if (rateEl) rateEl.value = '';
+    updateEditTransferPreview();
+    return;
+  }
+  let rate;
+  if (txCurr !== 'PHP' && toAcct.currency === 'PHP') rate = toAmount / amount;
+  else if (txCurr === 'PHP' && toAcct.currency !== 'PHP') rate = amount / toAmount;
+  else rate = toAmount / amount;
+  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  updateEditTransferPreview();
+}
+
+function onEtfCustomRateInput() {
+  const amount = parseFloat(document.getElementById('etf-amount')?.value) || 0;
+  const rate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+  const txCurr = document.getElementById('etf-currency')?.value;
+  const toId = document.getElementById('etf-to')?.value;
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const toAmountEl = document.getElementById('etf-toamount');
+  if (!toAmountEl || !toAcct || amount <= 0 || rate <= 0) {
+    if (toAmountEl) toAmountEl.value = '';
+    updateEditTransferPreview();
+    return;
+  }
+  let toAmount;
+  if (txCurr !== 'PHP' && toAcct.currency === 'PHP') toAmount = amount * rate;
+  else if (txCurr === 'PHP' && toAcct.currency !== 'PHP') toAmount = amount / rate;
+  else toAmount = amount * rate;
+  toAmountEl.value = (Math.round(toAmount * 100) / 100).toString();
+  updateEditTransferPreview();
+}
+
 function updateEditTransferPreview() {
   const fromId = document.getElementById('etf-from')?.value;
   const toId = document.getElementById('etf-to')?.value;
@@ -4699,6 +5102,10 @@ function updateEditTransferPreview() {
   const customRateRow = document.getElementById('etf-custom-rate-row');
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   const toAcct = db.accounts.find(a=>a.id===toId);
+
+  // Update toAmount currency label (Batch B #4)
+  const etfToAmountCurrLabel = document.getElementById('etf-toamount-curr-label');
+  if (etfToAmountCurrLabel && toAcct) etfToAmountCurrLabel.textContent = toAcct.currency;
 
   // Detect cross-currency
   const isCrossCurrency = fromAcct && toAcct && (fromAcct.currency !== toAcct.currency || (txCurr && txCurr !== fromAcct.currency));
@@ -4734,7 +5141,8 @@ function updateEditTransferPreview() {
   }
   if (previewVal) previewVal.textContent = fmt(toAmt, toCurr);
   if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ₱${snapRate.toFixed(4)} snapshot)` : '';
-  previewDiv.style.display = amount > 0 ? 'block' : 'none';
+  // In custom mode, the paired input row IS the source of truth — hide read-only preview
+  previewDiv.style.display = (amount > 0 && (useSnapshot || !isCrossCurrency)) ? 'block' : 'none';
   // Forex preview
   if (!useSnapshot && isCross && fxPrev) {
     const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
@@ -4761,6 +5169,7 @@ function syncEditTransferCurrency() {
   const currSel = document.getElementById('etf-currency');
   if (fromAcct && currSel) currSel.value = fromAcct.currency;
   document.getElementById('etf-custom-rate') && (document.getElementById('etf-custom-rate').value = '');
+  document.getElementById('etf-toamount') && (document.getElementById('etf-toamount').value = '');
   updateEditTransferPreview();
 }
 
@@ -4796,10 +5205,17 @@ function openEditTransfer(txId) {
       <label for="etf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
     </div>
     <div id="etf-custom-rate-row" style="display:${hasCustomRate?'block':'none'};margin-bottom:8px">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Transaction rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
-        <input class="form-input" type="number" id="etf-custom-rate" placeholder="Enter transaction rate" step="any" value="${existingCustomRate}" oninput="updateEditTransferPreview()">
+      <div class="form-row fr2" style="margin-bottom:6px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:11px">Actual received <span id="etf-toamount-curr-label" style="color:var(--text4)">${toAcct?.currency||'PHP'}</span></label>
+          <input class="form-input" type="number" id="etf-toamount" placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
+          <input class="form-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()">
+        </div>
       </div>
+      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either field — the other auto-fills.</div>
     </div>
     <div id="etf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;display:none"></div>
     <div class="form-group">
@@ -4821,6 +5237,7 @@ function saveEditTransfer(txId) {
   const oldDate = tx.date;
   const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+  const userToAmountEdit = parseFloat(document.getElementById('etf-toamount')?.value) || 0;
   tx.fromAccountId = document.getElementById('etf-from').value || tx.fromAccountId;
   tx.toAccountId = document.getElementById('etf-to').value || tx.toAccountId;
   tx.amount = parseFloat(document.getElementById('etf-amount').value) || tx.amount;
@@ -4837,34 +5254,35 @@ function saveEditTransfer(txId) {
   if (isCross) {
     const foreignCurr2 = tx.currency !== 'PHP' ? tx.currency : toAcct2.currency;
     const snapRate2 = getLatestFxRate(foreignCurr2);
-    if (!useSnapshot && customRate > 0) {
-      // Custom rate — toAmount based on snapshot, forex child handles difference
-      tx.toAmount = tx.currency === 'PHP'
-        ? Math.round((tx.amount / snapRate2) * 10000) / 10000
-        : Math.round(tx.amount * snapRate2 * 100) / 100;
-      // Update or create forex child
-      const forexDiff = tx.currency === 'PHP'
-        ? Math.round((tx.amount - (tx.toAmount * customRate)) * 100) / 100
-        : Math.round((tx.toAmount - (tx.amount * customRate)) * 100) / 100;
+    if (!useSnapshot && (customRate > 0 || userToAmountEdit > 0)) {
+      // Batch B #4: parent.toAmount = ACTUAL received (user input)
+      const snapshotToAmount = tx.currency === 'PHP'
+        ? tx.amount / snapRate2
+        : tx.amount * snapRate2;
+      let actualToAmount;
+      if (userToAmountEdit > 0) actualToAmount = userToAmountEdit;
+      else if (customRate > 0) actualToAmount = tx.currency === 'PHP' ? tx.amount / customRate : tx.amount * customRate;
+      else actualToAmount = snapshotToAmount;
+      tx.toAmount = Math.round(actualToAmount * 100) / 100;
+      // forexDiff in PHP
+      const forexDiff = toAcct2.currency === 'PHP'
+        ? Math.round((tx.toAmount - snapshotToAmount) * 100) / 100
+        : Math.round((tx.toAmount - snapshotToAmount) * snapRate2 * 100) / 100;
       let child = db.transactions.find(t => t.parentId === txId && t.isAutoForex);
       if (!child) {
         child = { id: genId(), parentId: txId, isAutoForex: true, createdAt: new Date().toISOString() };
         db.transactions.push(child);
       }
-      const fromAcctEdit = db.accounts.find(a=>a.id===tx.fromAccountId);
-      const toAcctEdit = db.accounts.find(a=>a.id===tx.toAccountId);
-      const forexAcctEdit = (fromAcctEdit?.currency==='PHP' ? fromAcctEdit : null)
-        || (toAcctEdit?.currency==='PHP' ? toAcctEdit : null)
-        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
-        || db.accounts.find(a=>!a.archived);
+      // Batch B #4: forex child routes to dedicated Forex P&L account
+      const forexAcctEdit = getOrCreateForexPnlAcct();
       Object.assign(child, {
         type: forexDiff >= 0 ? 'income' : 'expense',
         amount: Math.abs(forexDiff),
         currency: 'PHP',
-        accountId: forexAcctEdit?.id,
+        accountId: forexAcctEdit.id,
         categoryId: forexDiff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
         date: tx.date, time: tx.time||nowTime(),
-        notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (transaction rate vs snapshot)`,
+        notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
         fxSnapshot: tx.fxSnapshot,
       });
     } else {
@@ -4928,8 +5346,8 @@ function recomputeTransferForexChild(parentId) {
   }
 
   const isGain = gainLossPhp > 0;
-  const phpAcct = db.accounts.find(a => !a.archived && a.currency === 'PHP') || db.accounts.find(a => !a.archived);
-  if (!phpAcct) return;
+  // Batch B #4: forex child routes to dedicated Forex P&L account
+  const phpAcct = getOrCreateForexPnlAcct();
 
   const childFields = {
     type: isGain ? 'income' : 'expense',
@@ -5630,10 +6048,13 @@ function renderActiveAccounts() {
 function renderAcctCard(a) {
   const bal = getAcctBalance(a.id);
   const alerts = _alertCache.filter(al=>(al.type==='idle'||al.type==='low')&&al.id===a.id);
+  const forexBadge = a.isForexPnl ? `<span class="acct-type-badge" style="background:var(--purple-bg);color:var(--purple);margin-left:4px" title="Auto-managed forex tracker">⚖️</span>` : '';
   return `<div class="acct-card" onclick="openAcctDetail('${a.id}')">
     <div class="acct-card-top">
       <div class="acct-name">${a.name}</div>
-      <div class="acct-type-badge">${a.type}</div>
+      <div style="display:flex;align-items:center;gap:0">
+        <div class="acct-type-badge">${a.type}</div>${forexBadge}
+      </div>
     </div>
     ${a.note?`<div style="font-size:11px;color:var(--text4);margin-bottom:4px">${a.note}</div>`:''}
     <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency)}</div>
@@ -5685,9 +6106,10 @@ function openAcctDetail(acctId) {
       <span class="pill pill-gray">${a.type}</span>
     </div>
     ${a.note?`<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Ref: ${a.note}</div>`:''}
-    <div style="display:flex;gap:8px;margin-bottom:16px">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="openEditAccount('${acctId}')">Edit</button>
       <button class="btn btn-ghost btn-sm" onclick="nav('transactions');closeSheet('gen')">View Txns</button>
+      ${!a.archived && !a.isForexPnl ?`<button class="btn btn-ghost btn-sm" onclick="openBalanceCorrection('${acctId}')" title="Adjust balance to match reality">⚖️ Reconcile</button>`:''}
       ${!a.archived?`<button class="btn btn-warning btn-sm" onclick="archiveAccount('${acctId}')">Archive</button>`:`<button class="btn btn-ghost btn-sm" onclick="restoreAccount('${acctId}')">Restore</button>`}
       <button class="btn btn-danger btn-sm" onclick="deleteAccount('${acctId}')">Delete</button>
     </div>
@@ -5695,6 +6117,124 @@ function openAcctDetail(acctId) {
     ${recentTxs.length>0?`<div style="background:var(--bg3);border-radius:var(--r-md);overflow:hidden">${recentTxs.map(tx=>renderTxRow(tx,true)).join('')}</div>`:'<div style="font-size:13px;color:var(--text3)">No transactions yet</div>'}
   `);
 }
+
+// ════════════════════════════════════════════════════════════
+// BALANCE CORRECTION (Batch B #5) — ⚖️ Reconcile account
+// ════════════════════════════════════════════════════════════
+function openBalanceCorrection(acctId) {
+  const a = db.accounts.find(x => x.id === acctId);
+  if (!a) return;
+  if (a.isForexPnl) {
+    showToast('💡 Forex P&L is auto-managed — corrections not allowed');
+    return;
+  }
+  const appBal = getAcctBalance(acctId);
+  closeSheet('gen');
+  setTimeout(() => {
+    openSheet('gen', `Reconcile ${a.name}`, `
+      <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:14px">
+        Use this to bring the app balance in line with the actual balance shown in your bank/wallet/cash. A correction transaction will be logged.
+      </div>
+      <div style="background:var(--bg3);padding:12px;border-radius:var(--r-md);margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">App Balance</div>
+        <div style="font-size:22px;font-family:var(--mono);font-weight:600;color:${appBal<0?'var(--red)':'var(--text)'}">${fmt(appBal, a.currency)}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Actual Balance (${a.currency}) *</label>
+        <input class="form-input" type="number" id="bc-actual" placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})">
+      </div>
+      <div id="bc-preview" style="display:none;padding:12px;border-radius:var(--r-md);margin-bottom:14px;font-size:13px"></div>
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <div class="dt-row">
+          <div class="dt-field"><div class="dt-display" id="dtd-bc-date" onclick="dtTrigger('bc-date','date')"><span class="dt-icon">📅</span><span class="dt-val" id="dtv-bc-date">${fmtD(today())}</span></div><input type="date" class="dt-native form-input" id="bc-date" value="${today()}" onchange="dtUpdate('bc-date','date')"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason / Notes (optional)</label>
+        <input class="form-input" id="bc-notes" placeholder="e.g. ATM fee not logged, interest, rounding">
+      </div>
+      <button class="btn btn-primary btn-full" id="bc-submit-btn" onclick="submitBalanceCorrection('${acctId}', ${appBal})" disabled style="opacity:0.5">Save Correction</button>
+    `);
+  }, 60);
+}
+
+function previewBalanceCorrection(acctId, appBal) {
+  const a = db.accounts.find(x => x.id === acctId);
+  const actualEl = document.getElementById('bc-actual');
+  const preview = document.getElementById('bc-preview');
+  const submitBtn = document.getElementById('bc-submit-btn');
+  if (!a || !actualEl || !preview) return;
+
+  const actualVal = actualEl.value.trim();
+  const actual = parseFloat(actualVal);
+
+  if (actualVal === '' || isNaN(actual)) {
+    preview.style.display = 'none';
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '0.5'; }
+    return;
+  }
+
+  const diff = actual - appBal;
+  if (Math.abs(diff) < 0.01) {
+    preview.style.display = 'block';
+    preview.style.background = 'var(--green-bg)';
+    preview.style.color = 'var(--green)';
+    preview.innerHTML = `✓ Already in sync — no correction needed.`;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '0.5'; }
+    return;
+  }
+
+  const isUp = diff > 0;
+  const icon = isUp ? '📈' : '📉';
+  const color = isUp ? 'var(--green)' : 'var(--red)';
+  const bg = isUp ? 'var(--green-bg)' : 'var(--red-bg)';
+  const label = isUp ? 'Increase by' : 'Decrease by';
+  preview.style.display = 'block';
+  preview.style.background = bg;
+  preview.style.color = color;
+  preview.innerHTML = `${icon} <strong>${label} ${fmt(Math.abs(diff), a.currency)}</strong>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">App: ${fmt(appBal, a.currency)} → Actual: ${fmt(actual, a.currency)}</div>`;
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; }
+}
+
+function submitBalanceCorrection(acctId, appBal) {
+  const a = db.accounts.find(x => x.id === acctId);
+  if (!a) return;
+  const actual = parseFloat(document.getElementById('bc-actual')?.value);
+  if (isNaN(actual)) { showToast('Enter the actual balance'); return; }
+
+  const diff = actual - appBal;
+  if (Math.abs(diff) < 0.01) { showToast('Already in sync'); return; }
+
+  const date = document.getElementById('bc-date')?.value || today();
+  const notes = document.getElementById('bc-notes')?.value?.trim() || '';
+  const direction = diff > 0 ? 'up' : 'down';
+  const amount = Math.abs(diff);
+
+  db.transactions.push({
+    id: genId(),
+    type: 'correction',
+    isCorrection: true,
+    direction,
+    amount,
+    currency: a.currency,
+    accountId: acctId,
+    date,
+    time: nowTime(),
+    notes,
+    fxSnapshot: a.currency !== 'PHP' ? buildFxSnapshot(date) : null,
+    createdAt: new Date().toISOString()
+  });
+
+  saveDBWithSync();
+  closeSheet('gen');
+  if (currentPage === 'accounts') renderAccounts();
+  else if (currentPage === 'dashboard') renderDashboard();
+  else if (currentPage === 'transactions') renderTransactions();
+  showToast(`⚖️ ${direction === 'up' ? 'Increased' : 'Decreased'} by ${fmt(amount, a.currency)}`);
+}
+
 
 function openAddAccount() {
   const acctTypes = ['Savings','Checking','Cash','E-Wallet','Credit Card','Prepaid','Crypto Wallet','Investment','Other'];
@@ -5766,6 +6306,10 @@ function saveEditAccount(acctId) {
 function archiveAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
+  if (a.isForexPnl) {
+    showToast('💡 Forex P&L is auto-managed — cannot archive');
+    return;
+  }
   // Snapshot current balance before archiving
   a.lastKnownBalance = getAcctBalance(acctId);
   a.archivedAt = new Date().toISOString();
@@ -5781,6 +6325,11 @@ function restoreAccount(acctId) {
   if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
 }
 function deleteAccount(acctId) {
+  const a = db.accounts.find(x=>x.id===acctId);
+  if (a?.isForexPnl) {
+    showToast('💡 Forex P&L is auto-managed — cannot delete');
+    return;
+  }
   const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
   if (hasTxns) {
     openDlg('Cannot Delete',
