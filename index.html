@@ -237,6 +237,10 @@ option{background:var(--bg3);color:var(--text)}
 .pill-teal{background:var(--teal-bg);color:var(--teal)}
 .pill-gray{background:var(--bg4);color:var(--text3)}
 .pill-blue{background:var(--blue-bg);color:var(--blue)}
+/* C9 Quick-filter pills */
+.qf-pill{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:var(--r-full);font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);transition:all var(--transition);white-space:nowrap}
+.qf-pill:hover{background:var(--bg3);color:var(--text)}
+.qf-pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 .tx-item{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer;transition:background var(--transition)}
 .tx-item:hover{background:var(--bg3)}
@@ -550,6 +554,7 @@ option{background:var(--bg3);color:var(--text)}
   @page{size:A5;margin:10mm}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 </head>
 <body>
 <!-- ONBOARDING -->
@@ -1365,6 +1370,13 @@ function getAcctBalance(acctId) {
   let bal = acct.initialBalance || 0;
   for (const tx of db.transactions) {
     if (tx.archived) continue;
+    // isAutoForex children on NEW transfers (toAmountIsActual=true): diff already baked
+    // into parent's toAmount — skip to avoid double-counting (Batch B #4).
+    // OLD transfers (toAmount=snapshot) still need the child to affect balance — don't skip.
+    if (tx.isAutoForex && tx.parentId) {
+      const parent = db.transactions.find(t => t.id === tx.parentId);
+      if (parent?.toAmountIsActual) continue;
+    }
     // isLoanTx must be checked FIRST — these have type=income/expense as placeholder
     // but their actual balance impact is determined by loanDirection, not type
     if (tx.isLoanTx) {
@@ -1451,6 +1463,31 @@ function getNetWorth() {
   return assets - liabs;
 }
 
+// ── Dashboard Reorder (C2) ──
+function getDashOrder() {
+  const saved = db.settings?.dashboardOrder;
+  if (Array.isArray(saved) && saved.length === DASH_SECTIONS_DEFAULT.length) return saved;
+  return [...DASH_SECTIONS_DEFAULT];
+}
+
+function moveDashSection(id, dir) {
+  const order = getDashOrder();
+  const idx = order.indexOf(id);
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  if (!db.settings) db.settings = {};
+  db.settings.dashboardOrder = order;
+  saveDBWithSync();
+  renderDashboard();
+}
+
+function toggleDashReorderMode() {
+  _dashReorderMode = !_dashReorderMode;
+  renderDashboard();
+}
+
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
@@ -1535,6 +1572,16 @@ function txAmountDisplay(tx) {
 // ════════════════════════════════════════════════════════════
 const PAGES = ['dashboard','analytics','ai','installments','transactions','reimbursements','accounts','loans','planning','settings'];
 let currentPage = 'dashboard';
+let _dashReorderMode = false; // C2: dashboard reorder mode
+
+const DASH_SECTIONS_DEFAULT = ['metrics','pulse','insights','budget','recent'];
+const DASH_SECTION_LABELS = {
+  metrics: '4-Metric Grid',
+  pulse: "Today's Pulse",
+  insights: 'AI Insights',
+  budget: 'Budget Tracker',
+  recent: 'Recent Transactions',
+};
 
 function nav(page) {
   // Close mobile sidebar if open
@@ -1544,6 +1591,7 @@ function nav(page) {
     window._txSearchQuery = '';
     // Exit bulk mode when leaving transactions page
     if (_txBulkMode) { _txBulkMode = false; _txBulkSet.clear(); }
+    _txQuickFilter = null;
   }
   currentPage = page;
   const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
@@ -1882,6 +1930,27 @@ function checkAlerts() {
     if (bal < acct.alertThreshold) _alertCache.push({type:'low', id:acct.id, msg:`${acct.name}: low balance (${fmt(bal,acct.currency)})`});
   }
 
+  // ── C11: FX Rate Alerts — flag significant rate movements (>2% vs previous entry) ──
+  const FX_ALERT_THRESHOLD = 0.02; // 2%
+  for (const curr of (db.trackedCurrencies || [])) {
+    if (curr === 'PHP') continue;
+    const hist = (db.fxHistory?.[curr] || []).filter(h => h.rate > 0).sort((a,b) => b.date.localeCompare(a.date));
+    if (hist.length < 2) continue;
+    const latest = hist[0].rate;
+    const prev = hist[1].rate;
+    if (prev <= 0) continue;
+    const pctChange = (latest - prev) / prev;
+    if (Math.abs(pctChange) >= FX_ALERT_THRESHOLD) {
+      const dir = pctChange > 0 ? '📈' : '📉';
+      const sign = pctChange > 0 ? '+' : '';
+      _alertCache.push({
+        type: 'fx',
+        id: curr,
+        msg: `${dir} ${curr}/PHP moved ${sign}${(pctChange*100).toFixed(1)}% (${prev.toFixed(4)} → ${latest.toFixed(4)})`
+      });
+    }
+  }
+
   // Crypto > 5%
   const nw = getNetWorth();
   if (nw > 0) {
@@ -1916,8 +1985,7 @@ function checkAlerts() {
 function fitMetricNums() {
   const els = document.querySelectorAll('.mfit');
   els.forEach(el => {
-    el.style.fontSize = '15px'; // reset to max
-    // Shrink by 0.5px steps until scrollWidth <= clientWidth
+    el.style.fontSize = '15px';
     let size = 15;
     while (el.scrollWidth > el.clientWidth && size > 8) {
       size -= 0.5;
@@ -1926,6 +1994,34 @@ function fitMetricNums() {
   });
 }
 window.addEventListener('resize', ()=>{ if(document.querySelectorAll('.mfit').length) fitMetricNums(); });
+
+// ── C18: Count-up animations — animates elements with data-countup attribute ──
+function runCountUpAnimations() {
+  const DURATION = 600; // ms
+  const els = document.querySelectorAll('[data-countup]');
+  if (!els.length) return;
+  const start = performance.now();
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / DURATION, 1);
+    const ease = easeOut(progress);
+    els.forEach(el => {
+      const target = parseFloat(el.dataset.countup) || 0;
+      const decimals = parseInt(el.dataset.countupDecimals ?? 2);
+      const prefix = el.dataset.countupPrefix || '';
+      const suffix = el.dataset.countupSuffix || '';
+      const current = target * ease;
+      el.textContent = prefix + current.toLocaleString('en', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      }) + suffix;
+    });
+    if (progress < 1) requestAnimationFrame(tick);
+    else fitMetricNums(); // re-fit after final values set
+  }
+  requestAnimationFrame(tick);
+}
 
 function renderDashboard() {
   const alerts = checkAlerts();
@@ -1987,7 +2083,7 @@ function renderDashboard() {
   if (alerts.length > 0) {
     alertsHTML = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
       ${alerts.slice(0,3).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--r-md);font-size:12px;color:var(--amber)">
-        <span>${a.type==='loan'?'⏰':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':'💤'}</span>
+        <span>${a.type==='loan'?'⏰':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':a.type==='fx'?'💱':'💤'}</span>
         <span>${a.msg}</span>
       </div>`).join('')}
     </div>`;
@@ -2151,34 +2247,98 @@ function renderDashboard() {
   const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px">
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('accounts')">
       <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">CASH &amp; WALLETS</div>
-      <div class="metric-num mfit" style="font-family:var(--mono);font-weight:700;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
+      <div class="metric-num mfit" data-countup="${fromPhp(cashTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${cashAcctCount} accounts<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
       <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">LOANS OUT</div>
-      <div class="metric-num mfit" style="font-family:var(--mono);font-weight:700;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
+      <div class="metric-num mfit" data-countup="${fromPhp(loansOutTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${loansOutCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
       <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">DEBTS</div>
-      <div class="metric-num mfit" style="font-family:var(--mono);font-weight:700;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
+      <div class="metric-num mfit" data-countup="${fromPhp(debtsTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${debtsCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('transactions')">
       <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">TXNS THIS MONTH</div>
-      <div class="metric-num mfit" style="font-family:var(--mono);font-weight:700;color:var(--text)">${txnsThisMonth}</div>
+      <div class="metric-num mfit" data-countup="${txnsThisMonth}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${txnsThisMonth}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">transactions<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
   </div>`;
+  // ── Build ordered sections (C2 drag-to-reorder) ──
+  const sectionMap = {
+    metrics: metricsHTML,
+    pulse: (()=>{
+      const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today());
+      const todayIncA = todayTxsA.filter(t=>t.type==='income'&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      const todayExpA = todayTxsA.filter(t=>(t.type==='expense'||t.type==='shared')&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      const todayNetA = todayIncA - todayExpA;
+      if (!todayTxsA.length) return '';
+      const netCls = todayNetA>0?'var(--green)':todayNetA<0?'var(--red)':'var(--text3)';
+      const netSign = todayNetA>0?'+':todayNetA<0?'−':'';
+      return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;position:relative">
+            <span style="position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">${todayTxsA.length}</span>📅
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Today's Pulse</div>
+            <div style="font-size:13px;color:var(--text2)">${todayTxsA.length} transaction${todayTxsA.length>1?'s':''} · <span style="color:${netCls};font-weight:600;font-family:var(--mono)">${netSign}${fmt(Math.abs(todayNetA),disp)}</span></div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        ${todayIncA>0||todayExpA>0?`<div style="display:flex;gap:6px;margin-top:10px">
+          ${todayIncA>0?`<div style="flex:1;background:rgba(45,217,138,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">In</span> <span style="color:var(--green);font-family:var(--mono);font-weight:600;float:right">${fmt(todayIncA,disp)}</span></div>`:''}
+          ${todayExpA>0?`<div style="flex:1;background:rgba(240,86,90,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">Out</span> <span style="color:var(--red);font-family:var(--mono);font-weight:600;float:right">${fmt(todayExpA,disp)}</span></div>`:''}
+        </div>`:''}
+      </div>`;
+    })(),
+    insights: insightHTML ? `<div style="margin-bottom:16px">${insightHTML}</div>` : '',
+    budget: budgetHTML ? `<div style="margin-bottom:16px">
+      <div class="section-hdr"><div class="section-title">Budget Tracker</div><span class="section-action" onclick="nav('settings')">Manage</span></div>
+      ${budgetHTML}
+    </div>` : '',
+    recent: `<div>
+      <div class="section-hdr"><div class="section-title">Recent Transactions</div><span class="section-action" onclick="nav('transactions')">View All</span></div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${txHTML}</div>
+    </div>`,
+  };
+
+  const order = getDashOrder();
+
+  // Reorder toolbar
+  const reorderToolbarHTML = _dashReorderMode ? `
+    <div style="position:sticky;top:0;z-index:40;background:var(--accent);color:#fff;padding:10px 16px;border-radius:var(--r-md);margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <span style="flex:1;font-size:13px;font-weight:600">↕ Reorder Sections</span>
+      <button onclick="toggleDashReorderMode()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 14px;border-radius:var(--r-md);font-size:12px;font-weight:600;cursor:pointer">Done</button>
+    </div>
+    ${order.map((id, idx) => `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
+        <span style="font-size:18px;color:var(--text3);cursor:grab">⠿</span>
+        <span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">${DASH_SECTION_LABELS[id]}</span>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <button onclick="moveDashSection('${id}',-1)" ${idx===0?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↑</button>
+          <button onclick="moveDashSection('${id}',1)" ${idx===order.length-1?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↓</button>
+        </div>
+      </div>`).join('')}` : '';
+
+  const orderedSectionsHTML = _dashReorderMode ? '' : order.map(id => sectionMap[id] || '').join('');
+
+  // Customize button (small, below hero card)
+  const customizeBtn = !_dashReorderMode ? `<div style="text-align:right;margin:-8px 0 12px">
+    <button onclick="toggleDashReorderMode()" style="background:none;border:none;font-size:11px;color:var(--text4);cursor:pointer;padding:4px 0">⚙ Customize</button>
+  </div>` : '';
+
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
     ${migrationBannerHTML}
     ${onboardChecklistHTML}
     ${alertsHTML}
-    <div class="hero-card" style="margin-bottom:16px">
+    <div class="hero-card" style="margin-bottom:12px">
       <div class="hero-label">Net Worth</div>
       <div style="display:flex;align-items:baseline;gap:4px">
         <span class="hero-currency">${sym(disp)}</span>
-        <span class="hero-amount">${fromPhp(nw,disp).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        <span class="hero-amount" data-countup="${fromPhp(nw,disp)}" data-countup-decimals="2">${fromPhp(nw,disp).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
       </div>
       ${(()=>{
         const mNet = curr.net || 0;
@@ -2212,72 +2372,19 @@ function renderDashboard() {
           </div>`).join('')}`:''}
           ${topLiabs.length>0?`
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.2);margin-top:10px;margin-bottom:6px">Top Liabilities</div>
-          ${topLiabs.map(l=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-            <div style="font-size:12px;color:rgba(255,255,255,0.5)">${l.name}</div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--red)">${fmt(fromPhp(l.phpBal,disp),disp)}</div>
+          ${topLiabs.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div style="font-size:12px;color:rgba(255,255,255,0.5)">${a.name} <span style="color:rgba(255,255,255,0.2);font-size:10px">${a.type}</span></div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--red)">${fmt(fromPhp(a.phpBal,disp),disp)}</div>
           </div>`).join('')}`:''}
         </div>
       </details>`:''}
     </div>
-
-    ${metricsHTML}
-
-    ${(()=>{
-      // ── TODAY'S PULSE — live counter for today's transactions ──
-      const tdy = today();
-      const todayTxs = db.transactions.filter(t => !t.archived && t.date === tdy && !t.isSettlement && !t.isAutoForex && !t.isAutoReimb);
-      if (todayTxs.length === 0) {
-        return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-          <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📅</div>
-          <div style="flex:1">
-            <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Today's Pulse</div>
-            <div style="font-size:13px;color:var(--text2)">No transactions yet today</div>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>`;
-      }
-      let todayInc = 0, todayExp = 0;
-      for (const t of todayTxs) {
-        const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
-        const inDisp = t.currency === disp ? amt : convert(amt, t.currency, disp);
-        if (t.type === 'income') todayInc += inDisp;
-        else if (t.type === 'expense' || t.type === 'shared') todayExp += inDisp;
-      }
-      const todayNet = todayInc - todayExp;
-      const netCls = todayNet > 0 ? 'var(--green)' : todayNet < 0 ? 'var(--red)' : 'var(--text3)';
-      const netSign = todayNet > 0 ? '+' : todayNet < 0 ? '−' : '';
-      return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;position:relative">
-            <span style="position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">${todayTxs.length}</span>
-            📅
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Today's Pulse</div>
-            <div style="font-size:13px;color:var(--text2)">${todayTxs.length} transaction${todayTxs.length>1?'s':''} · <span style="color:${netCls};font-weight:600;font-family:var(--mono)">${netSign}${fmt(Math.abs(todayNet),disp)}</span></div>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        ${todayInc > 0 || todayExp > 0 ? `<div style="display:flex;gap:6px;margin-top:10px">
-          ${todayInc > 0 ? `<div style="flex:1;background:rgba(45,217,138,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">In</span> <span style="color:var(--green);font-family:var(--mono);font-weight:600;float:right">${fmt(todayInc,disp)}</span></div>` : ''}
-          ${todayExp > 0 ? `<div style="flex:1;background:rgba(240,86,90,0.08);border-radius:var(--r-sm);padding:6px 10px;font-size:11px"><span style="color:var(--text4)">Out</span> <span style="color:var(--red);font-family:var(--mono);font-weight:600;float:right">${fmt(todayExp,disp)}</span></div>` : ''}
-        </div>` : ''}
-      </div>`;
-    })()}
-
-    ${insightHTML?`<div style="margin-bottom:16px">${insightHTML}</div>`:''}
-
-    ${budgetHTML?`<div style="margin-bottom:16px">
-      <div class="section-hdr"><div class="section-title">Budget Tracker</div><span class="section-action" onclick="nav('settings')">Manage</span></div>
-      ${budgetHTML}
-    </div>`:''}
-
-    <div>
-      <div class="section-hdr"><div class="section-title">Recent Transactions</div><span class="section-action" onclick="nav('transactions')">View All</span></div>
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${txHTML}</div>
-    </div>
+    ${customizeBtn}
+    ${reorderToolbarHTML}
+    ${orderedSectionsHTML}
   </div>`;
   requestAnimationFrame(fitMetricNums);
+  requestAnimationFrame(runCountUpAnimations);
 }
 
 function renderTxRow(tx, showDate=false) {
@@ -2457,13 +2564,11 @@ function confirmBulkDelete() {
   const ids = Array.from(_txBulkSet);
   let deleted = 0, cascaded = 0;
   for (const id of ids) {
-    // Cascade-delete children first by parentId
     const childrenToDelete = db.transactions.filter(t => t.parentId === id);
     for (const child of childrenToDelete) {
       const ci = db.transactions.findIndex(t => t.id === child.id);
       if (ci >= 0) { db.transactions.splice(ci, 1); cascaded++; }
     }
-    // Then the parent itself
     const idx = db.transactions.findIndex(t => t.id === id);
     if (idx >= 0) { db.transactions.splice(idx, 1); deleted++; }
   }
@@ -2471,6 +2576,58 @@ function confirmBulkDelete() {
   closeDlg();
   exitTxBulkMode();
   showToast(cascaded > 0 ? `Deleted ${deleted} (+ ${cascaded} linked)` : `Deleted ${deleted} transactions`);
+}
+
+function bulkRecategorize() {
+  const ids = Array.from(_txBulkSet);
+  if (ids.length === 0) { showToast('No transactions selected'); return; }
+
+  // Determine dominant tx type among selected to filter relevant cats
+  const types = ids.map(id => db.transactions.find(t => t.id === id)?.type).filter(Boolean);
+  const typeForCat = types.includes('expense') ? 'expense'
+    : types.includes('income') ? 'income'
+    : types.includes('shared') ? 'shared'
+    : 'expense';
+
+  // Build category options grouped by parent cat
+  const cats = (db.categories || []).filter(c => !c.archived && c.type === typeForCat);
+  let catOpts = '';
+  for (const cat of cats) {
+    catOpts += `<optgroup label="${cat.icon||''} ${cat.name}">`;
+    for (const sc of (cat.subcats || [])) {
+      if (sc.archived || sc.autoOnly) continue;
+      catOpts += `<option value="${sc.id}">${cat.icon||''} ${cat.name} › ${sc.name}</option>`;
+    }
+    catOpts += '</optgroup>';
+  }
+
+  openDlg('Re-categorize Selected',
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Apply a new category to <strong>${ids.length} transaction${ids.length>1?'s':''}</strong>:</div>
+     <select class="form-input" id="bulk-recat-sel" style="margin-bottom:4px">
+       <option value="">— Pick a category —</option>
+       ${catOpts}
+     </select>
+     <div style="font-size:11px;color:var(--text4);margin-top:6px">⚠ This overwrites existing categories on all selected transactions.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBulkRecategorize()">Apply</button>`
+  );
+}
+
+function confirmBulkRecategorize() {
+  const catId = document.getElementById('bulk-recat-sel')?.value;
+  if (!catId) { showToast('Pick a category first'); return; }
+  const ids = Array.from(_txBulkSet);
+  let updated = 0;
+  for (const id of ids) {
+    const tx = db.transactions.find(t => t.id === id);
+    if (!tx) continue;
+    tx.categoryId = catId;
+    updated++;
+  }
+  saveDBWithSync();
+  closeDlg();
+  exitTxBulkMode();
+  showToast(`🏷️ Re-categorized ${updated} transactions`);
 }
 
 function renderTxRowBody(tx, showDate, acct, amtD) {
@@ -3045,11 +3202,31 @@ function afterRenderShared() {
 function updateSharedSplit() { calcSharedResult(); }
 function updateSharedOwed() { calcSharedResult(); }
 
+// ── C12: Smart account suggestion — returns most recently used account for tx type ──
+function getSmartDefaultAcct(txType) {
+  const relevantTypes = (txType === 'lend' || txType === 'borrow') ? ['lend','borrow']
+    : txType === 'transfer' ? ['transfer']
+    : ['expense','income','shared'];
+  // Find most recent tx of this type group
+  const recent = db.transactions
+    .filter(t => !t.archived && relevantTypes.includes(t.type) && (t.accountId || t.fromAccountId))
+    .sort((a,b) => b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''))
+    .slice(0, 1)[0];
+  const acctId = recent?.accountId || recent?.fromAccountId;
+  // Verify account still exists and is not archived
+  if (acctId && db.accounts.find(a => a.id === acctId && !a.archived)) return acctId;
+  // Fallback: first active account
+  return db.accounts.find(a => !a.archived)?.id || null;
+}
+
 function renderAmountForm() {
   const s = _addState;
   const cat = getCategoryDisplay(s.subCatId || s.catId);
   const accts = db.accounts.filter(a=>!a.archived);
-  const acctOpts = accts.map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+
+  // ── C12: Smart account suggestion — pre-select most recently used acct for this tx type ──
+  const smartAcctId = getSmartDefaultAcct(s.type);
+  const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===smartAcctId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===db.displayCurrency?'selected':''}>${c}</option>`).join('');
   const isLoan = s.type==='lend'||s.type==='borrow';
   const isShared = s.type==='shared';
@@ -3295,36 +3472,6 @@ function getLatestFxRate(currency) {
     return sorted[0].rate;
   }
   return db.fxRates?.[currency] || 1;
-}
-
-// ── Forex P&L account (Batch B #4) — dedicated ledger for forex gains/losses ──
-// Auto-created on first cross-currency transfer with custom rate.
-// Keeps account balances clean: parent.toAmount = ACTUAL received, forex diff lands here.
-function getOrCreateForexPnlAcct() {
-  // Look for existing tagged account first
-  let acct = db.accounts.find(a => a.isForexPnl);
-  if (acct) return acct;
-  // Fall back to name match (in case flag was lost)
-  acct = db.accounts.find(a => a.name === 'Forex P&L' && a.currency === 'PHP');
-  if (acct) {
-    acct.isForexPnl = true; // re-tag
-    return acct;
-  }
-  // Auto-create
-  acct = {
-    id: 'acct-forexpnl-' + genId(),
-    name: 'Forex P&L',
-    type: 'Other',
-    currency: 'PHP',
-    initialBalance: 0,
-    note: 'Auto-tracks forex gains/losses from cross-currency transfers',
-    alertThreshold: null,
-    archived: false,
-    lastTxDate: null,
-    isForexPnl: true,
-  };
-  db.accounts.push(acct);
-  return acct;
 }
 
 function submitRemittance() {
@@ -3943,10 +4090,14 @@ function submitTransfer() {
 
   const fxSnapshot = buildFxSnapshot(date);
   const parentId = genId();
+  // toAmountIsActual: true → signals getAcctBalance to skip this tx's isAutoForex child
+  // (diff already baked into toAmount). Only set when user provided actual received amount.
+  const toAmountIsActual = isCross && !useSnapshot && (customRate > 0 || userToAmount > 0);
   db.transactions.push({
     id: parentId, type:'transfer', amount, currency,
     fromAccountId:fromId, toAccountId:toId,
     toAmount, date, time:time||nowTime(), notes, fxSnapshot,
+    ...(toAmountIsActual ? {toAmountIsActual: true} : {}),
     createdAt:new Date().toISOString()
   });
 
@@ -3983,24 +4134,31 @@ function submitTransfer() {
   }
 
 
-  // Auto-log forex gain/loss if custom rate used — Batch B #4: routes to dedicated Forex P&L account
-  // This keeps the destination account balance clean (toAmount = ACTUAL received).
+  // Auto-log forex gain/loss — goes to PHP side of transfer for analytics visibility.
+  // getAcctBalance skips isAutoForex txs (already in toAmount) so no double-count.
   if (forexDiff !== 0 && !useSnapshot && (customRate > 0 || userToAmount > 0)) {
-    const forexAcct2 = getOrCreateForexPnlAcct();
-    db.transactions.push({
-      id: genId(),
-      type: forexDiff > 0 ? 'income' : 'expense',
-      amount: Math.abs(forexDiff),
-      currency: 'PHP',
-      accountId: forexAcct2.id,
-      categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
-      date, time: time||nowTime(),
-      notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
-      fxSnapshot: buildFxSnapshot(date),
-      parentId,
-      isAutoForex: true,
-      createdAt: new Date().toISOString()
-    });
+    const fromAcctF2 = db.accounts.find(a=>a.id===fromId);
+    const toAcctF2 = db.accounts.find(a=>a.id===toId);
+    const forexAcct2 = (toAcctF2?.currency==='PHP' ? toAcctF2 : null)
+      || (fromAcctF2?.currency==='PHP' ? fromAcctF2 : null)
+      || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+      || db.accounts.find(a=>!a.archived);
+    if (forexAcct2) {
+      db.transactions.push({
+        id: genId(),
+        type: forexDiff > 0 ? 'income' : 'expense',
+        amount: Math.abs(forexDiff),
+        currency: 'PHP',
+        accountId: forexAcct2.id,
+        categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
+        date, time: time||nowTime(),
+        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+        fxSnapshot: buildFxSnapshot(date),
+        parentId,
+        isAutoForex: true,
+        createdAt: new Date().toISOString()
+      });
+    }
   }
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   if (fromAcct) fromAcct.lastTxDate = date;
@@ -4024,13 +4182,14 @@ function submitTransfer() {
 let _txTab = 'log';
 let _txFilter = 'all';
 let _txMonth = currMonthKey();
+let _txQuickFilter = null; // C9: null | 'large' | 'foreign' | 'nonotes' | 'recurring'
 
 // ── BULK SELECT MODE (Batch B #6) ──
 let _txBulkMode = false;
 let _txBulkSet = new Set();
 let _txLongPressTimer = null;
 let _txLongPressFired = false;
-const TX_BULK_LONGPRESS_MS = 480;
+const TX_BULK_LONGPRESS_MS = 550;
 
 function renderTransactions() {
   const tabsHTML = `<div class="tab-bar">
@@ -4051,6 +4210,11 @@ function setTxTab(tab) {
   renderTransactions();
 }
 
+function setTxQuickFilter(key) {
+  _txQuickFilter = _txQuickFilter === key ? null : key; // toggle
+  renderTransactions();
+}
+
 function renderTxLog() {
   const months = [...new Set(db.transactions.filter(t=>!t.archived).map(t=>t.date?.slice(0,7)))].filter(Boolean).sort((a,b)=>b.localeCompare(a));
   if (!months.includes(_txMonth) && months.length > 0) _txMonth = months[0];
@@ -4058,6 +4222,25 @@ function renderTxLog() {
   const monthOpts = months.map(m=>`<option value="${m}" ${m===_txMonth?'selected':''}>${fmtMonth(m+'-01')}</option>`).join('');
   const filters = ['all','expense','income','shared','transfer','loans'];
   const chipHTML = filters.map(f=>`<div class="chip ${_txFilter===f?'active':''}" onclick="setTxFilter('${f}')">${f==='all'?'All':f==='loans'?'Loans':f.charAt(0).toUpperCase()+f.slice(1)}</div>`).join('');
+
+  // ── C9 Quick-filter pills — context-aware smart shortcuts ──
+  // Scan current month txs to decide which pills are relevant
+  const monthTxsScan = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(_txMonth));
+  const hasForeign = monthTxsScan.some(t => t.currency && t.currency !== 'PHP');
+  const hasNoNotes = monthTxsScan.some(t => !t.notes?.trim() && (t.type==='expense'||t.type==='income'||t.type==='shared'));
+  const LARGE_THRESHOLD = 1000; // PHP equivalent
+  const hasLarge = monthTxsScan.some(t => txToPhp(t) >= LARGE_THRESHOLD);
+
+  const qfPills = [
+    hasLarge   ? { key:'large',   label:'💸 Large',      title:`≥ ₱${LARGE_THRESHOLD.toLocaleString()}` } : null,
+    hasForeign ? { key:'foreign', label:'🌏 Foreign',    title:'Non-PHP transactions' } : null,
+    hasNoNotes ? { key:'nonotes', label:'📝 No Notes',   title:'Transactions without notes' } : null,
+  ].filter(Boolean);
+
+  const qfPillsHTML = qfPills.length > 0 ? `
+    <div style="display:flex;gap:6px;overflow-x:auto;padding:0 16px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+      ${qfPills.map(p=>`<div class="qf-pill${_txQuickFilter===p.key?' active':''}" onclick="setTxQuickFilter('${p.key}')" title="${p.title}">${p.label}</div>`).join('')}
+    </div>` : '';
 
   // Smart search query
   const searchQuery = (window._txSearchQuery || '').trim().toLowerCase();
@@ -4112,6 +4295,10 @@ function renderTxLog() {
         || (t.currency || '').toLowerCase().includes(searchQuery);
       if (!amountMatch && !textMatch) return false;
     }
+    // ── C9 Quick-filter ──
+    if (_txQuickFilter === 'large' && txToPhp(t) < LARGE_THRESHOLD) return false;
+    if (_txQuickFilter === 'foreign' && (t.currency === 'PHP' || !t.currency)) return false;
+    if (_txQuickFilter === 'nonotes' && t.notes?.trim()) return false;
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
 
@@ -4135,9 +4322,12 @@ function renderTxLog() {
   }
 
   if (!txHTML) {
-    txHTML = searchActive
-      ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]))}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
-      : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
+    const qfLabels = { large:'large transactions', foreign:'foreign currency transactions', nonotes:'transactions without notes' };
+    txHTML = _txQuickFilter
+      ? `<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">No ${qfLabels[_txQuickFilter]||'matches'} this month</div><button class="btn btn-ghost btn-sm" onclick="setTxQuickFilter('${_txQuickFilter}')">Clear filter</button></div>`
+      : searchActive
+        ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]))}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
+        : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
   }
 
   // When search is active, hide month selector since we search across all months
@@ -4159,6 +4349,7 @@ function renderTxLog() {
       <button class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
       <span class="bt-count">${_txBulkSet.size} selected</span>
       <button onclick="bulkSelectAllVisible()" title="Select all visible">All</button>
+      <button onclick="bulkRecategorize()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🏷️ Re-cat</button>
       <button onclick="bulkArchiveTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>📦 Archive</button>
       <button class="bt-danger" onclick="bulkDeleteTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🗑️ Delete</button>
     </div>` : '';
@@ -4204,6 +4395,7 @@ function renderTxLog() {
         </div>
       </div>
     </div>
+    ${qfPillsHTML}
     <div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
 }
 
@@ -4283,8 +4475,8 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function setTxFilter(f) { _txFilter = f; renderTransactions(); }
-function setTxMonth(m) { _txMonth = m; renderTransactions(); }
+function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactions(); }
+function setTxMonth(m) { _txMonth = m; _txQuickFilter = null; renderTransactions(); }
 
 // ── TX DETAIL & EDIT ──
 function openTxDetail(txId) {
@@ -5264,6 +5456,7 @@ function saveEditTransfer(txId) {
       else if (customRate > 0) actualToAmount = tx.currency === 'PHP' ? tx.amount / customRate : tx.amount * customRate;
       else actualToAmount = snapshotToAmount;
       tx.toAmount = Math.round(actualToAmount * 100) / 100;
+      tx.toAmountIsActual = true; // signals getAcctBalance to skip isAutoForex child
       // forexDiff in PHP
       const forexDiff = toAcct2.currency === 'PHP'
         ? Math.round((tx.toAmount - snapshotToAmount) * 100) / 100
@@ -5273,13 +5466,18 @@ function saveEditTransfer(txId) {
         child = { id: genId(), parentId: txId, isAutoForex: true, createdAt: new Date().toISOString() };
         db.transactions.push(child);
       }
-      // Batch B #4: forex child routes to dedicated Forex P&L account
-      const forexAcctEdit = getOrCreateForexPnlAcct();
+      // Route to PHP side — getAcctBalance skips isAutoForex so no double-count
+      const fromAcctEdit = db.accounts.find(a=>a.id===tx.fromAccountId);
+      const toAcctEdit = db.accounts.find(a=>a.id===tx.toAccountId);
+      const forexAcctEdit = (toAcctEdit?.currency==='PHP' ? toAcctEdit : null)
+        || (fromAcctEdit?.currency==='PHP' ? fromAcctEdit : null)
+        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+        || db.accounts.find(a=>!a.archived);
       Object.assign(child, {
         type: forexDiff >= 0 ? 'income' : 'expense',
         amount: Math.abs(forexDiff),
         currency: 'PHP',
-        accountId: forexAcctEdit.id,
+        accountId: forexAcctEdit?.id,
         categoryId: forexDiff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
         date: tx.date, time: tx.time||nowTime(),
         notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
@@ -5287,11 +5485,12 @@ function saveEditTransfer(txId) {
       });
     } else {
       tx.toAmount = convert(tx.amount, tx.currency, toAcct2.currency);
-      // Remove forex child if using snapshot
+      delete tx.toAmountIsActual; // snapshot mode — forex child handles diff
       db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
     }
   } else {
     tx.toAmount = null;
+    delete tx.toAmountIsActual;
     db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
   }
 
@@ -5346,8 +5545,9 @@ function recomputeTransferForexChild(parentId) {
   }
 
   const isGain = gainLossPhp > 0;
-  // Batch B #4: forex child routes to dedicated Forex P&L account
-  const phpAcct = getOrCreateForexPnlAcct();
+  // Route to PHP side — getAcctBalance skips isAutoForex so no double-count
+  const phpAcct = db.accounts.find(a => !a.archived && a.currency === 'PHP') || db.accounts.find(a => !a.archived);
+  if (!phpAcct) return;
 
   const childFields = {
     type: isGain ? 'income' : 'expense',
@@ -6022,6 +6222,15 @@ function renderActiveAccounts() {
   // Sort accounts within group alphabetically
   for (const curr of sortedCurrencies) groups[curr].sort((a,b)=>a.name.localeCompare(b.name));
 
+  if (sortedCurrencies.length === 0) {
+    return `<div class="empty-state page-pad">
+      <div class="empty-icon">🏦</div>
+      <div class="empty-text">No accounts yet</div>
+      <div class="empty-sub">Add your bank, e-wallet, cash, or crypto accounts to start tracking.</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddAccount()">+ Add Account</button>
+    </div>`;
+  }
+
   let html = '<div class="page-pad">';
   for (const curr of sortedCurrencies) {
     const grpAccts = groups[curr];
@@ -6048,13 +6257,10 @@ function renderActiveAccounts() {
 function renderAcctCard(a) {
   const bal = getAcctBalance(a.id);
   const alerts = _alertCache.filter(al=>(al.type==='idle'||al.type==='low')&&al.id===a.id);
-  const forexBadge = a.isForexPnl ? `<span class="acct-type-badge" style="background:var(--purple-bg);color:var(--purple);margin-left:4px" title="Auto-managed forex tracker">⚖️</span>` : '';
   return `<div class="acct-card" onclick="openAcctDetail('${a.id}')">
     <div class="acct-card-top">
       <div class="acct-name">${a.name}</div>
-      <div style="display:flex;align-items:center;gap:0">
-        <div class="acct-type-badge">${a.type}</div>${forexBadge}
-      </div>
+      <div class="acct-type-badge">${a.type}</div>
     </div>
     ${a.note?`<div style="font-size:11px;color:var(--text4);margin-bottom:4px">${a.note}</div>`:''}
     <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency)}</div>
@@ -6109,7 +6315,7 @@ function openAcctDetail(acctId) {
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="openEditAccount('${acctId}')">Edit</button>
       <button class="btn btn-ghost btn-sm" onclick="nav('transactions');closeSheet('gen')">View Txns</button>
-      ${!a.archived && !a.isForexPnl ?`<button class="btn btn-ghost btn-sm" onclick="openBalanceCorrection('${acctId}')" title="Adjust balance to match reality">⚖️ Reconcile</button>`:''}
+      ${!a.archived?`<button class="btn btn-ghost btn-sm" onclick="openBalanceCorrection('${acctId}')" title="Adjust balance to match reality">⚖️ Reconcile</button>`:''}
       ${!a.archived?`<button class="btn btn-warning btn-sm" onclick="archiveAccount('${acctId}')">Archive</button>`:`<button class="btn btn-ghost btn-sm" onclick="restoreAccount('${acctId}')">Restore</button>`}
       <button class="btn btn-danger btn-sm" onclick="deleteAccount('${acctId}')">Delete</button>
     </div>
@@ -6124,10 +6330,6 @@ function openAcctDetail(acctId) {
 function openBalanceCorrection(acctId) {
   const a = db.accounts.find(x => x.id === acctId);
   if (!a) return;
-  if (a.isForexPnl) {
-    showToast('💡 Forex P&L is auto-managed — corrections not allowed');
-    return;
-  }
   const appBal = getAcctBalance(acctId);
   closeSheet('gen');
   setTimeout(() => {
@@ -6306,10 +6508,6 @@ function saveEditAccount(acctId) {
 function archiveAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
-  if (a.isForexPnl) {
-    showToast('💡 Forex P&L is auto-managed — cannot archive');
-    return;
-  }
   // Snapshot current balance before archiving
   a.lastKnownBalance = getAcctBalance(acctId);
   a.archivedAt = new Date().toISOString();
@@ -6325,11 +6523,6 @@ function restoreAccount(acctId) {
   if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
 }
 function deleteAccount(acctId) {
-  const a = db.accounts.find(x=>x.id===acctId);
-  if (a?.isForexPnl) {
-    showToast('💡 Forex P&L is auto-managed — cannot delete');
-    return;
-  }
   const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
   if (hasTxns) {
     openDlg('Cannot Delete',
@@ -6359,7 +6552,7 @@ function renderInvestments() {
     </div>`;
   const invTypes = ['Stocks','Crypto','Bonds','Real Estate','Mutual Fund','Time Deposit','Other'];
   if (invs.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-text">No investments yet</div></div>`;
+    html += `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-text">No investments yet</div><div class="empty-sub">Track stocks, crypto, mutual funds, and more.</div><button class="btn btn-primary btn-sm" onclick="openAddInv()">+ Add Investment</button></div>`;
   } else {
     for (const inv of invs) {
       const gl = (inv.currentValue||inv.amount) - inv.amount;
@@ -6495,7 +6688,7 @@ function renderLoanList(direction) {
     </div>`;
   }
   if (active.length === 0 && settled.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">${direction==='lent'?'🤲':'🤏'}</div><div class="empty-text">No ${direction==='lent'?'loans out':'debts'} yet</div></div>`;
+    html += `<div class="empty-state"><div class="empty-icon">${direction==='lent'?'🤲':'🤏'}</div><div class="empty-text">No ${direction==='lent'?'loans out':'debts'} yet</div><div class="empty-sub">${direction==='lent'?'Track money you\'ve lent to others.':'Track money you\'ve borrowed.'}</div><button class="btn btn-primary btn-sm" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div>`;
   }
   for (const loan of [...active, ...settled]) {
     const d = daysUntil(loan.dueDate);
@@ -10908,6 +11101,10 @@ function renderDataTab() {
         <div class="sr-left"><div class="sr-icon">📝</div><div><div class="sr-text">Export Backup (TXT)</div><div class="sr-sub">For manual backup · ${(dbSize/1024).toFixed(1)} KB</div></div></div>
         <div class="sr-right">↓</div>
       </div>
+      <div class="settings-row" onclick="exportXLSX()">
+        <div class="sr-left"><div class="sr-icon">📊</div><div><div class="sr-text">Export to Excel (.xlsx)</div><div class="sr-sub">${txCount} transactions · 6 sheets</div></div></div>
+        <div class="sr-right">↓</div>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="section-title" style="margin-bottom:12px">Import</div>
@@ -10916,11 +11113,6 @@ function renderDataTab() {
         <div class="sr-right">↑</div>
       </div>
       <input type="file" id="import-file" accept=".json,.txt" style="display:none" onchange="importJSON(event);this.value=''">
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      </div>
-        <div class="sr-right">→</div>
-      </div>
     </div>
     <div class="card">
       <div class="section-title" style="margin-bottom:12px">Danger Zone</div>
@@ -10991,34 +11183,122 @@ function mergeImport() {
 }
 
 function exportXLSX() {
-  try {
-  // Multi-sheet TSV export (proper xlsx needs library)
-  const sheets = {
-    Transactions: [
-      ['Date','Time','Type','Category','Amount','Currency','Account','Person','Notes'],
-      ...db.transactions.map(t=>[t.date,t.time||'',t.type,getCategoryDisplay(t.categoryId).name,t.amount,t.currency,getAccountDisplay(t.accountId||t.fromAccountId).name,t.personName||'',t.notes||''])
-    ],
-    Accounts: [
-      ['Name','Type','Currency','Balance','Note'],
-      ...db.accounts.map(a=>[a.name,a.type,a.currency,getAcctBalance(a.id),a.note||''])
-    ],
-    FXRates: [
-      ['Currency','1 Unit = PHP','Last Updated'],
-      ...Object.entries(db.fxRates).map(([c,r])=>[c,r,(db.fxHistory[c]||[]).slice(-1)[0]?.date||''])
-    ],
-  };
-  let content = '';
-  for (const [name, rows] of Object.entries(sheets)) {
-    content += `\n\n=== ${name} ===\n`;
-    content += rows.map(r=>r.join('\t')).join('\n');
+  if (typeof XLSX === 'undefined') {
+    showToast('⏳ Excel library loading, try again in a moment');
+    return;
   }
-  const blob = new Blob([content], {type:'text/plain'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `trackbudget-export-${today()}.txt`;
-  a.click();
-  showToast('Export downloaded!');
-  } catch(e) { showToast('Export failed: ' + e.message); }
+  try {
+    const wb = XLSX.utils.book_new();
+    const today_ = today();
+
+    // ── Sheet 1: Transactions ──
+    const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency','PHP Equivalent','Account','To Account','Notes','Tags']];
+    for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
+      if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee) continue; // skip auto-children
+      const cat = getCategoryDisplay(tx.categoryId);
+      const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
+      const toAcct = tx.toAccountId ? getAccountDisplay(tx.toAccountId) : '';
+      const phpEq = txToPhp(tx);
+      const tags = [
+        tx.isSettlement ? 'Settlement' : '',
+        tx.isLoanTx ? 'Loan' : '',
+        tx.isLoanPayment ? 'Loan Payment' : '',
+        tx.isCorrection ? 'Correction' : '',
+        tx.archived ? 'Archived' : '',
+      ].filter(Boolean).join(', ');
+      txRows.push([
+        tx.date, tx.time || '', tx.type,
+        cat.name || '', cat.subName || '',
+        tx.amount, tx.currency,
+        Math.round(phpEq * 100) / 100,
+        acct.name || '', toAcct.name || '',
+        tx.notes || '', tags
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
+
+    // ── Sheet 2: Accounts ──
+    const acctRows = [['Name','Type','Currency','Current Balance','PHP Equivalent','Initial Balance','Note','Archived']];
+    for (const a of db.accounts) {
+      const bal = getAcctBalance(a.id);
+      acctRows.push([
+        a.name, a.type, a.currency,
+        bal, Math.round(toPhp(bal, a.currency) * 100) / 100,
+        a.initialBalance || 0, a.note || '',
+        a.archived ? 'Yes' : 'No'
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(acctRows), 'Accounts');
+
+    // ── Sheet 3: Budgets ──
+    const bgtRows = [['Budget Name','Currency','Monthly Limit','Spent This Month','Remaining','Alert %']];
+    for (const b of (db.budgets || [])) {
+      const monthKey = currMonthKey();
+      const spent = db.transactions.filter(t =>
+        !t.archived && t.date?.startsWith(monthKey) &&
+        (t.type === 'expense' || t.type === 'shared') &&
+        (b.accountIds?.includes(t.accountId) || !b.accountIds?.length)
+      ).reduce((s, t) => s + txToPhp(t), 0);
+      const limit = b.limit || 0;
+      bgtRows.push([
+        b.name || 'Budget', b.currency || 'PHP',
+        limit, Math.round(spent * 100) / 100,
+        Math.round((limit - spent) * 100) / 100,
+        b.alertPct || 80
+      ]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bgtRows), 'Budgets');
+
+    // ── Sheet 4: Loans ──
+    const loanRows = [['Direction','Person/Entity','Amount','Currency','PHP Equivalent','Remaining','Settled','Date','Notes']];
+    for (const l of (db.loans?.lent || [])) {
+      loanRows.push(['Lent', l.person||l.entity||'', l.amount, l.currency,
+        Math.round(toPhp(l.amount, l.currency)*100)/100,
+        l.remaining ?? l.amount, l.settled ? 'Yes' : 'No', l.date||'', l.notes||'']);
+    }
+    for (const l of (db.loans?.borrowed || [])) {
+      loanRows.push(['Borrowed', l.person||l.entity||'', l.amount, l.currency,
+        Math.round(toPhp(l.amount, l.currency)*100)/100,
+        l.remaining ?? l.amount, l.settled ? 'Yes' : 'No', l.date||'', l.notes||'']);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(loanRows), 'Loans');
+
+    // ── Sheet 5: FX Rates ──
+    const fxRows = [['Currency','Rate (1 unit = PHP)','Source','Last Updated']];
+    for (const [curr, rate] of Object.entries(db.fxRates || {})) {
+      const hist = (db.fxHistory?.[curr] || []).slice(-1)[0];
+      fxRows.push([curr, rate, hist?.source || '', hist?.date || '']);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fxRows), 'FX Rates');
+
+    // ── Sheet 6: Summary ──
+    const netWorth = getNetWorth();
+    const monthKey = currMonthKey();
+    const monthTotals = getMonthTotals(monthKey);
+    const summaryRows = [
+      ['TrackBudget Export Summary', ''],
+      ['Export Date', today_],
+      [''],
+      ['Net Worth (PHP)', Math.round(netWorth * 100) / 100],
+      [''],
+      [`${monthKey} Income (PHP)`, Math.round((monthTotals?.income || 0) * 100) / 100],
+      [`${monthKey} Expenses (PHP)`, Math.round((monthTotals?.expense || 0) * 100) / 100],
+      [`${monthKey} Net (PHP)`, Math.round(((monthTotals?.income || 0) - (monthTotals?.expense || 0)) * 100) / 100],
+      [''],
+      ['Total Transactions', db.transactions.filter(t => !t.archived).length],
+      ['Total Accounts', db.accounts.filter(a => !a.archived).length],
+      ['Active Loans (Lent)', (db.loans?.lent || []).filter(l => !l.settled).length],
+      ['Active Loans (Borrowed)', (db.loans?.borrowed || []).filter(l => !l.settled).length],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Summary');
+
+    // Write and download
+    XLSX.writeFile(wb, `TrackBudget-${today_}.xlsx`);
+    showToast('📊 Excel exported!');
+  } catch(e) {
+    console.error('exportXLSX error:', e);
+    showToast('Export failed: ' + e.message);
+  }
 }
 
 function confirmResetApp() {
@@ -12419,6 +12699,98 @@ function aiGetMonthsTxs(n) {
   });
 }
 
+// ════════════════════════════════════════════════════════════
+// GENERATIVE PHRASING ENGINE — offline pattern-based variant picker
+// Stable per insight-id+date so phrasing doesn't flicker on re-render.
+// ════════════════════════════════════════════════════════════
+
+// Deterministic hash → stable variant index per (id, date)
+function aiHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+// Pick a variant from a pool, stable per (id+today)
+function aiPick(pool, seedId) {
+  if (!pool || pool.length === 0) return '';
+  const seed = aiHash((seedId || 'x') + today());
+  return pool[seed % pool.length];
+}
+
+// User's nickname for personalization — falls back to "you"
+function aiName() {
+  const nick = (db.profile?.nickname || '').trim();
+  return nick || '';
+}
+
+// Time-of-month context: returns 'early' (1-10), 'mid' (11-20), 'late' (21+)
+function aiTimeOfMonth() {
+  const d = new Date().getDate();
+  return d <= 10 ? 'early' : d <= 20 ? 'mid' : 'late';
+}
+
+// Severity intensifier — based on ratio (how much over/under threshold)
+// Returns adjective string. ratio > 1 = over, < 1 = under.
+function aiSeverity(ratio) {
+  if (typeof ratio !== 'number' || !isFinite(ratio)) return 'noticeably';
+  const r = Math.abs(ratio - 1); // distance from 1
+  if (r < 0.10) return 'slightly';
+  if (r < 0.25) return 'noticeably';
+  if (r < 0.50) return 'considerably';
+  if (r < 1.00) return 'significantly';
+  return 'dramatically';
+}
+
+// Format with thin space separator for readability of large numbers
+function aiAmt(n, curr = 'PHP') {
+  if (typeof n !== 'number' || !isFinite(n)) n = 0;
+  const sym = curr === 'PHP' ? '₱' : curr + ' ';
+  return sym + Math.round(n).toLocaleString('en');
+}
+
+// Pluralize helper
+function aiPlural(n, singular, plural) {
+  return n === 1 ? singular : (plural || singular + 's');
+}
+
+// Build a "this/last month" phrase based on month index
+function aiMonthRef(monthsAgo) {
+  if (monthsAgo === 0) return 'this month';
+  if (monthsAgo === 1) return 'last month';
+  return `${monthsAgo} months ago`;
+}
+
+// Wrap a personalized opener — sometimes uses nickname, sometimes generic.
+function aiOpener(seedId, withName, withoutName) {
+  const name = aiName();
+  if (!name) return aiPick(withoutName, seedId);
+  // 60% chance of personalized opener (deterministic via hash)
+  const seed = aiHash((seedId || 'x') + 'op' + today()) % 10;
+  return seed < 6 ? aiPick(withName, seedId).replace('{name}', name) : aiPick(withoutName, seedId);
+}
+
+// Generate a forward-looking projection phrase
+// daysIn = days elapsed in month, totalDays = days in current month, currentAmt = spent so far
+function aiProjection(daysIn, totalDays, currentAmt) {
+  if (daysIn < 5 || daysIn >= totalDays - 2) return '';
+  const projected = (currentAmt / daysIn) * totalDays;
+  return ` At this pace, you'll reach ${aiAmt(projected)} by month-end.`;
+}
+
+// Pick a recovery suggestion when relevant (returns '' or sentence)
+function aiRecovery(category, overshoot) {
+  if (!overshoot || overshoot < 100) return '';
+  const pool = [
+    ` Consider trimming ${aiAmt(overshoot)} from non-essentials this week.`,
+    ` Cutting back on ${category||'discretionary spending'} could rebalance things.`,
+    ` A ${aiAmt(overshoot)} pause on extras would help.`,
+    ` Worth reviewing where the extra went.`,
+    '',
+  ];
+  return aiPick(pool, 'rec-' + (category || 'gen'));
+}
+
 function aiBudgetIntelligence() {
   const insights = [];
   // Only run if user has active budgets AND at least 1 month of spending
@@ -12434,9 +12806,44 @@ function aiBudgetIntelligence() {
     },0) / (months.filter(m=>m.txs.length>0).length||1);
     const ratio = avgSpend / bgt.limit;
     const sym = bgt.currency==='PHP'?'₱':'K';
-    if (ratio > 1.1) insights.push({id:'budget-over-'+bgt.id,type:'budget',priority:'high',icon:'📈',title:`${bgt.location} budget consistently over`,body:`Average: ${sym}${avgSpend.toFixed(0)}/mo vs limit ${sym}${bgt.limit}. Consider raising to ${sym}${Math.ceil(avgSpend*1.05/50)*50}.`,action:'Review budget limit'});
+    if (ratio > 1.1) {
+      const id = 'budget-over-'+bgt.id;
+      const sev = aiSeverity(ratio);
+      const overshoot = avgSpend - bgt.limit;
+      const newLimit = Math.ceil(avgSpend*1.05/50)*50;
+      const titles = [
+        `${bgt.location} budget consistently over`,
+        `Budget for ${bgt.location} is running tight`,
+        `${bgt.location} spending exceeds the limit`,
+        `Overshooting your ${bgt.location} budget`,
+      ];
+      const bodies = [
+        `You're ${sev} over — averaging ${sym}${avgSpend.toFixed(0)}/mo against your ${sym}${bgt.limit} limit. Try ${sym}${newLimit} as a more realistic target.`,
+        `${aiName()?aiName()+', y':'Y'}our ${bgt.location} spend is ${sev} above plan: ${sym}${avgSpend.toFixed(0)} vs ${sym}${bgt.limit}. Consider raising to ${sym}${newLimit}.`,
+        `Three-month average says ${sym}${avgSpend.toFixed(0)} — that's ${(ratio*100-100).toFixed(0)}% past your ${sym}${bgt.limit} cap. ${sym}${newLimit} would fit better.`,
+        `Spending ${sym}${overshoot.toFixed(0)} more than budgeted on average. ${sym}${newLimit} feels more honest.`,
+      ];
+      insights.push({id,type:'budget',priority:'high',icon:'📈',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review budget limit'});
+    }
     // Only fire "has room" if there's actual meaningful spending (not K0)
-    else if (ratio < 0.75 && avgSpend > 0) insights.push({id:'budget-under-'+bgt.id,type:'budget',priority:'low',icon:'📉',title:`${bgt.location} budget has room`,body:`Spending ${sym}${avgSpend.toFixed(0)}/mo avg — ${Math.round((1-ratio)*100)}% below limit. Could reallocate ${sym}${Math.abs(avgSpend-bgt.limit).toFixed(0)} to savings.`,action:'Consider reallocating'});
+    else if (ratio < 0.75 && avgSpend > 0) {
+      const id = 'budget-under-'+bgt.id;
+      const headroom = bgt.limit - avgSpend;
+      const pct = Math.round((1-ratio)*100);
+      const titles = [
+        `${bgt.location} budget has room`,
+        `Underspending in ${bgt.location}`,
+        `Slack in your ${bgt.location} budget`,
+        `${bgt.location}: more headroom than expected`,
+      ];
+      const bodies = [
+        `Averaging ${sym}${avgSpend.toFixed(0)}/mo — that's ${pct}% under limit. ${sym}${headroom.toFixed(0)} could go to savings.`,
+        `You've got ${pct}% breathing room (${sym}${headroom.toFixed(0)}/mo unused). Worth redirecting to a goal.`,
+        `Only spending ${sym}${avgSpend.toFixed(0)} of your ${sym}${bgt.limit}. The extra ${sym}${headroom.toFixed(0)} is sitting idle.`,
+        `Consistently ${pct}% below limit — could lower the cap or move ${sym}${headroom.toFixed(0)} to investments.`,
+      ];
+      insights.push({id,type:'budget',priority:'low',icon:'📉',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Consider reallocating'});
+    }
 
     // Sub-budget allocations (per category)
     if (bgt.allocations && Object.keys(bgt.allocations).length > 0) {
@@ -12453,7 +12860,20 @@ function aiBudgetIntelligence() {
         },0);
         const subRatio = spent / limAmt;
         const catName = cat.name.replace(/^[^ ]+ /,'');
-        if (subRatio > 1) insights.push({id:'sub-bgt-over-'+bgt.id+'-'+catId,type:'budget',priority:'medium',icon:'⚠️',title:`${catName} over allocation`,body:`Spent ${sym}${spent.toFixed(0)} of ${sym}${limAmt.toFixed(0)} (${(subRatio*100).toFixed(0)}%) sub-budget for ${bgt.location}.`,action:'Review allocation'});
+        if (subRatio > 1) {
+          const id = 'sub-bgt-over-'+bgt.id+'-'+catId;
+          const titles = [
+            `${catName} over allocation`,
+            `${catName} sub-budget exceeded`,
+            `Past your ${catName} cap`,
+          ];
+          const bodies = [
+            `${sym}${spent.toFixed(0)} spent of ${sym}${limAmt.toFixed(0)} allocated (${(subRatio*100).toFixed(0)}%) for ${bgt.location}.`,
+            `${catName} is at ${(subRatio*100).toFixed(0)}% of allocation — ${sym}${(spent-limAmt).toFixed(0)} over.`,
+            `Crossed the ${catName} line: ${sym}${spent.toFixed(0)} vs ${sym}${limAmt.toFixed(0)} allowed.`,
+          ];
+          insights.push({id,type:'budget',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review allocation'});
+        }
       }
     }
   }
@@ -12477,7 +12897,22 @@ function aiAnomalyDetection() {
       .reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
     if (curAmt > avg*1.5 && avg > 200) {
       const catName = getCategoryDisplay(cat)?.name||cat;
-      insights.push({id:'anomaly-'+cat,type:'anomaly',priority:'medium',icon:'⚠️',title:`Unusual ${catName} spending`,body:`This month: ₱${curAmt.toFixed(0)} vs avg ₱${avg.toFixed(0)} — ${Math.round((curAmt/avg-1)*100)}% higher.`,action:null});
+      const id = 'anomaly-'+cat;
+      const pctOver = Math.round((curAmt/avg-1)*100);
+      const sev = aiSeverity(curAmt/avg);
+      const titles = [
+        `Unusual ${catName} spending`,
+        `${catName} spike this month`,
+        `${catName} is trending higher`,
+        `Spending more on ${catName} than usual`,
+      ];
+      const bodies = [
+        `${sev} above your norm — ₱${curAmt.toFixed(0)} this month vs ₱${avg.toFixed(0)} average. That's ${pctOver}% higher.`,
+        `${catName} jumped to ₱${curAmt.toFixed(0)} — ${pctOver}% above your typical ₱${avg.toFixed(0)}.`,
+        `Your ${catName} expenses are ${sev} elevated: ₱${curAmt.toFixed(0)} vs the usual ₱${avg.toFixed(0)}.`,
+        `${pctOver}% spike in ${catName} — ₱${(curAmt-avg).toFixed(0)} more than your historical average.`,
+      ];
+      insights.push({id,type:'anomaly',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
   }
   return insights;
@@ -12493,7 +12928,32 @@ function aiPaydayPredictor() {
   const nextPayday = new Date(dates[0]); nextPayday.setDate(nextPayday.getDate()+avgInterval);
   const daysUntil = Math.round((nextPayday-new Date())/(1000*60*60*24));
   if (daysUntil >= 0 && daysUntil <= 14) {
-    insights.push({id:'payday',type:'payday',priority:daysUntil<=3?'high':'low',icon:'💰',title:daysUntil===0?'Payday today?':`Next income in ~${daysUntil} days`,body:`Based on ${avgInterval}-day cycle. Expected around ${nextPayday.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}.`,action:null});
+    const id = 'payday';
+    const dateStr = nextPayday.toLocaleDateString('en-PH',{month:'short',day:'numeric'});
+    let titles, bodies;
+    if (daysUntil === 0) {
+      titles = ['Payday today?', 'Income expected today', 'Looks like payday'];
+      bodies = [
+        `Based on your ${avgInterval}-day cycle, today should be it.`,
+        `Your typical pay rhythm puts the next deposit on ${dateStr}.`,
+        `Pattern suggests today — ${avgInterval} days since the last one.`,
+      ];
+    } else if (daysUntil <= 3) {
+      titles = [`Next income in ~${daysUntil} days`, `Payday around ${dateStr}`, `Income coming soon`];
+      bodies = [
+        `Right around the corner — your ${avgInterval}-day cycle points to ${dateStr}.`,
+        `Just ${daysUntil} ${aiPlural(daysUntil,'day')} out, based on your usual rhythm.`,
+        `Expected on ${dateStr}, give or take a day.`,
+      ];
+    } else {
+      titles = [`Next income in ~${daysUntil} days`, `Payday in ${daysUntil} days`, `~${daysUntil} days to next deposit`];
+      bodies = [
+        `Based on a ${avgInterval}-day cycle. Expected around ${dateStr}.`,
+        `Your pattern says ${dateStr} — ${daysUntil} days from now.`,
+        `${daysUntil} days out at your typical ${avgInterval}-day pace.`,
+      ];
+    }
+    insights.push({id,type:'payday',priority:daysUntil<=3?'high':'low',icon:'💰',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
   }
   return insights;
 }
@@ -12558,28 +13018,54 @@ function aiSavingsPace() {
     // Relative threshold: gap as % of what should be saved by now
     const gapPctOfExpected = targetNow > 0 ? (gap / targetNow) : 0;
     const priority = gapPctOfExpected > 0.30 ? 'high' : gapPctOfExpected > 0.10 ? 'medium' : 'low';
-    insights.push({
-      id:'savings-behind', type:'savings', priority, icon:'🎯',
-      title:`₱${fmtPHP(gap)} behind savings target`,
-      body:`${dayCounter}. ${paceLine} Expected: ₱${fmtPHP(targetNow)}. Actual: ₱${fmtPHP(actualTotal)}. ${projected>=targetAmount?`✅ Still on track for ₱${fmtPHP(targetAmount)}.`:`⚠️ May not reach ₱${fmtPHP(targetAmount)} at current pace.`}`,
-      action:'Review contract tab'
-    });
+    const id = 'savings-behind';
+    const onTrack = projected >= targetAmount;
+    const titles = [
+      `₱${fmtPHP(gap)} behind savings target`,
+      `Savings pace lagging by ₱${fmtPHP(gap)}`,
+      `Falling short on savings`,
+      `Behind schedule by ₱${fmtPHP(gap)}`,
+    ];
+    const status = onTrack
+      ? `Good news — projected ₱${fmtPHP(projected)} still hits the ₱${fmtPHP(targetAmount)} goal.`
+      : `Heads up — at this pace, projected total is ₱${fmtPHP(projected)}, short of ₱${fmtPHP(targetAmount)}.`;
+    const bodies = [
+      `${dayCounter}. ${paceLine} Expected: ₱${fmtPHP(targetNow)} · Actual: ₱${fmtPHP(actualTotal)}. ${status}`,
+      `${dayCounter}. You're at ${actualPct.toFixed(1)}%, target says ${expectedPct.toFixed(1)}% by now. ${status}`,
+      `${dayCounter}. ₱${fmtPHP(actualTotal)} saved vs ₱${fmtPHP(targetNow)} expected. ${status}`,
+    ];
+    insights.push({id, type:'savings', priority, icon:'🎯', title:aiPick(titles,id), body:aiPick(bodies,id), action:'Review contract tab'});
   } else if (gap < -5000) {
     // Significantly ahead of pace
-    insights.push({
-      id:'savings-ahead', type:'savings', priority:'low', icon:'🚀',
-      title:`₱${fmtPHP(Math.abs(gap))} ahead of savings pace`,
-      body:`${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}. Keep going!`,
-      action:null
-    });
+    const id = 'savings-ahead';
+    const ahead = Math.abs(gap);
+    const titles = [
+      `₱${fmtPHP(ahead)} ahead of savings pace`,
+      `Savings ahead of plan`,
+      `${aiName()?aiName()+', y':'Y'}ou're crushing the savings target`,
+      `Running ahead by ₱${fmtPHP(ahead)}`,
+    ];
+    const bodies = [
+      `${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}. Keep going!`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}% vs target ${expectedPct.toFixed(1)}% — projected to land at ₱${fmtPHP(projected)}.`,
+      `${dayCounter}. ₱${fmtPHP(actualTotal)} already vs ₱${fmtPHP(targetNow)} expected. Trajectory: ₱${fmtPHP(projected)}.`,
+    ];
+    insights.push({id, type:'savings', priority:'low', icon:'🚀', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   } else {
     // Within ±₱5,000 of expected pace
-    insights.push({
-      id:'savings-ok', type:'savings', priority:'low', icon:'✅',
-      title:'Savings exactly on pace',
-      body:`${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}.`,
-      action:null
-    });
+    const id = 'savings-ok';
+    const titles = [
+      'Savings exactly on pace',
+      'Right on track with savings',
+      `Steady savings pace`,
+      `On schedule — savings on point`,
+    ];
+    const bodies = [
+      `${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}.`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}% — exactly where you should be. Projected: ₱${fmtPHP(projected)}.`,
+      `${dayCounter}. ₱${fmtPHP(actualTotal)} saved, target ₱${fmtPHP(targetNow)} — bullseye. Projected: ₱${fmtPHP(projected)}.`,
+    ];
+    insights.push({id, type:'savings', priority:'low', icon:'✅', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   }
   return insights;
 }
@@ -12597,7 +13083,19 @@ function aiRecurringDetector() {
       if (months.length >= 3) {
         const catName = getCategoryDisplay(grp[0].categoryId)?.name||grp[0].categoryId;
         const avg = grp.reduce((s,t)=>s+t.amount,0)/grp.length;
-        insights.push({id:'recurring-'+key,type:'recurring',priority:'low',icon:'🔄',title:`Possible subscription: ${catName}`,body:`~${fmt(avg,grp[0].currency)} appears ${grp.length}× across ${months.length} months.`,action:'Add to recurring'});
+        const id = 'recurring-'+key;
+        const titles = [
+          `Possible subscription: ${catName}`,
+          `${catName} looks recurring`,
+          `Repeating ${catName} pattern`,
+          `Subscription detected: ${catName}`,
+        ];
+        const bodies = [
+          `~${fmt(avg,grp[0].currency)} appears ${grp.length}× across ${months.length} months.`,
+          `${grp.length} similar ${catName} charges over ${months.length} months — averaging ${fmt(avg,grp[0].currency)}.`,
+          `Looks like a ${fmt(avg,grp[0].currency)}/month commitment based on ${grp.length} entries.`,
+        ];
+        insights.push({id,type:'recurring',priority:'low',icon:'🔄',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Add to recurring'});
       }
     }
   }
@@ -12612,8 +13110,37 @@ function aiFxAdvisor() {
   const rates = history.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(h=>h.rate);
   const last3Avg = rates.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,rates.length);
   const current = db.fxRates?.PGK||last3Avg;
-  if (current > last3Avg*1.01) insights.push({id:'fx-good',type:'fx',priority:'medium',icon:'💱',title:'Good time to remit!',body:`Current ₱${current.toFixed(2)}/PGK is above recent avg ₱${last3Avg.toFixed(2)}.`,action:'Log remittance'});
-  else if (current < last3Avg*0.99) insights.push({id:'fx-wait',type:'fx',priority:'low',icon:'⏳',title:'FX rate below average',body:`Current ₱${current.toFixed(2)}/PGK below recent avg ₱${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,action:null});
+  if (current > last3Avg*1.01) {
+    const id = 'fx-good';
+    const diffPct = ((current/last3Avg-1)*100).toFixed(1);
+    const titles = [
+      'Good time to remit!',
+      'Favorable FX window',
+      'PGK rate trending up',
+      `${aiName()?aiName()+', t':'T'}his looks like a smart remit moment`,
+    ];
+    const bodies = [
+      `Current ₱${current.toFixed(2)}/PGK is above recent avg ₱${last3Avg.toFixed(2)} — +${diffPct}%.`,
+      `Rate's ${diffPct}% better than your 3-period average. Worth considering.`,
+      `Above your typical ₱${last3Avg.toFixed(2)} by ${diffPct}% — small win on conversion.`,
+    ];
+    insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
+  }
+  else if (current < last3Avg*0.99) {
+    const id = 'fx-wait';
+    const diffPct = ((1-current/last3Avg)*100).toFixed(1);
+    const titles = [
+      'FX rate below average',
+      'PGK softening lately',
+      'Rate dipped — maybe hold',
+    ];
+    const bodies = [
+      `Current ₱${current.toFixed(2)}/PGK below recent avg ₱${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,
+      `Rate's ${diffPct}% under your typical conversion. Worth a pause unless you need it now.`,
+      `${diffPct}% below your 3-period average. If timing flexible, holding might pay off.`,
+    ];
+    insights.push({id,type:'fx',priority:'low',icon:'⏳',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
+  }
   return insights;
 }
 
@@ -12632,7 +13159,21 @@ function aiCategoryTrends() {
     if (vals.length < 2) continue;
     const change = (vals[vals.length-1]-vals[0])/(vals[0]||1)*100;
     if (change > 25 && vals[0] > 500) {
-      insights.push({id:'trend-'+cat,type:'trend',priority:change>50?'medium':'low',icon:'📊',title:`${getCategoryDisplay(cat)?.name||cat} spending up`,body:`+${Math.round(change)}% over 3 months.`,action:null});
+      const id = 'trend-'+cat;
+      const catName = getCategoryDisplay(cat)?.name||cat;
+      const titles = [
+        `${catName} spending up`,
+        `${catName} trending higher`,
+        `Climbing ${catName} costs`,
+        `${catName} on the rise`,
+      ];
+      const bodies = [
+        `+${Math.round(change)}% over 3 months.`,
+        `${catName} grew ${Math.round(change)}% across the last 3 months.`,
+        `Trajectory shows +${Math.round(change)}% on ${catName} over 3 months.`,
+        `${catName} is up ₱${(vals[vals.length-1]-vals[0]).toFixed(0)} vs 3 months ago.`,
+      ];
+      insights.push({id,type:'trend',priority:change>50?'medium':'low',icon:'📊',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
   }
   return insights.slice(0,3);
@@ -12651,8 +13192,39 @@ function aiCashFlowForecast() {
   const bgt = db.budgets?.find(b=>b.active&&b.currency==='PHP');
   // Only fire if budget exists AND there's actual spending data this month
   if (bgt && spent > 0 && daysPassed >= 3) {
-    if (projected > bgt.limit*1.1) insights.push({id:'cashflow-over',type:'cashflow',priority:'high',icon:'🔮',title:'Projected to exceed budget',body:`At ₱${daily.toFixed(0)}/day, projected: ₱${projected.toFixed(0)} vs budget ₱${bgt.limit}.`,action:'Review spending'});
-    else insights.push({id:'cashflow-ok',type:'cashflow',priority:'low',icon:'🔮',title:'Cash flow looks healthy',body:`Projected month-end: ₱${projected.toFixed(0)} (budget: ₱${bgt.limit}). Daily rate: ₱${daily.toFixed(0)}.`,action:null});
+    if (projected > bgt.limit*1.1) {
+      const id = 'cashflow-over';
+      const sev = aiSeverity(projected/bgt.limit);
+      const overshoot = projected - bgt.limit;
+      const titles = [
+        'Projected to exceed budget',
+        'Cash flow heading over budget',
+        'Pace points to overspend',
+        `Trajectory: ${aiAmt(overshoot)} over budget`,
+      ];
+      const bodies = [
+        `At ₱${daily.toFixed(0)}/day, projected ₱${projected.toFixed(0)} vs budget ₱${bgt.limit}. ${sev} above plan.`,
+        `Burning ₱${daily.toFixed(0)}/day — at this pace, you'll close at ₱${projected.toFixed(0)} (budget ₱${bgt.limit}).`,
+        `${daysPassed} days in, daily rate of ₱${daily.toFixed(0)} projects ₱${projected.toFixed(0)} — that's ${aiAmt(overshoot)} over.`,
+        `Current trajectory ends ${aiAmt(overshoot)} past your ₱${bgt.limit} cap. ${daysLeft} days left to adjust.`,
+      ];
+      insights.push({id,type:'cashflow',priority:'high',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review spending'});
+    } else {
+      const id = 'cashflow-ok';
+      const headroom = bgt.limit - projected;
+      const titles = [
+        'Cash flow looks healthy',
+        'On track for the month',
+        `Comfortable spending pace`,
+        'Budget pace looking good',
+      ];
+      const bodies = [
+        `Projected month-end: ₱${projected.toFixed(0)} (budget: ₱${bgt.limit}). Daily rate: ₱${daily.toFixed(0)}.`,
+        `${daysPassed} days in, ₱${daily.toFixed(0)}/day average — projected to finish at ₱${projected.toFixed(0)}, ₱${headroom.toFixed(0)} under budget.`,
+        `Daily burn ₱${daily.toFixed(0)} — month-end estimate ₱${projected.toFixed(0)}. ${headroom.toFixed(0)} room to spare.`,
+      ];
+      insights.push({id,type:'cashflow',priority:'low',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
+    }
   }
   return insights;
 }
@@ -12664,7 +13236,20 @@ function aiReimbursementNudge() {
     if (days >= 7) {
       const persons = tx.persons?.map(p=>p.name).join(', ')||tx.personName||'someone';
       const owed = (tx.totalBill||tx.amount)-(tx.myShare||(tx.totalBill||tx.amount)/2);
-      insights.push({id:'reimb-'+tx.id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:`Follow up with ${persons}`,body:`${days} days pending — owes ${fmt(owed,tx.currency)}.`,action:'Go to Reimbursements'});
+      const id = 'reimb-'+tx.id;
+      const titles = [
+        `Follow up with ${persons}`,
+        `${persons} hasn't paid back yet`,
+        `Pending reimbursement from ${persons}`,
+        `Time to nudge ${persons}`,
+      ];
+      const bodies = [
+        `${days} days pending — owes ${fmt(owed,tx.currency)}.`,
+        `${fmt(owed,tx.currency)} outstanding for ${days} days. A friendly reminder might help.`,
+        `${days} days since the shared expense — ${fmt(owed,tx.currency)} still owed.`,
+        days >= 14 ? `Two weeks overdue — ${fmt(owed,tx.currency)} from ${persons}.` : `${days} days, ${fmt(owed,tx.currency)} pending.`,
+      ];
+      insights.push({id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Go to Reimbursements'});
     }
   }
   return insights;
@@ -12693,12 +13278,25 @@ function aiAccountBalanceAlert() {
     if (avgDaily <= 0) continue;
     const daysLeft = Math.floor(bal / avgDaily);
     if (daysLeft <= 14 && daysLeft >= 0) {
+      const id = 'lowbal-'+acct.id;
+      const titles = [
+        `${acct.name} running low`,
+        `${acct.name} balance dwindling`,
+        `Low balance: ${acct.name}`,
+        `${acct.name} won't last long`,
+      ];
+      const bodies = [
+        `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} days remaining.`,
+        `Burn rate ${fmt(avgDaily,acct.currency)}/day means ${fmt(bal,acct.currency)} runs out in ~${daysLeft} ${aiPlural(daysLeft,'day')}.`,
+        `${daysLeft} ${aiPlural(daysLeft,'day')} of runway at current pace (${fmt(avgDaily,acct.currency)}/day, ${fmt(bal,acct.currency)} left).`,
+        daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left — ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days at ${fmt(avgDaily,acct.currency)}/day. Top up soon?`,
+      ];
       insights.push({
-        id: 'lowbal-'+acct.id, type: 'balance',
+        id, type: 'balance',
         priority: daysLeft <= 5 ? 'high' : 'medium',
         icon: '🏦',
-        title: `${acct.name} running low`,
-        body: `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} days remaining.`,
+        title: aiPick(titles,id),
+        body: aiPick(bodies,id),
         action: 'View Accounts'
       });
     }
@@ -12723,15 +13321,26 @@ function aiInstallmentReminder() {
     const daysUntil = Math.round((nextDueDate - today)/(1000*60*60*24));
     
     if (daysUntil >= -2 && daysUntil <= 7) {
-      const dueText = daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` 
-        : daysUntil === 0 ? 'due today' 
+      const dueText = daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue`
+        : daysUntil === 0 ? 'due today'
         : `due in ${daysUntil} days`;
+      const id = 'inst-'+inst.id;
+      const titles = [
+        `${inst.name} payment ${dueText}`,
+        daysUntil < 0 ? `${inst.name} is overdue` : `${inst.name} payment coming up`,
+        daysUntil === 0 ? `${inst.name} payment today` : `Heads up: ${inst.name} ${dueText}`,
+      ];
+      const bodies = [
+        `~${fmt(inst.monthlyAmount, 'PGK')} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} payments left.`,
+        `Month ${totalPaid+1} of ${inst.totalMonths} — ~${fmt(inst.monthlyAmount, 'PGK')}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
+        `${remaining} more ${aiPlural(remaining,'payment')} of ~${fmt(inst.monthlyAmount, 'PGK')} to go.`,
+      ];
       insights.push({
-        id: 'inst-'+inst.id, type: 'installment',
+        id, type: 'installment',
         priority: daysUntil < 0 ? 'high' : daysUntil <= 2 ? 'medium' : 'low',
         icon: inst.icon || '💳',
-        title: `${inst.name} payment ${dueText}`,
-        body: `~${fmt(inst.monthlyAmount, 'PGK')} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} payments left.`,
+        title: aiPick(titles,id),
+        body: aiPick(bodies,id),
         action: 'View Installments'
       });
     }
@@ -12762,39 +13371,58 @@ function aiSpendingVelocity() {
   
   if (Math.abs(change) >= 25 && dayOfMonth >= 7) {
     if (change < -25) {
-      insights.push({
-        id: 'velocity-down', type: 'velocity',
-        priority: 'low', icon: '📉',
-        title: `Spending down ${Math.abs(change).toFixed(0)}% vs last month`,
-        body: `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Keep it up!`,
-        action: null
-      });
+      const id = 'velocity-down';
+      const titles = [
+        `Spending down ${Math.abs(change).toFixed(0)}% vs last month`,
+        `${aiName()?aiName()+'\'s s':'S'}pending easing up`,
+        `Lighter spending pace this month`,
+        `Down ${Math.abs(change).toFixed(0)}% from last month`,
+      ];
+      const bodies = [
+        `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Keep it up!`,
+        `On track to spend ${fmt(projectedFullMonth, thisMonth.currency)} — that's ${Math.abs(change).toFixed(0)}% less than last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
+        `Trajectory shows ${Math.abs(change).toFixed(0)}% lighter spend. Nice work.`,
+      ];
+      insights.push({id, type: 'velocity', priority: 'low', icon: '📉', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
     } else if (change > 25) {
-      insights.push({
-        id: 'velocity-up', type: 'velocity',
-        priority: change > 50 ? 'high' : 'medium', icon: '📈',
-        title: `Spending up ${change.toFixed(0)}% vs last month`,
-        body: `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Watch your pace.`,
-        action: 'Review spending'
-      });
+      const id = 'velocity-up';
+      const sev = aiSeverity(1+change/100);
+      const titles = [
+        `Spending up ${change.toFixed(0)}% vs last month`,
+        `Burning faster than last month`,
+        `Pace ${sev} above last month`,
+        `Heading for a bigger spend month`,
+      ];
+      const bodies = [
+        `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Watch your pace.`,
+        `At current rate, you'll close at ${fmt(projectedFullMonth, thisMonth.currency)} — ${change.toFixed(0)}% above last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
+        `${change.toFixed(0)}% faster pace than last month. Worth checking what changed.`,
+      ];
+      insights.push({id, type: 'velocity', priority: change > 50 ? 'high' : 'medium', icon: '📈', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
     }
   }
-  
+
   // Budget consumption check (mid-month)
   const bgt = (db.budgets||[]).find(b => b.active && b.currency === thisMonth.currency);
   if (bgt && monthProgress >= 0.4 && monthProgress <= 0.7) {
     const consumed = thisMonth.expense / bgt.limit;
     if (consumed >= 0.7) {
-      insights.push({
-        id: 'velocity-budget', type: 'velocity',
-        priority: 'medium', icon: '⏱️',
-        title: `${(consumed*100).toFixed(0)}% of budget used at day ${dayOfMonth}`,
-        body: `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed — ${daysInMonth-dayOfMonth} days left.`,
-        action: 'Review spending'
-      });
+      const id = 'velocity-budget';
+      const titles = [
+        `${(consumed*100).toFixed(0)}% of budget used at day ${dayOfMonth}`,
+        `Burning through budget fast`,
+        `Mid-month, ${(consumed*100).toFixed(0)}% spent`,
+        `Budget pacing tighter than expected`,
+      ];
+      const bodies = [
+        `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed — ${daysInMonth-dayOfMonth} days left.`,
+        `Used ${(consumed*100).toFixed(0)}% (${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)}) with ${daysInMonth-dayOfMonth} days remaining.`,
+        `${daysInMonth-dayOfMonth} days left, ${(100-consumed*100).toFixed(0)}% budget remaining (${fmt(bgt.limit-thisMonth.expense, bgt.currency)}).`,
+      ];
+      insights.push({id, type: 'velocity', priority: 'medium', icon: '⏱️', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
     }
   }
-  
+
   return insights;
 }
 
@@ -12820,23 +13448,38 @@ function aiSavingRate() {
   }
   
   if (savingRate >= 30 && dayOfMonth >= 20) {
-    insights.push({
-      id: 'saverate-good', type: 'saverate',
-      priority: 'low', icon: '💎',
-      title: `Saving ${savingRate.toFixed(0)}% this month`,
-      body: `Net: ${fmt(totals.income-totals.expense, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streak >= 2 ? ` ${streak+1} months net positive — on a roll!` : ''}`,
-      action: null
-    });
+    const id = 'saverate-good';
+    const net = totals.income - totals.expense;
+    const titles = [
+      `Saving ${savingRate.toFixed(0)}% this month`,
+      `Strong saving rate at ${savingRate.toFixed(0)}%`,
+      streak >= 2 ? `${streak+1}-month savings streak` : `Net positive month`,
+      `${aiName()?aiName()+', s':'S'}aving rate looking great`,
+    ];
+    const streakMsg = streak >= 2 ? ` ${streak+1} months net positive — on a roll!` : '';
+    const bodies = [
+      `Net: ${fmt(net, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streakMsg}`,
+      `Held onto ${fmt(net, totals.currency)} of your ${fmt(totals.income, totals.currency)} this month.${streakMsg}`,
+      `${savingRate.toFixed(0)}% saved — ${fmt(net, totals.currency)} not spent.${streakMsg}`,
+    ];
+    insights.push({id, type: 'saverate', priority: 'low', icon: '💎', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
   } else if (savingRate < 0 && dayOfMonth >= 15) {
-    insights.push({
-      id: 'saverate-neg', type: 'saverate',
-      priority: 'high', icon: '⚠️',
-      title: `Spending more than earning this month`,
-      body: `Expenses ${fmt(totals.expense-totals.income, totals.currency)} over income. Review categories.`,
-      action: 'Review spending'
-    });
+    const id = 'saverate-neg';
+    const overspend = totals.expense - totals.income;
+    const titles = [
+      `Spending more than earning this month`,
+      `In the red this month`,
+      `Expenses outpacing income`,
+      `Net negative — heads up`,
+    ];
+    const bodies = [
+      `Expenses ${fmt(overspend, totals.currency)} over income. Review categories.`,
+      `Spent ${fmt(overspend, totals.currency)} more than earned (${fmt(totals.expense, totals.currency)} vs ${fmt(totals.income, totals.currency)}). Worth a look.`,
+      `${fmt(overspend, totals.currency)} gap between expenses and income this month.`,
+    ];
+    insights.push({id, type: 'saverate', priority: 'high', icon: '⚠️', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
   }
-  
+
   return insights;
 }
 
@@ -12852,12 +13495,25 @@ function aiContractMilestone() {
     const daysUntil = Math.round((msDate - today)/(1000*60*60*24));
     
     if (daysUntil > 0 && daysUntil <= 14) {
+      const id = 'milestone-'+ms.date;
+      const dateStr = msDate.toLocaleDateString('en',{month:'short',day:'numeric'});
+      const titles = [
+        `${ms.label} in ${daysUntil} days`,
+        `Upcoming: ${ms.label}`,
+        `${ms.label} approaching`,
+        `${dateStr}: ${ms.label}`,
+      ];
+      const bodies = [
+        ms.note || `Milestone date: ${dateStr}.`,
+        ms.note ? `${ms.note} (${dateStr})` : `Coming up on ${dateStr} — ${daysUntil} ${aiPlural(daysUntil,'day')} away.`,
+        `${daysUntil} ${aiPlural(daysUntil,'day')} until ${ms.label}.${ms.note?' '+ms.note:''}`,
+      ];
       insights.push({
-        id: 'milestone-'+ms.date, type: 'milestone',
+        id, type: 'milestone',
         priority: daysUntil <= 3 ? 'medium' : 'low',
         icon: '🎯',
-        title: `${ms.label} in ${daysUntil} days`,
-        body: ms.note || `Milestone date: ${msDate.toLocaleDateString('en',{month:'short',day:'numeric'})}.`,
+        title: aiPick(titles,id),
+        body: aiPick(bodies,id),
         action: 'Review contract tab'
       });
     }
@@ -12874,11 +13530,23 @@ function aiTransferActivity() {
   );
   
   if (transfers.length >= 8) {
+    const id = 'transfer-many';
+    const titles = [
+      `${transfers.length} transfers in last 30 days`,
+      `High transfer activity`,
+      `Lots of account-to-account moves`,
+      `Frequent transfers detected`,
+    ];
+    const bodies = [
+      `Frequent moves between accounts. Consider consolidating to reduce friction or fees.`,
+      `${transfers.length} transfers in 30 days — averaging ${(transfers.length/30).toFixed(1)}/day. Worth checking if any are avoidable.`,
+      `That's ${transfers.length} transfers in a month. Could simplify your account structure.`,
+    ];
     insights.push({
-      id: 'transfer-many', type: 'transfer',
+      id, type: 'transfer',
       priority: 'low', icon: '🔁',
-      title: `${transfers.length} transfers in last 30 days`,
-      body: `Frequent moves between accounts. Consider consolidating to reduce friction or fees.`,
+      title: aiPick(titles,id),
+      body: aiPick(bodies,id),
       action: 'View Accounts'
     });
   }
@@ -12920,8 +13588,17 @@ function aiWeeklyRecap() {
   insights.push({
     id: 'weekly-recap', type: 'recap',
     priority: 'low', icon: '📊',
-    title: `Week recap: Net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
-    body: `Earned ${fmt(income, currency)}, spent ${fmt(expense, currency)}.${topCat ? ` Top: ${topCat[0]} (${fmt(topCat[1], currency)}).` : ''}`,
+    title: aiPick([
+      `Week recap: Net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
+      `Sunday recap — net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
+      `Your week in numbers`,
+      `Weekly snapshot`,
+    ], 'weekly-recap'),
+    body: aiPick([
+      `Earned ${fmt(income, currency)}, spent ${fmt(expense, currency)}.${topCat ? ` Top: ${topCat[0]} (${fmt(topCat[1], currency)}).` : ''}`,
+      `${fmt(income, currency)} in, ${fmt(expense, currency)} out across ${weekTxs.length} ${aiPlural(weekTxs.length,'transaction')}.${topCat ? ` Biggest category: ${topCat[0]}.` : ''}`,
+      `Past 7 days: ${fmt(income, currency)} earned · ${fmt(expense, currency)} spent.${topCat ? ` ${topCat[0]} led the spending at ${fmt(topCat[1], currency)}.` : ''}`,
+    ], 'weekly-recap-body'),
     action: 'View Analytics'
   });
   return insights;
@@ -12945,8 +13622,16 @@ function aiAtmFeeWaste() {
   insights.push({
     id: 'atm-waste', type: 'atm',
     priority: 'low', icon: '💸',
-    title: `${atmTxs.length} ATM fees in 30 days`,
-    body: `Total: ${fmt(total, atmTxs[0].currency)}. Consider digital transfers (often free) for routine moves.`,
+    title: aiPick([
+      `${atmTxs.length} ATM fees in 30 days`,
+      `ATM fees adding up`,
+      `Frequent ATM withdrawals lately`,
+    ], 'atm-waste'),
+    body: aiPick([
+      `Total: ${fmt(total, atmTxs[0].currency)}. Consider digital transfers (often free) for routine moves.`,
+      `${fmt(total, atmTxs[0].currency)} in fees across ${atmTxs.length} withdrawals. E-wallet transfers usually skip these.`,
+      `${atmTxs.length} ATM hits totaling ${fmt(total, atmTxs[0].currency)} — switching some to digital could save the fees.`,
+    ], 'atm-waste-body'),
     action: null
   });
   return insights;
@@ -12970,11 +13655,20 @@ function aiSmartSuggestion() {
       }
     }
     if (total > 0) {
+      const id = 'suggest-reimb';
       insights.push({
-        id: 'suggest-reimb', type: 'suggestion',
+        id, type: 'suggestion',
         priority: 'low', icon: '💡',
-        title: `${pendingReimbs.length} pending reimbursements`,
-        body: `Total receivable: ${fmt(total, pendingReimbs[0].currency)}. A quick follow-up could help.`,
+        title: aiPick([
+          `${pendingReimbs.length} pending reimbursements`,
+          `Reimbursements piling up`,
+          `${pendingReimbs.length} unsettled shared expenses`,
+        ], id),
+        body: aiPick([
+          `Total receivable: ${fmt(total, pendingReimbs[0].currency)}. A quick follow-up could help.`,
+          `${fmt(total, pendingReimbs[0].currency)} owed across ${pendingReimbs.length} pending splits. Worth chasing.`,
+          `Sitting on ${fmt(total, pendingReimbs[0].currency)} in receivables — a friendly reminder rarely hurts.`,
+        ], id+'-body'),
         action: 'Go to Reimbursements'
       });
     }
@@ -13002,6 +13696,7 @@ function renderAIPage() {
       'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('recurring'),100); },
       'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
       'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+      'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
       'View Accounts': ()=>{ nav('accounts'); },
       'View Installments': ()=>{ nav('installments'); },
       'View Analytics': ()=>{ nav('analytics'); },
