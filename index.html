@@ -206,6 +206,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .dt-row{display:flex;gap:8px}
 .dt-row .dt-field{flex:1}
 .form-input{width:100%;padding:10px 13px;background:var(--input-bg,var(--bg3));border:1px solid var(--border2);border-radius:var(--r-md);color:var(--text);font-size:14px;outline:none;transition:border-color var(--transition),box-shadow var(--transition);-webkit-appearance:none;appearance:none}
+
+/* ── CUSTOM NUMPAD (calculator keyboard) ── */
+#tb-numpad{position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--bg2);border-top:1px solid var(--border2);padding:0;transform:translateY(100%);transition:transform 0.22s cubic-bezier(0.32,0.72,0,1);box-shadow:0 -4px 24px rgba(0,0,0,0.18)}
+#tb-numpad.open{transform:translateY(0)}
+#tb-numpad-preview{padding:10px 16px 6px;font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);min-height:44px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+#tb-numpad-preview .np-expr{flex:1;overflow-x:auto;white-space:nowrap;color:var(--text2)}
+#tb-numpad-preview .np-result{color:var(--accent);font-size:14px;margin-left:8px}
+#tb-numpad-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
+.np-btn{background:var(--bg2);border:none;color:var(--text);font-size:18px;font-weight:500;padding:16px 4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;font-family:var(--mono);user-select:none;-webkit-user-select:none}
+.np-btn:active,.np-btn.pressed{background:var(--bg3)}
+.np-btn.np-op{color:var(--accent);font-size:16px}
+.np-btn.np-ok{background:var(--accent);color:#fff;font-size:20px;font-weight:700}
+.np-btn.np-ok:active{background:var(--accent-dark,#5b3fa8)}
+.np-btn.np-eq{background:var(--bg3);color:var(--text)}
+.np-btn.np-del{color:var(--red)}
+.np-btn.np-zero{grid-column:span 2}
 .form-input:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--text4)}
 .form-input:disabled{opacity:0.5;cursor:not-allowed}
@@ -379,7 +395,8 @@ option{background:var(--bg3);color:var(--text)}
 .acct-balance{font-family:var(--mono);font-size:20px;font-weight:500;margin-top:4px}
 
 /* ── SETTINGS ROW ── */
-.settings-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition),transform var(--transition);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:var(--r-sm)}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition),transform var(--transition);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:var(--r-sm)}
+.page-pad .card{margin-bottom:10px}
 .settings-row:hover{background:var(--bg3)}
 .settings-row:active{transform:scale(0.98);background:var(--accent-bg)}
 .settings-row:last-child{border-bottom:none}
@@ -909,19 +926,21 @@ const COUNTRIES = [...new Set([...Object.keys(COUNTRY_TO_CURRENCY), ...Object.ke
 
 // ── EMOJI POOL (cross-platform Unicode only) ──
 const EMOJI_GROUPS = {
-  'Food & Drink': ['🍽️','🍜','🍱','🍔','🍕','🌮','🍣','🍦','☕','🧃','🥤','🍺','🍷','🛒','🏪','🍿','🎂','🧁','🍰','🥗'],
-  'Transport': ['🚗','✈️','🚌','🚆','🚢','🛵','🚐','🏍️','🚲','⛽','🛣️','🅿️','🚖','🚕','🛺','🚁'],
-  'Housing': ['🏠','🏡','🏢','🔑','🛋️','🛏️','🪑','🚿','💡','💧','🔌','📡','🧹','🪴'],
-  'Finance': ['💰','💳','💵','💴','💶','💷','📈','📉','📊','🏦','💱','🤑','💸','🧾','📋','🏧'],
-  'Health': ['🏥','💊','🩺','💉','🩹','🧬','🦷','👁️','🧠','❤️','🩻'],
-  'Shopping': ['🛍️','📦','👗','👟','👜','💄','📱','💻','🖥️','📷','🎮','📚','📖','🗄️'],
-  'Personal': ['✂️','🧴','🧼','🪒','💈','🛁','🧺','👕','🧦','🧤'],
-  'Social': ['🎁','🎉','🎊','🙏','❤️','👨‍👩‍👧','🤝','🎗️','🕯️','🌹'],
-  'Work': ['💼','📎','🖊️','📌','📝','💡','🔧','⚙️','🖨️','📠','🗂️'],
-  'Education': ['📚','🎓','✏️','📐','🔬','🔭','🏫','📓','🖋️'],
-  'Entertainment': ['🎵','🎬','🎭','🎨','🎮','🎲','⚽','🏋️','🏊','🧘'],
-  'Travel': ['🌍','🗺️','🧳','🏖️','🏔️','🗼','🏛️','🎡','🌅','🛂'],
-  'Symbols': ['⭐','🔴','🟡','🟢','🔵','🟠','🟣','⚡','🔥','💎','🎯','🔖','📌','🏷️','✅','❌','⚠️'],
+  'Food & Drink': ['🍽️','🍜','🍱','🍔','🍕','🌮','🌯','🍣','🍱','🍦','🍧','🍨','🍩','🍪','🎂','🧁','🍰','🥮','🍫','🍬','🍭','🍮','☕','🍵','🧃','🥤','🧋','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🥛','🫖','🧉','🛒','🏪','🍿','🥗','🥘','🍲','🫕','🥙','🧆','🥚','🍳','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍟','🧀','🥪','🥨','🥐','🍞','🫓','🥖','🧈','🥜','🫘','🫚','🌽','🥕','🧅','🥔','🍠','🥑','🥦','🥬','🥒','🌶️','🫑','🧄','🍄','🥗','🍅','🫒','🧂'],
+  'Transport': ['🚗','🚙','🚕','🚌','🚎','🏎️','🚓','🚑','🚒','✈️','🛫','🛬','🚀','🛸','🛺','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🚃','🚂','🛳️','🚢','⛴️','🛥️','🚤','🛵','🏍️','🚲','🛴','🛻','🚐','🚌','🚎','🏍️','⛽','🅿️','🚁','🛶','🛟','🚦','🛣️','🗺️','🧭'],
+  'Housing': ['🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','🗼','🗽','🔑','🗝️','🛋️','🛏️','🪑','🛁','🚿','🪠','💡','💧','🔌','🪫','📡','🧹','🪣','🧺','🪴','🌿','🪵','🧱','🪞','🪟','🛗','🔒','🔓','🔨','🪛','🪚','🔧','🪤','🧰'],
+  'Finance': ['💰','💳','💵','💴','💶','💷','📈','📉','📊','🏦','💱','🤑','💸','🧾','📋','🏧','💹','🪙','💎','🏅','🎖️','🏆','🪬','🎰','📑','🗃️','📂','🗂️','🔐','💼','🤝','✍️','📝','🖊️'],
+  'Health & Medical': ['🏥','💊','🩺','💉','🩹','🧬','🦷','👁️','🧠','❤️','🩻','🩼','🩽','🩸','🧪','🔬','🩻','💆','💪','🏃','🧘','🏋️','🤸','🧗','🚴','🏊','🛌','😷','🤒','🤕','🩺','🫀','🫁','🦴','💆‍♀️'],
+  'Shopping & Retail': ['🛍️','📦','👗','👘','🥻','👙','🩱','👚','👕','👖','🩲','🩳','🧣','🧤','🧥','🧦','👒','🎩','🪖','⛑️','👟','👠','👡','👢','🥾','🧢','👑','💍','💄','💋','👜','👛','🎒','🧳','☂️','💻','📱','🖥️','📷','📸','🎮','📚','📖'],
+  'Personal Care': ['✂️','🧴','🧼','🪒','💈','🛁','🧺','💅','🧖','🧖‍♀️','💇','💇‍♀️','🪥','🪮','🪭','🧻','🫧','🧽','🧹','🫙'],
+  'Social & Family': ['🎁','🎉','🎊','🙏','❤️','💛','💚','💙','💜','🖤','🤍','🤎','👨‍👩‍👧','👨‍👩‍👦','👪','🤝','🎗️','🕯️','🌹','💐','🎂','🎈','🎀','🪅','🎆','🎇','🧨','🎋','🎍','🎎','🎑','🎃','🎄','🎋','☃️','🤶'],
+  'Work & Office': ['💼','📎','🖊️','📌','📍','📝','💡','🔧','⚙️','🖨️','📠','🗂️','📊','📋','📁','📂','🗄️','📤','📥','📧','📨','📩','📪','📫','📬','📭','📮','🗳️','✒️','🖋️','🖊️','📏','📐','✂️','🗃️','🗑️','🖥️','🖱️','🖲️','💾','💿','📀'],
+  'Education': ['📚','🎓','✏️','📐','🔬','🔭','🏫','📓','🖋️','🧮','🔭','📡','🧪','🧫','🧬','🏆','🥇','🎯','📰','📜','📃','📄','📑','🗒️','🗓️'],
+  'Entertainment': ['🎵','🎶','🎸','🎹','🎺','🎻','🥁','🎷','🪕','🎙️','🎚️','🎛️','📻','📺','🎬','🎭','🎨','🖼️','🎮','🕹️','🎲','♟️','🎯','🎳','🎰','🃏','🀄','🎴','⚽','🏀','🏈','⚾','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🥊','🥋','🎽','⛷️','🏂','🏋️','🤼','🤺','🏇','🧗','🚵','🏌️','🤽','🤾','🧘'],
+  'Travel & Places': ['🌍','🌎','🌏','🗺️','🧳','🏖️','🏔️','🗼','🏛️','🎡','🌅','🛂','🏕️','🏞️','⛩️','🕌','⛪','🛕','🗿','🗽','🏰','🏯','🗼','🌋','🏜️','🏝️','🏗️','🌉','🌁','🌃','🌆','🌇','🌉','🎠','🎢','🎪','🚂','🛫','🛬','🛥️','🚢','🗺️'],
+  'Nature': ['🌿','🌱','🌾','🍀','🌲','🌳','🌴','🌵','🎋','🎍','🍁','🍂','🍃','🌺','🌸','🌼','🌻','🌹','🌷','💐','🌾','☘️','🍄','🌊','🌬️','🌀','🌈','⛄','❄️','🌤️','⛅','🌦️','🌧️','⛈️','🌩️','🌨️','🌙','☀️','🌟','⭐','✨','🌠','🌌'],
+  'Animals': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐟','🐠','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐓','🦃'],
+  'Symbols & Signs': ['⭐','🌟','💫','✨','⚡','🔥','💥','❄️','🌊','🌀','🎯','🏷️','✅','❌','⚠️','🚫','🛑','⛔','🔴','🟡','🟢','🔵','🟠','🟣','⚫','⚪','🔶','🔷','🔸','🔹','🔺','🔻','💠','🔘','🔲','🔳','▪️','▫️','🔖','📌','📍','💡','🔑','🗝️','🔐','🔒','🔓','🏅','🎖️','🏆','🥇','🥈','🥉','💯','💢','💬','💭','🗯️','♻️','⚜️','🔰','📛','🎌'],
 };
 
 // ════════════════════════════════════════════════════════════
@@ -1704,6 +1723,132 @@ function openDlg(title, html, footer='') {
 function closeDlg() { document.getElementById('dlg-overlay').classList.remove('open'); }
 
 // Wire up close buttons — use addEventListener for reliability
+// ════════════════════════════════════════════════════════════
+// CUSTOM NUMPAD ENGINE
+// ════════════════════════════════════════════════════════════
+let _npTarget = null;   // the input element currently being edited
+let _npExpr = '';       // current expression string
+let _npCallback = null; // optional callback after confirm
+
+const NP_AMOUNT_SELECTOR = 'input.numpad-input[type="number"]';
+
+function npOpen(inputEl, callback) {
+  if (!inputEl) return;
+  _npTarget = inputEl;
+  _npCallback = callback || null;
+  _npExpr = inputEl.value ? String(inputEl.value) : '';
+  npRender();
+  const pad = document.getElementById('tb-numpad');
+  if (pad) {
+    pad.classList.add('open');
+    // Prevent native keyboard
+    inputEl.blur();
+    inputEl.setAttribute('readonly', 'true');
+  }
+}
+
+function npClose() {
+  const pad = document.getElementById('tb-numpad');
+  if (pad) pad.classList.remove('open');
+  if (_npTarget) {
+    _npTarget.removeAttribute('readonly');
+    _npTarget = null;
+  }
+  _npExpr = '';
+  _npCallback = null;
+  npRender();
+}
+
+function npRender() {
+  const exprEl = document.getElementById('np-expr');
+  const resEl = document.getElementById('np-result');
+  if (!exprEl || !resEl) return;
+  exprEl.textContent = _npExpr || '0';
+  // Live eval preview
+  try {
+    const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
+    if (safe && /[\d)]$/.test(safe)) {
+      const val = Function('"use strict";return (' + safe + ')')();
+      if (typeof val === 'number' && isFinite(val) && String(val) !== _npExpr) {
+        resEl.textContent = '= ' + (Math.round(val * 10000) / 10000);
+      } else resEl.textContent = '';
+    } else resEl.textContent = '';
+  } catch(e) { resEl.textContent = ''; }
+}
+
+function npKey(ch) {
+  // Prevent double operators
+  const lastCh = _npExpr.slice(-1);
+  const isOp = '+-×÷*/'.includes(ch);
+  const lastIsOp = '+-×÷*/'.includes(lastCh);
+  if (isOp && lastIsOp) {
+    // Replace last operator
+    _npExpr = _npExpr.slice(0,-1) + ch;
+  } else {
+    // Prevent double decimal in current number segment
+    if (ch === '.') {
+      const parts = _npExpr.split(/[+\-×÷*/()]/);
+      const curPart = parts[parts.length - 1];
+      if (curPart.includes('.')) return;
+    }
+    _npExpr += ch;
+  }
+  npRender();
+}
+
+function npDel() {
+  _npExpr = _npExpr.slice(0, -1);
+  npRender();
+}
+
+function npEval() {
+  try {
+    const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
+    const val = Function('"use strict";return (' + safe + ')')();
+    if (typeof val === 'number' && isFinite(val)) {
+      _npExpr = String(Math.round(val * 100) / 100);
+      npRender();
+    }
+  } catch(e) {}
+}
+
+function npConfirm() {
+  // Evaluate first if expression
+  const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
+  let finalVal = _npExpr;
+  try {
+    const val = Function('"use strict";return (' + safe + ')')();
+    if (typeof val === 'number' && isFinite(val) && val >= 0) {
+      finalVal = String(Math.round(val * 100) / 100);
+    }
+  } catch(e) {}
+
+  if (_npTarget) {
+    _npTarget.value = finalVal;
+    // Fire input event so oninput handlers (preview functions) trigger
+    _npTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    _npTarget.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (_npCallback) _npCallback(parseFloat(finalVal) || 0);
+  npClose();
+}
+
+// Wire numpad to all .numpad-input elements via event delegation
+document.addEventListener('focusin', function(e) {
+  if (e.target && e.target.classList.contains('numpad-input') && e.target.type === 'number') {
+    e.preventDefault();
+    npOpen(e.target);
+  }
+});
+// Also close numpad when tapping outside
+document.addEventListener('click', function(e) {
+  const pad = document.getElementById('tb-numpad');
+  if (!pad || !pad.classList.contains('open')) return;
+  if (!pad.contains(e.target) && !(e.target.classList?.contains('numpad-input'))) {
+    npClose();
+  }
+});
+
 function wireEvents() {
   document.addEventListener('click', function(e) {
     const container = document.getElementById('type-dd-container');
@@ -2333,7 +2478,6 @@ function renderDashboard() {
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
     ${migrationBannerHTML}
     ${onboardChecklistHTML}
-    ${alertsHTML}
     <div class="hero-card" style="margin-bottom:12px">
       <div class="hero-label">Net Worth</div>
       <div style="display:flex;align-items:baseline;gap:4px">
@@ -2380,6 +2524,7 @@ function renderDashboard() {
       </details>`:''}
     </div>
     ${customizeBtn}
+    ${alertsHTML}
     ${reorderToolbarHTML}
     ${orderedSectionsHTML}
   </div>`;
@@ -3245,12 +3390,12 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Receipt Total *</label>
-        <input class="form-input" type="number" id="add-total-bill" placeholder="0.00" step="any"
+        <input class="form-input" type="number" id="add-total-bill" class="numpad-input" placeholder="0.00" step="any"
           onchange="onTotalBillChange()" oninput="recalcShared()">
       </div>
       <div class="form-group">
         <label class="form-label">Amount to Split</label>
-        <input class="form-input" type="number" id="add-amount-to-split" placeholder="Same as total" step="any"
+        <input class="form-input" type="number" id="add-amount-to-split" class="numpad-input" placeholder="Same as total" step="any"
           oninput="recalcShared()">
       </div>
     </div>
@@ -3288,7 +3433,7 @@ function renderAmountForm() {
     </div>
 
     <input type="hidden" id="add-myshare">
-    <input type="hidden" id="add-amount" value="0">
+    <input type="hidden" id="add-amount" class="numpad-input" value="0">
 
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
@@ -3311,7 +3456,7 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount *</label>
-        <input class="form-input" type="number" id="add-amount" min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}">
+        <input class="form-input" type="number" id="add-amount" class="numpad-input" min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}">
       </div>
       <div class="form-group">
         <label class="form-label">Currency *</label>
@@ -3395,7 +3540,7 @@ function renderRemittanceForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount Sent *</label>
-        <input class="form-input" type="number" id="rem-amount" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()">
+        <input class="form-input" type="number" id="rem-amount" class="numpad-input" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()">
       </div>
       <div class="form-group">
         <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span> = ? PHP) *</label>
@@ -3644,7 +3789,7 @@ function renderTransferForm() {
     <div class="form-group"><label class="form-label">From Account *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
     <div class="form-group"><label class="form-label">To Account *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" class="numpad-input" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
     </div>
     <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
@@ -3659,7 +3804,7 @@ function renderTransferForm() {
       <div class="form-row fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
-          <input class="form-input" type="number" id="tf-toamount" placeholder="0.00" step="any" oninput="onTfToAmountInput()">
+          <input class="form-input" type="number" id="tf-toamount" class="numpad-input" placeholder="0.00" step="any" oninput="onTfToAmountInput()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Or rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
@@ -5033,7 +5178,7 @@ function openEditTx(txId) {
   const sharedFieldsHTML = isShared ? `
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Receipt Total *</label>
-        <input class="form-input" type="number" id="edit-total-bill" value="${tx.totalBill||tx.amount}" step="any" oninput="onEditSharedRecalc('${txId}')"></div>
+        <input class="form-input" type="number" id="edit-total-bill" class="numpad-input" value="${tx.totalBill||tx.amount}" step="any" oninput="onEditSharedRecalc('${txId}')"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="edit-currency">${currOpts}</select></div>
     </div>
     ${fxBadgeHTML}
@@ -5047,7 +5192,7 @@ function openEditTx(txId) {
     <input type="hidden" id="edit-myshare" value="${tx.myShare||0}">
   ` : `
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="edit-amount" value="${tx.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="edit-amount" class="numpad-input" value="${tx.amount}" step="any"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="edit-currency">${currOpts}</select></div>
     </div>
     ${fxBadgeHTML}
@@ -5385,7 +5530,7 @@ function openEditTransfer(txId) {
     <div class="form-group"><label class="form-label">From Account</label><select class="form-input" id="etf-from" onchange="syncEditTransferCurrency()">${acctOpts(tx.fromAccountId)}</select></div>
     <div class="form-group"><label class="form-label">To Account</label><select class="form-input" id="etf-to" onchange="updateEditTransferPreview()">${acctOpts(tx.toAccountId)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="etf-amount" value="${tx.amount}" oninput="updateEditTransferPreview()"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="etf-amount" class="numpad-input" value="${tx.amount}" oninput="updateEditTransferPreview()"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="etf-currency" onchange="updateEditTransferPreview()">${currOpts}</select></div>
     </div>
     <div id="etf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
@@ -5400,7 +5545,7 @@ function openEditTransfer(txId) {
       <div class="form-row fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Actual received <span id="etf-toamount-curr-label" style="color:var(--text4)">${toAcct?.currency||'PHP'}</span></label>
-          <input class="form-input" type="number" id="etf-toamount" placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()">
+          <input class="form-input" type="number" id="etf-toamount" class="numpad-input" placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
@@ -6343,7 +6488,7 @@ function openBalanceCorrection(acctId) {
       </div>
       <div class="form-group">
         <label class="form-label">Actual Balance (${a.currency}) *</label>
-        <input class="form-input" type="number" id="bc-actual" placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})">
+        <input class="form-input" type="number" id="bc-actual" class="numpad-input" placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})">
       </div>
       <div id="bc-preview" style="display:none;padding:12px;border-radius:var(--r-md);margin-bottom:14px;font-size:13px"></div>
       <div class="form-group">
@@ -6447,7 +6592,7 @@ function openAddAccount() {
       <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="na-type">${acctTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="na-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="na-balance" placeholder="0.00" value="0"></div>
+    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="na-balance" class="numpad-input" placeholder="0.00" value="0"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="na-note" placeholder="e.g. last 4 digits, account number"></div>
     <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="na-threshold" placeholder="Leave blank to disable"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddAccount()">Add Account</button>
@@ -6483,7 +6628,7 @@ function openEditAccount(acctId) {
       <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ea-type">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ea-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="ea-balance" value="${a.initialBalance||0}"></div>
+    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="ea-balance" class="numpad-input" value="${a.initialBalance||0}"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
     <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="ea-threshold" value="${a.alertThreshold||''}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditAccount('${acctId}')">Save Changes</button>
@@ -6581,10 +6726,10 @@ function openAddInv() {
     <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="ai-name" placeholder="e.g. VUL Policy, BTC Holdings"></div>
     <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested *</label><input class="form-input" type="number" id="ai-amount" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Amount Invested *</label><input class="form-input" type="number" id="ai-amount" class="numpad-input" placeholder="0.00"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ai-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ai-current" placeholder="Leave blank if same as invested"></div>
+    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ai-current" class="numpad-input" placeholder="Leave blank if same as invested"></div>
     <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ai-date" value="${today()}"></div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ai-notes" placeholder="Optional"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddInv()">Add Investment</button>
@@ -6615,10 +6760,10 @@ function openEditInv(invId) {
     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ei-name" value="${inv.name}"></div>
     <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested</label><input class="form-input" type="number" id="ei-amount" value="${inv.amount}"></div>
+      <div class="form-group"><label class="form-label">Amount Invested</label><input class="form-input" type="number" id="ei-amount" class="numpad-input" value="${inv.amount}"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ei-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ei-current" value="${inv.currentValue||inv.amount}"></div>
+    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ei-current" class="numpad-input" value="${inv.currentValue||inv.amount}"></div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save</button>
@@ -6840,7 +6985,7 @@ function openLoanDetail(loanId, direction) {
           Record ${isLent?'Repayment Received':'Payment Made'}
         </div>
         <div class="form-row fr2">
-          <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="loan-pay-amt" placeholder="${remaining}" step="any"></div>
+          <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="loan-pay-amt" class="numpad-input" placeholder="${remaining}" step="any"></div>
           <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="loan-pay-curr">${currOpts}</select></div>
         </div>
         <div class="form-group">
@@ -6925,7 +7070,7 @@ function editLoanFull(loanId, direction) {
   openDlg('Edit Loan',
     `<div class="form-group"><label class="form-label">Person *</label><input class="form-input" id="lf-person" value="${loan.personName||''}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="lf-amount" value="${loan.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="lf-amount" class="numpad-input" value="${loan.amount}" step="any"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">${direction==='lent'?'From Account':'To Account'}</label><select class="form-input" id="lf-account">${acctOpts}</select></div>
@@ -9918,18 +10063,17 @@ function renderProfileTab() {
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
-      <div class="section-title" style="margin-bottom:12px">Appearance</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div class="section-title" style="margin-bottom:10px">Appearance</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${[
-          ['auto','🌗','Auto','6am-6pm light'],
-          ['light','☀️','Light','Always bright'],
-          ['dark','🌙','Dark','Always dim']
-        ].map(([val,icon,label,sub])=>{
+          ['auto','🌗','Auto'],
+          ['light','☀️','Light'],
+          ['dark','🌙','Dark']
+        ].map(([val,icon,label])=>{
           const active = (db.settings.themeMode==='auto'&&val==='auto') || (db.settings.themeMode!=='auto'&&db.settings.theme===val);
-          return `<div onclick="setThemeMode('${val}')" style="padding:12px 8px;border:1.5px solid ${active?'var(--accent)':'var(--border)'};background:${active?'var(--accent-bg)':'var(--bg2)'};border-radius:var(--r-md);cursor:pointer;text-align:center;transition:all var(--transition);${active?'box-shadow:0 0 0 3px var(--accent-glow)':''}">
-            <div style="font-size:22px;margin-bottom:4px">${icon}</div>
-            <div style="font-size:12px;font-weight:600;color:${active?'var(--accent)':'var(--text)'}">${label}</div>
-            <div style="font-size:10px;color:var(--text4);margin-top:2px">${sub}</div>
+          return `<div onclick="setThemeMode('${val}')" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent-bg)':'var(--bg3)'};border-radius:var(--r-full);cursor:pointer;transition:all var(--transition)">
+            <span style="font-size:14px">${icon}</span>
+            <span style="font-size:12px;font-weight:${active?'600':'400'};color:${active?'var(--accent)':'var(--text2)'}">${label}</span>
           </div>`;
         }).join('')}
       </div>
@@ -14044,5 +14188,39 @@ function archiveInstallment(instId) {
 
 
 </script>
+<!-- ── CUSTOM NUMPAD ── -->
+<div id="tb-numpad">
+  <div id="tb-numpad-preview">
+    <span class="np-expr" id="np-expr"></span>
+    <span class="np-result" id="np-result"></span>
+  </div>
+  <div id="tb-numpad-grid">
+    <!-- Row 1 -->
+    <button class="np-btn" onclick="npKey('7')">7</button>
+    <button class="np-btn" onclick="npKey('8')">8</button>
+    <button class="np-btn" onclick="npKey('9')">9</button>
+    <button class="np-btn np-op" onclick="npKey('(')"> ( </button>
+    <button class="np-btn np-op" onclick="npKey(')')"> ) </button>
+    <!-- Row 2 -->
+    <button class="np-btn" onclick="npKey('4')">4</button>
+    <button class="np-btn" onclick="npKey('5')">5</button>
+    <button class="np-btn" onclick="npKey('6')">6</button>
+    <button class="np-btn np-op" onclick="npKey('×')">×</button>
+    <button class="np-btn np-op" onclick="npKey('÷')">÷</button>
+    <!-- Row 3 -->
+    <button class="np-btn" onclick="npKey('1')">1</button>
+    <button class="np-btn" onclick="npKey('2')">2</button>
+    <button class="np-btn" onclick="npKey('3')">3</button>
+    <button class="np-btn np-op" onclick="npKey('+')">+</button>
+    <button class="np-btn np-op" onclick="npKey('-')">−</button>
+    <!-- Row 4 -->
+    <button class="np-btn" onclick="npKey('.')">.</button>
+    <button class="np-btn np-zero" onclick="npKey('0')">0</button>
+    <button class="np-btn np-eq" onclick="npEval()">=</button>
+    <button class="np-btn np-del" onclick="npDel()">⌫</button>
+    <!-- Row 5 -->
+    <button class="np-btn np-ok" style="grid-column:span 5" onclick="npConfirm()">✓ Done</button>
+  </div>
+</div>
 </body>
 </html>
