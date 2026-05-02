@@ -211,6 +211,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* ── CUSTOM NUMPAD (calculator keyboard) ── */
 #tb-numpad{position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--bg2);border-top:1px solid var(--border2);padding:0;transform:translateY(100%);transition:transform 0.22s cubic-bezier(0.32,0.72,0,1);box-shadow:0 -4px 24px rgba(0,0,0,0.18)}
 #tb-numpad.open{transform:translateY(0)}
+body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(320px + env(safe-area-inset-bottom,0px));scroll-behavior:smooth}
 #tb-numpad-preview{padding:10px 16px 6px;font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);min-height:44px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 #tb-numpad-preview .np-expr{flex:1;overflow-x:auto;white-space:nowrap;color:var(--text2)}
 #tb-numpad-preview .np-result{color:var(--accent);font-size:14px;margin-left:8px}
@@ -1752,8 +1753,16 @@ function npOpen(inputEl, callback) {
   npRender();
   const pad = document.getElementById('tb-numpad');
   if (pad) {
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
     pad.classList.add('open');
+    document.body.classList.add('numpad-open');
     inputEl.blur();
+    // Scroll the input into view above the numpad
+    setTimeout(() => {
+      inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
   }
 }
 
@@ -1820,7 +1829,7 @@ document.addEventListener('focusin', function(e) {
 function npClose() {
   const pad = document.getElementById('tb-numpad');
   if (pad) pad.classList.remove('open');
-  // Note: don't remove readonly — it stays permanent on mobile to prevent native keyboard
+  document.body.classList.remove('numpad-open');
   _npTarget = null;
   _npExpr = '';
   _npCallback = null;
@@ -2629,7 +2638,7 @@ function renderTxRow(tx, showDate=false) {
   const checkSvg = '<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   return `<div class="${wrapClasses.join(' ')}" data-tx-id="${tx.id}" data-bulk-eligible="${eligible}"
     onmousedown="txRowPressStart(event,'${tx.id}')" onmouseup="txRowPressEnd(event,'${tx.id}')" onmouseleave="txRowPressCancel()"
-    ontouchstart="txRowPressStart(event,'${tx.id}')" ontouchend="txRowPressEnd(event,'${tx.id}')" ontouchcancel="txRowPressCancel()"
+    ontouchstart="txRowPressStart(event,'${tx.id}')" ontouchend="txRowPressEnd(event,'${tx.id}')" ontouchcancel="txRowPressCancel()" ontouchmove="txRowTouchMove(event)"
     onclick="txRowClickIntercept(event,'${tx.id}')">
     <div class="tx-bulk-check">${checkSvg}</div>
     ${body}
@@ -2649,17 +2658,28 @@ function isBulkEligible(tx) {
 }
 
 // ── BULK PRESS HANDLERS (Batch B #6) ──
+let _txPressStartX = 0;
+let _txPressStartY = 0;
+const TX_MOVE_THRESHOLD = 10; // pixels — finger jitter under this stays as long-press
+
 function txRowPressStart(ev, txId) {
   // Don't fire on right-click
   if (ev.type === 'mousedown' && ev.button !== 0) return;
   // Bulk mode only available on the Transactions page (where the toolbar can render)
   if (currentPage !== 'transactions') return;
   _txLongPressFired = false;
+  // Track starting touch position for jitter tolerance
+  if (ev.touches && ev.touches[0]) {
+    _txPressStartX = ev.touches[0].clientX;
+    _txPressStartY = ev.touches[0].clientY;
+  } else {
+    _txPressStartX = ev.clientX || 0;
+    _txPressStartY = ev.clientY || 0;
+  }
   if (_txLongPressTimer) { clearTimeout(_txLongPressTimer); _txLongPressTimer = null; }
   _txLongPressTimer = setTimeout(() => {
     const tx = db.transactions.find(t => t.id === txId);
     if (!tx || !isBulkEligible(tx)) {
-      // Long-press on non-eligible row: still enter bulk mode but don't pre-select it
       if (!_txBulkMode) {
         _txBulkMode = true;
         _txBulkSet.clear();
@@ -2686,6 +2706,18 @@ function txRowPressEnd(ev, txId) {
 
 function txRowPressCancel() {
   if (_txLongPressTimer) { clearTimeout(_txLongPressTimer); _txLongPressTimer = null; }
+}
+
+// Touchmove handler with threshold — only cancel if user actually moves finger >10px
+function txRowTouchMove(ev) {
+  if (!_txLongPressTimer) return;
+  if (!ev.touches || !ev.touches[0]) return;
+  const dx = Math.abs(ev.touches[0].clientX - _txPressStartX);
+  const dy = Math.abs(ev.touches[0].clientY - _txPressStartY);
+  if (dx > TX_MOVE_THRESHOLD || dy > TX_MOVE_THRESHOLD) {
+    clearTimeout(_txLongPressTimer);
+    _txLongPressTimer = null;
+  }
 }
 
 function txRowClickIntercept(ev, txId) {
@@ -5296,6 +5328,11 @@ function openEditTx(txId) {
     </div>
     ${tx.isAutoReimb ? `<div style="margin-top:10px;font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Archive or delete via the parent Shared transaction.</div>` : ''}
   `);
+  // Pre-populate date/time display after form renders
+  setTimeout(() => {
+    if (tx.date) dtSet('edit-date', tx.date, 'date');
+    if (tx.time) dtSet('edit-time', tx.time, 'time');
+  }, 0);
   if (isShared) setTimeout(()=>onEditSharedRecalc(txId), 0);
 }
 
@@ -6723,6 +6760,8 @@ function saveEditAccount(acctId) {
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
   a.note = document.getElementById('ea-note')?.value?.trim() || '';
   a.alertThreshold = parseFloat(document.getElementById('ea-threshold')?.value) || null;
+  // Re-sort accounts alphabetically so dropdowns stay ordered
+  db.accounts.sort((x, y) => x.name.localeCompare(y.name));
   saveDBWithSync();
   closeSheet('gen');
   renderAccounts();
@@ -7650,7 +7689,8 @@ function saveAddLoan(direction) {
 function renderInstallments() {
   const installs = db.installments || [];
   const active = installs.filter(i => !i.completed && !i.archived);
-  const completed = installs.filter(i => i.completed);
+  const completed = installs.filter(i => i.completed && !i.archived);
+  const archived = installs.filter(i => i.archived);
 
   if (installs.length === 0) {
     document.getElementById('page-content').innerHTML = `<div class="empty-state page-pad">
@@ -7752,6 +7792,10 @@ function renderInstallments() {
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:16px 0 10px">Completed</div>
       ${completed.map(installCard).join('')}` : ''}
     <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="openAddInstallment()">+ Add Installment</button>
+    ${archived.length > 0 ? `
+      <div style="margin-top:24px">
+        <button class="btn btn-ghost btn-sm" onclick="openInstArchiveSheet()" style="width:100%">📦 Archive (${archived.length})</button>
+      </div>` : ''}
   </div>`;
 
   document.getElementById('page-content').innerHTML = html;
@@ -14050,21 +14094,21 @@ function openAddInstallment() {
   const catOpts = cats.flatMap(c => (c.subcats||[]).filter(s=>!s.archived).map(s =>
     `<option value="${s.id}">${c.icon} ${c.name} › ${s.icon} ${s.name}</option>`
   )).join('');
+  const currMonth = new Date().toISOString().slice(0,7);
 
   openSheet('gen', 'New Installment', `
     <div class="form-group">
       <label class="form-label">Name *</label>
       <input class="form-input" id="inst-name" placeholder="e.g. iPhone 16">
     </div>
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Icon</label>
-        <input class="form-input" id="inst-icon" placeholder="💳" maxlength="2">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Monthly Amount *</label>
-        <input class="form-input numpad-input" type="number" id="inst-amount" placeholder="3745" step="0.01" inputmode="none">
-      </div>
+    <div class="form-group">
+      <label class="form-label">Icon</label>
+      <div class="emoji-trigger" onclick="toggleInlineEmoji('inst-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="inst-emoji-display">💳</span><span>Change icon</span></div>
+      <div id="inst-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('inst-emoji-display')}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monthly Amount *</label>
+      <input class="form-input numpad-input" type="number" id="inst-amount" placeholder="3745" step="0.01" inputmode="none">
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -14081,12 +14125,15 @@ function openAddInstallment() {
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Start Month * (YYYY-MM)</label>
-      <input class="form-input" id="inst-start" placeholder="${new Date().toISOString().slice(0,7)}" maxlength="7">
+      <label class="form-label">Start Month *</label>
+      <input class="form-input" type="month" id="inst-start" value="${currMonth}">
     </div>
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
       <input class="form-input" id="inst-notes" placeholder="e.g. from BDO credit card">
+    </div>
+    <div style="background:var(--accent-bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text3);line-height:1.5">
+      💡 <strong>How payment tracking works:</strong> After saving, tap <strong>✓ Mark month paid</strong> when you've paid for that month. Or use <strong>🔍 Find matching</strong> to auto-link transactions you've already logged.
     </div>
     <button class="btn btn-primary btn-full" onclick="saveNewInstallment()">Save Installment</button>
   `);
@@ -14094,7 +14141,7 @@ function openAddInstallment() {
 
 function saveNewInstallment() {
   const name = document.getElementById('inst-name')?.value?.trim();
-  const icon = document.getElementById('inst-icon')?.value?.trim() || '💳';
+  const icon = document.getElementById('inst-emoji-display')?.textContent?.trim() || '💳';
   const monthlyAmount = parseFloat(document.getElementById('inst-amount')?.value);
   const categoryId = document.getElementById('inst-cat')?.value;
   const totalMonths = parseInt(document.getElementById('inst-total')?.value);
@@ -14106,7 +14153,7 @@ function saveNewInstallment() {
     showToast('Fill in all required fields'); return;
   }
   if (!/^\d{4}-\d{2}$/.test(startDate)) {
-    showToast('Start month format: YYYY-MM (e.g. 2025-10)'); return;
+    showToast('Pick a valid start month'); return;
   }
 
   // Compute end date
@@ -14233,6 +14280,11 @@ function openEditInstallment(instId) {
   if (!inst) return;
   openSheet('gen', 'Edit Installment', `
     <div class="form-group">
+      <label class="form-label">Icon</label>
+      <div class="emoji-trigger" onclick="toggleInlineEmoji('einst-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="einst-emoji-display">${inst.icon||'💳'}</span><span>Change icon</span></div>
+      <div id="einst-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('einst-emoji-display')}</div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Name</label>
       <input class="form-input" id="einst-name" value="${inst.name}">
     </div>
@@ -14259,6 +14311,8 @@ function saveEditInstallment(instId) {
   const inst = db.installments.find(i => i.id === instId);
   if (!inst) return;
   inst.name = document.getElementById('einst-name')?.value?.trim() || inst.name;
+  const newIcon = document.getElementById('einst-emoji-display')?.textContent?.trim();
+  if (newIcon) inst.icon = newIcon;
   inst.monthlyAmount = parseFloat(document.getElementById('einst-amount')?.value) || inst.monthlyAmount;
   inst.alreadyPaid = parseInt(document.getElementById('einst-paid')?.value) || 0;
   inst.notes = document.getElementById('einst-notes')?.value?.trim() || '';
@@ -14278,6 +14332,67 @@ function archiveInstallment(instId) {
   closeSheet('gen');
   renderInstallments();
   showToast('Installment archived');
+}
+
+function restoreInstallment(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  inst.archived = false;
+  saveDBWithSync();
+  renderInstallments();
+  showToast('Installment restored ✓');
+  // Re-open the archive sheet if still has items
+  const stillArchived = (db.installments || []).filter(i => i.archived);
+  if (stillArchived.length > 0) openInstArchiveSheet();
+  else closeSheet('gen');
+}
+
+function deleteInstallmentPerm(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  openDlg('Delete permanently?',
+    `<div style="font-size:13px;color:var(--text2)">This will permanently delete <strong>${inst.icon||'💳'} ${inst.name}</strong>. This cannot be undone.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmDeleteInstallment('${instId}')">Delete</button>`
+  );
+}
+
+function confirmDeleteInstallment(instId) {
+  const idx = db.installments.findIndex(i => i.id === instId);
+  if (idx < 0) return;
+  db.installments.splice(idx, 1);
+  saveDBWithSync();
+  closeDlg();
+  renderInstallments();
+  showToast('Deleted permanently');
+  const stillArchived = (db.installments || []).filter(i => i.archived);
+  if (stillArchived.length > 0) openInstArchiveSheet();
+  else closeSheet('gen');
+}
+
+function openInstArchiveSheet() {
+  const archived = (db.installments || []).filter(i => i.archived);
+  if (archived.length === 0) {
+    showToast('No archived installments');
+    return;
+  }
+  const rows = archived.map(inst => {
+    const totalPaid = (inst.alreadyPaid || 0) + (inst.paidMonths || 0);
+    const status = inst.completed ? '✅ Completed' : `${totalPaid}/${inst.totalMonths} months paid`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
+      <div style="font-size:22px">${inst.icon||'💳'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${inst.name}</div>
+        <div style="font-size:11px;color:var(--text4)">${status}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="restoreInstallment('${inst.id}')" style="font-size:11px;padding:4px 10px">Restore</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteInstallmentPerm('${inst.id}')" style="font-size:11px;padding:4px 10px;color:var(--red)">Delete</button>
+    </div>`;
+  }).join('');
+  openSheet('gen', `Archived Installments (${archived.length})`, `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">${rows}</div>
+    <div style="font-size:11px;color:var(--text4);margin-top:10px">💡 Tap <strong>Restore</strong> to bring back, or <strong>Delete</strong> to permanently remove.</div>
+  `);
 }
 
 
