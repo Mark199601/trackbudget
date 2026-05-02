@@ -396,7 +396,6 @@ option{background:var(--bg3);color:var(--text)}
 
 /* ── SETTINGS ROW ── */
 .settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition),transform var(--transition);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:var(--r-sm)}
-.page-pad .card{margin-bottom:10px}
 .settings-row:hover{background:var(--bg3)}
 .settings-row:active{transform:scale(0.98);background:var(--accent-bg)}
 .settings-row:last-child{border-bottom:none}
@@ -1485,7 +1484,12 @@ function getNetWorth() {
 // ── Dashboard Reorder (C2) ──
 function getDashOrder() {
   const saved = db.settings?.dashboardOrder;
-  if (Array.isArray(saved) && saved.length === DASH_SECTIONS_DEFAULT.length) return saved;
+  if (Array.isArray(saved) && saved.length > 0) {
+    // Migrate: ensure all default sections exist (auto-add new ones at top)
+    const missing = DASH_SECTIONS_DEFAULT.filter(s => !saved.includes(s));
+    if (missing.length === 0) return saved;
+    return [...missing, ...saved];
+  }
   return [...DASH_SECTIONS_DEFAULT];
 }
 
@@ -1593,8 +1597,9 @@ const PAGES = ['dashboard','analytics','ai','installments','transactions','reimb
 let currentPage = 'dashboard';
 let _dashReorderMode = false; // C2: dashboard reorder mode
 
-const DASH_SECTIONS_DEFAULT = ['metrics','pulse','insights','budget','recent'];
+const DASH_SECTIONS_DEFAULT = ['alerts','metrics','pulse','insights','budget','recent'];
 const DASH_SECTION_LABELS = {
+  alerts: 'Alerts',
   metrics: '4-Metric Grid',
   pulse: "Today's Pulse",
   insights: 'AI Insights',
@@ -1741,11 +1746,30 @@ function npOpen(inputEl, callback) {
   const pad = document.getElementById('tb-numpad');
   if (pad) {
     pad.classList.add('open');
-    // Prevent native keyboard
+    // Aggressively prevent native keyboard on mobile
     inputEl.blur();
     inputEl.setAttribute('readonly', 'true');
+    // Re-blur after small delay (some mobile browsers re-focus)
+    setTimeout(() => inputEl.blur(), 50);
   }
 }
+
+// Wire numpad to all .numpad-input elements via touchstart (more reliable on mobile than focusin)
+document.addEventListener('touchstart', function(e) {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('numpad-input')) {
+    e.preventDefault();
+    npOpen(t);
+  }
+}, { passive: false });
+
+document.addEventListener('mousedown', function(e) {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('numpad-input') && !('ontouchstart' in window)) {
+    e.preventDefault();
+    npOpen(t);
+  }
+});
 
 function npClose() {
   const pad = document.getElementById('tb-numpad');
@@ -1833,13 +1857,6 @@ function npConfirm() {
   npClose();
 }
 
-// Wire numpad to all .numpad-input elements via event delegation
-document.addEventListener('focusin', function(e) {
-  if (e.target && e.target.classList.contains('numpad-input') && e.target.type === 'number') {
-    e.preventDefault();
-    npOpen(e.target);
-  }
-});
 // Also close numpad when tapping outside
 document.addEventListener('click', function(e) {
   const pad = document.getElementById('tb-numpad');
@@ -2391,28 +2408,29 @@ function renderDashboard() {
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
   const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px">
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('accounts')">
-      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">CASH &amp; WALLETS</div>
+      <div class="metric-label" style="white-space:normal;line-height:1.25">CASH &amp; WALLETS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(cashTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${cashAcctCount} accounts<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
-      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">LOANS OUT</div>
+      <div class="metric-label" style="white-space:normal;line-height:1.25">LOANS OUT</div>
       <div class="metric-num mfit" data-countup="${fromPhp(loansOutTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${loansOutCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
-      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">DEBTS</div>
+      <div class="metric-label" style="white-space:normal;line-height:1.25">DEBTS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(debtsTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${debtsCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('transactions')">
-      <div class="metric-label" style="white-space:normal;line-height:1.25;min-height:2.5em">TXNS THIS MONTH</div>
+      <div class="metric-label" style="white-space:normal;line-height:1.25">TXNS THIS MONTH</div>
       <div class="metric-num mfit" data-countup="${txnsThisMonth}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${txnsThisMonth}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">transactions<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
   </div>`;
   // ── Build ordered sections (C2 drag-to-reorder) ──
   const sectionMap = {
+    alerts: alertsHTML,
     metrics: metricsHTML,
     pulse: (()=>{
       const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today());
@@ -2524,7 +2542,6 @@ function renderDashboard() {
       </details>`:''}
     </div>
     ${customizeBtn}
-    ${alertsHTML}
     ${reorderToolbarHTML}
     ${orderedSectionsHTML}
   </div>`;
@@ -3390,13 +3407,13 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Receipt Total *</label>
-        <input class="form-input" type="number" id="add-total-bill" class="numpad-input" placeholder="0.00" step="any"
-          onchange="onTotalBillChange()" oninput="recalcShared()">
+        <input class="form-input numpad-input" type="number" id="add-total-bill"  placeholder="0.00" step="any"
+          onchange="onTotalBillChange()" oninput="recalcShared()" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Amount to Split</label>
-        <input class="form-input" type="number" id="add-amount-to-split" class="numpad-input" placeholder="Same as total" step="any"
-          oninput="recalcShared()">
+        <input class="form-input numpad-input" type="number" id="add-amount-to-split"  placeholder="Same as total" step="any"
+          oninput="recalcShared()" inputmode="none">
       </div>
     </div>
 
@@ -3456,7 +3473,7 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount *</label>
-        <input class="form-input" type="number" id="add-amount" class="numpad-input" min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}">
+        <input class="form-input numpad-input" type="number" id="add-amount"  min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Currency *</label>
@@ -3540,7 +3557,7 @@ function renderRemittanceForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount Sent *</label>
-        <input class="form-input" type="number" id="rem-amount" class="numpad-input" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()">
+        <input class="form-input numpad-input" type="number" id="rem-amount"  placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span> = ? PHP) *</label>
@@ -3789,29 +3806,27 @@ function renderTransferForm() {
     <div class="form-group"><label class="form-label">From Account *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
     <div class="form-group"><label class="form-label">To Account *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="tf-amount" class="numpad-input" placeholder="0.00" step="any" oninput="updateTransferPreview()"></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input numpad-input" type="number" id="tf-amount"  placeholder="0.00" step="any" oninput="updateTransferPreview()" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
     </div>
     <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
       <span style="color:var(--text3)">To Account receives: </span><span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
       <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
     </div>
-    <div id="tf-snapshot-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <input type="checkbox" id="tf-use-snapshot" checked onchange="updateTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
-      <label for="tf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
-    </div>
+    <!-- Hidden checkbox (legacy reference for submit logic — always treats as custom mode if any value entered) -->
+    <input type="checkbox" id="tf-use-snapshot" style="display:none">
     <div id="tf-custom-rate-row" style="display:none;margin-bottom:8px">
       <div class="form-row fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
-          <input class="form-input" type="number" id="tf-toamount" class="numpad-input" placeholder="0.00" step="any" oninput="onTfToAmountInput()">
+          <input class="form-input numpad-input" type="number" id="tf-toamount"  placeholder="0.00" step="any" oninput="onTfToAmountInput()" inputmode="none">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Or rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
-          <input class="form-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()">
+          <input class="form-input numpad-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()" inputmode="none">
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either field — the other auto-fills.</div>
+      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Optional — type either field to override snapshot rate. Leave blank to use snapshot.</div>
     </div>
     <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
     <div class="form-group">
@@ -3961,7 +3976,6 @@ function updateTransferPreview() {
 
   const txCurr = document.getElementById('tf-currency')?.value;
   const useSnapshotEl = document.getElementById('tf-use-snapshot');
-  const snapRow = document.getElementById('tf-snapshot-row');
   const customRateRow = document.getElementById('tf-custom-rate-row');
   const customCurrLabel = document.getElementById('tf-custom-curr-label');
 
@@ -3970,20 +3984,18 @@ function updateTransferPreview() {
   const toCurr2 = toAcct?.currency;
   const isCrossCurrency = fromAcct && toAcct && (fromCurr !== toCurr2 || (txCurr && txCurr !== fromCurr));
 
-  // Same-currency transfers don't need FX toggle — hide both rows entirely
-  if (!isCrossCurrency) {
-    if (snapRow) snapRow.style.display = 'none';
-    if (customRateRow) customRateRow.style.display = 'none';
-    // Also force snapshot mode so any stale state clears
-    if (useSnapshotEl && !useSnapshotEl.checked) useSnapshotEl.checked = true;
-  } else {
-    if (snapRow) snapRow.style.display = 'flex';
-  }
+  // Show paired-input row only for cross-currency transfers (no checkbox)
+  if (customRateRow) customRateRow.style.display = isCrossCurrency ? 'block' : 'none';
 
-  const useSnapshot = useSnapshotEl?.checked !== false;
+  // Determine if user has provided custom values (any value in toAmount or rate)
+  const userToAmount = parseFloat(toAmountEl?.value) || 0;
+  const userRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+  const hasCustomInput = userToAmount > 0 || userRate > 0;
+  // If hasCustomInput → treat as custom mode; otherwise → snapshot mode
+  // Sync the hidden checkbox so submitTransfer/saveEditTransfer logic still works
+  if (useSnapshotEl) useSnapshotEl.checked = !hasCustomInput;
+  const useSnapshot = !hasCustomInput;
 
-  // Show/hide custom rate input (only relevant when cross-currency)
-  if (customRateRow) customRateRow.style.display = (isCrossCurrency && !useSnapshot) ? 'block' : 'none';
   if (customCurrLabel && txCurr && txCurr !== 'PHP') customCurrLabel.textContent = txCurr;
   // Update toAmount currency label (Batch B #4)
   const toAmountCurrLabel = document.getElementById('tf-toamount-curr-label');
@@ -3996,7 +4008,7 @@ function updateTransferPreview() {
     const toCurr = toAcct.currency;
     let autoAmt;
     if (!useSnapshot && txCurr !== 'PHP') {
-      const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
+      const customRate = userRate;
       autoAmt = customRate > 0 ? (txCurr === 'PHP' ? amount / customRate : amount * customRate) : convert(amount, txCurr, toCurr);
     } else {
       autoAmt = txCurr !== toCurr ? convert(amount, txCurr, toCurr) : amount;
@@ -4184,9 +4196,10 @@ function submitTransfer() {
   const currency = document.getElementById('tf-currency')?.value;
   const fromAcct2 = db.accounts.find(a=>a.id===fromId);
   const toAcct2 = db.accounts.find(a=>a.id===toId);
-  const useSnapshot = document.getElementById('tf-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
   const userToAmount = parseFloat(document.getElementById('tf-toamount')?.value) || 0;
+  // Derive useSnapshot from actual input values (no checkbox dependency)
+  const useSnapshot = !(customRate > 0 || userToAmount > 0);
   const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
   let toAmount = null;
   let forexDiff = 0; // in PHP — for child forex tx
@@ -5178,7 +5191,7 @@ function openEditTx(txId) {
   const sharedFieldsHTML = isShared ? `
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Receipt Total *</label>
-        <input class="form-input" type="number" id="edit-total-bill" class="numpad-input" value="${tx.totalBill||tx.amount}" step="any" oninput="onEditSharedRecalc('${txId}')"></div>
+        <input class="form-input numpad-input" type="number" id="edit-total-bill"  value="${tx.totalBill||tx.amount}" step="any" oninput="onEditSharedRecalc('${txId}')" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="edit-currency">${currOpts}</select></div>
     </div>
     ${fxBadgeHTML}
@@ -5192,7 +5205,7 @@ function openEditTx(txId) {
     <input type="hidden" id="edit-myshare" value="${tx.myShare||0}">
   ` : `
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input" type="number" id="edit-amount" class="numpad-input" value="${tx.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input numpad-input" type="number" id="edit-amount"  value="${tx.amount}" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="edit-currency">${currOpts}</select></div>
     </div>
     ${fxBadgeHTML}
@@ -5435,7 +5448,6 @@ function updateEditTransferPreview() {
   const amount = parseFloat(document.getElementById('etf-amount')?.value) || 0;
   const txCurr = document.getElementById('etf-currency')?.value;
   const useSnapshotEl = document.getElementById('etf-use-snapshot');
-  const snapRow = document.getElementById('etf-snapshot-row');
   const customRateRow = document.getElementById('etf-custom-rate-row');
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   const toAcct = db.accounts.find(a=>a.id===toId);
@@ -5447,17 +5459,16 @@ function updateEditTransferPreview() {
   // Detect cross-currency
   const isCrossCurrency = fromAcct && toAcct && (fromAcct.currency !== toAcct.currency || (txCurr && txCurr !== fromAcct.currency));
 
-  // Same-currency → hide FX rows, force snapshot mode to clear stale state
-  if (!isCrossCurrency) {
-    if (snapRow) snapRow.style.display = 'none';
-    if (customRateRow) customRateRow.style.display = 'none';
-    if (useSnapshotEl && !useSnapshotEl.checked) useSnapshotEl.checked = true;
-  } else {
-    if (snapRow) snapRow.style.display = 'flex';
-  }
+  // Show paired-input row only for cross-currency transfers (no checkbox)
+  if (customRateRow) customRateRow.style.display = isCrossCurrency ? 'block' : 'none';
 
-  const useSnapshot = useSnapshotEl?.checked !== false;
-  if (customRateRow) customRateRow.style.display = (isCrossCurrency && !useSnapshot) ? 'block' : 'none';
+  // Auto-determine mode based on user input
+  const userToAmount = parseFloat(document.getElementById('etf-toamount')?.value) || 0;
+  const userRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+  const hasCustomInput = userToAmount > 0 || userRate > 0;
+  if (useSnapshotEl) useSnapshotEl.checked = !hasCustomInput;
+  const useSnapshot = !hasCustomInput;
+
   const currLabel = document.getElementById('etf-custom-curr-label');
   if (currLabel && txCurr && txCurr !== 'PHP') currLabel.textContent = txCurr;
   const previewDiv = document.getElementById('etf-toamount-preview');
@@ -5471,7 +5482,7 @@ function updateEditTransferPreview() {
   const snapRate = getLatestFxRate(foreignCurr);
   let toAmt;
   if (!useSnapshot && isCross) {
-    const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
+    const customRate = userRate;
     toAmt = customRate > 0 ? (txCurr === 'PHP' ? amount / snapRate : amount * snapRate) : convert(amount, txCurr, toCurr);
   } else {
     toAmt = isCross ? convert(amount, txCurr, toCurr) : amount;
@@ -5526,33 +5537,34 @@ function openEditTransfer(txId) {
     if (Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = String(derivedRate);
   }
   const hasCustomRate = existingCustomRate !== '';
+  // Initial visibility: show paired-input row whenever cross-currency (since checkbox is gone)
+  const fromAcctRender = accts.find(a=>a.id===tx.fromAccountId);
+  const isCrossCurrencyRender = fromAcctRender && toAcct && (fromAcctRender.currency !== toAcct.currency || (tx.currency && tx.currency !== fromAcctRender.currency));
   openSheet('gen','Edit Transfer',`
     <div class="form-group"><label class="form-label">From Account</label><select class="form-input" id="etf-from" onchange="syncEditTransferCurrency()">${acctOpts(tx.fromAccountId)}</select></div>
     <div class="form-group"><label class="form-label">To Account</label><select class="form-input" id="etf-to" onchange="updateEditTransferPreview()">${acctOpts(tx.toAccountId)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="etf-amount" class="numpad-input" value="${tx.amount}" oninput="updateEditTransferPreview()"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="etf-amount"  value="${tx.amount}" oninput="updateEditTransferPreview()" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="etf-currency" onchange="updateEditTransferPreview()">${currOpts}</select></div>
     </div>
     <div id="etf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
       <span style="color:var(--text3)">To Account receives: </span><span id="etf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
       <span id="etf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
     </div>
-    <div id="etf-snapshot-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <input type="checkbox" id="etf-use-snapshot" ${hasCustomRate?'':'checked'} onchange="updateEditTransferPreview()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
-      <label for="etf-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
-    </div>
-    <div id="etf-custom-rate-row" style="display:${hasCustomRate?'block':'none'};margin-bottom:8px">
+    <!-- Hidden checkbox (legacy reference for save logic — auto-synced based on input values) -->
+    <input type="checkbox" id="etf-use-snapshot" ${hasCustomRate?'':'checked'} style="display:none">
+    <div id="etf-custom-rate-row" style="display:${isCrossCurrencyRender?'block':'none'};margin-bottom:8px">
       <div class="form-row fr2" style="margin-bottom:6px">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Actual received <span id="etf-toamount-curr-label" style="color:var(--text4)">${toAcct?.currency||'PHP'}</span></label>
-          <input class="form-input" type="number" id="etf-toamount" class="numpad-input" placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()">
+          <input class="form-input numpad-input" type="number" id="etf-toamount"  placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()" inputmode="none">
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
-          <input class="form-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()">
+          <input class="form-input numpad-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()" inputmode="none">
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either field — the other auto-fills.</div>
+      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Optional — type either field to override snapshot rate. Leave blank to use snapshot.</div>
     </div>
     <div id="etf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;display:none"></div>
     <div class="form-group">
@@ -5572,9 +5584,10 @@ function saveEditTransfer(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
   const oldDate = tx.date;
-  const useSnapshot = document.getElementById('etf-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
   const userToAmountEdit = parseFloat(document.getElementById('etf-toamount')?.value) || 0;
+  // Derive useSnapshot from actual input values (no checkbox dependency)
+  const useSnapshot = !(customRate > 0 || userToAmountEdit > 0);
   tx.fromAccountId = document.getElementById('etf-from').value || tx.fromAccountId;
   tx.toAccountId = document.getElementById('etf-to').value || tx.toAccountId;
   tx.amount = parseFloat(document.getElementById('etf-amount').value) || tx.amount;
@@ -6488,7 +6501,7 @@ function openBalanceCorrection(acctId) {
       </div>
       <div class="form-group">
         <label class="form-label">Actual Balance (${a.currency}) *</label>
-        <input class="form-input" type="number" id="bc-actual" class="numpad-input" placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})">
+        <input class="form-input numpad-input" type="number" id="bc-actual"  placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})" inputmode="none">
       </div>
       <div id="bc-preview" style="display:none;padding:12px;border-radius:var(--r-md);margin-bottom:14px;font-size:13px"></div>
       <div class="form-group">
@@ -6592,7 +6605,7 @@ function openAddAccount() {
       <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="na-type">${acctTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="na-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="na-balance" class="numpad-input" placeholder="0.00" value="0"></div>
+    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="na-balance"  placeholder="0.00" value="0" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="na-note" placeholder="e.g. last 4 digits, account number"></div>
     <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="na-threshold" placeholder="Leave blank to disable"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddAccount()">Add Account</button>
@@ -6628,7 +6641,7 @@ function openEditAccount(acctId) {
       <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ea-type">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ea-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input" type="number" id="ea-balance" class="numpad-input" value="${a.initialBalance||0}"></div>
+    <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="ea-balance"  value="${a.initialBalance||0}" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
     <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="ea-threshold" value="${a.alertThreshold||''}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditAccount('${acctId}')">Save Changes</button>
@@ -6726,10 +6739,10 @@ function openAddInv() {
     <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="ai-name" placeholder="e.g. VUL Policy, BTC Holdings"></div>
     <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested *</label><input class="form-input" type="number" id="ai-amount" class="numpad-input" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Amount Invested *</label><input class="form-input numpad-input" type="number" id="ai-amount"  placeholder="0.00" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ai-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ai-current" class="numpad-input" placeholder="Leave blank if same as invested"></div>
+    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input numpad-input" type="number" id="ai-current"  placeholder="Leave blank if same as invested" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ai-date" value="${today()}"></div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ai-notes" placeholder="Optional"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddInv()">Add Investment</button>
@@ -6760,10 +6773,10 @@ function openEditInv(invId) {
     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ei-name" value="${inv.name}"></div>
     <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested</label><input class="form-input" type="number" id="ei-amount" class="numpad-input" value="${inv.amount}"></div>
+      <div class="form-group"><label class="form-label">Amount Invested</label><input class="form-input numpad-input" type="number" id="ei-amount"  value="${inv.amount}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ei-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input" type="number" id="ei-current" class="numpad-input" value="${inv.currentValue||inv.amount}"></div>
+    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input numpad-input" type="number" id="ei-current"  value="${inv.currentValue||inv.amount}" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save</button>
@@ -6985,7 +6998,7 @@ function openLoanDetail(loanId, direction) {
           Record ${isLent?'Repayment Received':'Payment Made'}
         </div>
         <div class="form-row fr2">
-          <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="loan-pay-amt" class="numpad-input" placeholder="${remaining}" step="any"></div>
+          <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="loan-pay-amt"  placeholder="${remaining}" step="any" inputmode="none"></div>
           <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="loan-pay-curr">${currOpts}</select></div>
         </div>
         <div class="form-group">
@@ -7070,7 +7083,7 @@ function editLoanFull(loanId, direction) {
   openDlg('Edit Loan',
     `<div class="form-group"><label class="form-label">Person *</label><input class="form-input" id="lf-person" value="${loan.personName||''}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="lf-amount" class="numpad-input" value="${loan.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="lf-amount"  value="${loan.amount}" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">${direction==='lent'?'From Account':'To Account'}</label><select class="form-input" id="lf-account">${acctOpts}</select></div>
