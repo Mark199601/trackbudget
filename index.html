@@ -213,15 +213,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 #tb-numpad-preview{padding:10px 16px 6px;font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);min-height:44px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 #tb-numpad-preview .np-expr{flex:1;overflow-x:auto;white-space:nowrap;color:var(--text2)}
 #tb-numpad-preview .np-result{color:var(--accent);font-size:14px;margin-left:8px}
-#tb-numpad-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
-.np-btn{background:var(--bg2);border:none;color:var(--text);font-size:18px;font-weight:500;padding:16px 4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;font-family:var(--mono);user-select:none;-webkit-user-select:none}
+#tb-numpad-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
+.np-btn{background:var(--bg2);border:none;color:var(--text);font-size:20px;font-weight:500;padding:18px 4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;font-family:var(--mono);user-select:none;-webkit-user-select:none}
 .np-btn:active,.np-btn.pressed{background:var(--bg3)}
-.np-btn.np-op{color:var(--accent);font-size:16px}
-.np-btn.np-ok{background:var(--accent);color:#fff;font-size:20px;font-weight:700}
-.np-btn.np-ok:active{background:var(--accent-dark,#5b3fa8)}
-.np-btn.np-eq{background:var(--bg3);color:var(--text)}
+.np-btn.np-fn{background:var(--bg3);color:var(--text2);font-size:16px;font-weight:600}
+.np-btn.np-fn:active{background:var(--bg4)}
+.np-btn.np-op{background:var(--accent);color:#fff;font-size:22px;font-weight:600}
+.np-btn.np-op:active{background:var(--accent-dark,#5b3fa8);opacity:0.85}
+.np-btn.np-eq{background:var(--accent);color:#fff;font-size:22px;font-weight:600}
+.np-btn.np-eq:active{background:var(--accent-dark,#5b3fa8);opacity:0.85}
 .np-btn.np-del{color:var(--red)}
 .np-btn.np-zero{grid-column:span 2}
+.np-btn.np-ok{background:var(--bg4);color:var(--text);font-size:18px;font-weight:700;padding:14px}
+.np-btn.np-ok:active{background:var(--accent)}
 .form-input:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--text4)}
 .form-input:disabled{opacity:0.5;cursor:not-allowed}
@@ -1754,8 +1758,25 @@ function npOpen(inputEl, callback) {
   }
 }
 
-// Wire numpad to all .numpad-input elements via touchstart (more reliable on mobile than focusin)
+// Mobile detection: presence of touch events + small viewport
+const NP_IS_MOBILE = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0)) && window.innerWidth <= 1024;
+
+// On desktop, remove inputmode="none" from all numpad inputs so native keyboard works
+if (!NP_IS_MOBILE) {
+  // Use MutationObserver since inputs are added dynamically (sheets/dialogs)
+  const removeInputmode = () => {
+    document.querySelectorAll('input.numpad-input[inputmode="none"]').forEach(el => {
+      el.removeAttribute('inputmode');
+    });
+  };
+  removeInputmode();
+  const mo = new MutationObserver(removeInputmode);
+  mo.observe(document.body, { childList: true, subtree: true });
+}
+
+// Wire numpad to all .numpad-input elements via touchstart (mobile only)
 document.addEventListener('touchstart', function(e) {
+  if (!NP_IS_MOBILE) return;
   const t = e.target;
   if (t && t.classList && t.classList.contains('numpad-input')) {
     e.preventDefault();
@@ -1764,6 +1785,7 @@ document.addEventListener('touchstart', function(e) {
 }, { passive: false });
 
 document.addEventListener('mousedown', function(e) {
+  if (!NP_IS_MOBILE) return;
   const t = e.target;
   if (t && t.classList && t.classList.contains('numpad-input') && !('ontouchstart' in window)) {
     e.preventDefault();
@@ -1801,6 +1823,21 @@ function npRender() {
 }
 
 function npKey(ch) {
+  // Smart parenthesis toggle when ch is '(' from the combined ( ) button
+  if (ch === '(') {
+    // Count unmatched parens
+    let openCount = 0;
+    for (const c of _npExpr) {
+      if (c === '(') openCount++;
+      else if (c === ')') openCount--;
+    }
+    const lastCh = _npExpr.slice(-1);
+    // Insert ')' if there are unmatched '(' AND last char is digit/closing paren
+    if (openCount > 0 && (/[\d)]/.test(lastCh))) {
+      ch = ')';
+    }
+    // Otherwise insert '('
+  }
   // Prevent double operators
   const lastCh = _npExpr.slice(-1);
   const isOp = '+-×÷*/'.includes(ch);
@@ -1817,6 +1854,11 @@ function npKey(ch) {
     }
     _npExpr += ch;
   }
+  npRender();
+}
+
+function npClear() {
+  _npExpr = '';
   npRender();
 }
 
@@ -3450,7 +3492,7 @@ function renderAmountForm() {
     </div>
 
     <input type="hidden" id="add-myshare">
-    <input type="hidden" id="add-amount" class="numpad-input" value="0">
+    <input type="hidden" id="add-amount" value="0">
 
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
@@ -14223,31 +14265,32 @@ function archiveInstallment(instId) {
     <span class="np-result" id="np-result"></span>
   </div>
   <div id="tb-numpad-grid">
-    <!-- Row 1 -->
+    <!-- Row 1: AC, ( ), ⌫, ÷ -->
+    <button class="np-btn np-fn" onclick="npClear()">AC</button>
+    <button class="np-btn np-fn" onclick="npKey('(')">( )</button>
+    <button class="np-btn np-fn np-del" onclick="npDel()">⌫</button>
+    <button class="np-btn np-op" onclick="npKey('÷')">÷</button>
+    <!-- Row 2: 7, 8, 9, × -->
     <button class="np-btn" onclick="npKey('7')">7</button>
     <button class="np-btn" onclick="npKey('8')">8</button>
     <button class="np-btn" onclick="npKey('9')">9</button>
-    <button class="np-btn np-op" onclick="npKey('(')"> ( </button>
-    <button class="np-btn np-op" onclick="npKey(')')"> ) </button>
-    <!-- Row 2 -->
+    <button class="np-btn np-op" onclick="npKey('×')">×</button>
+    <!-- Row 3: 4, 5, 6, − -->
     <button class="np-btn" onclick="npKey('4')">4</button>
     <button class="np-btn" onclick="npKey('5')">5</button>
     <button class="np-btn" onclick="npKey('6')">6</button>
-    <button class="np-btn np-op" onclick="npKey('×')">×</button>
-    <button class="np-btn np-op" onclick="npKey('÷')">÷</button>
-    <!-- Row 3 -->
+    <button class="np-btn np-op" onclick="npKey('-')">−</button>
+    <!-- Row 4: 1, 2, 3, + -->
     <button class="np-btn" onclick="npKey('1')">1</button>
     <button class="np-btn" onclick="npKey('2')">2</button>
     <button class="np-btn" onclick="npKey('3')">3</button>
     <button class="np-btn np-op" onclick="npKey('+')">+</button>
-    <button class="np-btn np-op" onclick="npKey('-')">−</button>
-    <!-- Row 4 -->
-    <button class="np-btn" onclick="npKey('.')">.</button>
+    <!-- Row 5: 0 (span 2), ., = -->
     <button class="np-btn np-zero" onclick="npKey('0')">0</button>
+    <button class="np-btn" onclick="npKey('.')">.</button>
     <button class="np-btn np-eq" onclick="npEval()">=</button>
-    <button class="np-btn np-del" onclick="npDel()">⌫</button>
-    <!-- Row 5 -->
-    <button class="np-btn np-ok" style="grid-column:span 5" onclick="npConfirm()">✓ Done</button>
+    <!-- Done -->
+    <button class="np-btn np-ok" style="grid-column:span 4" onclick="npConfirm()">✓ Done</button>
   </div>
 </div>
 </body>
