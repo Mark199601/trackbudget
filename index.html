@@ -218,13 +218,13 @@ body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(320p
 #tb-numpad-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
 .np-btn{background:var(--bg2);border:none;color:var(--text);font-size:20px;font-weight:500;padding:18px 4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;font-family:var(--mono);user-select:none;-webkit-user-select:none}
 .np-btn:active,.np-btn.pressed{background:var(--bg3)}
-.np-btn.np-fn{background:var(--bg3);color:var(--text2);font-size:16px;font-weight:600}
+.np-btn.np-fn{background:var(--bg3);color:var(--text2);font-size:20px;font-weight:600}
 .np-btn.np-fn:active{background:var(--bg4)}
 .np-btn.np-op{background:var(--accent);color:#fff;font-size:22px;font-weight:600}
 .np-btn.np-op:active{background:var(--accent-dark,#5b3fa8);opacity:0.85}
 .np-btn.np-eq{background:var(--accent);color:#fff;font-size:22px;font-weight:600}
 .np-btn.np-eq:active{background:var(--accent-dark,#5b3fa8);opacity:0.85}
-.np-btn.np-del{color:var(--red)}
+.np-btn.np-del{color:var(--red);font-size:24px;font-weight:600}
 .np-btn.np-zero{grid-column:span 2}
 input.numpad-input[readonly]{cursor:pointer;background:var(--input-bg,var(--bg3));color:var(--text);opacity:1}
 input.numpad-input[readonly]:focus{outline:none;border-color:var(--accent)}
@@ -5359,8 +5359,8 @@ function openEditTx(txId) {
     <div class="form-group">
       <label class="form-label">Date & Time</label>
       <div class="dt-row">
-        ${dtField('edit-date','date','Date')}
-        ${dtField('edit-time','time','Time')}
+        ${dtField('edit-date','date','Date',tx.date)}
+        ${dtField('edit-time','time','Time',tx.time)}
       </div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="edit-notes" rows="2" style="resize:none">${tx.notes||''}</textarea></div>
@@ -5370,11 +5370,6 @@ function openEditTx(txId) {
     </div>
     ${tx.isAutoReimb ? `<div style="margin-top:10px;font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Archive or delete via the parent Shared transaction.</div>` : ''}
   `);
-  // Pre-populate date/time display after form renders
-  setTimeout(() => {
-    if (tx.date) dtSet('edit-date', tx.date, 'date');
-    if (tx.time) dtSet('edit-time', tx.time, 'time');
-  }, 0);
   if (isShared) setTimeout(()=>onEditSharedRecalc(txId), 0);
 }
 
@@ -7758,7 +7753,9 @@ function renderInstallments() {
 
     // Month pills
     const months = [];
-    const startDate = new Date(inst.startDate + '-01');
+    const startDate = inst.startDate.length === 7
+      ? new Date(inst.startDate + '-01')
+      : new Date(inst.startDate + 'T00:00:00');
     for (let i = 0; i < totalMonths; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
       const label = d.toLocaleString('en', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
@@ -7797,7 +7794,7 @@ function renderInstallments() {
         <div style="height:100%;border-radius:3px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-bottom:12px">
-        <span>${inst.startDate ? new Date(inst.startDate+'-01').toLocaleString('en',{month:'short',year:'numeric'}) : ''} – ${inst.endDate ? new Date(inst.endDate+'-01').toLocaleString('en',{month:'short',year:'numeric'}) : ''}</span>
+        <span>${inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.startDate.length>7?'numeric':undefined,year:'numeric'}) : ''} – ${inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.endDate.length>7?'numeric':undefined,year:'numeric'}) : ''}</span>
         <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
       </div>` : `
       <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:8px">
@@ -12456,14 +12453,25 @@ function autoSaveTrigger() {
 }
 
 // ── CUSTOM DATE/TIME PICKER ──
-function dtField(inputId, type, placeholder) {
+function dtField(inputId, type, placeholder, initialValue) {
   const icon = type === 'time' ? '🕐' : '📅';
+  let displayLabel = placeholder;
+  if (initialValue) {
+    if (type === 'date') {
+      const d = new Date(initialValue + 'T00:00:00');
+      displayLabel = d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+    } else {
+      const [h, m] = initialValue.split(':');
+      const hour = parseInt(h);
+      displayLabel = ((hour % 12) || 12) + ':' + m + ' ' + (hour >= 12 ? 'PM' : 'AM');
+    }
+  }
   return `<div class="dt-field">
-    <div class="dt-display" id="dtd-${inputId}" onclick="dtTrigger('${inputId}','${type}')">
+    <div class="dt-display${initialValue?' dt-active':''}" id="dtd-${inputId}" onclick="dtTrigger('${inputId}','${type}')">
       <span class="dt-icon">${icon}</span>
-      <span class="dt-val dt-placeholder" id="dtv-${inputId}">${placeholder}</span>
+      <span class="dt-val${initialValue?'':' dt-placeholder'}" id="dtv-${inputId}">${displayLabel}</span>
     </div>
-    <input type="${type}" class="dt-native form-input" id="${inputId}" onchange="dtUpdate('${inputId}','${type}')">
+    <input type="${type}" class="dt-native form-input" id="${inputId}" value="${initialValue||''}" onchange="dtUpdate('${inputId}','${type}')">
   </div>`;
 }
 
@@ -14172,8 +14180,8 @@ function openAddInstallment() {
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Start Month *</label>
-      <input class="form-input" type="month" id="inst-start" value="${currMonth}">
+      <label class="form-label">Start Date *</label>
+      ${dtField('inst-start','date','Pick start date',new Date().toISOString().slice(0,10))}
     </div>
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
@@ -14199,21 +14207,22 @@ function saveNewInstallment() {
   if (!name || !monthlyAmount || !totalMonths || !startDate) {
     showToast('Fill in all required fields'); return;
   }
-  if (!/^\d{4}-\d{2}$/.test(startDate)) {
-    showToast('Pick a valid start month'); return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    showToast('Pick a valid start date'); return;
   }
 
-  // Compute end date
-  const [sy, sm] = startDate.split('-').map(Number);
-  const endD = new Date(sy, sm - 1 + totalMonths - 1, 1);
-  const endDate = `${endD.getFullYear()}-${String(endD.getMonth()+1).padStart(2,'0')}`;
+  // Compute end date based on start date + total months
+  const startD = new Date(startDate + 'T00:00:00');
+  const endD = new Date(startD.getFullYear(), startD.getMonth() + totalMonths - 1, startD.getDate());
+  const endDate = endD.toISOString().slice(0, 10);
+  const dueDay = startD.getDate(); // Day of month (1-31) for monthly due notifications
 
   if (!db.installments) db.installments = [];
   db.installments.push({
     id: genId(),
     name, icon, monthlyAmount, categoryId,
     totalMonths, alreadyPaid, paidMonths: 0,
-    startDate, endDate, notes,
+    startDate, endDate, dueDay, notes,
     linkedTxIds: [],
     completed: false,
     createdAt: new Date().toISOString()
@@ -14325,6 +14334,27 @@ function confirmLinkTransactions(instId) {
 function openEditInstallment(instId) {
   const inst = db.installments.find(i => i.id === instId);
   if (!inst) return;
+
+  // Convert legacy YYYY-MM format to YYYY-MM-01 for date picker
+  const startDateForPicker = inst.startDate
+    ? (inst.startDate.length === 7 ? inst.startDate + '-01' : inst.startDate)
+    : new Date().toISOString().slice(0,10);
+
+  // Linked transactions check
+  const linkedTxs = (inst.linkedTxIds || [])
+    .map(id => db.transactions.find(t => t.id === id))
+    .filter(Boolean);
+  const linkedHtml = linkedTxs.length > 0
+    ? `<div style="background:var(--green-bg,#0f3a2a);border:1px solid var(--green);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✓ ${linkedTxs.length} Linked Transaction${linkedTxs.length>1?'s':''}</div>
+        ${linkedTxs.slice(0,5).map(t => `<div style="font-size:11px;color:var(--text2);padding:3px 0;display:flex;justify-content:space-between"><span>${t.date}</span><span>${fmt(t.amount, t.currency||'PHP')}</span></div>`).join('')}
+        ${linkedTxs.length > 5 ? `<div style="font-size:10px;color:var(--text4);margin-top:4px">+${linkedTxs.length - 5} more</div>` : ''}
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:10px;width:100%" onclick="unlinkAllInstallmentTxs('${instId}')">Unlink All</button>
+      </div>`
+    : `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text4)">
+        ⚠️ No linked transactions yet. Use 🔍 Find matching from the installment card to link payments.
+      </div>`;
+
   openSheet('gen', 'Edit Installment', `
     <div class="form-group">
       <label class="form-label">Icon</label>
@@ -14346,12 +14376,43 @@ function openEditInstallment(instId) {
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Start Date</label>
+      ${dtField('einst-start','date','Pick start date',startDateForPicker)}
+    </div>
+    <div class="form-group">
       <label class="form-label">Notes</label>
       <input class="form-input" id="einst-notes" value="${inst.notes || ''}">
     </div>
+    ${linkedHtml}
     <button class="btn btn-primary btn-full" onclick="saveEditInstallment('${instId}')">Save</button>
     <button class="btn btn-ghost btn-full" style="margin-top:8px;color:var(--red)" onclick="archiveInstallment('${instId}')">Archive</button>
   `);
+}
+
+function unlinkAllInstallmentTxs(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  openDlg('Unlink all transactions?',
+    `<div style="font-size:13px;color:var(--text2)">This will remove the link between <strong>${inst.icon||'💳'} ${inst.name}</strong> and ${(inst.linkedTxIds||[]).length} transactions. The transactions themselves will remain.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmUnlinkAll('${instId}')">Unlink</button>`
+  );
+}
+
+function confirmUnlinkAll(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  inst.linkedTxIds = [];
+  // Recompute paidMonths based on remaining links (now 0)
+  inst.paidMonths = 0;
+  if (inst.completed && (inst.alreadyPaid || 0) < inst.totalMonths) {
+    inst.completed = false;
+  }
+  saveDBWithSync();
+  closeDlg();
+  closeSheet('gen');
+  renderInstallments();
+  showToast('Unlinked all transactions');
 }
 
 function saveEditInstallment(instId) {
@@ -14363,6 +14424,15 @@ function saveEditInstallment(instId) {
   inst.monthlyAmount = parseFloat(document.getElementById('einst-amount')?.value) || inst.monthlyAmount;
   inst.alreadyPaid = parseInt(document.getElementById('einst-paid')?.value) || 0;
   inst.notes = document.getElementById('einst-notes')?.value?.trim() || '';
+  // Update start date if changed (and recompute end date + due day)
+  const newStartDate = document.getElementById('einst-start')?.value?.trim();
+  if (newStartDate && /^\d{4}-\d{2}-\d{2}$/.test(newStartDate) && newStartDate !== inst.startDate) {
+    inst.startDate = newStartDate;
+    const startD = new Date(newStartDate + 'T00:00:00');
+    const endD = new Date(startD.getFullYear(), startD.getMonth() + inst.totalMonths - 1, startD.getDate());
+    inst.endDate = endD.toISOString().slice(0, 10);
+    inst.dueDay = startD.getDate();
+  }
   const totalPaid = inst.alreadyPaid + (inst.paidMonths || 0);
   if (totalPaid >= inst.totalMonths) inst.completed = true;
   saveDBWithSync();
