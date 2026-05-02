@@ -225,6 +225,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .np-btn.np-eq:active{background:var(--accent-dark,#5b3fa8);opacity:0.85}
 .np-btn.np-del{color:var(--red)}
 .np-btn.np-zero{grid-column:span 2}
+input.numpad-input[readonly]{cursor:pointer;background:var(--input-bg,var(--bg3));color:var(--text);opacity:1}
+input.numpad-input[readonly]:focus{outline:none;border-color:var(--accent)}
 .np-btn.np-ok{background:var(--bg4);color:var(--text);font-size:17px;font-weight:600;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro","Segoe UI",Roboto,system-ui,sans-serif;letter-spacing:-0.2px}
 .np-btn.np-ok:active{background:var(--accent)}
 .form-input:focus{border-color:var(--accent)}
@@ -1751,20 +1753,28 @@ function npOpen(inputEl, callback) {
   const pad = document.getElementById('tb-numpad');
   if (pad) {
     pad.classList.add('open');
-    // Aggressively prevent native keyboard on mobile
     inputEl.blur();
-    inputEl.setAttribute('readonly', 'true');
-    // Re-blur after small delay (some mobile browsers re-focus)
-    setTimeout(() => inputEl.blur(), 50);
   }
 }
 
 // Mobile detection: presence of touch events + small viewport
 const NP_IS_MOBILE = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0)) && window.innerWidth <= 1024;
 
-// On desktop, remove inputmode="none" from all numpad inputs so native keyboard works
-if (!NP_IS_MOBILE) {
-  // Use MutationObserver since inputs are added dynamically (sheets/dialogs)
+// On mobile, set readonly on numpad inputs so native keyboard NEVER opens.
+// Touch/click events still fire on readonly inputs, so our numpad still triggers.
+// On desktop, leave inputmode unset and inputs editable so native keyboard works.
+if (NP_IS_MOBILE) {
+  const enforceReadonly = () => {
+    document.querySelectorAll('input.numpad-input').forEach(el => {
+      if (!el.hasAttribute('readonly')) el.setAttribute('readonly', 'true');
+    });
+  };
+  enforceReadonly();
+  const mo = new MutationObserver(enforceReadonly);
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true }));
+} else {
+  // Desktop: remove inputmode="none" so native keyboard works
   const removeInputmode = () => {
     document.querySelectorAll('input.numpad-input[inputmode="none"]').forEach(el => {
       el.removeAttribute('inputmode');
@@ -1772,35 +1782,46 @@ if (!NP_IS_MOBILE) {
   };
   removeInputmode();
   const mo = new MutationObserver(removeInputmode);
-  mo.observe(document.body, { childList: true, subtree: true });
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true }));
 }
 
-// Wire numpad to all .numpad-input elements via touchstart (mobile only)
+// Wire numpad to all .numpad-input elements (mobile only)
+// Use both touchstart and click to handle all browsers
 document.addEventListener('touchstart', function(e) {
   if (!NP_IS_MOBILE) return;
   const t = e.target;
   if (t && t.classList && t.classList.contains('numpad-input')) {
     e.preventDefault();
+    e.stopPropagation();
     npOpen(t);
   }
-}, { passive: false });
+}, { passive: false, capture: true });
 
-document.addEventListener('mousedown', function(e) {
+document.addEventListener('click', function(e) {
   if (!NP_IS_MOBILE) return;
   const t = e.target;
-  if (t && t.classList && t.classList.contains('numpad-input') && !('ontouchstart' in window)) {
+  if (t && t.classList && t.classList.contains('numpad-input')) {
     e.preventDefault();
-    npOpen(t);
+    e.stopPropagation();
+    if (!_npTarget || _npTarget !== t) npOpen(t);
+  }
+}, { capture: true });
+
+// Also handle focus events as a safety net
+document.addEventListener('focusin', function(e) {
+  if (!NP_IS_MOBILE) return;
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('numpad-input')) {
+    if (!_npTarget || _npTarget !== t) npOpen(t);
   }
 });
 
 function npClose() {
   const pad = document.getElementById('tb-numpad');
   if (pad) pad.classList.remove('open');
-  if (_npTarget) {
-    _npTarget.removeAttribute('readonly');
-    _npTarget = null;
-  }
+  // Note: don't remove readonly — it stays permanent on mobile to prevent native keyboard
+  _npTarget = null;
   _npExpr = '';
   _npCallback = null;
   npRender();
