@@ -3604,7 +3604,7 @@ function renderRemittanceForm() {
       </div>
       <div class="form-group">
         <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span> = ? PHP) *</label>
-        <input class="form-input" type="number" id="rem-rate" placeholder="${latestRate.toFixed(4)}" step="any" value="${latestRate}" oninput="updateRemittancePhpPreview()">
+        <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="${latestRate.toFixed(4)}" step="any" value="${latestRate}" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
     </div>
 
@@ -3616,7 +3616,7 @@ function renderRemittanceForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Fee Amount</label>
-        <input class="form-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any">
+        <input class="form-input numpad-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Fee Account</label>
@@ -3773,7 +3773,7 @@ function renderExternalForm(type) {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount *</label>
-        <input class="form-input" type="number" id="ext-amount" placeholder="0.00" step="any">
+        <input class="form-input numpad-input" type="number" id="ext-amount" placeholder="0.00" step="any" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Currency</label>
@@ -4213,7 +4213,7 @@ function submitAddTx() {
         `<p style="font-size:14px;color:var(--text2);line-height:1.6">You received income in <strong>${currency}</strong>. Would you like to update your ${currency}→PHP exchange rate for accuracy?</p>
         <div class="form-group" style="margin-top:16px">
           <label class="form-label">1 ${currency} = ? PHP</label>
-          <input class="form-input" id="payday-fx-rate" type="number" placeholder="${db.fxRates[currency]||'0'}" value="${db.fxRates[currency]||''}">
+          <input class="form-input numpad-input" id="payday-fx-rate" type="number" placeholder="${db.fxRates[currency]||'0'}" value="${db.fxRates[currency]||''}" inputmode="none">
         </div>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Skip</button>
          <button class="btn btn-primary btn-sm" onclick="savePaydayFx('${currency}')">Update Rate</button>`
@@ -5226,7 +5226,7 @@ function openEditTx(txId) {
     personsRowsHTML = tx.persons.map((p, i) => `
       <div class="edit-person-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input class="form-input" style="flex:2;min-width:0" placeholder="Name" value="${p.name}" data-field="name">
-        <input class="form-input" style="flex:1;min-width:0" type="number" step="any" placeholder="Share" value="${p.share}" data-field="share" oninput="onEditSharedRecalc('${txId}')">
+        <input class="form-input numpad-input" style="flex:1;min-width:0" type="number" step="any" placeholder="Share" value="${p.share}" data-field="share" oninput="onEditSharedRecalc('${txId}')" inputmode="none">
         <button type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:2px 8px">×</button>
       </div>`).join('');
   }
@@ -6251,7 +6251,7 @@ function openReimbDialog(person) {
       </div>
       <div style="position:relative;width:110px">
         <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-family:var(--mono);font-size:12px">${sym(tx.currency)}</span>
-        <input class="form-input reimb-tx-amt" data-tx-id="${tx.id}" type="number" step="any" value="${remaining.toFixed(2)}" style="padding-left:24px;padding-right:8px;font-size:13px;text-align:right" oninput="updateReimbTotal()">
+        <input class="form-input reimb-tx-amt numpad-input" data-tx-id="${tx.id}" type="number" step="any" value="${remaining.toFixed(2)}" style="padding-left:24px;padding-right:8px;font-size:13px;text-align:right" oninput="updateReimbTotal()" inputmode="none">
       </div>
     </div>`;
   }).filter(Boolean).join('');
@@ -6650,7 +6650,7 @@ function openAddAccount() {
     </div>
     <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="na-balance"  placeholder="0.00" value="0" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="na-note" placeholder="e.g. last 4 digits, account number"></div>
-    <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="na-threshold" placeholder="Leave blank to disable"></div>
+    <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input numpad-input" type="number" id="na-threshold" placeholder="Leave blank to disable" inputmode="none"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddAccount()">Add Account</button>
   `);
 }
@@ -6686,7 +6686,7 @@ function openEditAccount(acctId) {
     </div>
     <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="ea-balance"  value="${a.initialBalance||0}" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
-    <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input" type="number" id="ea-threshold" value="${a.alertThreshold||''}"></div>
+    <div class="form-group"><label class="form-label">Low Balance Alert Threshold</label><input class="form-input numpad-input" type="number" id="ea-threshold" value="${a.alertThreshold||''}" inputmode="none"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditAccount('${acctId}')">Save Changes</button>
   `);
 }
@@ -7174,7 +7174,7 @@ function editLoanPayment(paymentId, loanId, direction) {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===payment.currency?'selected':''}>${c}</option>`).join('');
   openDlg('Edit Payment',
     `<div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="ep2-amount" value="${payment.amount}" step="any"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="ep2-amount" value="${payment.amount}" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ep2-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Account</label><select class="form-input" id="ep2-acct">${acctOpts}</select></div>
@@ -7390,7 +7390,7 @@ function openAddLoan(direction='lent') {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">${amtLabel} *</label>
-        <input class="form-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()">
+        <input class="form-input numpad-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()" inputmode="none">
         <div style="font-size:10px;color:var(--text4);margin-top:3px">${amtHelp}</div>
       </div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nl-currency" onchange="updateAddLoanFx()">${currOpts}</select></div>
@@ -7406,7 +7406,7 @@ function openAddLoan(direction='lent') {
     <div id="nl-custom-rate-row" style="display:none;margin-bottom:8px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Agreed rate (1 <span id="nl-rate-from">PGK</span> = ? <span id="nl-rate-to">PHP</span>)</label>
-        <input class="form-input" type="number" id="nl-custom-rate" placeholder="Enter agreed rate" step="any" oninput="updateAddLoanFx()">
+        <input class="form-input numpad-input" type="number" id="nl-custom-rate" placeholder="Enter agreed rate" step="any" oninput="updateAddLoanFx()" inputmode="none">
       </div>
     </div>
     <div id="nl-fx-preview" style="display:none;font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:10px;line-height:1.6"></div>
@@ -7745,11 +7745,11 @@ function openAddTarget() {
       </div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Goal Amount *</label><input class="form-input" type="number" id="nt-goal" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Goal Amount *</label><input class="form-input numpad-input" type="number" id="nt-goal" placeholder="0.00" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nt-currency">${currOpts}</select></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input" type="number" id="nt-current" placeholder="0.00" value="0"></div>
+      <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input numpad-input" type="number" id="nt-current" placeholder="0.00" value="0" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" type="date" id="nt-deadline"></div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="nt-notes" placeholder="Optional"></div>
@@ -7779,11 +7779,11 @@ function openEditTarget(id) {
   openSheet('gen','Edit Target',`
     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="et-name" value="${t.name}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Goal</label><input class="form-input" type="number" id="et-goal" value="${t.goal}"></div>
+      <div class="form-group"><label class="form-label">Goal</label><input class="form-input numpad-input" type="number" id="et-goal" value="${t.goal}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="et-currency">${currOpts}</select></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input" type="number" id="et-current" value="${t.current||0}"></div>
+      <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input numpad-input" type="number" id="et-current" value="${t.current||0}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" type="date" id="et-deadline" value="${t.deadline||''}"></div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="et-notes" value="${t.notes||''}"></div>
@@ -9026,7 +9026,7 @@ function openAddPayday() {
   openSheet('gen','Add Income Schedule',`
     <div class="form-group"><label class="form-label">Source Name *</label><input class="form-input" id="np-name" placeholder="e.g. BML Salary, Freelance"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Expected Amount</label><input class="form-input" type="number" id="np-amount" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Expected Amount</label><input class="form-input numpad-input" type="number" id="np-amount" placeholder="0.00" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="np-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Frequency</label>
@@ -9065,7 +9065,7 @@ function editPaydaySchedule(id) {
   openSheet('gen','Edit Schedule',`
     <div class="form-group"><label class="form-label">Source Name</label><input class="form-input" id="ep-name" value="${ps.name}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="ep-amount" value="${ps.amount||''}"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="ep-amount" value="${ps.amount||''}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ep-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Frequency</label>
@@ -9237,7 +9237,7 @@ function openAddRecurring() {
     <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="nr-name" placeholder="e.g. Spotify, Rent"></div>
     <div class="form-group"><label class="form-label">Category</label><select class="form-input" id="nr-cat">${catOpts}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="nr-amount" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="nr-amount" placeholder="0.00" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nr-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Frequency</label>
@@ -9270,7 +9270,7 @@ function editRecurring(id) {
   if (!r) return;
   openDlg(`Edit: ${r.name}`,
     `<div class="form-group"><label class="form-label">Next Date</label><input class="form-input" type="date" id="er-next" value="${r.nextDate||''}"></div>
-     <div class="form-group"><label class="form-label">Amount</label><input class="form-input" type="number" id="er-amt" value="${r.amount}"></div>`,
+     <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="er-amt" value="${r.amount}" inputmode="none"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-warning btn-sm" onclick="toggleRecurring('${id}')">${r.active?'Pause':'Resume'}</button>
      <button class="btn btn-primary btn-sm" onclick="saveEditRecurring('${id}')">Save</button>
@@ -9442,7 +9442,7 @@ function renderContractTab() {
       </div>
       ${isLinked
         ?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Linked: <span style="color:var(--accent)">${linkedNames}</span></div>`
-        :`<div style="margin-bottom:8px"><input class="form-input" type="number" step="100" min="0" placeholder="₱ manual balance" style="font-size:13px;padding:8px 10px"
+        :`<div style="margin-bottom:8px"><input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="₱ manual balance" style="font-size:13px;padding:8px 10px"
            value="${(active.buckets||{})[b.id]>0?(active.buckets||{})[b.id]:''}"
            onchange="saveContractBucket('${activeId}','${b.id}',this.value)"
            oninput="saveContractBucket('${activeId}','${b.id}',this.value)"></div>`}
@@ -9737,10 +9737,10 @@ function openContractWizard() {
       <div class="form-group"><label class="form-label">End Date *</label><input class="form-input" type="date" id="cw-end"></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Monthly Savings Goal *</label><input class="form-input" type="number" id="cw-monthly" placeholder="45000" step="1000"></div>
+      <div class="form-group"><label class="form-label">Monthly Savings Goal *</label><input class="form-input numpad-input" type="number" id="cw-monthly" placeholder="45000" step="1000" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="cw-goalcurr">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Target Amount *</label><input class="form-input" type="number" id="cw-target" placeholder="970000" step="10000"></div>
+    <div class="form-group"><label class="form-label">Target Amount *</label><input class="form-input numpad-input" type="number" id="cw-target" placeholder="970000" step="10000" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="cw-notes" rows="2" style="resize:none" placeholder="e.g. 24-month PNG contract"></textarea></div>
     <button class="btn btn-primary btn-full" onclick="saveContractWizard()">Create Contract</button>
   `);
@@ -9825,10 +9825,10 @@ function openEditContract(contractId) {
       <div class="form-group"><label class="form-label">End Date</label><input class="form-input" type="date" id="ec2-end" value="${c.endDate}"></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Monthly Goal</label><input class="form-input" type="number" id="ec2-monthly" value="${c.monthlyGoal}" step="1000"></div>
+      <div class="form-group"><label class="form-label">Monthly Goal</label><input class="form-input numpad-input" type="number" id="ec2-monthly" value="${c.monthlyGoal}" step="1000" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ec2-curr">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Target Amount</label><input class="form-input" type="number" id="ec2-target" value="${c.targetAmount}" step="10000"></div>
+    <div class="form-group"><label class="form-label">Target Amount</label><input class="form-input numpad-input" type="number" id="ec2-target" value="${c.targetAmount}" step="10000" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="ec2-notes" rows="2" style="resize:none">${c.notes||''}</textarea></div>
     <button class="btn btn-primary btn-full" onclick="saveEditContract('${contractId}')">Save</button>
   `);
@@ -9920,11 +9920,11 @@ function openBucketSheet(contractId, bucketId) {
     <div class="form-row fr2" style="margin-bottom:14px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Monthly (₱) *</label>
-        <input class="form-input" id="bk-monthly" type="number" step="100" min="0" placeholder="0" value="${b?.monthly||''}">
+        <input class="form-input numpad-input" id="bk-monthly" type="number" step="100" min="0" placeholder="0" value="${b?.monthly||''}" inputmode="none">
       </div>
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Cap (₱) — optional</label>
-        <input class="form-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap" value="${b?.cap||''}">
+        <input class="form-input numpad-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap" value="${b?.cap||''}" inputmode="none">
       </div>
     </div>
     <div class="form-group">
@@ -10327,7 +10327,7 @@ function openFxHistoryPage(currency) {
             <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 8px;flex:1;min-width:0;max-width:140px">
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
               <span style="color:var(--text3);font-size:12px">₱</span>
-              <input class="form-input fx-hist-rate" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px">
+              <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${currency}',${i})" style="font-size:11px;padding:4px 8px;flex-shrink:0">Save</button>
             ${entry.source!=='baseline'?`<button class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${currency}',${i})" style="color:var(--red);font-size:14px;padding:4px 6px;flex-shrink:0">×</button>`:''}
@@ -10363,7 +10363,7 @@ function openAddFxHistoryDlg(currency) {
     `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add a manual rate override. This will affect snapshot resolution for any tx on or after this date (until the next rate entry).</div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="addfx-date" value="${today()}"></div>
-      <div class="form-group"><label class="form-label">Rate (1 ${currency} = ? PHP)</label><input class="form-input" type="number" step="any" id="addfx-rate" value="${latest}"></div>
+      <div class="form-group"><label class="form-label">Rate (1 ${currency} = ? PHP)</label><input class="form-input numpad-input" type="number" step="any" id="addfx-rate" value="${latest}" inputmode="none"></div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmAddFxHistory('${currency}')">Add</button>`
@@ -10585,7 +10585,7 @@ function renderBudgetsTab() {
         <label class="toggle"><input type="checkbox" ${b.active?'checked':''} onchange="toggleBudget('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
       </div>
       <div class="form-group"><label class="form-label">Monthly Limit (${sym(b.currency)})</label>
-        <input class="form-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value)">
+        <input class="form-input numpad-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value)" inputmode="none">
       </div>
       <div style="display:flex;gap:8px;margin-bottom:${allocCount?'14':'0'}px">
         <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
@@ -10812,7 +10812,7 @@ function openAiAllocate(bgtId) {
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="color:var(--text3);font-size:12px">${sym(bgt.currency)}</span>
-              <input type="number" class="form-input alloc-input" data-cat="${r.catId}" value="${allocated}" style="width:80px;padding:4px 6px;text-align:right;font-size:13px">
+              <input type="number" class="form-input alloc-input numpad-input" data-cat="${r.catId}" value="${allocated}" style="width:80px;padding:4px 6px;text-align:right;font-size:13px" inputmode="none">
             </div>
           </div>
           <div style="font-size:10px;color:var(--text4);margin-left:24px;line-height:1.4">
@@ -10885,7 +10885,7 @@ function openAddBudget() {
   openDlg('Add Budget',
     `<div class="form-group"><label class="form-label">Location / Label</label><input class="form-input" id="nb-loc" placeholder="e.g. Manila, Singapore"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Monthly Limit</label><input class="form-input" type="number" id="nb-limit" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Monthly Limit</label><input class="form-input numpad-input" type="number" id="nb-limit" placeholder="0.00" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nb-curr">${currOpts}</select></div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
@@ -14040,7 +14040,7 @@ function openAddInstallment() {
       </div>
       <div class="form-group">
         <label class="form-label">Monthly Amount *</label>
-        <input class="form-input" type="number" id="inst-amount" placeholder="3745" step="0.01">
+        <input class="form-input numpad-input" type="number" id="inst-amount" placeholder="3745" step="0.01" inputmode="none">
       </div>
     </div>
     <div class="form-group">
@@ -14050,11 +14050,11 @@ function openAddInstallment() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Total Months *</label>
-        <input class="form-input" type="number" id="inst-total" placeholder="24" min="1">
+        <input class="form-input numpad-input" type="number" id="inst-total" placeholder="24" min="1" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Already Paid (months)</label>
-        <input class="form-input" type="number" id="inst-paid" placeholder="0" min="0" value="0">
+        <input class="form-input numpad-input" type="number" id="inst-paid" placeholder="0" min="0" value="0" inputmode="none">
       </div>
     </div>
     <div class="form-group">
@@ -14216,11 +14216,11 @@ function openEditInstallment(instId) {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Monthly Amount</label>
-        <input class="form-input" type="number" id="einst-amount" value="${inst.monthlyAmount}">
+        <input class="form-input numpad-input" type="number" id="einst-amount" value="${inst.monthlyAmount}" inputmode="none">
       </div>
       <div class="form-group">
         <label class="form-label">Already Paid (months)</label>
-        <input class="form-input" type="number" id="einst-paid" value="${inst.alreadyPaid || 0}">
+        <input class="form-input numpad-input" type="number" id="einst-paid" value="${inst.alreadyPaid || 0}" inputmode="none">
       </div>
     </div>
     <div class="form-group">
