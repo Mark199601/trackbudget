@@ -986,6 +986,42 @@ const GDRIVE_BACKUPS_FOLDER_NAME = 'Backups';
 const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
 let _gdriveTokenClient = null;
 let _gdriveAccessToken = null;
+let _gdriveTokenExpiry = 0; // Unix timestamp ms when token expires
+
+// ── Token persistence helpers ──
+const GDRIVE_TOKEN_KEY = 'tb_gdrive_token';
+function saveDriveToken(token, expiresInSec) {
+  _gdriveAccessToken = token;
+  _gdriveTokenExpiry = Date.now() + (expiresInSec || 3600) * 1000 - 30000; // -30s buffer
+  try {
+    localStorage.setItem(GDRIVE_TOKEN_KEY, JSON.stringify({
+      token,
+      expiry: _gdriveTokenExpiry
+    }));
+  } catch(e) {}
+}
+function loadDriveToken() {
+  try {
+    const raw = localStorage.getItem(GDRIVE_TOKEN_KEY);
+    if (!raw) return false;
+    const { token, expiry } = JSON.parse(raw);
+    if (!token || !expiry || Date.now() >= expiry) {
+      // Expired — clear
+      localStorage.removeItem(GDRIVE_TOKEN_KEY);
+      return false;
+    }
+    _gdriveAccessToken = token;
+    _gdriveTokenExpiry = expiry;
+    return true;
+  } catch(e) { return false; }
+}
+function clearDriveToken() {
+  _gdriveAccessToken = null;
+  _gdriveTokenExpiry = 0;
+  try { localStorage.removeItem(GDRIVE_TOKEN_KEY); } catch(e) {}
+}
+// Restore token immediately on script load
+loadDriveToken();
 let _gdriveFolderId = null;
 let _gdriveBackupsFolderId = null;
 const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',AUD:'A$',NZD:'NZ$',EUR:'€',GBP:'£',JPY:'¥',CNY:'¥',INR:'₹',SGD:'S$',CAD:'C$',CHF:'Fr',HKD:'HK$',TWD:'NT$',KRW:'₩',BRL:'R$',MXN:'MX$',ZAR:'R',THB:'฿',IDR:'Rp',MYR:'RM',VND:'₫',AED:'د.إ',SAR:'﷼',TRY:'₺',RUB:'₽',VUV:'Vt',FJD:'FJ$',SBD:'SI$',TOP:'T$'};
@@ -1602,7 +1638,12 @@ function txAmountDisplay(tx) {
 // NAVIGATION
 // ════════════════════════════════════════════════════════════
 const PAGES = ['dashboard','analytics','ai','installments','transactions','reimbursements','accounts','loans','planning','settings'];
-let currentPage = 'dashboard';
+let currentPage = (() => {
+  try {
+    const saved = localStorage.getItem('tb_last_page');
+    return saved && ['dashboard','transactions','accounts','loans','installments','reimbursements','planning','analytics','ai','settings'].includes(saved) ? saved : 'dashboard';
+  } catch(e) { return 'dashboard'; }
+})();
 let _dashReorderMode = false; // C2: dashboard reorder mode
 
 const DASH_SECTIONS_DEFAULT = ['alerts','metrics','pulse','insights','budget','recent'];
@@ -1626,6 +1667,7 @@ function nav(page) {
     _txQuickFilter = null;
   }
   currentPage = page;
+  try { localStorage.setItem('tb_last_page', page); } catch(e) {}
   const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
@@ -11651,7 +11693,7 @@ function disconnectDrive() {
 function confirmDisconnectDrive() {
   db.settings.googleDriveConnected = false;
   db.settings.googleDriveEmail = null;
-  _gdriveAccessToken = null;
+  clearDriveToken();
   _gdriveFolderId = null;
   _gdriveBackupsFolderId = null;
   Object.keys(_gdriveSubfolderCache).forEach(k => delete _gdriveSubfolderCache[k]);
@@ -11682,7 +11724,7 @@ function initGoogleDrive() {
         showToast('⚠ Drive sign-in failed: ' + friendly, 5000);
         return;
       }
-      _gdriveAccessToken = tokenResponse.access_token;
+      saveDriveToken(tokenResponse.access_token, tokenResponse.expires_in);
       db.settings.googleDriveConnected = true;
       db.settings.googleDriveEmail = db.settings.googleDriveEmail || 'Connected';
       saveDB();
@@ -11720,7 +11762,12 @@ function connectDrive() {
 
 // Ensure we have a valid token, silent re-auth if possible, fallback to popup
 function ensureDriveToken(callback, silent=false) {
-  if (_gdriveAccessToken) { callback(); return; }
+  // Check if token exists AND not expired
+  if (_gdriveAccessToken && Date.now() < _gdriveTokenExpiry) { callback(); return; }
+  // Token expired — clear before trying to get new one
+  if (_gdriveAccessToken && Date.now() >= _gdriveTokenExpiry) {
+    clearDriveToken();
+  }
   if (!db.settings.googleDriveConnected) {
     if (!silent) openDriveSheet();
     return;
@@ -11748,7 +11795,7 @@ function ensureDriveToken(callback, silent=false) {
           scope: GDRIVE_SCOPES,
           callback: (res) => {
             if (res.error) { showToast('Sign in failed: ' + res.error); return; }
-            _gdriveAccessToken = res.access_token;
+            saveDriveToken(res.access_token, res.expires_in);
             db.settings.googleDriveConnected = true;
             saveDB();
             _gdriveTokenClient = popupClient;
@@ -11758,7 +11805,7 @@ function ensureDriveToken(callback, silent=false) {
         popupClient.requestAccessToken({ prompt: 'select_account' });
         return;
       }
-      _gdriveAccessToken = tokenResponse.access_token;
+      saveDriveToken(tokenResponse.access_token, tokenResponse.expires_in);
       _gdriveTokenClient = silentClient;
       callback();
     }
@@ -12244,7 +12291,7 @@ async function showBackupPicker() {
     const msg = e.message || 'Unknown error';
     if (msg.includes('401') || msg.includes('403')) {
       showToast('Session expired — tap Load again to re-connect');
-      _gdriveAccessToken = null;
+      clearDriveToken();
     } else {
       showToast('Failed to load backups: ' + msg);
     }
@@ -12309,7 +12356,7 @@ async function saveToDriveSilent() {
     // Check token validity first — if expired, clear and bail silently
     const testRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + _gdriveAccessToken);
     if (!testRes.ok) {
-      _gdriveAccessToken = null; // Token expired — will re-auth next manual save
+      clearDriveToken(); // Token expired — will re-auth next manual save
       return;
     }
     const folderId = await getOrCreateFolder();
@@ -12840,7 +12887,7 @@ function initApp() {
     initTheme();
     initDeviceName();
     trackDeviceActivity();
-    nav('dashboard');
+    nav(currentPage); // Restore last visited page (defaults to dashboard)
     // Budget exceeded toast on load (once per day)
     setTimeout(() => {
       const mk = currMonthKey();
