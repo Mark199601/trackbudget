@@ -821,6 +821,7 @@ const CURRENCIES = [
   {code:'UAH',name:'Ukrainian Hryvnia',flag:'🇺🇦',country:'Ukraine'},
   {code:'UGX',name:'Ugandan Shilling',flag:'🇺🇬',country:'Uganda'},
   {code:'USD',name:'US Dollar',flag:'🇺🇸',country:'United States'},
+  {code:'USDT',name:'Tether (Crypto)',flag:'₮',country:'Cryptocurrency'},
   {code:'UYU',name:'Uruguayan Peso',flag:'🇺🇾',country:'Uruguay'},
   {code:'UZS',name:'Uzbekistani Som',flag:'🇺🇿',country:'Uzbekistan'},
   {code:'VES',name:'Venezuelan Bolívar',flag:'🇻🇪',country:'Venezuela'},
@@ -1036,7 +1037,7 @@ function clearDriveToken() {
 loadDriveToken();
 let _gdriveFolderId = null;
 let _gdriveBackupsFolderId = null;
-const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',AUD:'A$',NZD:'NZ$',EUR:'€',GBP:'£',JPY:'¥',CNY:'¥',INR:'₹',SGD:'S$',CAD:'C$',CHF:'Fr',HKD:'HK$',TWD:'NT$',KRW:'₩',BRL:'R$',MXN:'MX$',ZAR:'R',THB:'฿',IDR:'Rp',MYR:'RM',VND:'₫',AED:'د.إ',SAR:'﷼',TRY:'₺',RUB:'₽',VUV:'Vt',FJD:'FJ$',SBD:'SI$',TOP:'T$'};
+const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',USDT:'₮',AUD:'A$',NZD:'NZ$',EUR:'€',GBP:'£',JPY:'¥',CNY:'¥',INR:'₹',SGD:'S$',CAD:'C$',CHF:'Fr',HKD:'HK$',TWD:'NT$',KRW:'₩',BRL:'R$',MXN:'MX$',ZAR:'R',THB:'฿',IDR:'Rp',MYR:'RM',VND:'₫',AED:'د.إ',SAR:'﷼',TRY:'₺',RUB:'₽',VUV:'Vt',FJD:'FJ$',SBD:'SI$',TOP:'T$'};
 
 function sym(code) { return CURR_SYMBOLS[code] || (code+' '); }
 function fmt(amt, code, sign=false) {
@@ -4575,10 +4576,6 @@ function renderTxLog() {
 
   const txs = db.transactions.filter(t=> {
     if (t.archived) return false;
-    // When searching OR date range active, ignore month filter
-    if (!searchActive && !dateRangeActive) {
-      if (!t.date || !t.date.startsWith(_txMonth)) return false;
-    }
     // Date range filter
     if (dateRangeActive) {
       if (!t.date) return false;
@@ -4742,11 +4739,10 @@ function renderTxLog() {
         <span style="font-size:12px;color:var(--accent);white-space:nowrap;font-weight:500">${txs.length} match${txs.length!==1?'es':''}</span>
       </div>`
     : `<div style="display:flex;align-items:center;gap:6px;padding:10px 16px;border-bottom:${_txFilterPanelOpen?'none':'1px solid var(--border)'}">
-        <div style="position:relative;flex-shrink:0">
+        <div style="position:relative;flex:1">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.4"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <input type="text" id="tx-search-input" class="form-input" value="" placeholder="Search…" oninput="onTxSearchInput(this.value)" style="padding:8px 8px 8px 30px;font-size:13px;width:120px">
+          <input type="text" id="tx-search-input" class="form-input" value="" placeholder="Search…" oninput="onTxSearchInput(this.value)" style="padding:8px 8px 8px 30px;font-size:13px;width:100%">
         </div>
-        <select class="form-input" style="flex:1;padding:8px 8px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
         <button onclick="openTxArchiveSheet()" class="btn btn-ghost btn-sm" style="padding:8px 9px;flex-shrink:0" title="Archive">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M2 5v8a1 1 0 001 1h10a1 1 0 001-1V5" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
@@ -4773,7 +4769,7 @@ function clearAllTxFilters() {
 let _txSearchDebounce = null;
 let _txSearchCursorPos = null;
 function onTxSearchInput(val) {
-  // Debounce: re-render only after 180ms of no typing
+  // Snappy debounce — 50ms (just enough to coalesce keystrokes)
   window._txSearchQuery = val;
   // Capture cursor position before debounce fires
   const inputNow = document.getElementById('tx-search-input');
@@ -4788,7 +4784,7 @@ function onTxSearchInput(val) {
       const pos = _txSearchCursorPos != null ? _txSearchCursorPos : input.value.length;
       try { input.setSelectionRange(pos, pos); } catch(e) {}
     }
-  }, 180);
+  }, 50);
 }
 
 function clearTxSearch() {
@@ -6814,11 +6810,13 @@ function submitBalanceCorrection(acctId, appBal) {
 
 function openAddAccount() {
   const acctTypes = ['Savings','Checking','Cash','E-Wallet','Credit Card','Prepaid','Crypto Wallet','Investment','Other'];
+  // Ensure USDT is in tracked currencies (for Crypto Wallet support)
+  if (!db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   openSheet('gen','Add Account',`
     <div class="form-group"><label class="form-label">Account Name *</label><input class="form-input" id="na-name" placeholder="e.g. BPI Savings"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="na-type">${acctTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="na-type" onchange="onAcctTypeChange('na-type','na-currency')">${acctTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="na-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="na-balance"  placeholder="0.00" value="0" inputmode="none"></div>
@@ -6828,13 +6826,30 @@ function openAddAccount() {
   `);
 }
 
+function onAcctTypeChange(typeId, currId) {
+  const typeEl = document.getElementById(typeId);
+  const currEl = document.getElementById(currId);
+  if (!typeEl || !currEl) return;
+  if (typeEl.value === 'Crypto Wallet') {
+    currEl.value = 'USDT';
+    currEl.disabled = true;
+    currEl.style.opacity = '0.6';
+  } else {
+    currEl.disabled = false;
+    currEl.style.opacity = '';
+  }
+}
+
 function saveAddAccount() {
   const name = document.getElementById('na-name')?.value?.trim();
   if (!name) { showToast('Enter account name'); return; }
+  const type = document.getElementById('na-type')?.value||'Savings';
+  // Crypto Wallet always USDT
+  const currency = type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('na-currency')?.value||'PHP');
+  // Ensure USDT in tracked if used
+  if (currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
   db.accounts.push({
-    id:'acct-'+genId(), name,
-    type:document.getElementById('na-type')?.value||'Savings',
-    currency:document.getElementById('na-currency')?.value||'PHP',
+    id:'acct-'+genId(), name, type, currency,
     initialBalance:parseFloat(document.getElementById('na-balance')?.value)||0,
     note:document.getElementById('na-note')?.value?.trim()||'',
     alertThreshold:parseFloat(document.getElementById('na-threshold')?.value)||null,
@@ -6854,8 +6869,8 @@ function openEditAccount(acctId) {
   openSheet('gen','Edit Account',`
     <div class="form-group"><label class="form-label">Account Name *</label><input class="form-input" id="ea-name" value="${a.name}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ea-type">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ea-currency">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ea-type" onchange="onAcctTypeChange('ea-type','ea-currency')">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ea-currency" ${a.type==='Crypto Wallet'?'disabled style="opacity:0.6"':''}>${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Initial Balance</label><input class="form-input numpad-input" type="number" id="ea-balance"  value="${a.initialBalance||0}" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Note / Reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
@@ -6869,7 +6884,9 @@ function saveEditAccount(acctId) {
   if (!a) return;
   a.name = document.getElementById('ea-name')?.value?.trim() || a.name;
   a.type = document.getElementById('ea-type')?.value || a.type;
-  a.currency = document.getElementById('ea-currency')?.value || a.currency;
+  // Crypto Wallet always USDT (override regardless of dropdown state)
+  a.currency = a.type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency);
+  if (a.currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
   a.note = document.getElementById('ea-note')?.value?.trim() || '';
   a.alertThreshold = parseFloat(document.getElementById('ea-threshold')?.value) || null;
@@ -7066,33 +7083,171 @@ function renderLoanList(direction) {
   if (active.length === 0 && settled.length === 0) {
     html += `<div class="empty-state"><div class="empty-icon">${direction==='lent'?'🤲':'🤏'}</div><div class="empty-text">No ${direction==='lent'?'loans out':'debts'} yet</div><div class="empty-sub">${direction==='lent'?'Track money you\'ve lent to others.':'Track money you\'ve borrowed.'}</div><button class="btn btn-primary btn-sm" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div>`;
   }
-  for (const loan of [...active, ...settled]) {
-    const d = daysUntil(loan.dueDate);
-    const urgent = !loan.settled && loan.dueDate && d !== null && d <= 7;
-    const paidPct = loan.amount > 0 ? Math.min(((loan.amount-(loan.remaining||loan.amount))/loan.amount)*100,100) : 0;
-    const payments = getLoanPayments(loan.id);
-    html += `<div class="loan-card ${urgent?'border-warning':''}" style="${urgent?'border-color:var(--amber)':''}" onclick="openLoanDetail('${loan.id}','${direction}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="pool-avatar">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-          <div>
-            <div style="font-size:14px;font-weight:600">${loan.personName||'Unknown'}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtD(loan.date)} ${loan.dueDate?`· Due: ${fmtD(loan.dueDate)}`:''}${urgent?` <span style="color:var(--amber)">· ${d===0?'Due today':`${d}d left`}</span>`:''}</div>
-            ${payments.length>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${payments.length} payment${payments.length>1?'s':''} recorded</div>`:''}
+
+  // Group active loans by person
+  const byPerson = {};
+  for (const loan of active) {
+    const key = (loan.personName||'Unknown').trim();
+    if (!byPerson[key]) byPerson[key] = [];
+    byPerson[key].push(loan);
+  }
+  const personNames = Object.keys(byPerson).sort();
+
+  for (const person of personNames) {
+    const personLoans = byPerson[person];
+    // Sum total per currency
+    const byCurr = {};
+    for (const loan of personLoans) {
+      const c = loan.currency || 'PHP';
+      byCurr[c] = (byCurr[c]||0) + (loan.remaining||loan.amount);
+    }
+    const totalsHtml = Object.entries(byCurr).map(([c,amt])=>fmt(amt,c)).join(' · ');
+    const totalPersonPhp = personLoans.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+
+    // Earliest due date among active loans
+    const dueDates = personLoans.map(l=>l.dueDate).filter(Boolean).sort();
+    const earliestDue = dueDates[0];
+    const dueDays = earliestDue ? daysUntil(earliestDue) : null;
+    const urgent = dueDays !== null && dueDays <= 7;
+
+    const totalPayments = personLoans.reduce((s,l)=>s+getLoanPayments(l.id).length, 0);
+
+    html += `<div class="loan-card ${urgent?'border-warning':''}" style="${urgent?'border-color:var(--amber)':''};margin-bottom:10px">
+      <div onclick="toggleLoanPersonGroup('${direction}','${person.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
+          <div class="pool-avatar">${person.slice(0,2).toUpperCase()}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:14px;font-weight:600">${person}</div>
+            <div style="font-size:11px;color:var(--text3)">${personLoans.length} ${direction==='lent'?'loan':'debt'}${personLoans.length>1?'s':''}${earliestDue?` · earliest due ${fmtD(earliestDue)}${urgent?` <span style="color:var(--amber)">(${dueDays===0?'today':dueDays+'d'})</span>`:''}`:''}</div>
+            ${totalPayments>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${totalPayments} payment${totalPayments>1?'s':''} recorded</div>`:''}
           </div>
         </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono);font-weight:600;color:${loan.settled?'var(--text3)':direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount,loan.currency)}</div>
-          ${loan.settled?`<span class="pill pill-green" style="margin-top:4px">Settled</span>`:''}
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'};font-size:13px">${totalsHtml}</div>
+          ${Object.keys(byCurr).length>1||(Object.keys(byCurr)[0]&&Object.keys(byCurr)[0]!=='PHP')?`<div style="font-size:10px;color:var(--text4);font-family:var(--mono)">≈ ₱${totalPersonPhp.toLocaleString('en',{maximumFractionDigits:0})}</div>`:''}
+          <div style="font-size:11px;color:var(--text4);margin-top:4px">${_loanPersonExpanded[direction+':'+person]?'▼':'▶'}</div>
         </div>
       </div>
-      ${!loan.settled&&loan.amount>0?`<div class="loan-progress"><div class="loan-progress-fill" style="width:${paidPct}%;background:${direction==='lent'?'var(--amber)':'var(--red)'}"></div></div>
-      <div style="font-size:10px;color:var(--text4);margin-top:3px">${paidPct.toFixed(0)}% paid · Original: ${fmt(loan.amount,loan.currency)}</div>`:''}
-      ${loan.notes?`<div style="font-size:11px;color:var(--text3);margin-top:6px">${loan.notes}</div>`:''}
+      ${_loanPersonExpanded[direction+':'+person] ? `
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        ${personLoans.map(loan => {
+          const d = daysUntil(loan.dueDate);
+          const pl = getLoanPayments(loan.id);
+          return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;cursor:pointer;border-bottom:1px solid var(--border)" onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;color:var(--text2)">${fmtD(loan.date)}${loan.dueDate?` · Due ${fmtD(loan.dueDate)}`:''}</div>
+              ${loan.notes?`<div style="font-size:11px;color:var(--text4);margin-top:2px">${loan.notes}</div>`:''}
+              ${pl.length>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${pl.length} payment${pl.length>1?'s':''}</div>`:''}
+            </div>
+            <div style="font-family:var(--mono);font-size:12px;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
+          </div>`;
+        }).join('')}
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">💰 Batch Settle All</button>
+        </div>
+      </div>` : ''}
     </div>`;
   }
+
+  // Settled loans (still listed individually below active)
+  if (settled.length > 0) {
+    html += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:16px 0 8px">Settled</div>`;
+    for (const loan of settled) {
+      const payments = getLoanPayments(loan.id);
+      html += `<div class="loan-card" style="opacity:0.7;margin-bottom:8px" onclick="openLoanDetail('${loan.id}','${direction}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="pool-avatar">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+            <div>
+              <div style="font-size:13px;font-weight:500">${loan.personName||'Unknown'}</div>
+              <div style="font-size:11px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--mono);font-weight:500;color:var(--text3)">${fmt(loan.amount, loan.currency)}</div>
+            <span class="pill pill-green" style="margin-top:4px">Settled</span>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
   html += `<div style="margin-top:8px"><button class="pool-add-btn" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div></div>`;
   return html;
+}
+
+// Track expanded loan-person groups
+let _loanPersonExpanded = {};
+function toggleLoanPersonGroup(direction, person) {
+  const key = direction + ':' + person;
+  _loanPersonExpanded[key] = !_loanPersonExpanded[key];
+  renderLoans();
+}
+
+// Batch settle all of a person's loans
+function openBatchSettleLoans(direction, person) {
+  const loans = db.loans[direction].filter(l => !l.settled && (l.personName||'').trim() === person);
+  if (loans.length === 0) return;
+  const totalsByCurr = {};
+  for (const l of loans) {
+    const c = l.currency || 'PHP';
+    totalsByCurr[c] = (totalsByCurr[c]||0) + (l.remaining||l.amount);
+  }
+  const totalsList = Object.entries(totalsByCurr).map(([c,amt])=>`<li style="margin:4px 0">${fmt(amt, c)}</li>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  openDlg(`Batch Settle: ${person}`,
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Settle all ${loans.length} ${direction==='lent'?'loan':'debt'}${loans.length>1?'s':''} with <strong>${person}</strong>:</div>
+     <ul style="margin:0 0 12px 20px;padding:0;font-family:var(--mono);font-size:13px;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${totalsList}</ul>
+     <div class="form-group"><label class="form-label">${direction==='lent'?'Receive payment to':'Pay from'}</label>
+       <select class="form-input" id="bsl-acct">${acctOpts}</select>
+     </div>
+     <div class="form-group"><label class="form-label">Date</label>
+       <input class="form-input" type="date" id="bsl-date" value="${today()}">
+     </div>
+     <div class="form-group"><label class="form-label">Notes (optional)</label>
+       <input class="form-input" id="bsl-notes" placeholder="e.g. paid in full">
+     </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle All</button>`
+  );
+}
+
+function confirmBatchSettleLoans(direction, person) {
+  const loans = db.loans[direction].filter(l => !l.settled && (l.personName||'').trim() === person);
+  const acctId = document.getElementById('bsl-acct')?.value;
+  const date = document.getElementById('bsl-date')?.value || today();
+  const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
+  const acct = db.accounts.find(a=>a.id===acctId);
+  if (!acct) { showToast('Pick an account'); return; }
+
+  for (const loan of loans) {
+    const payAmt = loan.remaining || loan.amount;
+    // Create settlement transaction
+    const txId = 'tx-'+genId();
+    db.transactions.push({
+      id: txId,
+      type: direction === 'lent' ? 'income' : 'expense',
+      amount: payAmt,
+      currency: loan.currency,
+      accountId: acctId,
+      date,
+      time: nowTime(),
+      notes: notes || `Batch settled with ${person}`,
+      isSettlement: true,
+      isLoanPayment: true,
+      parentId: loan.id,
+      categoryId: loan.categoryId || null,
+      fxSnapshot: buildFxSnapshot(date),
+      createdAt: new Date().toISOString(),
+    });
+    loan.remaining = 0;
+    loan.settled = true;
+    loan.settledDate = date;
+  }
+  saveDBWithSync();
+  closeDlg();
+  renderLoans();
+  showToast(`✓ Settled ${loans.length} ${direction==='lent'?'loan':'debt'}${loans.length>1?'s':''} with ${person}`);
 }
 
 function openLoanDetail(loanId, direction) {
