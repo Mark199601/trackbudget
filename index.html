@@ -1502,29 +1502,50 @@ function getAcctBalance(acctId) {
 }
 
 function getNetWorth() {
-  // Assets: positive-balance asset-type accounts + investments + receivables (lent loans)
+  // Single source of truth — returns { assets, liabs, net, assetRows, liabRows }
+  // Used by: hero card, analytics wealth, alerts, AI insights, Excel export
   const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
   let assets = 0, liabs = 0;
+  const assetRows = [], liabRows = [];
+
   for (const acct of db.accounts) {
     if (acct.archived) continue;
-    const phpBal = toPhp(getAcctBalance(acct.id), acct.currency);
+    const bal = getAcctBalance(acct.id);
+    const phpBal = toPhp(bal, acct.currency);
     if (assetTypes.includes(acct.type)) {
-      if (phpBal > 0) assets += phpBal;
-      else if (phpBal < 0) liabs += Math.abs(phpBal); // overdrawn asset account = liability
+      if (phpBal > 0) {
+        assets += phpBal;
+        assetRows.push({ name: acct.name, type: acct.type, bal, currency: acct.currency, phpBal });
+      } else if (phpBal < 0) {
+        liabs += Math.abs(phpBal);
+        liabRows.push({ name: acct.name, type: acct.type, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
+      }
+    } else if (acct.type === 'Credit Card' && phpBal < 0) {
+      liabs += Math.abs(phpBal);
+      liabRows.push({ name: acct.name, type: 'Credit Card', bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
     }
-    if (acct.type === 'Credit Card' && phpBal < 0) liabs += Math.abs(phpBal);
   }
   for (const inv of db.investments) {
-    if (!inv.archived) assets += toPhp(inv.currentValue || inv.amount, inv.currency);
+    if (!inv.archived) {
+      const phpVal = toPhp(inv.currentValue || inv.amount, inv.currency);
+      assets += phpVal;
+      assetRows.push({ name: inv.name, type: inv.type || 'Investment', bal: inv.currentValue || inv.amount, currency: inv.currency, phpBal: phpVal });
+    }
   }
-  // Lent loans = receivables (asset), borrowed loans = liabilities
   for (const l of db.loans.lent) {
-    if (!l.settled) assets += toPhp(l.remaining || l.amount, l.currency);
+    if (!l.settled) {
+      const phpVal = toPhp(l.remaining || l.amount, l.currency);
+      assets += phpVal;
+      assetRows.push({ name: l.personName, type: 'Receivable', bal: l.remaining || l.amount, currency: l.currency, phpBal: phpVal });
+    }
   }
   for (const l of db.loans.borrowed) {
-    if (!l.settled) liabs += toPhp(l.remaining || l.amount, l.currency);
+    if (!l.settled) {
+      const phpVal = toPhp(l.remaining || l.amount, l.currency);
+      liabs += phpVal;
+      liabRows.push({ name: l.personName, type: 'Loan', bal: l.remaining || l.amount, currency: l.currency, phpBal: phpVal });
+    }
   }
-  // Shared tx outstanding reimbursements = receivables (asset)
   for (const tx of db.transactions) {
     if (tx.type !== 'shared' || tx.archived || tx.settled) continue;
     const persons = tx.persons || [];
@@ -1532,10 +1553,14 @@ function getNetWorth() {
       const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
         ? (tx.paidSoFar[p.name] || 0) : 0;
       const remaining = Math.max(0, (p.share || 0) - paid);
-      if (remaining > 0.01) assets += toPhp(remaining, tx.currency);
+      if (remaining > 0.01) {
+        const phpVal = toPhp(remaining, tx.currency);
+        assets += phpVal;
+        assetRows.push({ name: p.name + ' (Reimb.)', type: 'Receivable', bal: remaining, currency: tx.currency, phpBal: phpVal });
+      }
     }
   }
-  return assets - liabs;
+  return { assets, liabs, net: assets - liabs, assetRows, liabRows };
 }
 
 // ── Dashboard Reorder (C2) ──
@@ -2242,7 +2267,7 @@ function checkAlerts() {
   }
 
   // Crypto > 5%
-  const nw = getNetWorth();
+  const { net: nw } = getNetWorth();
   if (nw > 0) {
     const cryptoAccts = db.accounts.filter(a=>a.type==='Crypto Wallet'&&!a.archived);
     const cryptoVal = cryptoAccts.reduce((s,a)=>s+toPhp(getAcctBalance(a.id),a.currency), 0);
@@ -2328,7 +2353,6 @@ function renderDashboard() {
   const mk = currMonthKey();
   const lmk = lastMonthKey();
   const curr = getMonthTotals(mk);
-  const nw = getNetWorth();
   const insights = generateInsights();
   const disp = db.displayCurrency || 'PHP';
 
@@ -2466,66 +2490,10 @@ function renderDashboard() {
     </div>`;
   }
 
-  // Assets & Liabilities
-  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
-  const liabTypes  = ['Credit Card'];
-  let totalAssets = 0, totalLiab = 0;
-  const assetRows = [], liabRows = [];
-
-  for (const acct of db.accounts.filter(a=>!a.archived)) {
-    const bal = getAcctBalance(acct.id);
-    const phpBal = toPhp(bal, acct.currency);
-    if (assetTypes.includes(acct.type)) {
-      if (phpBal > 0) {
-        totalAssets += phpBal;
-        assetRows.push({ name: acct.name, type: acct.type, bal, currency: acct.currency, phpBal });
-      } else if (phpBal < 0) {
-        // Negative balance asset account (e.g. GCash overdrawn) → counts as liability
-        totalLiab += Math.abs(phpBal);
-        liabRows.push({ name: acct.name, type: acct.type, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
-      }
-    } else if (acct.type === 'Credit Card' && phpBal < 0) {
-      totalLiab += Math.abs(phpBal);
-      liabRows.push({ name: acct.name, type: 'Credit Card', bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
-    }
-  }
-  // Add investments to assets
-  for (const inv of db.investments.filter(i=>!i.archived)) {
-    const phpVal = toPhp(inv.currentValue||inv.amount, inv.currency);
-    totalAssets += phpVal;
-    assetRows.push({ name: inv.name, type: inv.type||'Investment', bal: inv.currentValue||inv.amount, currency: inv.currency, phpBal: phpVal });
-  }
-  // Add loans out (receivables) to assets
-  for (const l of db.loans.lent.filter(l=>!l.settled)) {
-    const phpVal = toPhp(l.remaining||l.amount, l.currency);
-    totalAssets += phpVal;
-    assetRows.push({ name: l.personName, type: 'Receivable', bal: l.remaining||l.amount, currency: l.currency, phpBal: phpVal });
-  }
-  // Reimbursement receivables = assets
-  for (const tx of db.transactions) {
-    if (tx.type !== 'shared' || tx.archived || tx.settled) continue;
-    const persons = tx.persons || [];
-    for (const p of persons) {
-      const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
-        ? (tx.paidSoFar[p.name] || 0) : 0;
-      const remaining = Math.max(0, (p.share || 0) - paid);
-      if (remaining > 0.01) {
-        const phpVal = toPhp(remaining, tx.currency);
-        totalAssets += phpVal;
-        assetRows.push({ name: p.name + ' (Reimb.)', type: 'Receivable', bal: remaining, currency: tx.currency, phpBal: phpVal });
-      }
-    }
-  }
-  // Add borrowed loans to liabilities
-  for (const l of db.loans.borrowed.filter(l=>!l.settled)) {
-    const phpVal = toPhp(l.remaining||l.amount, l.currency);
-    totalLiab += phpVal;
-    liabRows.push({ name: l.personName, type: 'Loan', bal: l.remaining||l.amount, currency: l.currency, phpBal: phpVal });
-  }
-
-  const netWorthCalc = totalAssets - totalLiab;
-  const topAssets = assetRows.sort((a,b)=>b.phpBal-a.phpBal).slice(0,4);
-  const topLiabs  = liabRows.sort((a,b)=>b.phpBal-a.phpBal).slice(0,4);
+  // Assets & Liabilities — single source of truth via getNetWorth()
+  const { assets: totalAssets, liabs: totalLiab, net: netWorthCalc, assetRows, liabRows } = getNetWorth();
+  const topAssets = [...assetRows].sort((a,b)=>b.phpBal-a.phpBal).slice(0,4);
+  const topLiabs  = [...liabRows].sort((a,b)=>b.phpBal-a.phpBal).slice(0,4);
 
   // Assets & Liabilities now rendered inside hero card
 
@@ -2638,7 +2606,7 @@ function renderDashboard() {
       <div class="hero-label">Net Worth</div>
       <div style="display:flex;align-items:baseline;gap:4px">
         <span class="hero-currency">${sym(disp)}</span>
-        <span class="hero-amount" data-countup="${fromPhp(nw,disp)}" data-countup-decimals="2">${fromPhp(nw,disp).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        <span class="hero-amount" data-countup="${fromPhp(netWorthCalc,disp)}" data-countup-decimals="2">${fromPhp(netWorthCalc,disp).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
       </div>
       ${(()=>{
         const mNet = curr.net || 0;
@@ -9083,22 +9051,13 @@ function showHeatmapDay(dateKey) {
 
 function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
-  const nw = getNetWorth();
-  const accts = db.accounts.filter(a=>!a.archived);
-  const LIABILITY_TYPES = new Set(['Credit Card']);
+  const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
+  // Group assetRows by type for bar chart display
   const assetByType = {}, liabByType = {};
-  for (const a of accts) {
-    const val = toPhp(getAcctBalance(a.id), a.currency);
-    if (LIABILITY_TYPES.has(a.type)) {
-      liabByType[a.type] = (liabByType[a.type]||0) + val;
-    } else {
-      assetByType[a.type] = (assetByType[a.type]||0) + val;
-    }
-  }
-  const totalAssets = Object.values(assetByType).reduce((s,v)=>s+v,0);
-  const totalLiab = Object.values(liabByType).reduce((s,v)=>s+v,0);
+  for (const r of assetRows) assetByType[r.type] = (assetByType[r.type]||0) + r.phpBal;
+  for (const r of liabRows) liabByType[r.type] = (liabByType[r.type]||0) + r.phpBal;
   const assetSorted = Object.entries(assetByType).sort((a,b)=>b[1]-a[1]);
-  const liabSorted = Object.entries(liabByType).sort((a,b)=>a[1]-b[1]);
+  const liabSorted  = Object.entries(liabByType).sort((a,b)=>b[1]-a[1]);
 
   function typeRow(type, val, base, color) {
     const pct = base > 0 ? Math.abs(val/base*100) : 0;
@@ -11936,7 +11895,7 @@ function exportXLSX() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fxRows), 'FX Rates');
 
     // ── Sheet 6: Summary ──
-    const netWorth = getNetWorth();
+    const { net: netWorth } = getNetWorth();
     const monthKey = currMonthKey();
     const monthTotals = getMonthTotals(monthKey);
     const summaryRows = [
