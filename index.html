@@ -149,13 +149,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px;font-weight:500;line-height:1.25;min-height:2.5em;display:flex;align-items:flex-start}
 .metric-num{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .metric-value{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-0.6px;color:var(--text)}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:480px){
   .metric-card{padding:10px 11px}
   .metric-label{font-size:9px;letter-spacing:0.04em;margin-bottom:4px;min-height:2.2em}
   .metric-num{font-size:11px}
   .metric-sub{font-size:9px}
 }
-.metric-sub{font-size:11px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(min-width:768px){
+  .metric-card{padding:18px 20px}
+  .metric-label{font-size:12px;margin-bottom:10px}
+  .metric-num{font-size:18px}
+  .metric-sub{font-size:12px}
+}
+@media(min-width:1024px){
+  .metric-card{padding:22px 24px}
+  .metric-label{font-size:13px;margin-bottom:12px;letter-spacing:0.1em}
+  .metric-num{font-size:22px}
+  .metric-sub{font-size:13px}
+}
 .metric-grid{display:grid;gap:10px}
 .g2{grid-template-columns:1fr 1fr}
 .g3{grid-template-columns:1fr 1fr 1fr}
@@ -2260,15 +2272,25 @@ function checkAlerts() {
 // ════════════════════════════════════════════════════════════
 // Auto-shrink metric card amounts until they fit in 1 line
 function fitMetricNums() {
-  const els = document.querySelectorAll('.mfit');
+  const w = window.innerWidth;
+  const baseSize = w >= 1024 ? 22 : w >= 768 ? 18 : w <= 480 ? 11 : 13;
+  const els = Array.from(document.querySelectorAll('.mfit'));
+  if (!els.length) return;
+
+  // Find the smallest size that fits ALL cards (consistent across all 4)
+  let minSize = baseSize;
   els.forEach(el => {
-    el.style.fontSize = '13px';
-    let size = 13;
+    el.style.fontSize = baseSize + 'px';
+    let size = baseSize;
     while (el.scrollWidth > el.clientWidth && size > 8) {
       size -= 0.5;
       el.style.fontSize = size + 'px';
     }
+    if (size < minSize) minSize = size;
   });
+
+  // Apply the smallest found size to ALL cards so they're consistent
+  els.forEach(el => { el.style.fontSize = minSize + 'px'; });
 }
 window.addEventListener('resize', ()=>{ if(document.querySelectorAll('.mfit').length) fitMetricNums(); });
 
@@ -2521,23 +2543,23 @@ function renderDashboard() {
     .reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
   const debtsCount = db.loans.borrowed.filter(l=>!l.settled).length;
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
-  const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px">
-    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('accounts')">
+  const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.5vw,20px);margin-bottom:16px">
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('accounts')">
       <div class="metric-label" style="white-space:normal;line-height:1.25">CASH &amp; WALLETS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(cashTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${cashAcctCount} accounts<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('loans')">
       <div class="metric-label" style="white-space:normal;line-height:1.25">LOANS OUT</div>
       <div class="metric-num mfit" data-countup="${fromPhp(loansOutTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${loansOutCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('loans')">
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('loans')">
       <div class="metric-label" style="white-space:normal;line-height:1.25">DEBTS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(debtsTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${debtsCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
-    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;padding:11px 12px;cursor:pointer" onclick="nav('transactions')">
+    <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('transactions')">
       <div class="metric-label" style="white-space:normal;line-height:1.25">TXNS THIS MONTH</div>
       <div class="metric-num mfit" data-countup="${txnsThisMonth}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:700;color:var(--text)">${txnsThisMonth}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">transactions<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -4479,6 +4501,9 @@ function submitTransfer() {
 let _txTab = 'log';
 let _txFilter = 'all';
 let _txMonth = currMonthKey();
+let _txAcctFilter = 'all'; // account filter
+let _txFilterPanelOpen = false; // funnel panel open state
+let _txSort = 'newest'; // newest | oldest | amount_asc | amount_desc
 let _txQuickFilter = null; // C9: null | 'large' | 'foreign' | 'nonotes' | 'recurring'
 
 // ── BULK SELECT MODE (Batch B #6) ──
@@ -4596,8 +4621,18 @@ function renderTxLog() {
     if (_txQuickFilter === 'large' && txToPhp(t) < LARGE_THRESHOLD) return false;
     if (_txQuickFilter === 'foreign' && (t.currency === 'PHP' || !t.currency)) return false;
     if (_txQuickFilter === 'nonotes' && t.notes?.trim()) return false;
+    // Account filter
+    if (_txAcctFilter !== 'all') {
+      const matchAcct = t.accountId === _txAcctFilter || t.fromAccountId === _txAcctFilter || t.toAccountId === _txAcctFilter;
+      if (!matchAcct) return false;
+    }
     return true;
-  }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||''));
+  }).sort((a,b) => {
+    if (_txSort === 'oldest') return a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||'');
+    if (_txSort === 'amount_desc') return txToPhp(b) - txToPhp(a);
+    if (_txSort === 'amount_asc') return txToPhp(a) - txToPhp(b);
+    return b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'');
+  });
 
   // Group by date
   const groups = {};
@@ -4627,20 +4662,7 @@ function renderTxLog() {
         : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
   }
 
-  // When search is active, hide month selector since we search across all months
-  const monthRow = searchActive
-    ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
-        <span style="font-size:12px;color:var(--accent);font-weight:600">🔍 Searching all months</span>
-        <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} match${txs.length!==1?'es':''}</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
-      </div>`
-    : `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;gap:8px">
-        <select class="form-input" style="flex:1;max-width:200px;padding:7px 12px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
-        <span style="font-size:12px;color:var(--text3);white-space:nowrap">${txs.length} txns</span>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px;white-space:nowrap;flex-shrink:0" onclick="setTxTab('archive')">Archive →</button>
-      </div>`;
-
-  // ── BULK TOOLBAR (Batch B #6) — shown when bulk mode active ──
+  // ── BULK TOOLBAR ──
   const bulkToolbar = _txBulkMode ? `
     <div class="bulk-toolbar">
       <button class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
@@ -4651,49 +4673,100 @@ function renderTxLog() {
       <button class="bt-danger" onclick="bulkDeleteTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🗑️ Delete</button>
     </div>` : '';
 
-  return `${bulkToolbar}${monthRow}
-    <div style="padding:8px 16px;display:flex;gap:8px;align-items:center">
-      <div style="flex:1;position:relative">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.5"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <input type="text" id="tx-search-input" class="form-input" value="${searchQuery.replace(/"/g, '&quot;')}" placeholder="Search notes, amount, account, category…" oninput="onTxSearchInput(this.value)" style="padding:8px 32px 8px 32px;font-size:13px">
-        ${searchActive ? `<button onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0;line-height:1">×</button>` : ''}
-      </div>
-      <button onclick="toggleTxDateRange()" class="btn btn-ghost btn-sm" style="padding:8px 10px;font-size:12px;${(window._txDateFrom||window._txDateTo)?'color:var(--accent);border-color:var(--accent)':''}" title="Date range filter">📅</button>
-    </div>
-    ${(window._txDateRangeOpen||window._txDateFrom||window._txDateTo) ? `
-    <div style="padding:0 16px 10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:120px">
-        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:3px">From</label>
-        <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="padding:6px 8px;font-size:12px">
-      </div>
-      <div style="flex:1;min-width:120px">
-        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:3px">To</label>
-        <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="padding:6px 8px;font-size:12px">
-      </div>
-      ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="margin-top:14px;padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
-    </div>` : ''}
-    <div style="padding:0 16px 8px 16px;border-bottom:1px solid var(--border)">
-      <div class="type-dd-wrap" style="position:relative" id="txfilter-container">
-        <div onclick="toggleTxFilterDd()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;font-size:13px;font-weight:500;user-select:none">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span id="txfilter-icon">${_txFilter==='all'?'📋':_txFilter==='expense'?'💸':_txFilter==='income'?'📈':_txFilter==='shared'?'🤝':_txFilter==='transfer'?'↔️':'🏦'}</span>
-            <span id="txfilter-label">${_txFilter==='all'?'All Types':_txFilter.charAt(0).toUpperCase()+_txFilter.slice(1)}</span>
-          </div>
-          <svg id="txfilter-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0"><path d="M1 1l5 5 5-5" stroke="var(--text3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <div id="txfilter-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-lg);z-index:100;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.2)">
-          <div style="padding:4px">
-            ${[['all','📋','All Types'],['expense','💸','Expense'],['income','📈','Income'],['shared','🤝','Shared'],['transfer','↔️','Transfer'],['loans','🏦','Loans']].map(([val,icon,label])=>`
-            <div onclick="setTxFilterDd('${val}','${icon}','${label}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13px${_txFilter===val?';background:var(--accent-bg);color:var(--accent)':''}">
-              <span style="font-size:15px">${icon}</span><span>${label}</span>
-              ${_txFilter===val?'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
-            </div>`).join('')}
-          </div>
+  // ── Account options for filter panel ──
+  const acctOpts2 = [
+    `<option value="all">All Accounts</option>`,
+    ...(db.accounts||[]).filter(a=>!a.archived).sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}" ${_txAcctFilter===a.id?'selected':''}>${a.name}</option>`)
+  ].join('');
+
+  // ── Active filter count for badge ──
+  const activeFilterCount = [
+    _txFilter !== 'all', _txAcctFilter !== 'all',
+    !!_txQuickFilter, _txSort !== 'newest',
+    !!(window._txDateFrom||window._txDateTo),
+  ].filter(Boolean).length;
+
+  const filterBadge = activeFilterCount > 0
+    ? `<span style="position:absolute;top:-5px;right:-5px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center">${activeFilterCount}</span>`
+    : '';
+
+  // ── Filter panel ──
+  const filterPanel = _txFilterPanelOpen ? `
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;gap:12px">
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Type</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[['all','All'],['expense','Expense'],['income','Income'],['shared','Shared'],['transfer','Transfer'],['loans','Loans']].map(([val,label])=>`
+            <div onclick="setTxFilter('${val}')" style="padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid ${_txFilter===val?'var(--accent)':'var(--border2)'};background:${_txFilter===val?'var(--accent-bg)':'var(--bg3)'};color:${_txFilter===val?'var(--accent)':'var(--text2)'};white-space:nowrap">${label}</div>
+          `).join('')}
         </div>
       </div>
-    </div>
-    ${qfPillsHTML}
-    <div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Account</div>
+        <select class="form-input" style="width:100%;padding:7px 12px;font-size:13px" onchange="setTxAcctFilter(this.value)">${acctOpts2}</select>
+      </div>
+      ${qfPills.length > 0 ? `<div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Quick Filters</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${qfPills.map(p=>`<div class="qf-pill${_txQuickFilter===p.key?' active':''}" onclick="setTxQuickFilter('${p.key}')" title="${p.title}">${p.label}</div>`).join('')}
+        </div>
+      </div>` : ''}
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Sort</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[['newest','Newest'],['oldest','Oldest'],['amount_desc','Amount ↓'],['amount_asc','Amount ↑']].map(([val,label])=>`
+            <div onclick="setTxSort('${val}')" style="padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid ${_txSort===val?'var(--accent)':'var(--border2)'};background:${_txSort===val?'var(--accent-bg)':'var(--bg3)'};color:${_txSort===val?'var(--accent)':'var(--text2)'};white-space:nowrap">${label}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Date Range</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+          <span style="font-size:12px;color:var(--text3)">→</span>
+          <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+          ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
+        </div>
+      </div>
+      ${activeFilterCount > 0 ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;width:100%" onclick="clearAllTxFilters()">✕ Clear all filters</button>` : ''}
+    </div>` : '';
+
+  // ── Main toolbar row ──
+  const mainToolbar = searchActive
+    ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border)">
+        <div style="flex:1;position:relative">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.5"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input type="text" id="tx-search-input" class="form-input" value="${searchQuery.replace(/"/g,'&quot;')}" placeholder="Search…" oninput="onTxSearchInput(this.value)" style="padding:8px 32px 8px 32px;font-size:13px">
+          <button onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0">×</button>
+        </div>
+        <span style="font-size:12px;color:var(--accent);white-space:nowrap;font-weight:500">${txs.length} match${txs.length!==1?'es':''}</span>
+      </div>`
+    : `<div style="display:flex;align-items:center;gap:6px;padding:10px 16px;border-bottom:${_txFilterPanelOpen?'none':'1px solid var(--border)'}">
+        <div style="position:relative;flex-shrink:0">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.4"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input type="text" id="tx-search-input" class="form-input" value="" placeholder="Search…" oninput="onTxSearchInput(this.value)" style="padding:8px 8px 8px 30px;font-size:13px;width:120px">
+        </div>
+        <select class="form-input" style="flex:1;padding:8px 8px;font-size:13px" onchange="setTxMonth(this.value)">${monthOpts}</select>
+        <button onclick="openTxArchiveSheet()" class="btn btn-ghost btn-sm" style="padding:8px 9px;flex-shrink:0" title="Archive">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M2 5v8a1 1 0 001 1h10a1 1 0 001-1V5" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button onclick="toggleTxFilterPanel()" class="btn btn-ghost btn-sm" style="padding:8px 9px;flex-shrink:0;position:relative${_txFilterPanelOpen?';color:var(--accent);border-color:var(--accent);background:var(--accent-bg)':''}" title="Filter">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M4 8h8M7 13h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          ${filterBadge}
+        </button>
+      </div>`;
+
+  return `${bulkToolbar}${mainToolbar}${filterPanel}<div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
+}
+
+function clearAllTxFilters() {
+  _txFilter = 'all';
+  _txAcctFilter = 'all';
+  _txQuickFilter = null;
+  _txSort = 'newest';
+  window._txDateFrom = null;
+  window._txDateTo = null;
+  renderTransactions();
 }
 
 // ── SMART SEARCH HELPERS ──
@@ -4774,6 +4847,9 @@ document.addEventListener('click', function(e) {
 
 function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactions(); }
 function setTxMonth(m) { _txMonth = m; _txQuickFilter = null; renderTransactions(); }
+function setTxAcctFilter(a) { _txAcctFilter = a; renderTransactions(); }
+function setTxSort(s) { _txSort = s; renderTransactions(); }
+function toggleTxFilterPanel() { _txFilterPanelOpen = !_txFilterPanelOpen; renderTransactions(); }
 
 // ── TX DETAIL & EDIT ──
 function openTxDetail(txId) {
@@ -7749,32 +7825,12 @@ function renderInstallments() {
     const remaining = remainingMonths * monthlyAmt;
     const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
     const isComplete = remainingMonths <= 0;
-    const linkedTxs = (inst.linkedTxIds || []).map(id => db.transactions.find(t => t.id === id)).filter(Boolean);
-
-    // Month pills
-    const months = [];
-    const startDate = inst.startDate.length === 7
-      ? new Date(inst.startDate + '-01')
-      : new Date(inst.startDate + 'T00:00:00');
-    for (let i = 0; i < totalMonths; i++) {
-      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
-      const label = d.toLocaleString('en', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
-      const isPaid = i < totalPaidMonths;
-      const isCurrent = i === totalPaidMonths;
-      months.push({ label, isPaid, isCurrent });
-    }
-
-    const pillsHtml = months.map(m =>
-      `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;margin:2px;
-        background:${m.isPaid ? 'rgba(45,217,138,0.1)' : m.isCurrent ? 'rgba(124,109,240,0.15)' : 'rgba(255,255,255,0.04)'};
-        color:${m.isPaid ? 'var(--green)' : m.isCurrent ? 'var(--accent)' : 'var(--text4)'}">
-        ${m.isPaid ? '✓ ' : m.isCurrent ? '▶ ' : ''}${m.label}
-      </span>`
-    ).join('');
 
     const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
+    const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
+    const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
 
-    return `<div class="card" style="margin-bottom:12px${isComplete ? ';opacity:0.65' : ''}">
+    return `<div class="card" style="margin-bottom:12px;cursor:pointer${isComplete ? ';opacity:0.65' : ''}" onclick="openInstallmentDetail('${inst.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-size:15px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${inst.name}</div>
@@ -7784,44 +7840,22 @@ function renderInstallments() {
           ? `<span style="padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
           : `<span style="padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} left</span>`}
       </div>
-
       ${!isComplete ? `
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
         <span>${fmt(remaining,'PHP')} remaining</span>
         <span>${totalPaidMonths} / ${totalMonths} months paid</span>
       </div>
-      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
+      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:8px">
         <div style="height:100%;border-radius:3px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-bottom:12px">
-        <span>${inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.startDate.length>7?'numeric':undefined,year:'numeric'}) : ''} – ${inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.endDate.length>7?'numeric':undefined,year:'numeric'}) : ''}</span>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+        <span>${startD} – ${endD}</span>
         <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
       </div>` : `
-      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:8px">
+      <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
         <div style="height:100%;border-radius:3px;background:var(--green);width:100%"></div>
-      </div>`}
-
-      <!-- Month pills -->
-      <div style="margin-bottom:12px;line-height:1.8">${pillsHtml}</div>
-
-      ${linkedTxs.length > 0 ? `
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:8px">Linked Transactions</div>
-      ${linkedTxs.slice(0,3).map(tx => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">${tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment'} <span style="display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;background:var(--accent-bg);color:var(--accent)">🔗 linked</span></div>
-            <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}</div>
-          </div>
-          <div style="font-family:var(--mono);font-size:13px;color:var(--red)">-${fmt(tx.amount,tx.currency)}</div>
-        </div>`).join('')}
-      ` : ''}
-
-      ${!isComplete ? `
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" onclick="openInstallmentSuggest('${inst.id}')">🔍 Find matching</button>
-        <button class="btn btn-ghost btn-sm" onclick="markInstallmentPaid('${inst.id}')">✓ Mark month paid</button>
-        <button class="btn btn-ghost btn-sm" onclick="openEditInstallment('${inst.id}')">✏️</button>
-      </div>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--text4);text-align:center">${startD} – ${endD}</div>`}
     </div>`;
   }
 
@@ -7920,10 +7954,10 @@ function deleteTarget(id) {
 // EMOJI PICKER
 // ════════════════════════════════════════════════════════════
 function renderEmojiPanel(targetDisplayId) {
-  let html = `<input class="emoji-search" placeholder="Search emoji..." oninput="filterEmoji(this.value,'${targetDisplayId}','epg-${targetDisplayId}')">
-    <div id="epg-${targetDisplayId}">`;
+  let html = `<input class="emoji-search" placeholder="Search emoji..." oninput="filterEmoji(this.value,'${targetDisplayId}','epg-${targetDisplayId}')" style="margin-bottom:8px">
+    <div id="epg-${targetDisplayId}" style="max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px">`;
   for (const [group, emojis] of Object.entries(EMOJI_GROUPS)) {
-    html += `<div class="emoji-group-label">${group}</div><div class="emoji-grid">`;
+    html += `<div class="emoji-group-label">${group}</div><div class="emoji-grid" style="max-height:none">`;
     html += emojis.map(e=>`<button class="emoji-btn" onclick="selectEmoji('${e}','${targetDisplayId}')" title="${e}">${e}</button>`).join('');
     html += `</div>`;
   }
@@ -7933,9 +7967,9 @@ function renderEmojiPanel(targetDisplayId) {
 function filterEmoji(q, targetId, gridId) {
   const grid = document.getElementById(gridId);
   if (!grid) return;
-  if (!q) { grid.innerHTML = Object.entries(EMOJI_GROUPS).map(([g,es])=>`<div class="emoji-group-label">${g}</div><div class="emoji-grid">${es.map(e=>`<button class="emoji-btn" onclick="selectEmoji('${e}','${targetId}')">${e}</button>`).join('')}</div>`).join(''); return; }
+  if (!q) { grid.innerHTML = Object.entries(EMOJI_GROUPS).map(([g,es])=>`<div class="emoji-group-label">${g}</div><div class="emoji-grid" style="max-height:none">${es.map(e=>`<button class="emoji-btn" onclick="selectEmoji('${e}','${targetId}')">${e}</button>`).join('')}</div>`).join(''); return; }
   const all = Object.values(EMOJI_GROUPS).flat();
-  grid.innerHTML = `<div class="emoji-grid">${all.filter(e=>e.includes(q)).map(e=>`<button class="emoji-btn" onclick="selectEmoji('${e}','${targetId}')">${e}</button>`).join('')}</div>`;
+  grid.innerHTML = `<div class="emoji-grid" style="max-height:none">${all.filter(e=>e.includes(q)).map(e=>`<button class="emoji-btn" onclick="selectEmoji('${e}','${targetId}')">${e}</button>`).join('')}</div>`;
 }
 
 function selectEmoji(emoji, targetDisplayId) {
@@ -8674,6 +8708,7 @@ function renderSpendingHeatmap(disp) {
   // Build grid: columns are weeks (Sunday at top, Saturday at bottom)
   const cells = [];
   const monthLabels = []; // {weekIdx, label}
+  const monthDividers = []; // {weekIdx, dayIdx} where new month begins
   let prevMonth = -1;
   for (let w = 0; w < NUM_WEEKS; w++) {
     for (let d = 0; d < 7; d++) {
@@ -8693,13 +8728,13 @@ function renderSpendingHeatmap(disp) {
         else if (ratio >= 0.25) level = 2;
         else level = 1;
       }
-      // Track first cell of each month for label
-      if (d === 0) {
-        const m = cellDate.getMonth();
-        if (m !== prevMonth) {
-          monthLabels.push({ weekIdx: w, label: cellDate.toLocaleString('en', {month:'short'}) });
-          prevMonth = m;
-        }
+      // Track first cell of each month for label + divider
+      const m = cellDate.getMonth();
+      if (m !== prevMonth) {
+        if (d === 0) monthLabels.push({ weekIdx: w, label: cellDate.toLocaleString('en', {month:'short'}) });
+        else monthLabels.push({ weekIdx: w + 1, label: cellDate.toLocaleString('en', {month:'short'}) });
+        if (prevMonth !== -1) monthDividers.push({ weekIdx: w, dayIdx: d });
+        prevMonth = m;
       }
       cells.push({
         w, d, key, total, count: dayData?.count || 0, level, isFuture,
@@ -8768,6 +8803,12 @@ function renderSpendingHeatmap(disp) {
     return `<text x="${x}" y="-4" font-size="10" fill="var(--text4)" font-family="system-ui">${ml.label}</text>`;
   }).join('');
 
+  // Month divider lines (vertical) — drawn between months
+  const monthDividerEls = monthDividers.map(div => {
+    const x = div.weekIdx * colWidth - 1;
+    return `<line x1="${x}" y1="-2" x2="${x}" y2="${gridHeight}" stroke="var(--border2)" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.5"/>`;
+  }).join('');
+
   // Day labels (Sun, Mon, etc.) — only show every other one to save space
   const dayNames = ['Sun','','Tue','','Thu','','Sat'];
   const dayLabelEls = dayNames.map((n,i) => n
@@ -8790,6 +8831,7 @@ function renderSpendingHeatmap(disp) {
     <div id="heatmap-scroll-wrap" style="overflow-x:auto;padding:14px 4px 4px;margin:0 -4px;-webkit-overflow-scrolling:touch">
       <svg width="${gridWidth + 32}" height="${gridHeight + 24}" style="display:block">
         <g transform="translate(28, 18)">
+          ${monthDividerEls}
           ${monthLabelEls}
           ${dayLabelEls}
           ${cellRects}
@@ -10219,7 +10261,7 @@ function renderProfileTab() {
         <div class="sr-left"><div class="sr-icon">👤</div><div><div class="sr-text">${p.nickname||'Set nickname'}</div><div class="sr-sub">${p.country||'Set country'}</div></div></div>
         <div class="sr-right">Edit →</div>
       </div>
-      <div class="settings-row">
+      <div class="settings-row" style="cursor:default">
         <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">Primary display unit</div></div></div>
         <select class="form-input" style="width:auto;padding:5px 12px;font-size:12px" onchange="setDisplayCurrency(this.value)">${currOpts}</select>
       </div>
@@ -10258,7 +10300,7 @@ function renderProfileTab() {
         <div class="sr-right">→</div>
       </div>
     </div>
-    <div class="card">
+    <div class="card" style="margin-top:16px">
       <div class="section-title" style="margin-bottom:12px">Snapshots & Storage</div>
       <div class="settings-row" onclick="showSnapshotPicker()">
         <div class="sr-left"><div class="sr-icon">📸</div><div><div class="sr-text">Snapshots</div><div class="sr-sub">${db.settings.googleDriveConnected?'Labeled restore points · max 20':'Connect Drive to enable'}</div></div></div>
@@ -11081,6 +11123,82 @@ const CAT_KEYWORDS = {
   'Returns & Gains':  ['return','gain','investment','dividend','interest','profit','forex gain','reimburse','repayment'],
 };
 
+// Icon keyword map for offline AI icon picker
+const ICON_KEYWORDS = {
+  '🍔': ['food','meal','restaurant','dine','dining','lunch','dinner','breakfast','snack','eat','kain'],
+  '🍕': ['pizza'],
+  '☕': ['coffee','cafe','starbucks','espresso','latte','cappuccino'],
+  '🍺': ['beer','alcohol','drink','liquor','cocktail','bar','pub'],
+  '🛒': ['groceries','grocery','supermarket','market','sm','shopwise','rustans'],
+  '🚗': ['car','gas','fuel','parking','toll','grab','uber','taxi','transport','transpo','vehicle'],
+  '🚆': ['train','mrt','lrt','jeep','bus','commute'],
+  '✈️': ['flight','plane','airline','airfare','airport'],
+  '🏠': ['rent','house','home','apartment','condo','mortgage','housing'],
+  '⚡': ['electric','meralco','power','utility','utilities'],
+  '💧': ['water','manila water','maynilad'],
+  '🌐': ['internet','wifi','globe','pldt','converge','sky'],
+  '📱': ['phone','mobile','load','data','prepaid','postpaid','sim','smart','tnt','dito'],
+  '💊': ['medicine','medication','drug','pharmacy','mercury','generika','watsons'],
+  '🏥': ['hospital','doctor','clinic','medical','health','checkup','dentist','dental'],
+  '🧴': ['toiletries','shampoo','soap','toothpaste','beauty','cosmetic','makeup','skincare'],
+  '👕': ['clothes','clothing','shirt','pants','dress','fashion','apparel','uniqlo','zara','h&m'],
+  '👟': ['shoes','sneakers','footwear','adidas','nike'],
+  '💼': ['work','office','business','salary','income','job'],
+  '🎓': ['school','tuition','education','college','university','book','textbook','student'],
+  '🎬': ['movie','cinema','netflix','disney','prime','hbo','streaming'],
+  '🎵': ['music','spotify','apple music','youtube music','concert'],
+  '🎮': ['game','gaming','steam','playstation','xbox','nintendo','mobile legends','genshin'],
+  '🐶': ['pet','dog','cat','vet','pet food'],
+  '💪': ['gym','fitness','workout','exercise','sport','sports'],
+  '🎁': ['gift','present','birthday','christmas','holiday'],
+  '💰': ['savings','save','investment','invest','stock','crypto','bonds'],
+  '💳': ['credit card','card payment','installment','installments','loan payment'],
+  '🏦': ['bank','transfer','remittance','wire','wise','remitly'],
+  '✂️': ['haircut','salon','barber','spa','massage'],
+  '📚': ['book','reading','novel','magazine'],
+  '🌐': ['subscription','service','online'],
+  '🎂': ['cake','birthday','dessert'],
+  '🚬': ['cigarette','smoke','tobacco','vape'],
+  '🪴': ['plant','garden','flower'],
+  '🛠️': ['repair','maintenance','fix','tool'],
+  '⛽': ['gas','fuel','petrol'],
+  '🍎': ['fruit','apple','vegetable','veggie'],
+  '🥩': ['meat','beef','pork','chicken','protein'],
+  '🍞': ['bread','bakery','pastry'],
+  '🍰': ['dessert','cake','sweets','cake'],
+  '👶': ['baby','kids','child','children','diaper','milk','formula'],
+  '🪒': ['shave','razor','grooming'],
+  '💅': ['nail','manicure','pedicure'],
+  '🧸': ['toy','plush'],
+  '📦': ['shipping','delivery','lalamove','grab express','lbc','jrs'],
+  '💸': ['transfer','send','sent','remit'],
+  '🤝': ['shared','split','utang','bayad'],
+  '🎉': ['party','celebration','event'],
+  '🎒': ['travel','trip','vacation','tour','holiday'],
+  '🏖️': ['beach','resort','swim'],
+  '🎨': ['art','craft','hobby','painting'],
+  '📷': ['camera','photo','photography'],
+  '💻': ['laptop','computer','tech','gadget','electronics'],
+  '🖨️': ['print','printer','xerox'],
+};
+
+function aiSuggestIcon(name) {
+  if (!name) return null;
+  const q = name.trim().toLowerCase();
+  // Score each icon by keyword matches
+  let bestIcon = null, bestScore = 0;
+  for (const [icon, keywords] of Object.entries(ICON_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (q === kw) return icon; // exact match wins immediately
+      if (q.includes(kw) || kw.includes(q)) {
+        const score = kw.length / Math.max(q.length, kw.length) * 50;
+        if (score > bestScore) { bestScore = score; bestIcon = icon; }
+      }
+    }
+  }
+  return bestScore >= 25 ? bestIcon : null;
+}
+
 function aiCatSuggest(input) {
   if (!input || input.trim().length < 2) return null;
   const q = input.trim().toLowerCase();
@@ -11236,7 +11354,7 @@ function dismissAiCatSugg(inputId, suggBoxId) {
 function openAddMajorCat(forType) {
   openSheet('gen','Add Major Category',`
     <div class="form-group"><label class="form-label">Category Name *</label>
-      <input class="form-input" id="nc-name" placeholder="e.g. Entertainment" oninput="renderAiCatSuggestion('nc-name','nc-ai-sugg','${forType}')">
+      <input class="form-input" id="nc-name" placeholder="e.g. Entertainment" oninput="onCatNameInput('nc-name','nc-emoji-display','nc-ai-sugg','${forType}')">
       <div id="nc-ai-sugg"></div>
     </div>
     <div class="form-group"><label class="form-label">Icon</label>
@@ -11245,6 +11363,21 @@ function openAddMajorCat(forType) {
     </div>
     <button class="btn btn-primary btn-full" onclick="saveAddMajorCat('${forType}')">Add Category</button>
   `);
+}
+
+function onCatNameInput(inputId, iconElId, suggBoxId, forType) {
+  // Auto-suggest icon based on name
+  const name = document.getElementById(inputId)?.value?.trim();
+  const iconEl = document.getElementById(iconElId);
+  if (iconEl && name && (iconEl.textContent === '📌' || iconEl.dataset.aiSet === '1')) {
+    const sugg = aiSuggestIcon(name);
+    if (sugg) {
+      iconEl.textContent = sugg;
+      iconEl.dataset.aiSet = '1';
+    }
+  }
+  // Also run major/sub suggestion
+  if (suggBoxId) renderAiCatSuggestion(inputId, suggBoxId, forType);
 }
 
 function saveAddMajorCat(forType) {
@@ -11257,7 +11390,7 @@ function saveAddMajorCat(forType) {
 
 function openAddSubCat(catId, forType) {
   openSheet('gen','Add Subcategory',`
-    <div class="form-group"><label class="form-label">Subcategory Name *</label><input class="form-input" id="nsc-name" placeholder="e.g. Spotify"></div>
+    <div class="form-group"><label class="form-label">Subcategory Name *</label><input class="form-input" id="nsc-name" placeholder="e.g. Spotify" oninput="onCatNameInput('nsc-name','nsc-emoji-display',null,'${forType}')"></div>
     <div class="form-group"><label class="form-label">Icon</label>
       <div class="emoji-trigger" onclick="toggleInlineEmoji('nsc-emoji-panel')"><span class="et-icon" id="nsc-emoji-display">📌</span><span>Pick icon</span></div>
       <div id="nsc-emoji-panel" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('nsc-emoji-display')}</div>
@@ -11281,16 +11414,43 @@ function saveAddSubCat(catId, forType) {
 function openEditCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   if (!cat) return;
+  // Check if category (or any subcat) has linked transactions
+  const subcatIds = (cat.subcats||[]).map(s=>s.id);
+  const allRelatedIds = [catId, ...subcatIds];
+  const hasTxs = db.transactions.some(t => allRelatedIds.includes(t.categoryId));
+  const archivedHasTxs = (db.archivedTransactions||[]).some(t => allRelatedIds.includes(t.categoryId));
+  const canDelete = !hasTxs && !archivedHasTxs;
+
   openDlg(`Edit: ${cat.name}`,
     `<div class="form-group"><label class="form-label">Icon</label>
       <div class="emoji-trigger" onclick="toggleInlineEmoji('ec-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="ec-emoji-display">${cat.icon||'📌'}</span><span>Change icon</span></div>
       <div id="ec-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('ec-emoji-display')}</div>
      </div>
-     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${cat.name}"></div>`,
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${cat.name}"></div>
+     ${!canDelete ? '<div style="font-size:11px;color:var(--text4);background:var(--bg3);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:8px">💡 This category has linked transactions. You can Archive/Restore but cannot delete.</div>' : ''}`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-warning btn-sm" onclick="toggleArchiveCat('${catId}','${forType}')">${cat.archived?'Restore':'Archive'}</button>
+     ${canDelete
+        ? `<button class="btn btn-danger btn-sm" onclick="confirmDeleteCat('${catId}','${forType}')">Delete</button>`
+        : `<button class="btn btn-warning btn-sm" onclick="toggleArchiveCat('${catId}','${forType}')">${cat.archived?'Restore':'Archive'}</button>`}
      <button class="btn btn-primary btn-sm" onclick="saveEditCat('${catId}','${forType}')">Save</button>`
   );
+}
+
+function confirmDeleteCat(catId, forType) {
+  const cat = db.categories[forType].find(c=>c.id===catId);
+  if (!cat) return;
+  openDlg('Delete category?',
+    `<div style="font-size:13px;color:var(--text2)">Permanently delete <strong>${cat.icon||''} ${cat.name}</strong>? This cannot be undone.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="doDeleteCat('${catId}','${forType}')">Delete</button>`
+  );
+}
+
+function doDeleteCat(catId, forType) {
+  const idx = db.categories[forType].findIndex(c=>c.id===catId);
+  if (idx < 0) return;
+  db.categories[forType].splice(idx, 1);
+  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Category deleted');
 }
 
 function saveEditCat(catId, forType) {
@@ -11364,16 +11524,44 @@ function openEditSubCat(catId, subId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   const sc = cat?.subcats?.find(s=>s.id===subId);
   if (!sc) return;
+  // Check for linked transactions
+  const hasTxs = db.transactions.some(t => t.categoryId === subId);
+  const archivedHasTxs = (db.archivedTransactions||[]).some(t => t.categoryId === subId);
+  const canDelete = !hasTxs && !archivedHasTxs;
+
   openDlg(`Edit: ${sc.name}`,
     `<div class="form-group"><label class="form-label">Icon</label>
       <div class="emoji-trigger" onclick="toggleInlineEmoji('esc-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="esc-emoji-display">${sc.icon||cat?.icon||'📌'}</span><span>Change icon</span></div>
       <div id="esc-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('esc-emoji-display')}</div>
      </div>
-     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${sc.name}"></div>`,
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${sc.name}"></div>
+     ${!canDelete ? '<div style="font-size:11px;color:var(--text4);background:var(--bg3);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:8px">💡 This subcategory has linked transactions. You can Archive/Restore but cannot delete.</div>' : ''}`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-warning btn-sm" onclick="toggleArchiveSubCat('${catId}','${subId}','${forType}')">${sc.archived?'Restore':'Archive'}</button>
+     ${canDelete
+        ? `<button class="btn btn-danger btn-sm" onclick="confirmDeleteSubCat('${catId}','${subId}','${forType}')">Delete</button>`
+        : `<button class="btn btn-warning btn-sm" onclick="toggleArchiveSubCat('${catId}','${subId}','${forType}')">${sc.archived?'Restore':'Archive'}</button>`}
      <button class="btn btn-primary btn-sm" onclick="saveEditSubCat('${catId}','${subId}','${forType}')">Save</button>`
   );
+}
+
+function confirmDeleteSubCat(catId, subId, forType) {
+  const cat = db.categories[forType].find(c=>c.id===catId);
+  const sc = cat?.subcats?.find(s=>s.id===subId);
+  if (!sc) return;
+  openDlg('Delete subcategory?',
+    `<div style="font-size:13px;color:var(--text2)">Permanently delete <strong>${sc.icon||''} ${sc.name}</strong>? This cannot be undone.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="doDeleteSubCat('${catId}','${subId}','${forType}')">Delete</button>`
+  );
+}
+
+function doDeleteSubCat(catId, subId, forType) {
+  const cat = db.categories[forType].find(c=>c.id===catId);
+  if (!cat || !cat.subcats) return;
+  const idx = cat.subcats.findIndex(s=>s.id===subId);
+  if (idx < 0) return;
+  cat.subcats.splice(idx, 1);
+  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Subcategory deleted');
 }
 
 function saveEditSubCat(catId, subId, forType) {
@@ -14095,6 +14283,10 @@ function aiNavigate(insId) {
     'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('recurring'); },150); },
     'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
     'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+    'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+    'View Accounts': ()=>{ nav('accounts'); },
+    'View Installments': ()=>{ nav('installments'); },
+    'View Analytics': ()=>{ nav('analytics'); },
   };
   const fn = actionNav[ins.action];
   if (fn) fn();
@@ -14188,7 +14380,7 @@ function openAddInstallment() {
       <input class="form-input" id="inst-notes" placeholder="e.g. from BDO credit card">
     </div>
     <div style="background:var(--accent-bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--text3);line-height:1.5">
-      💡 <strong>How payment tracking works:</strong> After saving, tap <strong>✓ Mark month paid</strong> when you've paid for that month. Or use <strong>🔍 Find matching</strong> to auto-link transactions you've already logged.
+      💡 <strong>How payment tracking works:</strong> Use <strong>🔍 Find matching</strong> to auto-link transactions you've logged for this installment. Each linked transaction counts as one paid month.
     </div>
     <button class="btn btn-primary btn-full" onclick="saveNewInstallment()">Save Installment</button>
   `);
@@ -14246,6 +14438,97 @@ function markInstallmentPaid(instId) {
   }
   saveDBWithSync();
   renderInstallments();
+}
+
+function openInstallmentDetail(instId) {
+  const inst = db.installments.find(i => i.id === instId);
+  if (!inst) return;
+  const totalMonths = inst.totalMonths || 12;
+  const paidMonths = inst.paidMonths || 0;
+  const monthlyAmt = inst.monthlyAmount || 0;
+  const alreadyPaid = inst.alreadyPaid || 0;
+  const totalPaidMonths = alreadyPaid + paidMonths;
+  const remainingMonths = totalMonths - totalPaidMonths;
+  const remaining = remainingMonths * monthlyAmt;
+  const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
+  const isComplete = remainingMonths <= 0;
+  const linkedTxs = (inst.linkedTxIds || []).map(id => db.transactions.find(t => t.id === id)).filter(Boolean);
+  const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
+
+  // Month pills
+  const months = [];
+  const startDate = inst.startDate.length === 7
+    ? new Date(inst.startDate + '-01')
+    : new Date(inst.startDate + 'T00:00:00');
+  for (let i = 0; i < totalMonths; i++) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+    const label = d.toLocaleString('en', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2);
+    const isPaid = i < totalPaidMonths;
+    const isCurrent = i === totalPaidMonths;
+    months.push({ label, isPaid, isCurrent });
+  }
+  const pillsHtml = months.map(m =>
+    `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;margin:2px;
+      background:${m.isPaid ? 'rgba(45,217,138,0.1)' : m.isCurrent ? 'rgba(124,109,240,0.15)' : 'rgba(255,255,255,0.04)'};
+      color:${m.isPaid ? 'var(--green)' : m.isCurrent ? 'var(--accent)' : 'var(--text4)'}">
+      ${m.isPaid ? '✓ ' : m.isCurrent ? '▶ ' : ''}${m.label}
+    </span>`
+  ).join('');
+
+  const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.startDate.length>7?'numeric':undefined,year:'numeric'}) : '';
+  const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.endDate.length>7?'numeric':undefined,year:'numeric'}) : '';
+
+  openSheet('gen', `${inst.icon||'💳'} ${inst.name}`, `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-size:11px;color:var(--text4);margin-bottom:3px">📂 ${catName}</div>
+        <div style="font-size:13px;color:var(--text2)">${fmt(monthlyAmt,'PHP')}/month</div>
+      </div>
+      ${isComplete
+        ? `<span style="padding:3px 12px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
+        : `<span style="padding:3px 12px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} months left</span>`}
+    </div>
+    ${!isComplete ? `
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
+        <span>${fmt(remaining,'PHP')} remaining</span>
+        <span>${totalPaidMonths} / ${totalMonths} paid</span>
+      </div>
+      <div style="height:8px;background:var(--bg5);border-radius:4px;overflow:hidden;margin-bottom:6px">
+        <div style="height:100%;border-radius:4px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-bottom:14px">
+        <span>${startD} – ${endD}</span>
+        <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
+      </div>` : ''}
+    ${inst.notes ? `<div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2)">📝 ${inst.notes}</div>` : ''}
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:8px 0 6px">Months</div>
+    <div style="margin-bottom:14px;line-height:1.8">${pillsHtml}</div>
+    ${linkedTxs.length > 0 ? `
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:8px 0 6px">Linked Transactions (${linkedTxs.length})</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-bottom:14px">
+        ${linkedTxs.map((tx,i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px${i<linkedTxs.length-1?';border-bottom:1px solid var(--border)':''}">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500">${tx.notes || getCategoryDisplay(tx.categoryId)?.name || 'Payment'}</div>
+              <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:13px;color:var(--red)">-${fmt(tx.amount,tx.currency||'PHP')}</div>
+          </div>`).join('')}
+      </div>
+    ` : `
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--text4)">
+        ⚠️ No linked transactions yet. Tap 🔍 Find matching to link payments.
+      </div>
+    `}
+    ${!isComplete ? `
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="closeSheet('gen');setTimeout(()=>openInstallmentSuggest('${inst.id}'),200)">🔍 Find matching</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeSheet('gen');setTimeout(()=>openEditInstallment('${inst.id}'),200)">✏️ Edit</button>
+      </div>
+    ` : `
+      <button class="btn btn-ghost btn-sm" style="width:100%" onclick="closeSheet('gen');setTimeout(()=>openEditInstallment('${inst.id}'),200)">✏️ Edit</button>
+    `}
+  `);
 }
 
 function openInstallmentSuggest(instId) {
