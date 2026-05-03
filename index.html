@@ -2482,11 +2482,11 @@ function renderDashboard() {
       } else if (phpBal < 0) {
         // Negative balance asset account (e.g. GCash overdrawn) → counts as liability
         totalLiab += Math.abs(phpBal);
-        liabRows.push({ name: acct.name, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
+        liabRows.push({ name: acct.name, type: acct.type, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
       }
     } else if (acct.type === 'Credit Card' && phpBal < 0) {
       totalLiab += Math.abs(phpBal);
-      liabRows.push({ name: acct.name, bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
+      liabRows.push({ name: acct.name, type: 'Credit Card', bal: Math.abs(bal), currency: acct.currency, phpBal: Math.abs(phpBal) });
     }
   }
   // Add investments to assets
@@ -2520,7 +2520,7 @@ function renderDashboard() {
   for (const l of db.loans.borrowed.filter(l=>!l.settled)) {
     const phpVal = toPhp(l.remaining||l.amount, l.currency);
     totalLiab += phpVal;
-    liabRows.push({ name: l.personName, bal: l.remaining||l.amount, currency: l.currency, phpBal: phpVal });
+    liabRows.push({ name: l.personName, type: 'Loan', bal: l.remaining||l.amount, currency: l.currency, phpBal: phpVal });
   }
 
   const netWorthCalc = totalAssets - totalLiab;
