@@ -340,9 +340,9 @@ option{background:var(--bg3);color:var(--text)}
 
 .month-hdr{padding:10px 20px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text4);font-weight:600;background:var(--bg);position:sticky;top:0;z-index:5;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 
-.tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 20px;gap:0;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;overflow-x:hidden;flex-shrink:0;touch-action:pan-y}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{padding:12px 14px;border:none;background:transparent;color:var(--text3);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all var(--transition)}
+.tab-btn{flex:1 1 0;min-width:0;padding:10px 4px;border:none;background:transparent;color:var(--text3);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all var(--transition)}
 .tab-btn:hover{color:var(--text2)}
 .tab-btn:active{transform:scale(0.96)}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -9104,6 +9104,13 @@ function showHeatmapDay(dateKey) {
   );
 }
 
+// Wealth tab accordion state — global so onclick can reach it
+if (!window._wealthExpanded) window._wealthExpanded = {};
+function toggleWealthGroup(key) {
+  window._wealthExpanded[key] = !window._wealthExpanded[key];
+  renderAnalytics();
+}
+
 function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
   const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
@@ -9122,14 +9129,6 @@ function renderAnalyticsWealth() {
         total: data.total,
         accounts: data.accounts.sort((a,b) => b.phpBal - a.phpBal)
       }));
-  }
-
-  // Accordion state — tracks which group keys are expanded
-  if (!window._wealthExpanded) window._wealthExpanded = {};
-
-  function toggleWealthGroup(key) {
-    window._wealthExpanded[key] = !window._wealthExpanded[key];
-    renderAnalytics();
   }
 
   function iosGroupedSection(groups, sectionColor, base, prefix) {
