@@ -1166,8 +1166,7 @@ function defaultDB() {
       {id:'acct-diskartech',name:'Diskartech',type:'E-Wallet',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-beep',name:'Beep Card',type:'Prepaid',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-paswipe',name:'Paswipe',type:'Credit Card',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-okx',name:'OKX',type:'Crypto Wallet',currency:'USD',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-binance',name:'Binance Funding',type:'Crypto Wallet',currency:'USD',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-binance',name:'Binance Funding',type:'Crypto Wallet',currency:'USDT',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-bpibanko',name:'BPI BanKo',type:'Savings',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-dragonfi',name:'DragonFi',type:'Investment',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
     ],
@@ -1339,8 +1338,7 @@ let db = (() => {
       {id:'acct-diskartech',name:'Diskartech',type:'E-Wallet',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-beep',name:'Beep Card',type:'Prepaid',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-paswipe',name:'Paswipe',type:'Credit Card',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-okx',name:'OKX',type:'Crypto Wallet',currency:'USD',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-binance',name:'Binance Funding',type:'Crypto Wallet',currency:'USD',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-binance',name:'Binance Funding',type:'Crypto Wallet',currency:'USDT',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-bpibanko',name:'BPI BanKo',type:'Savings',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
       {id:'acct-dragonfi',name:'DragonFi',type:'Investment',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
     ];
@@ -1445,17 +1443,16 @@ function getAcctBalance(acctId) {
   let bal = acct.initialBalance || 0;
   for (const tx of db.transactions) {
     if (tx.archived) continue;
-    // isAutoForex children on NEW transfers (toAmountIsActual=true): diff already baked
-    // into parent's toAmount — skip to avoid double-counting (Batch B #4).
-    // OLD transfers (toAmount=snapshot) still need the child to affect balance — don't skip.
+    // ── PERSONAL LOGIC SET ── isAutoForex skip on toAmountIsActual transfers
+    // Custom-rate transfers bake FX diff into toAmount — skip child to avoid double-count.
+    // Snapshot-rate transfers still need the child to affect balance.
     if (tx.isAutoForex && tx.parentId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
       if (parent?.toAmountIsActual) continue;
     }
-    // isLoanTx must be checked FIRST — these have type=income/expense as placeholder
-    // but their actual balance impact is determined by loanDirection, not type
+    // ── PERSONAL LOGIC SET ── isLoanTx balance direction
+    // loanDirection drives balance, not tx.type. Lent = money left pocket (bal -=). Borrowed = money received (bal +=).
     if (tx.isLoanTx) {
-      // Convert loan amount to account's currency if different
       const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
       if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= loanAmtInAcctCurr;
       else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += loanAmtInAcctCurr;
@@ -1468,6 +1465,7 @@ function getAcctBalance(acctId) {
       const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
       bal += amt;
     }
+    // ── PERSONAL LOGIC SET ── shared tx: deduct full totalBill from account (you paid upfront); isAutoReimb adds back others' shares
     else if (tx.type === 'shared' && tx.accountId === acctId) bal -= (tx.totalBill || tx.amount);
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) {
@@ -1512,6 +1510,9 @@ function getNetWorth() {
     if (acct.archived) continue;
     const bal = getAcctBalance(acct.id);
     const phpBal = toPhp(bal, acct.currency);
+    // ── PERSONAL LOGIC SET ── Net Worth account classification
+    // Asset-type accounts: positive = asset, negative (overdrawn) = liability.
+    // Credit Card: negative balance = liability. Positive CC balance (overpaid) = ignored (not an asset).
     if (assetTypes.includes(acct.type)) {
       if (phpBal > 0) {
         assets += phpBal;
@@ -1598,9 +1599,15 @@ function getMonthTotals(monthKey) {
   let income=0, expense=0;
   const dispCurr = db.displayCurrency || 'PHP';
   for (const t of txs) {
-    // Settlements, external-in, external-out excluded from income/expense totals
+    // ── PERSONAL LOGIC SET ── (do not remove)
+    // isSettlement, loanTx, loanPayment, external = not real income/expense
     if (t.isSettlement) continue;
+    if (t.isLoanTx || t.isLoanPayment) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
+    // isAutoReimb excluded: full totalBill already counted on shared tx — reimb is NOT income
+    // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers
+    // isAutoFee INCLUDED: real remittance fee expense
+    if (t.isAutoReimb) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -2501,6 +2508,7 @@ function renderDashboard() {
 
 
   // 4-metric grid
+  // ── PERSONAL LOGIC SET ── Credit Card included in Cash & Wallets: negative CC balance subtracts from total
   const cashWalletTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Credit Card'];
   const cashTotal = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type))
     .reduce((s,a)=>{ const b=toPhp(getAcctBalance(a.id),a.currency); return s+b; },0);
@@ -2693,7 +2701,7 @@ function isBulkEligible(tx) {
 // ── BULK PRESS HANDLERS (Batch B #6) ──
 let _txPressStartX = 0;
 let _txPressStartY = 0;
-const TX_MOVE_THRESHOLD = 10; // pixels — finger jitter under this stays as long-press
+const TX_MOVE_THRESHOLD = 10; // pixels — PERSONAL LOGIC SET: finger jitter under 10px stays as long-press
 
 function txRowPressStart(ev, txId) {
   // Don't fire on right-click
@@ -4328,7 +4336,8 @@ function submitTransfer() {
   const toAcct2 = db.accounts.find(a=>a.id===toId);
   const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
   const userToAmount = parseFloat(document.getElementById('tf-toamount')?.value) || 0;
-  // Derive useSnapshot from actual input values (no checkbox dependency)
+  // ── PERSONAL LOGIC SET ── useSnapshot derived from actual inputs, not a checkbox
+  // If user typed a custom rate or toAmount → use actual. Otherwise → use snapshot rate.
   const useSnapshot = !(customRate > 0 || userToAmount > 0);
   const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
   let toAmount = null;
@@ -4480,6 +4489,7 @@ let _txBulkMode = false;
 let _txBulkSet = new Set();
 let _txLongPressTimer = null;
 let _txLongPressFired = false;
+// ── PERSONAL LOGIC SET ── bulk long-press: 550ms hold, 10px scroll cancels
 const TX_BULK_LONGPRESS_MS = 550;
 
 function renderTransactions() {
@@ -5542,7 +5552,7 @@ function saveEditTx(txId) {
             const ci = db.transactions.findIndex(t => t.id === child.id);
             if (ci >= 0) db.transactions.splice(ci, 1);
           } else if (child.amount > remaining) {
-            child.amount = parseFloat(remaining.toFixed(2));
+            child.amount = remaining;
             remaining = 0;
           } else {
             remaining -= child.amount;
@@ -6125,17 +6135,17 @@ function promptArchiveDelete(txId, txName, childCount) {
 
 function confirmDeleteTx(txId) {
   // Delete the tx itself
+  const beforeCount = db.archivedTransactions.length;
   db.archivedTransactions = db.archivedTransactions.filter(t => t.id !== txId);
   // Cascade-delete all children archived with this parent (cascadedFrom) OR linked via parentId
   db.archivedTransactions = db.archivedTransactions.filter(t => t.cascadedFrom !== txId && t.parentId !== txId);
+  const deleted = beforeCount - db.archivedTransactions.length - 1; // -1 for parent itself
   saveDBWithSync();
   closeDlg();
-  // Snappy — if archive sheet is open, re-render it; else render transactions
-  // Always re-render archive sheet after delete (it was open since user clicked from it)
   openTxArchiveSheet();
   if (currentPage === 'transactions') renderTransactions();
   showToast(deleted > 0
-    ? `Deleted (+ ${deleted} linked)`
+    ? `🗑 Permanently deleted (+ ${deleted} linked)`
     : '🗑 Permanently deleted');
 }
 
@@ -6812,7 +6822,7 @@ function saveAddAccount() {
   const name = document.getElementById('na-name')?.value?.trim();
   if (!name) { showToast('Enter account name'); return; }
   const type = document.getElementById('na-type')?.value||'Savings';
-  // Crypto Wallet always USDT
+  // ── PERSONAL LOGIC SET ── Crypto Wallet account type always locked to USDT
   const currency = type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('na-currency')?.value||'PHP');
   // Ensure USDT in tracked if used
   if (currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
@@ -6852,7 +6862,7 @@ function saveEditAccount(acctId) {
   if (!a) return;
   a.name = document.getElementById('ea-name')?.value?.trim() || a.name;
   a.type = document.getElementById('ea-type')?.value || a.type;
-  // Crypto Wallet always USDT (override regardless of dropdown state)
+  // ── PERSONAL LOGIC SET ── Crypto Wallet always USDT (enforced on save/edit)
   a.currency = a.type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency);
   if (a.currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
@@ -8286,8 +8296,15 @@ function renderAnalyticsOverview() {
   const daysInMetricMonth = new Date(mY, mM, 0).getDate();
 
   // ── Pie chart data ──
+  // ── PERSONAL LOGIC SET ── (do not remove)
+  // isAutoReimb excluded: reimb is NOT income — totalBill already counted on parent shared tx
+  // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers
+  // isAutoFee INCLUDED: real remittance fee expense
   const allTxs = db.transactions.filter(t =>
-    !t.archived && !t.isSettlement && t.date &&
+    !t.archived && !t.isSettlement &&
+    !t.isLoanTx && !t.isLoanPayment &&
+    !t.isAutoReimb &&
+    t.date &&
     (period === 'ytd'
       ? t.date.startsWith(String(currentYear))
       : t.date.startsWith(metricMk))
@@ -12369,7 +12386,7 @@ async function showSnapshotPicker() {
     showLoading('Loading snapshots...');
     const folderId = await getOrCreateSubfolder('Snapshots');
     const files = await driveRequest('GET',
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20`
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20` /* PERSONAL LOGIC SET: max 20 snapshots shown */
     );
     hideLoading();
     if (!files.files || files.files.length === 0) {
@@ -14328,11 +14345,11 @@ function renderAIPage() {
     const col = pColor[ins.priority]||'var(--text3)';
     // Navigation map per action
     const actionNav = {
-      'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('contract'),100); },
+      'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('contract'),100); },
       'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
       'Log remittance': ()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },
       'Go to Reimbursements': ()=>{ nav('reimbursements'); },
-      'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlannTab&&setPlannTab('recurring'),100); },
+      'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('recurring'),100); },
       'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
       'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
       'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
@@ -14390,11 +14407,11 @@ function aiNavigate(insId) {
   const ins = _aiInsights.find(i=>i.id===insId);
   if (!ins || !ins.action) return;
   const actionNav = {
-    'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('contract'); },150); },
+    'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('contract'); },150); },
     'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
     'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
     'Go to Reimbursements': ()=>{ nav('reimbursements'); },
-    'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlannTab==='function') setPlannTab('recurring'); },150); },
+    'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('recurring'); },150); },
     'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
     'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
     'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
