@@ -340,9 +340,9 @@ option{background:var(--bg3);color:var(--text)}
 
 .month-hdr{padding:10px 20px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text4);font-weight:600;background:var(--bg);position:sticky;top:0;z-index:5;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 
-.tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;overflow-x:hidden;flex-shrink:0;touch-action:pan-y}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;overflow:hidden;flex-shrink:0;touch-action:pan-y;overscroll-behavior:none;-webkit-overflow-scrolling:auto}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 0;min-width:0;padding:10px 4px;border:none;background:transparent;color:var(--text3);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all var(--transition)}
+.tab-btn{flex:1 1 0;min-width:0;padding:10px 4px;border:none;background:transparent;color:var(--text3);text-align:center;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all var(--transition)}
 .tab-btn:hover{color:var(--text2)}
 .tab-btn:active{transform:scale(0.96)}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -9134,7 +9134,7 @@ function renderAnalyticsWealth() {
   function iosGroupedSection(groups, sectionColor, base, prefix) {
     if (!groups.length) return `<div style="padding:16px;text-align:center;font-size:13px;color:var(--text4)">None recorded</div>`;
     return groups.map((g, gi) => {
-      const key = prefix + '_' + g.type;
+      const key = (prefix + '_' + g.type).replace(/ /g, '_');
       const expanded = !!window._wealthExpanded[key];
       const pct = base > 0 ? Math.min(Math.abs(g.total / base), 1) * 100 : 0;
       const last = gi === groups.length - 1;
@@ -9152,7 +9152,7 @@ function renderAnalyticsWealth() {
         </div>`;
       }).join('');
       return `<div style="margin-bottom:${last?'0':'22px'}">
-        <div onclick="toggleWealthGroup('${key}')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:6px 2px;cursor:pointer;user-select:none">
+        <div onclick="toggleWealthGroup('${key.replace(/ /g,'_')}')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:6px 2px;cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:6px">
             <svg width="12" height="12" viewBox="0 0 12 12" style="transition:transform 0.2s;transform:rotate(${expanded?'90':'0'}deg);flex-shrink:0" fill="none">
               <path d="M4 2l4 4-4 4" stroke="var(--text4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
