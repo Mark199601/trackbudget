@@ -2169,8 +2169,9 @@ function generateInsights() {
       (t.type==='expense'||t.type==='shared') &&
       t.currency===bgt.currency
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
-    const pct = spent / bgt.limit;
-    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${sym(bgt.currency)}${spent.toFixed(0)} of ${sym(bgt.currency)}${bgt.limit} limit this month.`});
+    const effLimit = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+    const pct = spent / effLimit;
+    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${sym(bgt.currency)}${spent.toFixed(0)} of ${sym(bgt.currency)}${effLimit.toFixed(0)} limit this month.`});
     else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
   }
 
@@ -2224,6 +2225,22 @@ function checkAlerts() {
     if (!l.settled && l.dueDate) {
       const d = daysUntil(l.dueDate);
       if (d !== null && d >= 0 && d <= 7) _alertCache.push({type:'loan', id:l.id, msg:`Loan with ${l.personName} due in ${d}d`});
+    }
+  }
+
+  // Installment due date alerts (uses dueDay field)
+  // ── PERSONAL LOGIC SET ── installment alert fires 3 days before dueDay each month
+  if (db.installments) {
+    const todayD = new Date();
+    const todayDay = todayD.getDate();
+    for (const inst of db.installments.filter(i=>!i.archived&&!i.completed&&i.dueDay)) {
+      const daysAway = inst.dueDay - todayDay;
+      if (daysAway >= 0 && daysAway <= 3) {
+        const paidCount = (inst.linkedTxIds||[]).length;
+        const remaining = inst.totalMonths - paidCount;
+        _alertCache.push({type:'installment', id:inst.id,
+          msg:`📅 ${inst.icon||''} ${inst.name} due on day ${inst.dueDay} (${remaining} month${remaining!==1?'s':''} left)`});
+      }
     }
   }
 
@@ -2292,7 +2309,7 @@ function checkAlerts() {
   const budgetAlerts = db.budgets.filter(b=>b.active).filter(bgt=>{
     const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
       .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
-    return spent > bgt.limit;
+    return spent > (bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0));
   }).length;
   const analyticsBadge = document.getElementById('analytics-badge');
   if (analyticsBadge) { analyticsBadge.style.display = budgetAlerts>0?'':'none'; analyticsBadge.textContent='!'; }
@@ -2385,7 +2402,9 @@ function renderDashboard() {
     const isNat = curr === natCurrency;
     const country = isNat ? userNationality : userLocation;
     const bgt = db.budgets.find(b => b.active && b.currency === curr);
-    const limit = bgt?.limit || 0;
+    const rawLimit = bgt?.limit || 0;
+    const rollover = bgt?.rollover ? (bgt?.rolloverAmount||0) : 0;
+    const limit = rawLimit + rollover; // effectiveLimit includes rollover
     const spent = db.transactions.filter(t=>
       !t.archived && !t.isSettlement && !t.isLoanTx && t.date && t.date.startsWith(mk) &&
       (t.type==='expense'||t.type==='shared') &&
@@ -2485,15 +2504,35 @@ function renderDashboard() {
   }
 
   // Insights — only show pill if there are urgent ones, navigates to AI Insights
+  // Merge alerts + insights into one "Needs Attention" card
   let insightHTML = '';
   const urgentInsights = insights.filter(i => i.urgent);
-  if (urgentInsights.length > 0) {
-    const count = urgentInsights.length;
-    const previewIcon = urgentInsights[0].icon;
-    insightHTML = `<div onclick="nav('ai')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border:1px solid var(--amber-bg,var(--border));border-left:3px solid var(--amber);border-radius:var(--r-md);cursor:pointer;user-select:none;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
-      <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${previewIcon}</div>
-      <div style="flex:1;font-size:13px;color:var(--text)"><strong>${count} insight${count>1?'s':''}</strong> need${count>1?'':'s'} attention</div>
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.5;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  const alertItems = alerts;
+  const totalAttention = urgentInsights.length + alertItems.length;
+  if (totalAttention > 0) {
+    const alertRows = alertItems.map(a => {
+      const icon = a.type==='loan'?'⏰':a.type==='installment'?'📅':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':a.type==='fx'?'💱':'💤';
+      const actionBtn = a.type==='recurring' && a.id
+        ? `<button onclick="event.stopPropagation();logRecurringNow('${a.id}')" style="font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--accent);color:var(--accent);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0">Log now</button>`
+        : a.type==='installment' && a.id
+        ? `<button onclick="event.stopPropagation();nav('installments')" style="font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--amber);color:var(--amber);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0">View</button>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:14px;flex-shrink:0">${icon}</span>
+        <span style="font-size:12px;color:var(--text2);flex:1">${a.msg}</span>
+        ${actionBtn}
+      </div>`;
+    }).join('');
+    const insightRow = urgentInsights.length > 0
+      ? `<div onclick="nav('ai')" style="display:flex;align-items:center;gap:8px;padding:7px 0;cursor:pointer">
+          <span style="font-size:14px;flex-shrink:0">${urgentInsights[0].icon}</span>
+          <span style="font-size:12px;color:var(--text2);flex:1"><strong>${urgentInsights.length} insight${urgentInsights.length>1?'s':''}</strong> need${urgentInsights.length>1?'':'s'} attention</span>
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>`
+      : '';
+    insightHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r-md);padding:10px 14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;color:var(--amber);margin-bottom:6px">NEEDS ATTENTION</div>
+      ${alertRows}${insightRow}
     </div>`;
   }
 
@@ -2544,7 +2583,7 @@ function renderDashboard() {
   </div>`;
   // ── Build ordered sections (C2 drag-to-reorder) ──
   const sectionMap = {
-    alerts: alertsHTML,
+    alerts: '',
     metrics: metricsHTML,
     pulse: (()=>{
       const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today());
@@ -9069,24 +9108,51 @@ function showHeatmapDay(dateKey) {
 function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
   const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
-  // Group assetRows by type for bar chart display
-  const assetByType = {}, liabByType = {};
-  for (const r of assetRows) assetByType[r.type] = (assetByType[r.type]||0) + r.phpBal;
-  for (const r of liabRows) liabByType[r.type] = (liabByType[r.type]||0) + r.phpBal;
-  const assetSorted = Object.entries(assetByType).sort((a,b)=>b[1]-a[1]);
-  const liabSorted  = Object.entries(liabByType).sort((a,b)=>b[1]-a[1]);
 
-  function typeRow(type, val, base, color) {
-    const pct = base > 0 ? Math.abs(val/base*100) : 0;
-    return `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
-        <span>${type}</span><span style="font-family:var(--mono);color:${color||'var(--text)'}">${fmt(fromPhp(val,disp),disp)}</span>
-      </div>
-      <div style="height:5px;background:var(--bg5);border-radius:3px;overflow:hidden">
-        <div style="height:100%;border-radius:3px;background:${color||'var(--accent)'};width:${pct.toFixed(1)}%"></div>
-      </div>
-    </div>`;
+  // Group rows by type, preserving individual accounts for nested display
+  function groupByType(rows) {
+    const map = {};
+    for (const r of rows) {
+      if (!map[r.type]) map[r.type] = { total: 0, accounts: [] };
+      map[r.type].total += r.phpBal;
+      map[r.type].accounts.push(r);
+    }
+    // Sort groups by total descending, accounts within each group by balance descending
+    return Object.entries(map)
+      .sort((a,b) => b[1].total - a[1].total)
+      .map(([type, data]) => ({
+        type,
+        total: data.total,
+        accounts: data.accounts.sort((a,b) => b.phpBal - a.phpBal)
+      }));
   }
+
+  function nestedGroup(groups, base, color) {
+    return groups.map(g => {
+      const pct = base > 0 ? Math.abs(g.total / base * 100) : 0;
+      const acctRows = g.accounts.map(a =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 14px;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <span style="font-size:12px;color:var(--text3)">${a.name}</span>
+          <span style="font-size:12px;font-family:var(--mono);color:${color||'var(--text)'}">${fmt(fromPhp(a.phpBal,disp),disp)}</span>
+        </div>`
+      ).join('');
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${g.type}</span>
+          <span style="font-size:13px;font-family:var(--mono);color:${color||'var(--accent)'}">${fmt(fromPhp(g.total,disp),disp)}</span>
+        </div>
+        <div style="height:4px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
+          <div style="height:100%;border-radius:3px;background:${color||'var(--accent)'};width:${pct.toFixed(1)}%"></div>
+        </div>
+        <div style="border-left:2px solid ${color||'var(--accent)'};margin-left:4px;opacity:0.9">
+          ${acctRows}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const assetGroups = groupByType(assetRows);
+  const liabGroups  = groupByType(liabRows);
 
   return `<div class="page-pad">
     <div class="hero-card" style="margin-bottom:16px">
@@ -9104,12 +9170,12 @@ function renderAnalyticsWealth() {
       </div>
     </div>
     <div class="card" style="margin-bottom:14px">
-      <div class="section-title" style="margin-bottom:12px;color:var(--green)">By Account Type</div>
-      ${assetSorted.map(([t,v])=>typeRow(t,v,totalAssets)).join('')}
+      <div class="section-title" style="margin-bottom:14px;color:var(--green)">Assets — By Account Type</div>
+      ${assetGroups.length > 0 ? nestedGroup(assetGroups, totalAssets) : '<div style="color:var(--text4);font-size:13px">No assets recorded.</div>'}
     </div>
-    ${liabSorted.length > 0 ? `<div class="card">
-      <div class="section-title" style="margin-bottom:12px;color:var(--red)">Liabilities</div>
-      ${liabSorted.map(([t,v])=>typeRow(t,Math.abs(v),Math.abs(totalLiab),'var(--red)')).join('')}
+    ${liabGroups.length > 0 ? `<div class="card">
+      <div class="section-title" style="margin-bottom:14px;color:var(--red)">Liabilities — By Account Type</div>
+      ${nestedGroup(liabGroups, Math.abs(totalLiab), 'var(--red)')}
     </div>` : ''}
   </div>`;
 }
@@ -10830,7 +10896,7 @@ function renderBudgetsTab() {
       const allocs = b.allocations || {};
       const allocCount = Object.keys(allocs).length;
       const totalAllocated = Object.values(allocs).reduce((s,v)=>s+(parseFloat(v)||0),0);
-      const allocPct = b.limit > 0 ? (totalAllocated/b.limit*100) : 0;
+      const allocPct = b.limit > 0 ? (totalAllocated/(b.limit + (b.rollover?(b.rolloverAmount||0):0))*100) : 0;
       const mk = currMonthKey();
 
       // Compute spending per allocated category for this month
@@ -10857,6 +10923,8 @@ function renderBudgetsTab() {
         </div>`;
       }).join('') : '';
 
+      const rollAmt = b.rollover ? (b.rolloverAmount||0) : 0;
+      const effectiveLimit = b.limit + rollAmt;
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div><div style="font-size:14px;font-weight:600">${getFlag(b.location)} ${b.location}</div>
@@ -10865,6 +10933,14 @@ function renderBudgetsTab() {
       </div>
       <div class="form-group"><label class="form-label">Monthly Limit (${sym(b.currency)})</label>
         <input class="form-input numpad-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value)" inputmode="none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:var(--r-sm)">
+          <div>
+            <div style="font-size:12px;color:var(--text2)">Rollover unspent</div>
+            <div style="font-size:10px;color:var(--text4)">Carry leftover to next month</div>
+          </div>
+          <label class="toggle"><input type="checkbox" ${b.rollover?'checked':''} onchange="toggleBudgetRollover('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
+        </div>
+        ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin-top:6px;font-family:var(--mono)">+ ${sym(b.currency)}${(b.rolloverAmount||0).toFixed(2)} carried over from last month</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:${allocCount?'14':'0'}px">
         <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
@@ -10873,13 +10949,40 @@ function renderBudgetsTab() {
       ${allocCount > 0 ? `<div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600">Sub-budgets (${allocCount})</div>
-          <div style="font-size:10px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${b.limit.toFixed(0)} <span>(${allocPct.toFixed(0)}%)</span></div>
+          <div style="font-size:10px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${effectiveLimit.toFixed(0)} <span>(${allocPct.toFixed(0)}%)</span></div>
         </div>
         ${subRows}
       </div>` : ''}
     </div>`;}).join('')}
     <button class="pool-add-btn" onclick="openAddBudget()">+ Add Budget</button>
   </div>`;
+}
+
+function toggleBudgetRollover(bgtId, enabled) {
+  const b = db.budgets.find(x=>x.id===bgtId);
+  if (!b) return;
+  b.rollover = enabled;
+  if (!enabled) b.rolloverAmount = 0;
+  saveDBWithSync();
+  renderSettings();
+  showToast(enabled ? '✅ Rollover enabled' : 'Rollover disabled');
+}
+
+function computeBudgetRollover() {
+  // Called on initApp — computes unspent from last month and stores as rolloverAmount
+  // Only runs for budgets with rollover enabled; only saves if a value actually changed
+  const prevMk = lastMonthKey();
+  let changed = false;
+  for (const b of db.budgets) {
+    if (!b.rollover || !b.active) continue;
+    const spent = db.transactions.filter(t =>
+      !t.archived && !t.isSettlement && t.date && t.date.startsWith(prevMk) &&
+      (t.type==='expense'||t.type==='shared') && t.currency===b.currency
+    ).reduce((s,t) => s + (t.type==='shared'?(t.myShare||t.amount):t.amount), 0);
+    const unspent = Math.max(0, b.limit - spent); // raw float — toFixed() display only (math rule)
+    if (b.rolloverAmount !== unspent) { b.rolloverAmount = unspent; changed = true; }
+  }
+  if (changed) saveDBWithSync();
 }
 
 function clearAllocations(bgtId) {
@@ -13211,6 +13314,7 @@ function initApp() {
     document.getElementById('sb-name').textContent = db.profile.nickname;
     checkMobileLayout();
     checkAlerts();
+    computeBudgetRollover(); // Populate rolloverAmount for budgets with rollover enabled
     initTheme();
     initDeviceName();
     trackDeviceActivity();
@@ -13221,7 +13325,7 @@ function initApp() {
       const exceeded = db.budgets.filter(b=>b.active).filter(bgt=>{
         const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
           .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
-        return spent > bgt.limit;
+        return spent > (bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0));
       });
       const lastBudgetToast = localStorage.getItem('tb_last_budget_toast');
       const today = new Date().toISOString().split('T')[0];
