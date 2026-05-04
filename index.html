@@ -9124,9 +9124,19 @@ function renderAnalyticsWealth() {
       }));
   }
 
-  function iosGroupedSection(groups, sectionColor, base) {
+  // Accordion state — tracks which group keys are expanded
+  if (!window._wealthExpanded) window._wealthExpanded = {};
+
+  function toggleWealthGroup(key) {
+    window._wealthExpanded[key] = !window._wealthExpanded[key];
+    renderAnalytics();
+  }
+
+  function iosGroupedSection(groups, sectionColor, base, prefix) {
     if (!groups.length) return `<div style="padding:16px;text-align:center;font-size:13px;color:var(--text4)">None recorded</div>`;
     return groups.map((g, gi) => {
+      const key = prefix + '_' + g.type;
+      const expanded = !!window._wealthExpanded[key];
       const pct = base > 0 ? Math.min(Math.abs(g.total / base), 1) * 100 : 0;
       const last = gi === groups.length - 1;
       const accts = g.accounts.map((a, ai) => {
@@ -9143,16 +9153,19 @@ function renderAnalyticsWealth() {
         </div>`;
       }).join('');
       return `<div style="margin-bottom:${last?'0':'22px'}">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:0 2px">
-          <span style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text4)">${g.type}</span>
+        <div onclick="toggleWealthGroup('${key}')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:6px 2px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 12 12" style="transition:transform 0.2s;transform:rotate(${expanded?'90':'0'}deg);flex-shrink:0" fill="none">
+              <path d="M4 2l4 4-4 4" stroke="var(--text4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text4)">${g.type}</span>
+          </div>
           <span style="font-size:12px;font-family:var(--mono);font-weight:600;color:${sectionColor}">${fmt(fromPhp(g.total,disp),disp)}</span>
         </div>
-        <div style="height:3px;background:var(--bg4);border-radius:99px;margin-bottom:10px;overflow:hidden">
+        <div style="height:3px;background:var(--bg4);border-radius:99px;margin-bottom:${expanded?'10':'0'}px;overflow:hidden">
           <div style="height:100%;border-radius:99px;background:${sectionColor};width:${pct.toFixed(1)}%"></div>
         </div>
-        <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-          ${accts}
-        </div>
+        ${expanded ? `<div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:2px">${accts}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -9188,12 +9201,12 @@ function renderAnalyticsWealth() {
 
     <div style="margin-bottom:28px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Assets</div>
-      ${iosGroupedSection(assetGroups, 'var(--green)', totalAssets)}
+      ${iosGroupedSection(assetGroups, 'var(--green)', totalAssets, 'a')}
     </div>
 
     ${liabGroups.length > 0 ? `<div>
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Liabilities</div>
-      ${iosGroupedSection(liabGroups, 'var(--red)', Math.abs(totalLiab))}
+      ${iosGroupedSection(liabGroups, 'var(--red)', Math.abs(totalLiab), 'l')}
     </div>` : ''}
 
   </div>`;
