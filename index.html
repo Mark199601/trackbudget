@@ -2428,16 +2428,7 @@ function renderDashboard() {
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
     `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions yet</div></div>`;
 
-  // Alerts bar
-  let alertsHTML = '';
-  if (alerts.length > 0) {
-    alertsHTML = `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-      ${alerts.slice(0,3).map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--r-md);font-size:12px;color:var(--amber)">
-        <span>${a.type==='loan'?'⏰':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':a.type==='fx'?'💱':'💤'}</span>
-        <span>${a.msg}</span>
-      </div>`).join('')}
-    </div>`;
-  }
+  // Alerts merged into insightHTML (NEEDS ATTENTION card) — no standalone alertsHTML needed
 
   // Migration banner — shows once when an old investmentPlan was auto-migrated to a contract
   let migrationBannerHTML = '';
@@ -9109,7 +9100,6 @@ function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
   const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
 
-  // Group rows by type, preserving individual accounts for nested display
   function groupByType(rows) {
     const map = {};
     for (const r of rows) {
@@ -9117,7 +9107,6 @@ function renderAnalyticsWealth() {
       map[r.type].total += r.phpBal;
       map[r.type].accounts.push(r);
     }
-    // Sort groups by total descending, accounts within each group by balance descending
     return Object.entries(map)
       .sort((a,b) => b[1].total - a[1].total)
       .map(([type, data]) => ({
@@ -9127,25 +9116,34 @@ function renderAnalyticsWealth() {
       }));
   }
 
-  function nestedGroup(groups, base, color) {
-    return groups.map(g => {
-      const pct = base > 0 ? Math.abs(g.total / base * 100) : 0;
-      const acctRows = g.accounts.map(a =>
-        `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 14px;border-bottom:1px solid rgba(255,255,255,0.04)">
-          <span style="font-size:12px;color:var(--text3)">${a.name}</span>
-          <span style="font-size:12px;font-family:var(--mono);color:${color||'var(--text)'}">${fmt(fromPhp(a.phpBal,disp),disp)}</span>
-        </div>`
-      ).join('');
-      return `<div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">${g.type}</span>
-          <span style="font-size:13px;font-family:var(--mono);color:${color||'var(--accent)'}">${fmt(fromPhp(g.total,disp),disp)}</span>
+  function iosGroupedSection(groups, sectionColor, base) {
+    if (!groups.length) return `<div style="padding:16px;text-align:center;font-size:13px;color:var(--text4)">None recorded</div>`;
+    return groups.map((g, gi) => {
+      const pct = base > 0 ? Math.min(Math.abs(g.total / base), 1) * 100 : 0;
+      const last = gi === groups.length - 1;
+      const accts = g.accounts.map((a, ai) => {
+        const isLast = ai === g.accounts.length - 1;
+        const dispAmt = fmt(fromPhp(a.phpBal, disp), disp);
+        const rawAmt = a.bal !== undefined ? `${getCurrSymbol(a.currency)}${Math.abs(a.bal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '';
+        const showRaw = a.currency && a.currency !== 'PHP' && rawAmt;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;${!isLast?'border-bottom:1px solid rgba(255,255,255,0.05)':''}">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+            ${showRaw?`<div style="font-size:11px;color:var(--text4);margin-top:1px">${rawAmt}</div>`:''}
+          </div>
+          <div style="font-size:13.5px;font-family:var(--mono);color:${sectionColor};font-weight:500;flex-shrink:0">${dispAmt}</div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:${last?'0':'22px'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:0 2px">
+          <span style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text4)">${g.type}</span>
+          <span style="font-size:12px;font-family:var(--mono);font-weight:600;color:${sectionColor}">${fmt(fromPhp(g.total,disp),disp)}</span>
         </div>
-        <div style="height:4px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
-          <div style="height:100%;border-radius:3px;background:${color||'var(--accent)'};width:${pct.toFixed(1)}%"></div>
+        <div style="height:3px;background:var(--bg4);border-radius:99px;margin-bottom:10px;overflow:hidden">
+          <div style="height:100%;border-radius:99px;background:${sectionColor};width:${pct.toFixed(1)}%"></div>
         </div>
-        <div style="border-left:2px solid ${color||'var(--accent)'};margin-left:4px;opacity:0.9">
-          ${acctRows}
+        <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+          ${accts}
         </div>
       </div>`;
     }).join('');
@@ -9153,32 +9151,46 @@ function renderAnalyticsWealth() {
 
   const assetGroups = groupByType(assetRows);
   const liabGroups  = groupByType(liabRows);
+  const ratio = (totalAssets + Math.abs(totalLiab)) > 0
+    ? (totalAssets / (totalAssets + Math.abs(totalLiab)) * 100)
+    : 100;
 
-  return `<div class="page-pad">
-    <div class="hero-card" style="margin-bottom:16px">
-      <div class="hero-label">Net Worth</div>
-      <div style="font-size:32px;font-weight:600;font-family:var(--mono);color:#fff">${fmt(fromPhp(nw,disp),disp)}</div>
+  return `<div class="page-pad" style="padding-bottom:32px">
+
+    <div style="text-align:center;padding:24px 16px 18px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text4);margin-bottom:5px">Net Worth</div>
+      <div style="font-size:34px;font-weight:700;font-family:var(--mono);color:var(--text);letter-spacing:-1px">${fmt(fromPhp(nw,disp),disp)}</div>
     </div>
-    <div class="form-row fr2" style="margin-bottom:14px">
-      <div class="metric-card">
-        <div class="metric-label">ASSETS</div>
-        <div class="metric-value" style="color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+
+    <div style="margin-bottom:22px">
+      <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;border-radius:99px;background:var(--green);width:${ratio.toFixed(1)}%"></div>
       </div>
-      <div class="metric-card">
-        <div class="metric-label">LIABILITIES</div>
-        <div class="metric-value" style="color:var(--red)">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
+      <div style="display:flex;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;color:var(--text4);margin-bottom:2px;font-weight:600;letter-spacing:0.05em">ASSETS</div>
+          <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text4);margin-bottom:2px;font-weight:600;letter-spacing:0.05em">LIABILITIES</div>
+          <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
+        </div>
       </div>
     </div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="section-title" style="margin-bottom:14px;color:var(--green)">Assets — By Account Type</div>
-      ${assetGroups.length > 0 ? nestedGroup(assetGroups, totalAssets) : '<div style="color:var(--text4);font-size:13px">No assets recorded.</div>'}
+
+    <div style="margin-bottom:28px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Assets</div>
+      ${iosGroupedSection(assetGroups, 'var(--green)', totalAssets)}
     </div>
-    ${liabGroups.length > 0 ? `<div class="card">
-      <div class="section-title" style="margin-bottom:14px;color:var(--red)">Liabilities — By Account Type</div>
-      ${nestedGroup(liabGroups, Math.abs(totalLiab), 'var(--red)')}
+
+    ${liabGroups.length > 0 ? `<div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Liabilities</div>
+      ${iosGroupedSection(liabGroups, 'var(--red)', Math.abs(totalLiab))}
     </div>` : ''}
+
   </div>`;
 }
+
 
 function renderAnalyticsForex() {
   const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
