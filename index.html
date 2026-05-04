@@ -1033,7 +1033,8 @@ function clearDriveToken() {
   _gdriveTokenExpiry = 0;
   try { localStorage.removeItem(GDRIVE_TOKEN_KEY); } catch(e) {}
 }
-// Restore token immediately on script load
+// ── PERSONAL LOGIC SET ── loadDriveToken() called at script load level (not inside initApp).
+// Token must be available before any GDrive call fires, including auto-save on first render.
 loadDriveToken();
 let _gdriveFolderId = null;
 let _gdriveBackupsFolderId = null;
@@ -1131,7 +1132,7 @@ function defaultDB() {
     trackedCurrencies: ['PHP','PGK','USD','AUD','NZD'],
     displayCurrency: 'PHP',
     // fxRates: 1 unit of X = ? PHP (PHP as base)
-    fxRates: { PGK:13.02, USD:56.5, AUD:37.0, NZD:34.0 },
+    fxRates: { PGK:13.02, USD:56.5, USDT:56.5, AUD:37.0, NZD:34.0 },
     // fxHistory: updated on Remittance tx or Settings FX edit
     fxHistory: {
       PGK: [{ date:'2026-01-01', rate:13.02, source:'baseline' }],
@@ -1604,9 +1605,11 @@ function getMonthTotals(monthKey) {
     if (t.isSettlement) continue;
     if (t.isLoanTx || t.isLoanPayment) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
-    // isAutoReimb excluded: full totalBill already counted on shared tx — reimb is NOT income
-    // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers
+    // ── PERSONAL LOGIC SET ── inclusion/exclusion rules for getMonthTotals (do not remove)
+    // isAutoReimb EXCLUDED: full totalBill already counted on shared tx — reimb is NOT income
+    // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
     // isAutoFee INCLUDED: real remittance fee expense
+    // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
     if (t.isAutoReimb) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
@@ -2733,6 +2736,11 @@ let _txPressStartX = 0;
 let _txPressStartY = 0;
 const TX_MOVE_THRESHOLD = 10; // pixels — PERSONAL LOGIC SET: finger jitter under 10px stays as long-press
 
+function exitBulkMode() {
+  _txBulkMode = false;
+  _txBulkSet.clear();
+  renderTransactions();
+}
 function txRowPressStart(ev, txId) {
   // Don't fire on right-click
   if (ev.type === 'mousedown' && ev.button !== 0) return;
@@ -5590,7 +5598,7 @@ function saveEditTx(txId) {
         }
         // Sync paidSoFar to reflect trimmed total
         if (tx.paidSoFar && typeof tx.paidSoFar === 'object') {
-          tx.paidSoFar[person.name] = parseFloat(newShare.toFixed(2));
+          tx.paidSoFar[person.name] = newShare; // raw float — toFixed() display only (math rule)
         }
       } else {
         // Person's share increased — existing reimbursements are still valid; paidSoFar stays
@@ -8326,9 +8334,9 @@ function renderAnalyticsOverview() {
   const daysInMetricMonth = new Date(mY, mM, 0).getDate();
 
   // ── Pie chart data ──
-  // ── PERSONAL LOGIC SET ── (do not remove)
-  // isAutoReimb excluded: reimb is NOT income — totalBill already counted on parent shared tx
-  // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers
+  // ── PERSONAL LOGIC SET ── Pie chart inclusion/exclusion rules (do not remove)
+  // isAutoReimb EXCLUDED: reimb is NOT income — totalBill already counted on parent shared tx
+  // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
   // isAutoFee INCLUDED: real remittance fee expense
   const allTxs = db.transactions.filter(t =>
     !t.archived && !t.isSettlement &&
@@ -11217,7 +11225,8 @@ function openAiAllocate(bgtId) {
       }).join('');
 
       const totalAlloc = Object.values(allocations).reduce((s,v)=>s+v, 0);
-      const remaining = bgt.limit - totalAlloc;
+      const effLimitAlloc = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+      const remaining = effLimitAlloc - totalAlloc;
 
       openDlg(`🤖 AI Allocation — ${bgt.location}`,
         `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Analyzed last 3-6 months. Needs allocated first, wants share the rest. Edit any value before applying.</div>
@@ -11225,7 +11234,7 @@ function openAiAllocate(bgtId) {
         <div style="background:var(--bg3);border-radius:8px;overflow:hidden;max-height:50dvh;overflow-y:auto;margin-bottom:10px">${rows}</div>
         <div id="alloc-summary" style="display:flex;justify-content:space-between;font-size:12px;padding:8px 10px;background:var(--bg3);border-radius:6px;font-family:var(--mono)">
           <span>Allocated: <strong>${sym(bgt.currency)}${totalAlloc.toFixed(0)}</strong></span>
-          <span>Budget: ${sym(bgt.currency)}${bgt.limit.toFixed(0)}</span>
+          <span>Budget: ${sym(bgt.currency)}${effLimitAlloc.toFixed(0)}</span>
           <span>Buffer: <strong style="color:${remaining<0?'var(--red)':'var(--green)'}">${remaining>=0?'+':''}${sym(bgt.currency)}${remaining.toFixed(0)}</strong></span>
         </div>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
@@ -11240,9 +11249,10 @@ function openAiAllocate(bgtId) {
             const inputs = document.querySelectorAll('.alloc-input');
             let total = 0;
             inputs.forEach(i => { total += parseFloat(i.value) || 0; });
-            const remain = bgt.limit - total;
+            const effLim_ = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+            const remain = effLim_ - total;
             const summ = document.getElementById('alloc-summary');
-            if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span><span>Budget: ${sym_}${bgt.limit.toFixed(0)}</span><span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
+            if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span><span>Budget: ${sym_}${effLim_.toFixed(0)}</span><span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
           });
         });
       }, 50);
@@ -14459,7 +14469,8 @@ function renderAIPage() {
 
   function card(ins) {
     const col = pColor[ins.priority]||'var(--text3)';
-    // Navigation map per action
+    // ── PERSONAL LOGIC SET ── actionNav wiring (do not remove entries — all verified defined)
+    // openAddSheet, openDriveSheet, openInstArchiveSheet etc. are all defined functions (verified in debug)
     const actionNav = {
       'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('contract'),100); },
       'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
@@ -14522,6 +14533,8 @@ function renderAIPage() {
 function aiNavigate(insId) {
   const ins = _aiInsights.find(i=>i.id===insId);
   if (!ins || !ins.action) return;
+  // ── PERSONAL LOGIC SET ── second actionNav map (do not remove — complements inline map above)
+  // All action strings here are verified wired to defined functions (confirmed in debug scans)
   const actionNav = {
     'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('contract'); },150); },
     'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
