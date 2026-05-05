@@ -59,6 +59,19 @@
 /* ── Non-Apple devices (Windows/Android/Linux) use Inter (Apple-style font) ── */
 html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'JetBrains Mono','Cascadia Mono','Consolas',monospace; }
 @keyframes slideUp { from { transform:translateY(20%); opacity:0 } to { transform:translateY(0); opacity:1 } }
+
+/* Unified Add Transaction form */
+.big-amt-wrap{max-width:480px;margin:0 auto}
+.big-amt-input{width:100%;border:none;background:transparent;text-align:center;font-family:var(--mono);font-weight:700;letter-spacing:-2px;color:var(--text);outline:none;padding:8px 0;font-variant-numeric:tabular-nums;font-size:clamp(40px,10vw,64px);line-height:1.1}
+.big-amt-input::placeholder{color:var(--text4);opacity:0.4}
+.big-amt-curr{font-size:clamp(20px,4vw,28px);color:var(--text4);font-weight:600;margin-right:6px;vertical-align:top;display:inline-block;margin-top:8px}
+.field-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;margin-bottom:8px}
+.field-row:hover{background:var(--bg3)}
+.field-row .fr-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--bg3)}
+.field-row .fr-label{flex:1;min-width:0;font-size:13px;color:var(--text2)}
+.field-row .fr-value{font-size:13px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;text-align:right}
+.field-row-wrap{position:relative}
+.field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
 /* ── DARK MODE (default) — purple-tinted, more contrast ── */
 :root, [data-theme="dark"] {
   --bg:#06060d;--bg2:#0e0d1a;--bg3:#16142a;--bg4:#1f1c38;--bg5:#2a2647;
@@ -1061,6 +1074,8 @@ function clearDriveToken() {
   _gdriveTokenExpiry = 0;
   try { localStorage.removeItem(GDRIVE_TOKEN_KEY); } catch(e) {}
 }
+// 📖 USER STORY: Pag nag-open ka ng app sa bagong device o nag-refresh, hindi ka na nag-loloop ng login
+// kapag may saved Google Drive token ka pa — auto-restore agad para tuluy-tuloy ang sync.
 // ── PERSONAL LOGIC SET ── loadDriveToken() called at script load level (not inside initApp).
 // Token must be available before any GDrive call fires, including auto-save on first render.
 loadDriveToken();
@@ -1472,6 +1487,9 @@ function getAcctBalance(acctId) {
   let bal = acct.initialBalance || 0;
   for (const tx of db.transactions) {
     if (tx.archived) continue;
+    // 📖 USER STORY: Pag nag-transfer ka cross-currency (e.g. PGK → PHP) at tinype mo yung actual
+    // na natanggap (hindi snapshot rate), hindi na nag-doble-count yung forex difference sa account
+    // balance. Yung app mismo ang bahala mag-adjust para tama parin yung running balance.
     // ── PERSONAL LOGIC SET ── isAutoForex skip on toAmountIsActual transfers
     // Custom-rate transfers bake FX diff into toAmount — skip child to avoid double-count.
     // Snapshot-rate transfers still need the child to affect balance.
@@ -1479,6 +1497,9 @@ function getAcctBalance(acctId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
       if (parent?.toAmountIsActual) continue;
     }
+    // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
+    // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
+    // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
     // ── PERSONAL LOGIC SET ── isLoanTx balance direction
     // loanDirection drives balance, not tx.type. Lent = money left pocket (bal -=). Borrowed = money received (bal +=).
     if (tx.isLoanTx) {
@@ -1494,6 +1515,10 @@ function getAcctBalance(acctId) {
       const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
       bal += amt;
     }
+    // 📖 USER STORY: Pag nag-log ka ng shared expense (e.g. dinner ng tatlo, ₱1,000) at ikaw ang
+    // nagbayad ng buong bill, yung ₱1,000 ay buong mababawas sa account mo agad. Pag nagbayad na
+    // sayo ng share niya yung kasama mo (e.g. ₱333), hindi yan mag-aappear as income — binalik
+    // lang niya yung pera mo, hindi mo kinita.
     // ── PERSONAL LOGIC SET ── shared tx: deduct full totalBill from account (you paid upfront); isAutoReimb adds back others' shares
     else if (tx.type === 'shared' && tx.accountId === acctId) bal -= (tx.totalBill || tx.amount);
     else if (tx.type === 'transfer') {
@@ -1539,6 +1564,10 @@ function getNetWorth() {
     if (acct.archived) continue;
     const bal = getAcctBalance(acct.id);
     const phpBal = toPhp(bal, acct.currency);
+    // 📖 USER STORY: Pag may overdrawn savings account ka (naging negative dahil walang initial
+    // balance o mas malaki ang gastos), tinatrato siya as liability — hindi asset. Same sa credit
+    // card na may utang. Pero kapag positive, asset siya. Net Worth = Assets minus Liabilities,
+    // at parehas yung formula sa dashboard at sa Wealth tab — guaranteed na consistent.
     // ── PERSONAL LOGIC SET ── Net Worth account classification
     // Asset-type accounts: positive = asset, negative (overdrawn) = liability.
     // Credit Card: negative balance = liability. Positive CC balance (overpaid) = ignored (not an asset).
@@ -1628,11 +1657,17 @@ function getMonthTotals(monthKey) {
   let income=0, expense=0;
   const dispCurr = db.displayCurrency || 'PHP';
   for (const t of txs) {
+    // 📖 USER STORY: Pag nag-open ka ng Analytics, yung income at expense totals mo ay malinis —
+    // hindi kasama ang loan transactions, settlement entries, o auto-generated reimbursements.
+    // Para hindi ma-inflate yung mga numbers mo at maging misleading.
     // ── PERSONAL LOGIC SET ── (do not remove)
     // isSettlement, loanTx, loanPayment, external = not real income/expense
     if (t.isSettlement) continue;
     if (t.isLoanTx || t.isLoanPayment) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
+    // 📖 USER STORY: Yung remittance fee na binayaran mo (e.g. ₱150 sa WU) ay kasama sa monthly
+    // expenses kasi totoong lumabas siya sa account mo. Pero yung auto-generated forex gain/loss
+    // entry — hindi kasama, kasi adjustment lang yan, hindi tunay na transaction.
     // ── PERSONAL LOGIC SET ── inclusion/exclusion rules for getMonthTotals (do not remove)
     // isAutoReimb EXCLUDED: full totalBill already counted on shared tx — reimb is NOT income
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
@@ -2260,6 +2295,9 @@ function checkAlerts() {
   }
 
   // Installment due date alerts (uses dueDay field)
+  // 📖 USER STORY: Pag may credit card installment ka (e.g. due every 25th), tatlong araw bago
+  // mag-due, lalabas yung alert sa dashboard "Installment due in 3 days" — para hindi mo malimutan
+  // bayaran on time at maiwasan ang late fees.
   // ── PERSONAL LOGIC SET ── installment alert fires 3 days before dueDay each month
   if (db.installments) {
     const todayD = new Date();
@@ -2569,6 +2607,9 @@ function renderDashboard() {
 
 
   // 4-metric grid
+  // 📖 USER STORY: Pag may credit card kang naka-red sa accounts (may utang, e.g. -₱5,000), yung
+  // utang na yun ay binabawas sa Cash & Wallets total sa dashboard — hindi tinatrato as zero. So
+  // kung Maya mo ay ₱65,000 at CC mo ay -₱5,000, ang Cash & Wallets total ay ₱60,000.
   // ── PERSONAL LOGIC SET ── Credit Card included in Cash & Wallets: negative CC balance subtracts from total
   const cashWalletTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Credit Card'];
   const cashTotal = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type))
@@ -2762,6 +2803,9 @@ function isBulkEligible(tx) {
 // ── BULK PRESS HANDLERS (Batch B #6) ──
 let _txPressStartX = 0;
 let _txPressStartY = 0;
+// 📖 USER STORY: Pag long-press ka ng transaction sa list, kahit konting jitter ng finger mo
+// (under 10px) — okay lang, hindi nag-cancel ang long-press. Pero pag nag-scroll ka talaga
+// (>10px movement), nag-cancel — para hindi accidental ang pag-trigger ng bulk select mode.
 const TX_MOVE_THRESHOLD = 10; // pixels — PERSONAL LOGIC SET: finger jitter under 10px stays as long-press
 
 function exitBulkMode() {
@@ -3350,7 +3394,7 @@ function renderUnifiedAmountForm() {
   const showCatPlaceholder = !displayCat;
 
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
-  const currOpts = TRACKED_CURRENCIES.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = (db.trackedCurrencies || ['PHP']).map(c=>`<option value="${c}">${c}</option>`).join('');
 
   if (isShared) {
     if (!cat) return renderCatPicker('expense');
@@ -3358,20 +3402,7 @@ function renderUnifiedAmountForm() {
   }
 
   // Big-amount design (Apple Wallet style) — Expense/Income
-  return `<style>
-    .big-amt-wrap{max-width:480px;margin:0 auto}
-    .big-amt-input{width:100%;border:none;background:transparent;text-align:center;font-family:var(--mono);font-weight:700;letter-spacing:-2px;color:var(--text);outline:none;padding:8px 0;font-variant-numeric:tabular-nums;font-size:clamp(40px,10vw,64px);line-height:1.1}
-    .big-amt-input::placeholder{color:var(--text4);opacity:0.4}
-    .big-amt-curr{font-size:clamp(20px,4vw,28px);color:var(--text4);font-weight:600;margin-right:6px;vertical-align:top;display:inline-block;margin-top:8px}
-    .field-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;margin-bottom:8px}
-    .field-row:hover{background:var(--bg3)}
-    .field-row .fr-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--bg3)}
-    .field-row .fr-label{flex:1;min-width:0;font-size:13px;color:var(--text2)}
-    .field-row .fr-value{font-size:13px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;text-align:right}
-    .field-row select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
-    .field-row-wrap{position:relative}
-  </style>
-  <div class="big-amt-wrap">
+  return `<div class="big-amt-wrap">
 
     <!-- Big amount hero -->
     <div style="text-align:center;padding:16px 0 18px">
@@ -4707,6 +4738,9 @@ function submitTransfer() {
   const toAcct2 = db.accounts.find(a=>a.id===toId);
   const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
   const userToAmount = parseFloat(document.getElementById('tf-toamount')?.value) || 0;
+  // 📖 USER STORY: Pag nag-transfer ka cross-currency, hindi mo na kailangang mag-tap ng "Use
+  // snapshot rate" checkbox. Auto-detects ng app: pag may tinype ka sa "Actual received" o
+  // "Custom rate" field, custom mode na — kahit blank pareho, snapshot rate ang gagamitin.
   // ── PERSONAL LOGIC SET ── useSnapshot derived from actual inputs, not a checkbox
   // If user typed a custom rate or toAmount → use actual. Otherwise → use snapshot rate.
   const useSnapshot = !(customRate > 0 || userToAmount > 0);
@@ -4860,6 +4894,9 @@ let _txBulkMode = false;
 let _txBulkSet = new Set();
 let _txLongPressTimer = null;
 let _txLongPressFired = false;
+// 📖 USER STORY: Pag gusto mong i-bulk select ang transactions, pindutin mo lang ng 550ms (over
+// half a second) ang isa, pumapasok ka sa bulk mode. Pero pag nag-scroll ka kahit konti (>10px),
+// nag-cancel — kasi obvious na browse lang yung intent mo, hindi bulk action.
 // ── PERSONAL LOGIC SET ── bulk long-press: 550ms hold, 10px scroll cancels
 const TX_BULK_LONGPRESS_MS = 550;
 
@@ -7208,6 +7245,9 @@ function saveAddAccount() {
   const name = document.getElementById('na-name')?.value?.trim();
   if (!name) { showToast('Enter account name'); return; }
   const type = document.getElementById('na-type')?.value||'Savings';
+  // 📖 USER STORY: Pag nag-add ka ng bagong account at pinili mong "Crypto Wallet" ang type,
+  // automatic na USDT ang currency — hindi mo mababago. Para consistent ang lahat ng crypto
+  // accounts mo (Binance, OKX, etc.) at iisa lang ang FX rate na tina-track.
   // ── PERSONAL LOGIC SET ── Crypto Wallet account type always locked to USDT
   const currency = type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('na-currency')?.value||'PHP');
   // Ensure USDT in tracked if used
@@ -7248,6 +7288,9 @@ function saveEditAccount(acctId) {
   if (!a) return;
   a.name = document.getElementById('ea-name')?.value?.trim() || a.name;
   a.type = document.getElementById('ea-type')?.value || a.type;
+  // 📖 USER STORY: Pag binago mo ang type ng existing account papuntang "Crypto Wallet", auto
+  // converts to USDT ang currency. Pag nilipat mo from Crypto Wallet to ibang type, pwede ka na
+  // mag-pick ng currency manually.
   // ── PERSONAL LOGIC SET ── Crypto Wallet always USDT (enforced on save/edit)
   a.currency = a.type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency);
   if (a.currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
@@ -8682,6 +8725,9 @@ function renderAnalyticsOverview() {
   const daysInMetricMonth = new Date(mY, mM, 0).getDate();
 
   // ── Pie chart data ──
+  // 📖 USER STORY: Sa Analytics → Spending pie chart, hindi mo makikita yung loan transactions,
+  // settlements, o auto-generated reimbursements. Yung mga totoong gastos mo lang — para tunay
+  // ang representation kung saan napupunta ang pera mo.
   // ── PERSONAL LOGIC SET ── Pie chart inclusion/exclusion rules (do not remove)
   // isAutoReimb EXCLUDED: reimb is NOT income — totalBill already counted on parent shared tx
   // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
@@ -12956,7 +13002,7 @@ async function showSnapshotPicker() {
     showLoading('Loading snapshots...');
     const folderId = await getOrCreateSubfolder('Snapshots');
     const files = await driveRequest('GET',
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20` /* PERSONAL LOGIC SET: max 20 snapshots shown */
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'snapshot_' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,size)&pageSize=20` /* 📖 USER STORY: Pag nag-create ka ng snapshot backups sa Google Drive, max 20 lang ang ipapakita — yung mga pinaka-recent. Para hindi ma-bloat ang storage mo at madaling makita kung anong backup ang gusto mong i-restore. PERSONAL LOGIC SET: max 20 snapshots shown */
     );
     hideLoading();
     if (!files.files || files.files.length === 0) {
@@ -14914,6 +14960,9 @@ function renderAIPage() {
 
   function card(ins) {
     const col = pColor[ins.priority]||'var(--text3)';
+    // 📖 USER STORY: Pag nag-tap ka ng action button sa AI Insights (e.g. "Review Budget"), dapat
+    // gumana lahat — walang dead button. Ito yung map ng action label → kung saan ka pupunta sa app.
+    // Lahat verified, naka-defined ang functions na tinatawag.
     // ── PERSONAL LOGIC SET ── actionNav wiring (do not remove entries — all verified defined)
     // openAddSheet, openDriveSheet, openInstArchiveSheet etc. are all defined functions (verified in debug)
     const actionNav = {
@@ -14978,6 +15027,8 @@ function renderAIPage() {
 function aiNavigate(insId) {
   const ins = _aiInsights.find(i=>i.id===insId);
   if (!ins || !ins.action) return;
+  // 📖 USER STORY: Same usage as actionNav above — pero ito yung mga action sa Onboarding
+  // checklist (e.g. "Set up first account") at AI Insights na hindi ma-cover ng inline map.
   // ── PERSONAL LOGIC SET ── second actionNav map (do not remove — complements inline map above)
   // All action strings here are verified wired to defined functions (confirmed in debug scans)
   const actionNav = {
