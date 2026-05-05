@@ -58,6 +58,7 @@
 }
 /* ── Non-Apple devices (Windows/Android/Linux) use Inter (Apple-style font) ── */
 html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'JetBrains Mono','Cascadia Mono','Consolas',monospace; }
+@keyframes slideUp { from { transform:translateY(20%); opacity:0 } to { transform:translateY(0); opacity:1 } }
 /* ── DARK MODE (default) — purple-tinted, more contrast ── */
 :root, [data-theme="dark"] {
   --bg:#06060d;--bg2:#0e0d1a;--bg3:#16142a;--bg4:#1f1c38;--bg5:#2a2647;
@@ -3279,40 +3280,35 @@ function renderAddSheet() {
   const s = _addState;
   const body = document.getElementById('add-body');
 
-  // Type toggle
-  const types = ['expense','income','shared','transfer','remittance','external-in','external-out','lend','borrow'];
-  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance','external-in':'External In','external-out':'External Out',lend:'Lend',borrow:'Borrow'};
-  const typeIcons = {expense:'💸',income:'📈',shared:'🤝',transfer:'↔️',remittance:'📤','external-in':'📥','external-out':'📤',lend:'🏦',borrow:'📋'};
-  const typeHTML = `<div class="type-dd-wrap" style="position:relative;margin-bottom:14px;display:inline-block" id="type-dd-container">
-    <div class="type-dd-btn" onclick="toggleTypeDd()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px 6px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-full);cursor:pointer;font-size:12px;font-weight:600;user-select:none;letter-spacing:0.01em">
-      <span id="type-dd-icon" style="font-size:13px;line-height:1">${typeIcons[s.type]||'💸'}</span>
-      <span id="type-dd-label">${typeLabels[s.type]||'Expense'}</span>
-      <svg id="type-dd-arrow" width="9" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.6"><path d="M1 1l5 5 5-5" stroke="var(--text3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-    <div id="type-dd-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:200px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-lg);z-index:100;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
-      <div style="padding:4px">
-        ${Object.entries(typeLabels).map(([t,label])=>`
-        <div class="type-dd-opt${s.type===t?' type-dd-active':''}" onclick="setAddType('${t}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--r-md);cursor:pointer;font-size:13px${s.type===t?';background:var(--accent-bg);color:var(--accent)':''}">
-          <span style="font-size:15px">${typeIcons[t]}</span>
-          <span>${label}</span>
-          ${s.type===t?'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
-        </div>`).join('')}
-      </div>
-    </div>
+  // Type list — Lend/Borrow excluded (use Loans page instead)
+  const types = ['expense','income','shared','transfer','remittance','external-in','external-out'];
+  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance','external-in':'External In','external-out':'External Out'};
+  const typeIcons = {expense:'💸',income:'📈',shared:'🤝',transfer:'↔️',remittance:'📤','external-in':'📥','external-out':'📤'};
+
+  // Horizontal scrollable pill row — single tap to switch type
+  const typePillsHTML = `<div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 12px 0;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+    <style>.add-type-pills::-webkit-scrollbar{display:none}</style>
+    ${types.map(t => {
+      const active = s.type === t;
+      return `<div onclick="setAddType('${t}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:${active?'var(--accent-bg)':'var(--bg2)'};border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:99px;cursor:pointer;font-size:12px;font-weight:${active?'600':'500'};color:${active?'var(--accent)':'var(--text2)'};white-space:nowrap;flex-shrink:0;-webkit-tap-highlight-color:transparent;letter-spacing:-0.1px;transition:all 0.15s">
+        <span style="font-size:13px">${typeIcons[t]}</span>
+        <span>${typeLabels[t]}</span>
+      </div>`;
+    }).join('')}
   </div>`;
 
+  // Conditional renders for transfer/remittance/external (kept their own form structure)
   if (s.type === 'transfer') {
-    body.innerHTML = typeHTML + renderTransferForm();
+    body.innerHTML = typePillsHTML + renderTransferForm();
     setTimeout(() => {
       if (document.getElementById('tf-date') && !document.getElementById('tf-date').value) dtSet('tf-date','date',today());
       if (document.getElementById('tf-time') && !document.getElementById('tf-time').value) dtSet('tf-time','time',nowTime());
-      // Initial state — sync visibility of FX rows based on default account selection
       updateTransferPreview();
     }, 50);
     return;
   }
   if (s.type === 'remittance') {
-    body.innerHTML = typeHTML + renderRemittanceForm();
+    body.innerHTML = typePillsHTML + renderRemittanceForm();
     setTimeout(() => {
       if (document.getElementById('rem-date') && !document.getElementById('rem-date').value) dtSet('rem-date','date',today());
       if (document.getElementById('rem-time') && !document.getElementById('rem-time').value) dtSet('rem-time','time',nowTime());
@@ -3321,7 +3317,7 @@ function renderAddSheet() {
     return;
   }
   if (s.type === 'external-in' || s.type === 'external-out') {
-    body.innerHTML = typeHTML + renderExternalForm(s.type);
+    body.innerHTML = typePillsHTML + renderExternalForm(s.type);
     setTimeout(() => {
       if (document.getElementById('ext-date') && !document.getElementById('ext-date').value) dtSet('ext-date','date',today());
       if (document.getElementById('ext-time') && !document.getElementById('ext-time').value) dtSet('ext-time','time',nowTime());
@@ -3331,21 +3327,236 @@ function renderAddSheet() {
     return;
   }
 
-  // Step 1: Category picker
-  if (s.step === 1) {
-    body.innerHTML = typeHTML + renderCatPicker(s.type==='income'?'income':'expense');
-    return;
+  // ── For Expense/Income/Shared — unified single-screen design ──
+  body.innerHTML = typePillsHTML + renderUnifiedAmountForm();
+  setTimeout(() => {
+    if (document.getElementById('add-date') && !document.getElementById('add-date').value) dtSet('add-date','date',today());
+    if (document.getElementById('add-time') && !document.getElementById('add-time').value) dtSet('add-time','time',nowTime());
+    syncAddCurrency();
+    if (s.type === 'shared') afterRenderShared();
+  }, 50);
+}
+
+// Unified single-screen form for Expense/Income/Shared
+function renderUnifiedAmountForm() {
+  const s = _addState;
+  const isShared = s.type === 'shared';
+  const txTypeForCat = s.type === 'income' ? 'income' : 'expense';
+  // Resolve category and subcategory from IDs
+  const cat = s.catId ? (db.categories[txTypeForCat] || []).find(c=>c.id===s.catId) : null;
+  const subCat = (cat && s.subCatId) ? cat.subcats?.find(sc=>sc.id===s.subCatId) : null;
+  // Display: subcategory if picked, else category, else nothing
+  const displayCat = subCat || cat;
+  const showCatPlaceholder = !displayCat;
+
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  const currOpts = TRACKED_CURRENCIES.map(c=>`<option value="${c}">${c}</option>`).join('');
+
+  if (isShared) {
+    if (!cat) return renderCatPicker('expense');
+    return renderSharedFormBody(cat, acctOpts, currOpts);
   }
 
-  // Step 2: Amount + details
-  body.innerHTML = typeHTML + renderAmountForm();
-    // Init date/time defaults (today/now) and display values
-    setTimeout(() => {
-      if (document.getElementById('add-date') && !document.getElementById('add-date').value) dtSet('add-date','date',today());
-      if (document.getElementById('add-time') && !document.getElementById('add-time').value) dtSet('add-time','time',nowTime());
-    }, 50);
-  setTimeout(syncAddCurrency, 0);
-  if (s.type === 'shared') setTimeout(afterRenderShared, 0);
+  // Big-amount design (Apple Wallet style) — Expense/Income
+  return `<style>
+    .big-amt-wrap{max-width:480px;margin:0 auto}
+    .big-amt-input{width:100%;border:none;background:transparent;text-align:center;font-family:var(--mono);font-weight:700;letter-spacing:-2px;color:var(--text);outline:none;padding:8px 0;font-variant-numeric:tabular-nums;font-size:clamp(40px,10vw,64px);line-height:1.1}
+    .big-amt-input::placeholder{color:var(--text4);opacity:0.4}
+    .big-amt-curr{font-size:clamp(20px,4vw,28px);color:var(--text4);font-weight:600;margin-right:6px;vertical-align:top;display:inline-block;margin-top:8px}
+    .field-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;margin-bottom:8px}
+    .field-row:hover{background:var(--bg3)}
+    .field-row .fr-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--bg3)}
+    .field-row .fr-label{flex:1;min-width:0;font-size:13px;color:var(--text2)}
+    .field-row .fr-value{font-size:13px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;text-align:right}
+    .field-row select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
+    .field-row-wrap{position:relative}
+  </style>
+  <div class="big-amt-wrap">
+
+    <!-- Big amount hero -->
+    <div style="text-align:center;padding:16px 0 18px">
+      <div style="display:inline-flex;align-items:flex-start;justify-content:center">
+        <span class="big-amt-curr" id="big-amt-curr-sym">${sym(db.accounts.find(a=>a.id===s.prefill?.accountId)?.currency || 'PHP')}</span>
+        <input class="big-amt-input numpad-input" type="number" id="add-amount" min="0" step="any" placeholder="0" value="${s.prefill?.amount||''}" inputmode="none">
+      </div>
+    </div>
+
+    <!-- Category field — tappable -->
+    <div class="field-row" onclick="openCatPickerSheet()">
+      <div class="fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
+      <div class="fr-label">Category</div>
+      <div class="fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
+      <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Account field -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">🏦</div>
+        <div class="fr-label">Account</div>
+        <div class="fr-value" id="add-acct-display">${db.accounts.find(a=>a.id===s.prefill?.accountId)?.name || db.accounts.filter(a=>!a.archived)[0]?.name || 'No accounts'}</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="add-account" onchange="syncAddCurrency();updateBigAmtCurr();updateAcctDisplay()">${acctOpts}</select>
+    </div>
+
+    <!-- Date field -->
+    <div class="field-row-wrap">
+      <div class="field-row" onclick="document.getElementById('add-date').showPicker?document.getElementById('add-date').showPicker():document.getElementById('add-date').focus()">
+        <div class="fr-icon" style="background:var(--bg3)">📅</div>
+        <div class="fr-label">Date</div>
+        <div class="fr-value" id="add-date-display">Today</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <input type="date" id="add-date" style="position:absolute;opacity:0;width:1px;height:1px;left:0;top:0;pointer-events:none" onchange="onAddDateChange()">
+    </div>
+
+    <!-- Currency hidden — auto-derived -->
+    <select id="add-currency" style="display:none">${currOpts}</select>
+
+    <!-- More options expander -->
+    <div style="margin:12px 0 14px">
+      <div onclick="toggleAddMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 4px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="add-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="add-more-row" style="display:none;margin-top:8px">
+        <div class="form-group"><label class="form-label">Time</label>${dtField('add-time','time','Now')}</div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none">${s.prefill?.notes||''}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-bottom:12px">Save Transaction</button>
+  </div>`;
+}
+
+function updateBigAmtCurr() {
+  const acctId = document.getElementById('add-account')?.value;
+  const acct = db.accounts.find(a=>a.id===acctId);
+  const symEl = document.getElementById('big-amt-curr-sym');
+  if (symEl && acct) symEl.textContent = sym(acct.currency);
+}
+
+function updateAcctDisplay() {
+  const acctId = document.getElementById('add-account')?.value;
+  const acct = db.accounts.find(a=>a.id===acctId);
+  const dispEl = document.getElementById('add-acct-display');
+  if (dispEl && acct) dispEl.textContent = acct.name;
+}
+
+function onAddDateChange() {
+  const v = document.getElementById('add-date')?.value;
+  const dispEl = document.getElementById('add-date-display');
+  if (dispEl) {
+    if (!v) dispEl.textContent = 'Today';
+    else if (v === today()) dispEl.textContent = 'Today';
+    else dispEl.textContent = fmtD(v);
+  }
+}
+
+function openCatPickerSheet() {
+  const s = _addState;
+  const txType = s.type === 'income' ? 'income' : 'expense';
+  // Open category picker as inline overlay
+  const body = document.getElementById('add-body');
+  if (!body) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'cat-picker-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:flex;align-items:flex-end;justify-content:center;-webkit-tap-highlight-color:transparent';
+  overlay.onclick = (e) => { if (e.target === overlay) closeCatPickerSheet(); };
+  overlay.innerHTML = `<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:75vh;overflow-y:auto;padding:18px 16px 24px;animation:slideUp 0.25s cubic-bezier(.4,0,.2,1)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">Pick Category</div>
+      <div onclick="closeCatPickerSheet()" style="cursor:pointer;font-size:18px;color:var(--text3);padding:4px 8px;-webkit-tap-highlight-color:transparent">✕</div>
+    </div>
+    ${renderCatPicker(txType, true)}
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+function closeCatPickerSheet() {
+  const overlay = document.getElementById('cat-picker-overlay');
+  if (overlay) overlay.remove();
+}
+
+// Wraps shared form for the unified flow
+function renderSharedFormBody(cat, acctOpts, currOpts) {
+  // Reuse old shared form structure (already redesigned earlier)
+  const s = _addState;
+  if (s && _sharedPersons.length === 0) _sharedPersons = [{ name: '', share: '' }];
+  return `<div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;margin-bottom:14px;cursor:pointer" onclick="goBack()">
+      <span style="color:var(--accent)">←</span>
+      <span style="font-size:20px">${cat.icon}</span>
+      <span style="font-size:14px;font-weight:600">${cat.name}</span>
+    </div>
+
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label">Receipt Total *</label>
+        <input class="form-input numpad-input" type="number" id="add-total-bill" placeholder="0.00" step="any"
+          onchange="onTotalBillChange()" oninput="recalcShared()" inputmode="none">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date *</label>
+        ${dtField('add-date','date','Today')}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Paid From *</label>
+      <select class="form-input" id="add-account" onchange="syncAddCurrency()">${acctOpts}</select>
+    </div>
+
+    <div class="form-group">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label class="form-label" style="margin-bottom:0">Split With (others)</label>
+        <button type="button" onclick="equalSplitShared()" style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;cursor:pointer;letter-spacing:-0.1px">÷ Equal split</button>
+      </div>
+      <div id="shared-persons-list"></div>
+      <button type="button" onclick="addSharedPerson()"
+        style="width:100%;padding:9px;background:transparent;border:1.5px dashed var(--border3);border-radius:var(--r-md);color:var(--text3);font-size:13px;cursor:pointer;margin-top:4px">
+        + Add person
+      </button>
+    </div>
+
+    <div id="shared-calc-result" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none">
+      Add people and receipt total to calculate.
+    </div>
+
+    <select id="add-currency" style="display:none" onchange="recalcShared()">${currOpts}</select>
+    <input type="hidden" id="add-myshare">
+    <input type="hidden" id="add-amount" value="0">
+
+    <div style="margin-bottom:10px">
+      <div onclick="toggleSharedMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="shared-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="shared-more-row" style="display:none">
+        <div class="form-row fr2" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            ${dtField('add-time','time','Now')}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Amount to Split</label>
+            <input class="form-input numpad-input" type="number" id="add-amount-to-split" placeholder="Same as total" step="any"
+              oninput="recalcShared()" inputmode="none">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="submitAddTx()">Save Transaction</button>
+  </div>`;
 }
 
 function toggleTypeDd() {
@@ -3467,12 +3678,14 @@ function pickCat(catId) {
   _addState.catId = catId;
   _addState.subCatId = null;
   _addState.step = 2;
+  closeCatPickerSheet();
   renderAddSheet();
 }
 function pickSubCat(catId, subCatId) {
   _addState.catId = catId;
   _addState.subCatId = subCatId;
   _addState.step = 2;
+  closeCatPickerSheet();
   renderAddSheet();
 }
 
