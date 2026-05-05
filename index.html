@@ -983,7 +983,11 @@ const EMOJI_GROUPS = {
   'Travel & Places': ['🌍','🌎','🌏','🗺️','🧳','🏖️','🏔️','🗼','🏛️','🎡','🌅','🛂','🏕️','🏞️','⛩️','🕌','⛪','🛕','🗿','🗽','🏰','🏯','🗼','🌋','🏜️','🏝️','🏗️','🌉','🌁','🌃','🌆','🌇','🌉','🎠','🎢','🎪','🚂','🛫','🛬','🛥️','🚢','🗺️'],
   'Nature': ['🌿','🌱','🌾','🍀','🌲','🌳','🌴','🌵','🎋','🎍','🍁','🍂','🍃','🌺','🌸','🌼','🌻','🌹','🌷','💐','🌾','☘️','🍄','🌊','🌬️','🌀','🌈','⛄','❄️','🌤️','⛅','🌦️','🌧️','⛈️','🌩️','🌨️','🌙','☀️','🌟','⭐','✨','🌠','🌌'],
   'Animals': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐟','🐠','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐓','🦃'],
-  'Symbols & Signs': ['⭐','🌟','💫','✨','⚡','🔥','💥','❄️','🌊','🌀','🎯','🏷️','✅','❌','⚠️','🚫','🛑','⛔','🔴','🟡','🟢','🔵','🟠','🟣','⚫','⚪','🔶','🔷','🔸','🔹','🔺','🔻','💠','🔘','🔲','🔳','▪️','▫️','🔖','📌','📍','💡','🔑','🗝️','🔐','🔒','🔓','🏅','🎖️','🏆','🥇','🥈','🥉','💯','💢','💬','💭','🗯️','♻️','⚜️','🔰','📛','🎌'],
+  'Technology': ['💻','🖥️','⌨️','🖱️','🖨️','💾','💿','📀','💽','📱','☎️','📞','📟','📠','🔋','🪫','🔌','🌐','📡','🛰️','📶','📳','📴','🤖','🛸','📷','📸','📹','🎥','📺','📻','🎙️','🎚️','🎛️','🎧','📼','📽️','💡','🔦','🪪','🆔','📲','🛜','🖼️','📊','🗂️','💻','⚙️','🛠️'],
+  'Cloud & Subscriptions': ['☁️','🌥️','⛅','🌤️','💾','🗄️','📂','📁','🔄','🔃','♻️','🔁','📥','📤','💼','🔔','🔕','📩','📧','💎','✨','⭐','🌟','📺','🎬','🎵','🎶','🎙️','📻','🛒','🎁','💳','🪙','📅','📆','🗓️','📊','🔐','🛡️','🔒','🔑','💯','🆓','🆕','🆙','🆒'],
+  'Utilities & Bills': ['💡','🔌','⚡','🔋','🪫','💧','🚰','🚿','🛁','🚽','🔥','🧯','🪜','🧱','🚪','🪟','🪞','🗑️','♻️','🧴','🧼','🧽','🧹','🧺','🧻','🚮','🛢️','📡','📺','📞','☎️','📱','💻','🌐','📶','💸','🧾','📋','📑'],
+  'Tools & Hardware': ['🔧','🔨','🪛','🪚','⚒️','🛠️','⚙️','🪤','🧰','🔩','⛓️','🪝','🪑','🪞','🪟','🛗','🚪','🔑','🗝️','🔒','🔓','🪜','🪣','🧱','🪵','🧯','🔦','🪫','🔋','📏','📐','✂️','🪒','🧷','🪡','🧵','🧶','🪢','🪠','🪥','🪮'],
+  'Religious & Spiritual': ['🙏','✝️','☦️','☪️','☮️','🕉️','☸️','✡️','🔯','🕎','⛪','🕌','🛕','⛩️','🕯️','📿','🪬','✨','😇','👼','🧎','🧎‍♀️','🧎‍♂️','🤲','🪔','🌟','⭐','🌅','🕊️','💒'],
 };
 
 // ════════════════════════════════════════════════════════════
@@ -8451,8 +8455,24 @@ function renderAnalyticsOverview() {
       </div>
       <div class="metric-card">
         <div class="metric-label">SAVINGS RATE</div>
-        <div class="metric-value">${curr.income>0?Math.round((1-curr.expense/curr.income)*100):0}%</div>
-        <div style="font-size:11px;color:var(--text4)">of income saved</div>
+        ${(() => {
+          // Personal Logic Set: Savings rate only meaningful with proper income.
+          // Avoid nonsense like -4737% when income is tiny vs expenses.
+          if (curr.income <= 0) {
+            return `<div class="metric-value" style="color:var(--text3)">—</div>
+                    <div style="font-size:11px;color:var(--text4)">no income yet</div>`;
+          }
+          if (curr.expense > curr.income) {
+            // Spending exceeds income — show overspend ratio capped
+            const overPct = Math.round((curr.expense / curr.income - 1) * 100);
+            const display = overPct > 999 ? '>999%' : overPct + '%';
+            return `<div class="metric-value" style="color:var(--red)">−${display}</div>
+                    <div style="font-size:11px;color:var(--text4)">overspending</div>`;
+          }
+          const savedPct = Math.round((1 - curr.expense / curr.income) * 100);
+          return `<div class="metric-value">${savedPct}%</div>
+                  <div style="font-size:11px;color:var(--text4)">of income saved</div>`;
+        })()}
       </div>
       <div class="metric-card">
         <div class="metric-label">DAILY AVG SPEND</div>
@@ -8488,12 +8508,14 @@ function renderAnalyticsOverview() {
             bottomLabel = `Saved ${savedPct}%`;
             progressPct = savedPct;
           } else {
+            // Cap overspend display — avoid "Spent 4837%" eyesore
             const overPct = Math.round((m.expense/m.income) * 100);
-            bottomLabel = `Spent ${overPct}%`;
+            const overDisp = overPct > 999 ? '>999%' : overPct + '%';
+            bottomLabel = `Spent ${overDisp}`;
             progressPct = Math.min(overPct, 100);
           }
         } else if (m.expense > 0) {
-          bottomLabel = 'Spent 100%';
+          bottomLabel = 'No income logged';
           progressPct = 100;
         }
         // Progress bar segments (10 cells)
@@ -11512,8 +11534,28 @@ const ICON_KEYWORDS = {
   '🏖️': ['beach','resort','swim'],
   '🎨': ['art','craft','hobby','painting'],
   '📷': ['camera','photo','photography'],
-  '💻': ['laptop','computer','tech','gadget','electronics'],
+  '💻': ['laptop','computer','tech','gadget','electronics','technology','macbook','pc'],
   '🖨️': ['print','printer','xerox'],
+  '☁️': ['cloud','cloud storage','icloud','google drive','dropbox','onedrive','backup','storage'],
+  '🔄': ['subscription','recurring','monthly','annual','renew','autopay'],
+  '🛡️': ['security','vpn','antivirus','firewall','protection','password manager','1password','lastpass'],
+  '📺': ['tv','television','cable','sky','converge tv','netflix','youtube tv'],
+  '🔋': ['battery','powerbank','charger'],
+  '⚙️': ['settings','config','setup','tools','admin'],
+  '🤖': ['ai','chatgpt','claude','copilot','gemini','perplexity','bot','automation'],
+  '🛒': ['groceries','grocery','supermarket','market','sm','shopwise','rustans','shopee','lazada','tiktok shop','online shopping'],
+  '📡': ['satellite','antenna','signal','broadcast'],
+  '🔧': ['repair','maintenance','plumber','electrician','handyman','fix'],
+  '🧾': ['bill','bills','receipt','invoice'],
+  '💡': ['idea','insight','tip','utility','utilities','light'],
+  '🪙': ['coin','token','crypto','bitcoin','eth','usdt','tether','binance','coingecko'],
+  '🧹': ['cleaning','laundry','household','chore','maid','helper'],
+  '🪴': ['plant','garden','flower','succulent','indoor plant'],
+  '🚪': ['door','entrance','exit'],
+  '🙏': ['church','tithe','offering','religious','spiritual','god','pray','prayer','iglesia','mass','simbahan'],
+  '✝️': ['christian','catholic','jesus','christ'],
+  '🕌': ['mosque','islam','muslim'],
+  '🕉️': ['hindu','buddhist','temple'],
 };
 
 function aiSuggestIcon(name) {
