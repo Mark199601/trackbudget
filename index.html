@@ -3304,29 +3304,29 @@ function renderAddSheet() {
   if (s.type === 'transfer') {
     body.innerHTML = typeHTML + renderTransferForm();
     setTimeout(() => {
-      if (document.getElementById('tf-date')?.value) dtUpdate('tf-date','date');
-      if (document.getElementById('tf-time')?.value) dtUpdate('tf-time','time');
+      if (document.getElementById('tf-date') && !document.getElementById('tf-date').value) dtSet('tf-date','date',today());
+      if (document.getElementById('tf-time') && !document.getElementById('tf-time').value) dtSet('tf-time','time',nowTime());
       // Initial state — sync visibility of FX rows based on default account selection
       updateTransferPreview();
-    }, 0);
+    }, 50);
     return;
   }
   if (s.type === 'remittance') {
     body.innerHTML = typeHTML + renderRemittanceForm();
     setTimeout(() => {
-      if (document.getElementById('rem-date')?.value) dtUpdate('rem-date','date');
-      if (document.getElementById('rem-time')?.value) dtUpdate('rem-time','time');
-    }, 0);
+      if (document.getElementById('rem-date') && !document.getElementById('rem-date').value) dtSet('rem-date','date',today());
+      if (document.getElementById('rem-time') && !document.getElementById('rem-time').value) dtSet('rem-time','time',nowTime());
+    }, 50);
     setTimeout(updateRemittancePhpPreview, 0);
     return;
   }
   if (s.type === 'external-in' || s.type === 'external-out') {
     body.innerHTML = typeHTML + renderExternalForm(s.type);
     setTimeout(() => {
-      if (document.getElementById('ext-date')?.value) dtUpdate('ext-date','date');
-      if (document.getElementById('ext-time')?.value) dtUpdate('ext-time','time');
+      if (document.getElementById('ext-date') && !document.getElementById('ext-date').value) dtSet('ext-date','date',today());
+      if (document.getElementById('ext-time') && !document.getElementById('ext-time').value) dtSet('ext-time','time',nowTime());
       syncExtCurrency();
-    }, 0);
+    }, 50);
     setTimeout(syncExtCurrency, 0);
     return;
   }
@@ -3339,11 +3339,11 @@ function renderAddSheet() {
 
   // Step 2: Amount + details
   body.innerHTML = typeHTML + renderAmountForm();
-    // Init date/time display values
+    // Init date/time defaults (today/now) and display values
     setTimeout(() => {
-      if (document.getElementById('add-date')?.value) dtUpdate('add-date','date');
-      if (document.getElementById('add-time')?.value) dtUpdate('add-time','time');
-    }, 0);
+      if (document.getElementById('add-date') && !document.getElementById('add-date').value) dtSet('add-date','date',today());
+      if (document.getElementById('add-time') && !document.getElementById('add-time').value) dtSet('add-time','time',nowTime());
+    }, 50);
   setTimeout(syncAddCurrency, 0);
   if (s.type === 'shared') setTimeout(afterRenderShared, 0);
 }
@@ -3531,7 +3531,7 @@ function calcSharedResult() {
   const resEl = document.getElementById('shared-calc-result');
   const myShareEl = document.getElementById('add-myshare');
   if (!resEl) return;
-  if (!total) { resEl.textContent = 'Enter receipt total to calculate.'; return; }
+  if (!total) { resEl.innerHTML = '<span style="color:var(--text4)">Enter receipt total to calculate</span>'; return; }
   let theirTotal = 0;
   const parts = [];
   document.querySelectorAll('#shared-persons-list > div').forEach(row => {
@@ -3539,16 +3539,54 @@ function calcSharedResult() {
     const name = inputs[0]?.value?.trim() || '?';
     const share = parseFloat(inputs[1]?.value) || 0;
     theirTotal += share;
-    parts.push('<span style="color:var(--text2)">' + name + '</span>: <strong>' + fmt(share, curr) + '</strong>');
+    if (share > 0) parts.push('<span style="color:var(--text3)">' + name + '</span> ' + fmt(share, curr));
   });
   const myShare = total - theirTotal;
   if (myShareEl) myShareEl.value = myShare.toFixed(2);
-  const col = myShare >= 0 ? 'var(--green)' : 'var(--red)';
-  resEl.innerHTML = 'You pay: <strong style="color:' + col + '">' + fmt(myShare, curr) + '</strong>' +
-    (parts.length ? ' &nbsp;·&nbsp; ' + parts.join(' &nbsp;·&nbsp; ') : '');
+
+  let statusIcon = '';
+  let statusColor = 'var(--green)';
+  if (Math.abs(myShare) < 0.01 && parts.length > 0) {
+    statusIcon = '⚠️ ';
+    statusColor = 'var(--amber)';
+    // Receipt fully covered by others - you pay 0 (rare but valid)
+  } else if (myShare < 0) {
+    statusIcon = '⚠️ ';
+    statusColor = 'var(--red)';
+  }
+
+  resEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="color:var(--text4);font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">You Pay</span><strong style="color:' + statusColor + ';font-size:15px;font-family:var(--mono);font-variant-numeric:tabular-nums">' + statusIcon + fmt(myShare, curr) + '</strong></div>' +
+    (parts.length ? '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.4">' + parts.join(' &nbsp;·&nbsp; ') + '</div>' : '');
 }
 
 function recalcShared() { calcSharedResult(); }
+
+// Equal-split helper: divides receipt total by (others + 1 you), fills others with equal share
+function equalSplitShared() {
+  const total = parseFloat(document.getElementById('add-total-bill')?.value) || 0;
+  // Use Amount to Split if set, otherwise fall back to Receipt Total
+  const toSplit = parseFloat(document.getElementById('add-amount-to-split')?.value) || total;
+  if (!toSplit) { showToast('Enter receipt total first'); return; }
+  const rows = document.querySelectorAll('#shared-persons-list > div');
+  if (!rows.length) { showToast('Add at least one person to split with'); return; }
+  const totalPeople = rows.length + 1; // +1 for "You"
+  const equalShare = Math.round((toSplit / totalPeople) * 100) / 100;
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    if (inputs[1]) inputs[1].value = equalShare.toFixed(2);
+  });
+  calcSharedResult();
+  showToast('Split equally — ' + fmt(equalShare, document.getElementById('add-currency')?.value || 'PHP') + ' each');
+}
+
+function toggleSharedMore() {
+  const row = document.getElementById('shared-more-row');
+  const chev = document.getElementById('shared-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+}
 
 function onTotalBillChange() {
   const total = parseFloat(document.getElementById('add-total-bill')?.value) || 0;
@@ -3610,54 +3648,64 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Receipt Total *</label>
-        <input class="form-input numpad-input" type="number" id="add-total-bill"  placeholder="0.00" step="any"
+        <input class="form-input numpad-input" type="number" id="add-total-bill" placeholder="0.00" step="any"
           onchange="onTotalBillChange()" oninput="recalcShared()" inputmode="none">
       </div>
       <div class="form-group">
-        <label class="form-label">Amount to Split</label>
-        <input class="form-input numpad-input" type="number" id="add-amount-to-split"  placeholder="Same as total" step="any"
-          oninput="recalcShared()" inputmode="none">
+        <label class="form-label">Date *</label>
+        ${dtField('add-date','date','Today')}
       </div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Date & Time *</label>
-      <div class="dt-row">
-        ${dtField('add-date','date','Date')}
-        ${dtField('add-time','time','Time')}
-      </div>
+      <label class="form-label">Paid From *</label>
+      <select class="form-input" id="add-account" onchange="syncAddCurrency()">${acctOpts}</select>
     </div>
 
     <div class="form-group">
-      <label class="form-label">Split With</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label class="form-label" style="margin-bottom:0">Split With (others)</label>
+        <button type="button" onclick="equalSplitShared()" style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;cursor:pointer;letter-spacing:-0.1px">÷ Equal split</button>
+      </div>
       <div id="shared-persons-list"></div>
       <button type="button" onclick="addSharedPerson()"
-        style="width:100%;padding:10px;background:transparent;border:1.5px dashed var(--border3);border-radius:var(--r-md);color:var(--text3);font-size:13px;cursor:pointer;margin-top:4px">
+        style="width:100%;padding:9px;background:transparent;border:1.5px dashed var(--border3);border-radius:var(--r-md);color:var(--text3);font-size:13px;cursor:pointer;margin-top:4px">
         + Add person
       </button>
     </div>
 
-    <div id="shared-calc-result" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none">
+    <div id="shared-calc-result" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none">
       Add people and receipt total to calculate.
     </div>
 
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Account Debited *</label>
-        <select class="form-input" id="add-account" onchange="syncAddCurrency()">${acctOpts}</select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Currency</label>
-        <select class="form-input" id="add-currency" onchange="recalcShared()">${currOpts}</select>
-      </div>
-    </div>
-
+    <!-- Hidden currency dropdown — auto-synced from account -->
+    <select id="add-currency" style="display:none" onchange="recalcShared()">${currOpts}</select>
     <input type="hidden" id="add-myshare">
     <input type="hidden" id="add-amount" value="0">
 
-    <div class="form-group">
-      <label class="form-label">Notes (optional)</label>
-      <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none"></textarea>
+    <!-- More options expander -->
+    <div style="margin-bottom:10px">
+      <div onclick="toggleSharedMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="shared-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="shared-more-row" style="display:none">
+        <div class="form-row fr2" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label">Time</label>
+            ${dtField('add-time','time','Now')}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Amount to Split</label>
+            <input class="form-input numpad-input" type="number" id="add-amount-to-split" placeholder="Same as total" step="any"
+              oninput="recalcShared()" inputmode="none">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none"></textarea>
+        </div>
+      </div>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitAddTx()">Save Transaction</button>
@@ -3676,11 +3724,11 @@ function renderAmountForm() {
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount *</label>
-        <input class="form-input numpad-input" type="number" id="add-amount"  min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}" inputmode="none">
+        <input class="form-input numpad-input" type="number" id="add-amount" min="0" step="any" placeholder="0.00" value="${s.prefill?.amount||''}" inputmode="none">
       </div>
       <div class="form-group">
-        <label class="form-label">Currency *</label>
-        <select class="form-input" id="add-currency">${currOpts}</select>
+        <label class="form-label">Date *</label>
+        ${dtField('add-date','date','Today')}
       </div>
     </div>
 
@@ -3692,30 +3740,38 @@ function renderAmountForm() {
     ${isLoan ? `<div class="form-group">
       <label class="form-label">${s.type==='lend'?'Lent To':'Borrowed From'} *</label>
       <input class="form-input" id="add-person" placeholder="Person's name" value="${s.prefill?.personName||''}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Due Date</label>
-      <input class="form-input" type="date" id="add-duedate">
     </div>` : ''}
 
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Date *</label>
-        <input class="form-input" type="date" id="add-date" value="${today()}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Time</label>
-        <input class="form-input" type="time" id="add-time" value="${nowTime()}">
-      </div>
-    </div>
+    <!-- Currency hidden — auto-derived from account -->
+    <select id="add-currency" style="display:none">${currOpts}</select>
 
-    <div class="form-group">
-      <label class="form-label">Notes (optional)</label>
-      <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none">${s.prefill?.notes||''}</textarea>
+    <!-- More options expander -->
+    <div style="margin-bottom:10px">
+      <div onclick="toggleAddMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="add-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="add-more-row" style="display:none;margin-top:8px">
+        <div class="form-group"><label class="form-label">Time</label>${dtField('add-time','time','Now')}</div>
+        ${isLoan ? `<div class="form-group"><label class="form-label">Due Date</label>${dtField('add-duedate','date','Optional')}</div>` : ''}
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none">${s.prefill?.notes||''}</textarea>
+        </div>
+      </div>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitAddTx()">Save Transaction</button>
   </div>`;
+}
+
+function toggleAddMore() {
+  const row = document.getElementById('add-more-row');
+  const chev = document.getElementById('add-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 function goBack() { _addState.step=1; _sharedPersons=[]; renderAddSheet(); }
 
@@ -3743,65 +3799,80 @@ function renderRemittanceForm() {
   }
 
   return `<div>
-    <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
-      📤 Log a Western Union or bank remittance. This creates an FX rate anchor for this date — all other foreign-currency transactions in this period will use this rate.
+    <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
+      📤 Western Union or bank remittance. Sets FX rate anchor for this date.
     </div>
 
     <div class="form-group">
-      <label class="form-label">From Account (sending) *</label>
+      <label class="form-label">From (sending) *</label>
       <select class="form-input" id="rem-from-acct" onchange="onRemittanceFromChange()">${foreignOpts}</select>
     </div>
 
     <div class="form-group">
-      <label class="form-label">To Account (receiving PHP) *</label>
+      <label class="form-label">To (PHP) *</label>
       <select class="form-input" id="rem-to-acct">${phpOpts}</select>
     </div>
 
     <div class="form-row fr2">
       <div class="form-group">
         <label class="form-label">Amount Sent *</label>
-        <input class="form-input numpad-input" type="number" id="rem-amount"  placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
+        <input class="form-input numpad-input" type="number" id="rem-amount" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
       <div class="form-group">
-        <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span> = ? PHP) *</label>
+        <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span>) *</label>
         <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="${latestRate.toFixed(4)}" step="any" value="${latestRate}" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
     </div>
 
-    <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:40px;pointer-events:none">
+    <div class="form-group">
+      <label class="form-label">Date *</label>
+      ${dtField('rem-date','date','Today')}
+    </div>
+
+    <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:40px;pointer-events:none">
       PHP received: —
     </div>
 
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:4px">Remittance Fee <span style="font-size:10px;font-weight:400;color:var(--text4)">(optional)</span></div>
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Fee Amount</label>
-        <input class="form-input numpad-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any" inputmode="none">
+    <!-- More options expander -->
+    <div style="margin-bottom:10px">
+      <div onclick="toggleRemMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="rem-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="form-group">
-        <label class="form-label">Fee Account</label>
-        <select class="form-input" id="rem-fee-acct">
-          <option value="">-- No fee --</option>
-          ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('')}
-        </select>
+      <div id="rem-more-row" style="display:none;margin-top:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Remittance Fee (optional)</div>
+        <div class="form-row fr2">
+          <div class="form-group">
+            <label class="form-label">Fee Amount</label>
+            <input class="form-input numpad-input" type="number" id="rem-fee-amount" placeholder="0.00" step="any" inputmode="none">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fee Account</label>
+            <select class="form-input" id="rem-fee-acct">
+              <option value="">-- No fee --</option>
+              ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label class="form-label">Time</label>${dtField('rem-time','time','Now')}</div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU receipt #12345"></textarea>
+        </div>
       </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Date & Time *</label>
-      <div class="dt-row">
-        ${dtField('rem-date','date','Date')}
-        ${dtField('rem-time','time','Time')}
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Notes (optional)</label>
-      <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU receipt #12345"></textarea>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitRemittance()">Save Remittance</button>
   </div>`;
+}
+
+function toggleRemMore() {
+  const row = document.getElementById('rem-more-row');
+  const chev = document.getElementById('rem-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
 function onRemittanceFromChange() {
@@ -3923,12 +3994,8 @@ function renderExternalForm(type) {
   const acctOpts = accts.map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   return `<div>
-    <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
-      ${isIn ? '📥 <strong>External In</strong> — Receiving from outside. Adds to your account balance. Not counted as income.' : '📤 <strong>External Out</strong> — Sending to outside. Reduces your account balance. Not counted as expense.'}
-    </div>
-    <div class="form-group">
-      <label class="form-label">${isIn ? 'To Account (yours) *' : 'From Account (yours) *'}</label>
-      <select class="form-input" id="ext-account" onchange="syncExtCurrency()">${acctOpts}</select>
+    <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
+      ${isIn ? '📥 <strong>External In</strong> — Adds to balance. Not counted as income.' : '📤 <strong>External Out</strong> — Reduces balance. Not counted as expense.'}
     </div>
     <div class="form-row fr2">
       <div class="form-group">
@@ -3936,27 +4003,46 @@ function renderExternalForm(type) {
         <input class="form-input numpad-input" type="number" id="ext-amount" placeholder="0.00" step="any" inputmode="none">
       </div>
       <div class="form-group">
-        <label class="form-label">Currency</label>
-        <select class="form-input" id="ext-currency">${currOpts}</select>
+        <label class="form-label">Date *</label>
+        ${dtField('ext-date','date','Today')}
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">${isIn ? 'From (optional)' : 'To (optional)'}</label>
+      <label class="form-label">${isIn ? 'To Account *' : 'From Account *'}</label>
+      <select class="form-input" id="ext-account" onchange="syncExtCurrency()">${acctOpts}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${isIn ? 'From' : 'To'}</label>
       <input class="form-input" id="ext-person" placeholder="${isIn ? 'e.g. Papa, Company advance' : 'e.g. Pasalubong, Papa'}">
     </div>
-    <div class="form-group">
-      <label class="form-label">Date & Time *</label>
-      <div class="dt-row">
-        ${dtField('ext-date','date','Date')}
-        ${dtField('ext-time','time','Time')}
+    <!-- Currency hidden — auto from account -->
+    <select id="ext-currency" style="display:none">${currOpts}</select>
+
+    <!-- More options expander -->
+    <div style="margin-bottom:10px">
+      <div onclick="toggleExtMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="ext-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Notes (optional)</label>
-      <textarea class="form-input" id="ext-notes" rows="2" style="resize:none"></textarea>
+      <div id="ext-more-row" style="display:none;margin-top:8px">
+        <div class="form-group"><label class="form-label">Time</label>${dtField('ext-time','time','Now')}</div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="ext-notes" rows="2" style="resize:none"></textarea>
+        </div>
+      </div>
     </div>
     <button class="btn btn-primary btn-full" onclick="submitExternal('${type}')">Save</button>
   </div>`;
+}
+
+function toggleExtMore() {
+  const row = document.getElementById('ext-more-row');
+  const chev = document.getElementById('ext-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
 function syncExtCurrency() {
@@ -4006,42 +4092,64 @@ function renderTransferForm() {
   const fromCurr = firstFrom?.currency || 'PGK';
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===fromCurr?'selected':''}>${c}</option>`).join('');
   return `<div>
-    <div class="form-group"><label class="form-label">From Account *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
-    <div class="form-group"><label class="form-label">To Account *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
+    <div class="form-group"><label class="form-label">From *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
+    <div class="form-group"><label class="form-label">To *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input numpad-input" type="number" id="tf-amount"  placeholder="0.00" step="any" oninput="updateTransferPreview()" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="tf-currency" onchange="updateTransferPreview()">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input numpad-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()" inputmode="none"></div>
+      <div class="form-group"><label class="form-label">Date *</label>${dtField('tf-date','date','Today')}</div>
     </div>
-    <div id="tf-toamount-preview" style="font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:8px;display:none">
-      <span style="color:var(--text3)">To Account receives: </span><span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600"></span>
-      <span id="tf-toamount-hint" style="color:var(--text4);font-size:10px;margin-left:6px"></span>
+    <!-- Currency hidden — auto-derived from From account -->
+    <select id="tf-currency" style="display:none" onchange="updateTransferPreview()">${currOpts}</select>
+
+    <!-- Forex preview card — only visible for cross-currency, display-only -->
+    <div id="tf-forex-preview" style="display:none;background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">💱 <span id="tf-fx-pair">PGK → PHP</span></div>
+        <div style="font-size:10px;color:var(--text4)">snapshot <span id="tf-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
+      </div>
+      <div style="font-size:13px;color:var(--text3)">Will receive: <span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600;font-size:15px;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">—</span></div>
+      <div id="tf-fx-extra" style="font-size:11px;color:var(--text4);margin-top:4px;line-height:1.4"></div>
     </div>
-    <!-- Hidden checkbox (legacy reference for submit logic — always treats as custom mode if any value entered) -->
     <input type="checkbox" id="tf-use-snapshot" style="display:none">
-    <div id="tf-custom-rate-row" style="display:none;margin-bottom:8px">
-      <div class="form-row fr2" style="margin-bottom:6px">
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
-          <input class="form-input numpad-input" type="number" id="tf-toamount"  placeholder="0.00" step="any" oninput="onTfToAmountInput()" inputmode="none">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Or rate (1 <span id="tf-custom-curr-label">PGK</span> = ? PHP)</label>
-          <input class="form-input numpad-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()" inputmode="none">
-        </div>
+
+    <!-- More options expander -->
+    <div style="margin-bottom:10px">
+      <div onclick="toggleTfMore()" id="tf-more-toggle" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="tf-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Optional — type either field to override snapshot rate. Leave blank to use snapshot.</div>
-    </div>
-    <div id="tf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none;display:none"></div>
-    <div class="form-group">
-      <label class="form-label">Date & Time *</label>
-      <div class="dt-row">
-        <div class="dt-field"><div class="dt-display" id="dtd-tf-date" onclick="dtTrigger('tf-date','date')"><span class="dt-icon">📅</span><span class="dt-val dt-placeholder" id="dtv-tf-date">Date</span></div><input type="date" class="dt-native form-input" id="tf-date" onchange="dtUpdate('tf-date','date');updateTransferPreview()"></div>
-        ${dtField('tf-time','time','Time')}
+      <div id="tf-more-row" style="display:none">
+        <!-- Actual received / rate override — only shown for cross-currency -->
+        <div id="tf-custom-rate-section" style="display:none;margin-top:8px;padding:12px 14px;background:var(--bg2);border-radius:12px;border:1px solid var(--border);margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Override rate or amount</div>
+          <div class="form-row fr2" style="margin-bottom:4px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
+              <input class="form-input numpad-input" type="number" id="tf-toamount" placeholder="0.00" step="any" oninput="onTfToAmountInput()" inputmode="none">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">Or rate <span id="tf-custom-curr-label" style="color:var(--text4);font-weight:400">(1 PGK)</span></label>
+              <input class="form-input numpad-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()" inputmode="none">
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either — auto-syncs. Leave blank to use snapshot.</div>
+        </div>
+        <div class="form-group" style="margin-top:8px"><label class="form-label">Time</label>${dtField('tf-time','time','Now')}</div>
+        <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
+
     <button class="btn btn-primary btn-full" onclick="submitTransfer()">Save Transfer</button>
   </div>`;
+}
+
+function toggleTfMore() {
+  const row = document.getElementById('tf-more-row');
+  const chev = document.getElementById('tf-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
 // Compute forex gain/loss preview for cross-currency transfer
@@ -4176,10 +4284,8 @@ function updateTransferPreview() {
   const fromAcct = db.accounts.find(a=>a.id===fromId);
   const toAcct = db.accounts.find(a=>a.id===toId);
   const toAmountEl = document.getElementById('tf-toamount');
-
   const txCurr = document.getElementById('tf-currency')?.value;
   const useSnapshotEl = document.getElementById('tf-use-snapshot');
-  const customRateRow = document.getElementById('tf-custom-rate-row');
   const customCurrLabel = document.getElementById('tf-custom-curr-label');
 
   // Detect if this is a cross-currency transfer
@@ -4187,98 +4293,85 @@ function updateTransferPreview() {
   const toCurr2 = toAcct?.currency;
   const isCrossCurrency = fromAcct && toAcct && (fromCurr !== toCurr2 || (txCurr && txCurr !== fromCurr));
 
-  // Show paired-input row only for cross-currency transfers (no checkbox)
-  if (customRateRow) customRateRow.style.display = isCrossCurrency ? 'block' : 'none';
-
   // Determine if user has provided custom values (any value in toAmount or rate)
   const userToAmount = parseFloat(toAmountEl?.value) || 0;
   const userRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
   const hasCustomInput = userToAmount > 0 || userRate > 0;
-  // If hasCustomInput → treat as custom mode; otherwise → snapshot mode
-  // Sync the hidden checkbox so submitTransfer/saveEditTransfer logic still works
   if (useSnapshotEl) useSnapshotEl.checked = !hasCustomInput;
   const useSnapshot = !hasCustomInput;
 
-  if (customCurrLabel && txCurr && txCurr !== 'PHP') customCurrLabel.textContent = txCurr;
-  // Update toAmount currency label (Batch B #4)
+  if (customCurrLabel && fromCurr) customCurrLabel.textContent = '(1 ' + fromCurr + ')';
   const toAmountCurrLabel = document.getElementById('tf-toamount-curr-label');
   if (toAmountCurrLabel && toAcct) toAmountCurrLabel.textContent = toAcct.currency;
 
-  // Show To Account receives preview
-  const previewDiv = document.getElementById('tf-toamount-preview');
+  // ── New unified forex card ──
+  const fxCard = document.getElementById('tf-forex-preview');
+  const fxPair = document.getElementById('tf-fx-pair');
+  const fxRate = document.getElementById('tf-fx-rate');
+  const fxExtra = document.getElementById('tf-fx-extra');
   const previewVal = document.getElementById('tf-toamount-val');
-  if (fromAcct && toAcct && amount > 0 && previewDiv && previewVal) {
+
+  // Show/hide forex card and custom rate section based on cross-currency
+  if (fxCard) fxCard.style.display = isCrossCurrency ? 'block' : 'none';
+  const customRateSection = document.getElementById('tf-custom-rate-section');
+  if (customRateSection) customRateSection.style.display = isCrossCurrency ? 'block' : 'none';
+
+  if (isCrossCurrency && fromAcct && toAcct && amount > 0) {
     const toCurr = toAcct.currency;
+    // Compute snapshot rate (foreign side)
+    const foreignCurr = fromCurr !== 'PHP' ? fromCurr : toCurr;
+    const snapRate = getLatestFxRate(foreignCurr);
+    if (fxPair) fxPair.textContent = fromCurr + ' → ' + toCurr;
+    if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ₱' + (snapRate || 0).toFixed(4);
+
+    // Compute "will receive"
     let autoAmt;
-    if (!useSnapshot && txCurr !== 'PHP') {
-      const customRate = userRate;
-      autoAmt = customRate > 0 ? (txCurr === 'PHP' ? amount / customRate : amount * customRate) : convert(amount, txCurr, toCurr);
+    if (!useSnapshot) {
+      if (userToAmount > 0) autoAmt = userToAmount;
+      else if (userRate > 0) autoAmt = (txCurr === 'PHP' ? amount / userRate : amount * userRate);
+      else autoAmt = convert(amount, txCurr, toCurr);
     } else {
       autoAmt = txCurr !== toCurr ? convert(amount, txCurr, toCurr) : amount;
     }
-    previewVal.textContent = fmt(autoAmt, toCurr);
-    if (hint) {
-      if (txCurr !== toCurr) {
-        const snapRate = getLatestFxRate(txCurr !== 'PHP' ? txCurr : toCurr);
-        hint.textContent = useSnapshot ? `(1 ${txCurr !== 'PHP' ? txCurr : toCurr} = ₱${snapRate.toFixed(4)} snapshot)` : '';
-      } else {
-        hint.textContent = '';
-      }
-    }
-    // In custom mode, the paired input row IS the source of truth — hide read-only preview
-    previewDiv.style.display = (!useSnapshot && isCrossCurrency) ? 'none' : 'block';
+    if (previewVal) previewVal.textContent = fmt(autoAmt, toCurr);
 
-    // Forex gain/loss preview when custom rate used
-    const fxPreview = document.getElementById('tf-forex-preview');
-    if (!useSnapshot && txCurr !== 'PHP' && txCurr !== toAcct.currency) {
-      const customRate = parseFloat(document.getElementById('tf-custom-rate')?.value) || 0;
-      const snapRate = getLatestFxRate(txCurr);
-      if (customRate > 0 && snapRate > 0) {
-        // Forex diff: result1 - (toAmount × transactionRate)
-        const foreignCurr2 = txCurr !== 'PHP' ? txCurr : toAcct.currency;
-        const snapRate2 = getLatestFxRate(foreignCurr2);
+    // Forex gain/loss extra line — only if custom rate or amount provided
+    if (fxExtra) {
+      if (!useSnapshot && userRate > 0 && snapRate > 0) {
         let diff;
         if (txCurr === 'PHP') {
-          // Sending PHP → receiving foreign at snapshot rate
-          const toAmtPreview = amount / snapRate2;
-          diff = Math.round((amount - (toAmtPreview * customRate)) * 100) / 100;
+          const toAmtPreview = amount / snapRate;
+          diff = Math.round((amount - (toAmtPreview * userRate)) * 100) / 100;
         } else {
-          // Sending foreign → receiving PHP at snapshot rate
-          const toAmtPreview = amount * snapRate2;
-          diff = Math.round((toAmtPreview - (amount * customRate)) * 100) / 100;
+          const toAmtPreview = amount * snapRate;
+          diff = Math.round(((userToAmount > 0 ? userToAmount : amount * userRate) - toAmtPreview) * 100) / 100;
         }
-        const snapshotAmt = 0; const actualAmt = 0; // unused
         const isLoss = diff < 0;
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
         const label = isLoss ? 'Forex Loss' : 'Forex Gain';
-        if (fxPreview) {
-          fxPreview.style.display = 'block';
-          fxPreview.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${txCurr} = ₱${snapRate.toFixed(4)} | Actual: 1 ${txCurr} = ₱${customRate.toFixed(4)}</div>
-            <div style="color:${color};font-weight:600">${icon} ${label}: ₱${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged as ${isLoss?'expense':'income'})</span></div>`;
-        }
-      } else if (fxPreview) fxPreview.style.display = 'none';
-    } else {
-      const fxPreview = document.getElementById('tf-forex-preview');
-      if (fxPreview) fxPreview.style.display = 'none';
+        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ₱' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text4)">auto-logged</span>';
+      } else if (!useSnapshot && userToAmount > 0 && snapRate > 0) {
+        // User entered actual received only — diff vs snapshot
+        const snapAmt = txCurr === 'PHP' ? amount / snapRate : amount * snapRate;
+        const diff = Math.round((userToAmount - snapAmt) * 100) / 100;
+        const isLoss = diff < 0;
+        const color = isLoss ? 'var(--red)' : 'var(--green)';
+        const icon = isLoss ? '📉' : '📈';
+        const label = isLoss ? 'Forex Loss' : 'Forex Gain';
+        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + toCurr + '</span> <span style="color:var(--text4)">vs snapshot</span>';
+      } else {
+        fxExtra.innerHTML = '';
+      }
     }
-  } else if (previewDiv) {
-    previewDiv.style.display = 'none';
   }
+  // hide legacy preview block (replaced by unified card)
+  const legacyPreview = document.getElementById('tf-toamount-preview');
+  if (legacyPreview) legacyPreview.style.display = 'none';
 
-  const forex = computeTransferForex();
-  if (!forex) { el.style.display = 'none'; return; }
-  el.style.display = 'block';
-  if (forex.direction === 'none') {
-    el.innerHTML = `<span style="color:var(--text3)">Transfer matches snapshot rate ${forex.snapshotRate?.toFixed(4) || ''} — no forex gain/loss</span>`;
-  } else {
-    const color = forex.direction === 'gain' ? 'var(--green)' : 'var(--red)';
-    const icon = forex.direction === 'gain' ? '📈' : '📉';
-    const label = forex.direction === 'gain' ? 'Forex Gain' : 'Forex Loss';
-    const abs = Math.abs(forex.gainLossPhp);
-    el.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Manual rate: ${forex.actualRate.toFixed(4)} vs Snapshot rate: ${forex.snapshotRate?.toFixed(4) || 'N/A'}</div>
-      <div style="color:${color};font-weight:600">${icon} ${label}: ₱${abs.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged as ${forex.direction === 'gain' ? 'income' : 'expense'})</span></div>`;
-  }
+  // Hide legacy fx-preview at bottom (now folded into card)
+  el.style.display = 'none';
+  return;
 }
 
 
@@ -6747,31 +6840,46 @@ function openBalanceCorrection(acctId) {
   closeSheet('gen');
   setTimeout(() => {
     openSheet('gen', `Reconcile ${a.name}`, `
-      <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:14px">
-        Use this to bring the app balance in line with the actual balance shown in your bank/wallet/cash. A correction transaction will be logged.
-      </div>
-      <div style="background:var(--bg3);padding:12px;border-radius:var(--r-md);margin-bottom:14px">
-        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">App Balance</div>
-        <div style="font-size:22px;font-family:var(--mono);font-weight:600;color:${appBal<0?'var(--red)':'var(--text)'}">${fmt(appBal, a.currency)}</div>
+      <div style="background:var(--bg2);padding:14px;border-radius:12px;margin-bottom:14px;border:1px solid var(--border);text-align:center">
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Current App Balance</div>
+        <div style="font-size:24px;font-family:var(--mono);font-weight:600;letter-spacing:-0.5px;color:${appBal<0?'var(--red)':'var(--text)'}">${fmt(appBal, a.currency)}</div>
       </div>
       <div class="form-group">
         <label class="form-label">Actual Balance (${a.currency}) *</label>
-        <input class="form-input numpad-input" type="number" id="bc-actual"  placeholder="Enter the real balance" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})" inputmode="none">
+        <input class="form-input numpad-input" type="number" id="bc-actual" placeholder="What's the real balance?" step="any" oninput="previewBalanceCorrection('${acctId}', ${appBal})" inputmode="none">
       </div>
       <div id="bc-preview" style="display:none;padding:12px;border-radius:var(--r-md);margin-bottom:14px;font-size:13px"></div>
-      <div class="form-group">
-        <label class="form-label">Date</label>
-        <div class="dt-row">
-          <div class="dt-field"><div class="dt-display" id="dtd-bc-date" onclick="dtTrigger('bc-date','date')"><span class="dt-icon">📅</span><span class="dt-val" id="dtv-bc-date">${fmtD(today())}</span></div><input type="date" class="dt-native form-input" id="bc-date" value="${today()}" onchange="dtUpdate('bc-date','date')"></div>
+
+      <!-- More options expander -->
+      <div style="margin-bottom:10px">
+        <div onclick="toggleBcMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+          <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+          <svg id="bc-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Reason / Notes (optional)</label>
-        <input class="form-input" id="bc-notes" placeholder="e.g. ATM fee not logged, interest, rounding">
+        <div id="bc-more-row" style="display:none;margin-top:8px">
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            ${dtField('bc-date','date','Today')}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reason / Notes</label>
+            <input class="form-input" id="bc-notes" placeholder="e.g. ATM fee not logged, interest, rounding">
+          </div>
+        </div>
       </div>
       <button class="btn btn-primary btn-full" id="bc-submit-btn" onclick="submitBalanceCorrection('${acctId}', ${appBal})" disabled style="opacity:0.5">Save Correction</button>
     `);
+    setTimeout(() => { dtSet('bc-date', today()); }, 50);
   }, 60);
+}
+
+function toggleBcMore() {
+  const row = document.getElementById('bc-more-row');
+  const chev = document.getElementById('bc-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
 function previewBalanceCorrection(acctId, appBal) {
