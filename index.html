@@ -8731,7 +8731,8 @@ function renderAnalyticsSpending() {
     </div>`;
   }
 
-  const bars = sorted.map(([name,v],i) => {
+  const bars = sorted.map(([name,v],gi) => {
+    const i = gi;
     const pct = total > 0 ? (v.total/total*100) : 0;
     const color = colors[i % colors.length];
     const subEntries = Object.entries(v.subs).sort((a,b)=>b[1].total-a[1].total);
@@ -8770,36 +8771,37 @@ function renderAnalyticsSpending() {
 
     const expandedContent = (hasSubs ? subRows : '') + (showTxBreakdown ? txRows : '');
 
-    return `<div style="margin-bottom:8px;background:var(--bg);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-      <div style="padding:14px 16px;cursor:${expandable?'pointer':'default'}" ${expandable?`onclick="toggleSpendingDrill('drill-${i}')"`:''}>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:32px;height:32px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px">${v.icon}</div>
-            <span style="font-weight:600;font-size:14px;color:var(--text)">${name}</span>
+    return `<div style="${gi===0?'':'border-top:0.33px solid var(--border)'}">
+      <div style="padding:9px 14px;cursor:${expandable?'pointer':'default'};-webkit-tap-highlight-color:transparent" ${expandable?`onclick="toggleSpendingDrill('drill-${i}')"`:''}>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:24px;height:24px;border-radius:6px;background:linear-gradient(180deg,${color},${color}cc);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,0.15)">
+            <span style="filter:saturate(1.2)">${v.icon}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-family:var(--mono);font-weight:600;font-size:14px;color:var(--text)">${fmt(v.total,view)}</span>
-            <span style="color:var(--text4);font-size:11px;font-weight:500;min-width:32px;text-align:right">${pct.toFixed(0)}%</span>
-            ${expandable?`<span style="font-size:9px;color:var(--text4)" id="drill-${i}-arrow">▼</span>`:''}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} tx</div>
           </div>
+          <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${color};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div>
+          ${expandable?`<svg width="7" height="11" viewBox="0 0 8 13" fill="none" id="drill-${i}-arrow" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);flex-shrink:0;opacity:0.45"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
         </div>
-        <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
+        <div style="height:3px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-top:8px;margin-left:34px">
           <div style="height:100%;border-radius:99px;background:${color};width:${pct.toFixed(1)}%;transition:width 0.3s"></div>
         </div>
       </div>
-      ${expandable?`<div id="drill-${i}" style="display:none">${expandedContent}</div>`:''}
+      ${expandable?`<div id="drill-${i}" style="display:none;background:var(--bg3);border-top:0.33px solid var(--border)">${expandedContent}</div>`:''}
     </div>`;
   });
 
   return `<div class="page-pad">
     ${segmentedHTML}
-    <div style="background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;margin-bottom:6px">${view==='PGK'?'🇵🇬 PNG':'🇵🇭 Pinas'} EXPENSES — ${periodLabel.toUpperCase()}</div>
-      <div style="font-size:22px;font-weight:600;color:var(--red);font-family:var(--mono);letter-spacing:-0.4px">${fmt(total,view)}</div>
-      ${view !== dispCurr ? `<div style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
-      <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:16px;border:1px solid var(--border)">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${view==='PGK'?'🇵🇬 PNG':'🇵🇭 Pinas'} EXPENSES — ${periodLabel.toUpperCase()}</div>
+      <div style="font-size:22px;font-weight:600;color:var(--red);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
+      ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
+      <div style="font-size:10px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
-    <div>${bars.join('')}</div>
+    <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Category · ${sorted.length}</div>
+    <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">${bars.join('')}</div>
     ${renderInlineInsights(['velocity','anomaly','atm'])}
   </div>`;
 }
@@ -8816,9 +8818,8 @@ function toggleSpendingDrill(id) {
     el.style.display = isOpen ? 'none' : 'block';
     const arrow = document.getElementById(id + '-arrow');
     if (arrow) {
-      arrow.style.transition = 'transform 0.2s';
-      arrow.style.display = 'inline-block';
-      arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      arrow.style.transition = 'transform 0.25s cubic-bezier(.4,0,.2,1)';
+      arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
     }
   }
 }
@@ -9317,7 +9318,7 @@ function renderAnalyticsForex() {
     });
   }
 
-  let html = '<div class="page-pad">';
+  let html = '<div class="page-pad"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:12px">';
 
   for (const curr of currencies) {
     const history = db.fxHistory[curr] || [];
@@ -9382,7 +9383,7 @@ function renderAnalyticsForex() {
     const gridTop = (padT).toFixed(1);
     const gridBot = (padT + chartH).toFixed(1);
 
-    html += `<div class="card" style="margin-bottom:14px;padding:14px 16px;max-width:520px">
+    html += `<div class="card" style="margin-bottom:0;padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:18px">${currInfo.flag}</span>
@@ -9434,6 +9435,7 @@ function renderAnalyticsForex() {
     </div>`;
   }
 
+  html += '</div>'; // close grid
   html += renderInlineInsights(['fx']);
   html += `<button class="btn btn-ghost btn-sm" onclick="nav('settings')" style="margin-top:4px">Update FX Rates →</button></div>`;
   return html;
@@ -14693,23 +14695,102 @@ function renderAnalyticsExternal() {
   const totalIn = inTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
   const totalOut = outTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
   const net = totalIn - totalOut;
+  const netPositive = net >= 0;
+  const ratio = (totalIn + totalOut) > 0 ? (totalIn / (totalIn + totalOut) * 100) : 100;
+
+  // Group by external party
   const parties = {};
   for (const t of txs) {
     const p = t.externalParty||'Unknown';
-    if (!parties[p]) parties[p]={in:0,out:0};
-    if (t.type==='external-in') parties[p].in+=toPhp(t.amount,t.currency);
-    else parties[p].out+=toPhp(t.amount,t.currency);
+    if (!parties[p]) parties[p] = { in:0, out:0, txs:[] };
+    if (t.type==='external-in') parties[p].in += toPhp(t.amount,t.currency);
+    else parties[p].out += toPhp(t.amount,t.currency);
+    parties[p].txs.push(t);
   }
-  const partyRows = Object.entries(parties).sort((a,b)=>(b[1].in+b[1].out)-(a[1].in+a[1].out))
-    .map(([name,v])=>`<div class="detail-row" style="padding:10px 0"><div class="detail-label">${name}</div><div class="detail-value" style="text-align:right"><span style="color:var(--green);font-family:var(--mono);font-size:12px">+${fmt(fromPhp(v.in,disp),disp)}</span>${v.out>0?`<span style="color:var(--red);font-family:var(--mono);font-size:12px;margin-left:8px">-${fmt(fromPhp(v.out,disp),disp)}</span>`:''}</div></div>`).join('');
-  return `<div class="page-pad">
-    <div class="form-row fr2" style="margin-bottom:16px">
-      <div class="metric-card"><div class="metric-label">Total In</div><div class="metric-value" style="color:var(--green)">${fmt(fromPhp(totalIn,disp),disp)}</div><div style="font-size:11px;color:var(--text4)">${inTxs.length} txns</div></div>
-      <div class="metric-card"><div class="metric-label">Total Out</div><div class="metric-value" style="color:var(--red)">${fmt(fromPhp(totalOut,disp),disp)}</div><div style="font-size:11px;color:var(--text4)">${outTxs.length} txns</div></div>
+  const sortedParties = Object.entries(parties)
+    .sort((a,b) => (b[1].in + b[1].out) - (a[1].in + a[1].out));
+
+  // Party list — iOS-style inset
+  const partyRows = sortedParties.map(([name, v], i) => {
+    const isLast = i === sortedParties.length - 1;
+    const partyNet = v.in - v.out;
+    const partyColor = partyNet >= 0 ? 'var(--green)' : 'var(--red)';
+    const partyTotal = v.in + v.out;
+    const partyPct = (totalIn + totalOut) > 0 ? (partyTotal / (totalIn + totalOut) * 100) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--bg2);${!isLast?'border-bottom:0.33px solid var(--border)':''}">
+      <div style="width:24px;height:24px;border-radius:6px;background:linear-gradient(180deg,${partyColor},${partyColor}cc);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#fff;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.15)">${name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+        <div style="font-size:10px;color:var(--text4);margin-top:1px;line-height:1.2">${v.txs.length} tx · ${partyPct.toFixed(0)}%</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        ${v.in > 0 ? `<div style="font-size:12px;font-family:var(--mono);font-weight:500;color:var(--green);letter-spacing:-0.2px;font-variant-numeric:tabular-nums">+${fmt(fromPhp(v.in,disp),disp)}</div>` : ''}
+        ${v.out > 0 ? `<div style="font-size:12px;font-family:var(--mono);font-weight:500;color:var(--red);letter-spacing:-0.2px;font-variant-numeric:tabular-nums">−${fmt(fromPhp(v.out,disp),disp)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Recent transactions — iOS-style inset
+  const recentTxs = [...txs].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0,10);
+  const txRows = recentTxs.map((t, i) => {
+    const isLast = i === recentTxs.length - 1;
+    const isIn = t.type === 'external-in';
+    const partyName = t.externalParty || 'External';
+    return `<div onclick="openTxDetail('${t.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--bg2);${!isLast?'border-bottom:0.33px solid var(--border)':''};cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <div style="width:24px;height:24px;border-radius:6px;background:${isIn?'var(--green)':'var(--red)'}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px">${isIn?'📥':'📤'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${partyName}</div>
+        <div style="font-size:10px;color:var(--text4);margin-top:1px;line-height:1.2">${fmtD(t.date)}${t.notes ? ' · ' + t.notes : ''}</div>
+      </div>
+      <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${isIn?'var(--green)':'var(--red)'};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${isIn?'+':'−'}${fmt(t.amount, t.currency)}</div>
+    </div>`;
+  }).join('');
+
+  return `<div style="padding:0 0 40px;background:var(--bg)">
+
+    <!-- Hero Net External -->
+    <div style="text-align:center;padding:22px 16px 18px">
+      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px;letter-spacing:-0.1px;text-transform:uppercase">Net External</div>
+      <div style="font-size:30px;font-weight:700;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums;font-family:var(--mono)">${netPositive?'+':'−'}${fmt(fromPhp(Math.abs(net),disp),disp)}</div>
+      <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${netPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:99px;font-size:10px;font-weight:600;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
+        ${netPositive?'▲':'▼'} ${ratio.toFixed(1)}% inflow ratio
+      </div>
     </div>
-    <div class="metric-card" style="margin-bottom:16px"><div class="metric-label">Net External</div><div class="metric-value" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${fmt(fromPhp(net,disp),disp)}</div></div>
-    <div class="card" style="margin-bottom:16px"><div class="section-title" style="margin-bottom:8px">By Party</div>${partyRows}</div>
-    <div class="card"><div class="section-title" style="margin-bottom:8px">Recent</div>${txs.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(t=>`<div class="tx-item" onclick="openTxDetail('${t.id}')"><div class="tx-icon">${t.type==='external-in'?'📥':'📤'}</div><div class="tx-meta"><div class="tx-name">${t.externalParty||'External'}</div><div class="tx-detail">${fmtD(t.date)}${t.notes?' · '+t.notes:''}</div></div><div class="tx-right"><div class="tx-amount ${t.type==='external-in'?'tx-pos':'tx-neg'}">${t.type==='external-in'?'+':'-'}${fmt(t.amount,t.currency)}</div></div></div>`).join('')}</div>
+
+    <!-- In vs Out summary -->
+    <div style="padding:0 12px;margin-bottom:24px">
+      <div style="background:var(--bg2);border-radius:12px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;color:var(--text4);font-weight:500;margin-bottom:2px">📥 Total In</div>
+            <div style="font-size:14px;font-weight:600;color:var(--green);letter-spacing:-0.3px;font-variant-numeric:tabular-nums;font-family:var(--mono)">${fmt(fromPhp(totalIn,disp),disp)}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px">${inTxs.length} tx</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--text4);font-weight:500;margin-bottom:2px">📤 Total Out</div>
+            <div style="font-size:14px;font-weight:600;color:var(--red);letter-spacing:-0.3px;font-variant-numeric:tabular-nums;font-family:var(--mono)">${fmt(fromPhp(totalOut,disp),disp)}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px">${outTxs.length} tx</div>
+          </div>
+        </div>
+        <div style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--bg4);gap:2px">
+          <div style="height:100%;background:linear-gradient(90deg,var(--green),#5dd089);width:${ratio.toFixed(1)}%;transition:width 0.5s cubic-bezier(.4,0,.2,1);border-radius:99px"></div>
+          ${ratio < 100 ? `<div style="height:100%;background:linear-gradient(90deg,var(--red),#ff6b6b);flex:1;border-radius:99px"></div>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Parties list -->
+    <div style="padding:0 12px;margin-bottom:22px">
+      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Party · ${sortedParties.length}</div>
+      <div style="background:var(--bg2);border-radius:12px;overflow:hidden">${partyRows}</div>
+    </div>
+
+    <!-- Recent transactions -->
+    <div style="padding:0 12px">
+      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">Recent · ${recentTxs.length}</div>
+      <div style="background:var(--bg2);border-radius:12px;overflow:hidden">${txRows}</div>
+    </div>
+
   </div>`;
 }
 
