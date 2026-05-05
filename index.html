@@ -8793,11 +8793,11 @@ function renderAnalyticsSpending() {
 
   return `<div class="page-pad">
     ${segmentedHTML}
-    <div style="background:var(--bg);border-radius:12px;padding:16px;margin-bottom:16px;border:1px solid var(--border)">
+    <div style="background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--border)">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;margin-bottom:6px">${view==='PGK'?'🇵🇬 PNG':'🇵🇭 Pinas'} EXPENSES — ${periodLabel.toUpperCase()}</div>
-      <div style="font-size:32px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:-0.02em">${fmt(total,view)}</div>
-      ${view !== dispCurr ? `<div style="font-size:13px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
-      <div style="font-size:12px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
+      <div style="font-size:22px;font-weight:600;color:var(--red);font-family:var(--mono);letter-spacing:-0.4px">${fmt(total,view)}</div>
+      ${view !== dispCurr ? `<div style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
+      <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
     <div>${bars.join('')}</div>
     ${renderInlineInsights(['velocity','anomaly','atm'])}
@@ -9026,10 +9026,10 @@ function renderSpendingHeatmap(disp) {
     return `<text x="${x}" y="-4" font-size="10" fill="var(--text4)" font-family="system-ui">${ml.label}</text>`;
   }).join('');
 
-  // Month divider lines (vertical) — drawn between months
+  // Month divider lines (vertical) — drawn between months — clearer for visual separation
   const monthDividerEls = monthDividers.map(div => {
     const x = div.weekIdx * colWidth - 1;
-    return `<line x1="${x}" y1="-2" x2="${x}" y2="${gridHeight}" stroke="var(--border2)" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.5"/>`;
+    return `<line x1="${x}" y1="-12" x2="${x}" y2="${gridHeight + 2}" stroke="var(--accent)" stroke-width="1" opacity="0.35"/>`;
   }).join('');
 
   // Day labels (Sun, Mon, etc.) — only show every other one to save space
@@ -9251,14 +9251,14 @@ function renderAnalyticsWealth() {
     ? Math.max(0, Math.min(100, totalAssets / (totalAssets + Math.abs(totalLiab)) * 100))
     : 100;
   const nwAbs = Math.abs(nw);
-  const nwSize = nwAbs > 99999999 ? 26 : nwAbs > 9999999 ? 32 : 38;
+  const nwSize = nwAbs > 99999999 ? 22 : nwAbs > 9999999 ? 26 : 30;
 
   return `<div style="padding:0 0 40px;background:var(--bg)">
 
     <!-- Hero NW -->
-    <div style="text-align:center;padding:28px 16px 22px">
+    <div style="text-align:center;padding:22px 16px 18px">
       <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px;letter-spacing:-0.1px;text-transform:uppercase">Total Net Worth</div>
-      <div style="font-size:${nwSize}px;font-weight:700;color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-1.4px;line-height:1.05;font-variant-numeric:tabular-nums">${fmt(fromPhp(nw,disp),disp)}</div>
+      <div style="font-size:${nwSize}px;font-weight:700;color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums">${fmt(fromPhp(nw,disp),disp)}</div>
       <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${nwPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:99px;font-size:10px;font-weight:600;color:${nwPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
         ${nwPositive?'▲':'▼'} ${(ratio).toFixed(1)}% asset ratio
       </div>
@@ -9270,11 +9270,11 @@ function renderAnalyticsWealth() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div>
             <div style="font-size:11px;color:var(--text4);font-weight:500;letter-spacing:-0.05px;margin-bottom:2px">Assets</div>
-            <div style="font-size:16px;font-weight:600;color:var(--green);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+            <div style="font-size:14px;font-weight:600;color:var(--green);letter-spacing:-0.3px;font-variant-numeric:tabular-nums;font-family:var(--mono)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:11px;color:var(--text4);font-weight:500;letter-spacing:-0.05px;margin-bottom:2px">Liabilities</div>
-            <div style="font-size:16px;font-weight:600;color:${totalLiab<0?'var(--red)':'var(--text4)'};letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
+            <div style="font-size:14px;font-weight:600;color:${totalLiab<0?'var(--red)':'var(--text4)'};letter-spacing:-0.3px;font-variant-numeric:tabular-nums;font-family:var(--mono)">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
           </div>
         </div>
         <div style="display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--bg4);gap:2px">
@@ -9351,7 +9351,7 @@ function renderAnalyticsForex() {
     const color = chgPos ? 'var(--green)' : 'var(--red)';
     const colorRgb = chgPos ? '22,163,74' : '220,38,38';
 
-    const W = 320, H = 88, padL = 8, padR = 8, padT = 12, padB = 22;
+    const W = 320, H = 64, padL = 8, padR = 8, padT = 8, padB = 18;
     const chartW = W - padL - padR;
     const chartH = H - padT - padB;
 
@@ -9383,14 +9383,14 @@ function renderAnalyticsForex() {
     html += `<div class="card" style="margin-bottom:14px;padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px">${currInfo.flag}</span>
+          <span style="font-size:18px">${currInfo.flag}</span>
           <div>
-            <div style="font-size:15px;font-weight:700;letter-spacing:-0.3px">${curr} <span style="font-size:11px;font-weight:400;color:var(--text3)">${currInfo.name||''}</span></div>
-            <div style="font-size:12px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</span></div>
+            <div style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${curr} <span style="font-size:11px;font-weight:400;color:var(--text3)">${currInfo.name||''}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</span></div>
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:${color};letter-spacing:-0.5px">${chgPos?'+':''}${chg.toFixed(2)}%</div>
+          <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:${color};letter-spacing:-0.3px">${chgPos?'+':''}${chg.toFixed(2)}%</div>
           <div style="font-size:10px;color:var(--text4);margin-top:1px">past 12 months</div>
         </div>
       </div>
@@ -9415,17 +9415,17 @@ function renderAnalyticsForex() {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">₱${maxRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">₱${maxRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[maxIdx]?.label} ${months[maxIdx]?.year}</div>
         </div>
         <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">per 1 ${curr}</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">₱${minRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">₱${minRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[minIdx]?.label} ${months[minIdx]?.year}</div>
         </div>
       </div>
