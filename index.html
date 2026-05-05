@@ -9115,6 +9115,24 @@ function renderAnalyticsWealth() {
   const disp = db.displayCurrency || 'PHP';
   const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
 
+  // SF Pro system font stack — full Apple feel
+  const SF = `-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif`;
+  const SF_MONO = `'SF Mono',ui-monospace,'Menlo',monospace`;
+
+  // iOS account type → SF Symbol-like icon mapping
+  const TYPE_ICONS = {
+    'Savings':         '🏦',
+    'Checking':        '💳',
+    'Cash':            '💵',
+    'E-Wallet':        '📱',
+    'Prepaid':         '🎫',
+    'Crypto Wallet':   '₿',
+    'Receivable':      '🤲',
+    'Investment':      '📈',
+    'Credit Card':     '💳',
+    'Loan':            '📋',
+  };
+
   function groupByType(rows) {
     const map = {};
     for (const r of rows) {
@@ -9131,81 +9149,111 @@ function renderAnalyticsWealth() {
       }));
   }
 
-  function iosGroupedSection(groups, sectionColor, base, prefix) {
-    if (!groups.length) return `<div style="padding:16px;text-align:center;font-size:13px;color:var(--text4)">None recorded</div>`;
-    return groups.map((g, gi) => {
-      const key = (prefix + '_' + g.type).replace(/ /g, '_');
-      const expanded = !!window._wealthExpanded[key];
-      const pct = base > 0 ? Math.min(Math.abs(g.total / base), 1) * 100 : 0;
-      const last = gi === groups.length - 1;
-      const accts = g.accounts.map((a, ai) => {
-        const isLast = ai === g.accounts.length - 1;
-        const dispAmt = fmt(fromPhp(a.phpBal, disp), disp);
-        const rawAmt = a.bal !== undefined ? `${sym(a.currency)}${Math.abs(a.bal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '';
-        const showRaw = a.currency && a.currency !== 'PHP' && rawAmt;
-        return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;${!isLast?'border-bottom:1px solid rgba(255,255,255,0.05)':''}">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
-            ${showRaw?`<div style="font-size:11px;color:var(--text4);margin-top:1px">${rawAmt}</div>`:''}
-          </div>
-          <div style="font-size:13.5px;font-family:var(--mono);color:${sectionColor};font-weight:500;flex-shrink:0">${dispAmt}</div>
-        </div>`;
-      }).join('');
-      return `<div style="margin-bottom:${last?'0':'22px'}">
-        <div onclick="toggleWealthGroup('${key.replace(/ /g,'_')}')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding:6px 2px;cursor:pointer;user-select:none">
-          <div style="display:flex;align-items:center;gap:6px">
-            <svg width="12" height="12" viewBox="0 0 12 12" style="transition:transform 0.2s;transform:rotate(${expanded?'90':'0'}deg);flex-shrink:0" fill="none">
-              <path d="M4 2l4 4-4 4" stroke="var(--text4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  // iOS-style inset grouped list — single rounded card, hairline separators, no per-group borders
+  function iosGroupedList(groups, accentColor, base, prefix) {
+    if (!groups.length) {
+      return `<div style="padding:24px 16px;text-align:center;font-size:15px;color:var(--text4);font-family:${SF};letter-spacing:-0.2px">No items</div>`;
+    }
+    return `<div style="background:var(--bg2);border-radius:14px;overflow:hidden">
+      ${groups.map((g, gi) => {
+        const key = (prefix + '_' + g.type).replace(/ /g,'_');
+        const expanded = !!window._wealthExpanded[key];
+        const pct = base > 0 ? Math.min(Math.abs(g.total / base), 1) * 100 : 0;
+        const isLast = gi === groups.length - 1;
+        const icon = TYPE_ICONS[g.type] || '•';
+
+        const rows = g.accounts.map((a, ai) => {
+          const isLastRow = ai === g.accounts.length - 1;
+          const dispAmt = fmt(fromPhp(a.phpBal, disp), disp);
+          const rawAmt = a.bal !== undefined ? `${sym(a.currency)}${Math.abs(a.bal).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '';
+          const showRaw = a.currency && a.currency !== disp && rawAmt;
+          return `<div style="display:flex;align-items:center;gap:14px;padding:11px 16px 11px 60px;background:var(--bg3);${!isLastRow?'border-bottom:0.33px solid var(--border)':''};font-family:${SF}">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400;letter-spacing:-0.3px">${a.name}</div>
+              ${showRaw?`<div style="font-size:12px;color:var(--text4);margin-top:2px;font-family:${SF_MONO};font-variant-numeric:tabular-nums">${rawAmt}</div>`:''}
+            </div>
+            <div style="font-size:15px;font-family:${SF_MONO};color:${accentColor};font-weight:500;flex-shrink:0;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">${dispAmt}</div>
+          </div>`;
+        }).join('');
+
+        return `<div>
+          <!-- iOS header row (with squircle icon badge, like Apple Settings) -->
+          <div onclick="toggleWealthGroup('${key}')" 
+               ontouchstart="this.style.background='var(--bg3)'" 
+               ontouchend="this.style.background='var(--bg2)'" 
+               ontouchcancel="this.style.background='var(--bg2)'"
+               style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--bg2);${!isLast||expanded?'border-bottom:0.33px solid var(--border)':''};cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:background 0.15s;font-family:${SF}">
+            <!-- Squircle icon badge — Apple Settings-style -->
+            <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(180deg,${accentColor},${accentColor}cc);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;box-shadow:0 1px 2px rgba(0,0,0,0.15)">
+              <span style="filter:saturate(1.2)">${icon}</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:16px;font-weight:400;color:var(--text);letter-spacing:-0.4px">${g.type}</div>
+              <div style="font-size:12px;color:var(--text4);margin-top:1px;letter-spacing:-0.1px">${g.accounts.length} account${g.accounts.length>1?'s':''} · ${pct.toFixed(0)}%</div>
+            </div>
+            <div style="font-size:15px;font-family:${SF_MONO};font-weight:500;color:${accentColor};letter-spacing:-0.3px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(fromPhp(g.total,disp),disp)}</div>
+            <!-- iOS native chevron color & weight -->
+            <svg width="8" height="13" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);transform:rotate(${expanded?'90':'0'}deg);flex-shrink:0;opacity:0.45">
+              <path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--text4)">${g.type}</span>
           </div>
-          <span style="font-size:12px;font-family:var(--mono);font-weight:600;color:${sectionColor}">${fmt(fromPhp(g.total,disp),disp)}</span>
-        </div>
-        <div style="height:3px;background:var(--bg4);border-radius:99px;margin-bottom:${expanded?'10':'0'}px;overflow:hidden">
-          <div style="height:100%;border-radius:99px;background:${sectionColor};width:${pct.toFixed(1)}%"></div>
-        </div>
-        ${expanded ? `<div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:2px">${accts}</div>` : ''}
-      </div>`;
-    }).join('');
+          ${expanded ? rows : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
   }
 
   const assetGroups = groupByType(assetRows);
   const liabGroups  = groupByType(liabRows);
+  const nwPositive  = nw >= 0;
   const ratio = (totalAssets + Math.abs(totalLiab)) > 0
-    ? (totalAssets / (totalAssets + Math.abs(totalLiab)) * 100)
+    ? Math.max(0, Math.min(100, totalAssets / (totalAssets + Math.abs(totalLiab)) * 100))
     : 100;
+  const nwAbs = Math.abs(nw);
+  const nwSize = nwAbs > 99999999 ? 32 : nwAbs > 9999999 ? 40 : 48;
 
-  return `<div class="page-pad" style="padding-bottom:32px">
+  return `<div style="padding:0 0 48px;font-family:${SF};background:var(--bg)">
 
-    <div style="text-align:center;padding:24px 16px 18px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text4);margin-bottom:5px">Net Worth</div>
-      <div style="font-size:34px;font-weight:700;font-family:var(--mono);color:var(--text);letter-spacing:-1px">${fmt(fromPhp(nw,disp),disp)}</div>
-    </div>
-
-    <div style="margin-bottom:22px">
-      <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-bottom:10px">
-        <div style="height:100%;border-radius:99px;background:var(--green);width:${ratio.toFixed(1)}%"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between">
-        <div>
-          <div style="font-size:11px;color:var(--text4);margin-bottom:2px;font-weight:600;letter-spacing:0.05em">ASSETS</div>
-          <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:var(--text4);margin-bottom:2px;font-weight:600;letter-spacing:0.05em">LIABILITIES</div>
-          <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
-        </div>
+    <!-- Hero NW — Apple Wallet style large amount -->
+    <div style="text-align:center;padding:36px 20px 28px">
+      <div style="font-size:13px;font-weight:500;color:var(--text4);margin-bottom:6px;letter-spacing:-0.1px">Total Net Worth</div>
+      <div style="font-size:${nwSize}px;font-weight:700;font-family:${SF};color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-2px;line-height:1.05;font-variant-numeric:tabular-nums">${fmt(fromPhp(nw,disp),disp)}</div>
+      <div style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 11px;background:${nwPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:99px;font-size:12px;font-weight:600;color:${nwPositive?'var(--green)':'var(--red)'};letter-spacing:-0.1px">
+        ${nwPositive?'▲':'▼'} ${(ratio).toFixed(1)}% asset ratio
       </div>
     </div>
 
-    <div style="margin-bottom:28px">
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Assets</div>
-      ${iosGroupedSection(assetGroups, 'var(--green)', totalAssets, 'a')}
+    <!-- Assets vs Liabilities — iOS Health-style segmented bar -->
+    <div style="padding:0 16px;margin-bottom:32px">
+      <div style="background:var(--bg2);border-radius:14px;padding:18px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <div style="font-size:13px;color:var(--text4);font-weight:500;letter-spacing:-0.1px;margin-bottom:2px">Assets</div>
+            <div style="font-size:20px;font-weight:600;font-family:${SF};color:var(--green);letter-spacing:-0.6px;font-variant-numeric:tabular-nums">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:13px;color:var(--text4);font-weight:500;letter-spacing:-0.1px;margin-bottom:2px">Liabilities</div>
+            <div style="font-size:20px;font-weight:600;font-family:${SF};color:${totalLiab<0?'var(--red)':'var(--text4)'};letter-spacing:-0.6px;font-variant-numeric:tabular-nums">${fmt(fromPhp(Math.abs(totalLiab),disp),disp)}</div>
+          </div>
+        </div>
+        <!-- iOS-style segmented progress -->
+        <div style="display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--bg4);gap:2px">
+          <div style="height:100%;background:linear-gradient(90deg,var(--green),#5dd089);width:${ratio.toFixed(1)}%;transition:width 0.5s cubic-bezier(.4,0,.2,1);border-radius:99px"></div>
+          ${ratio < 100 ? `<div style="height:100%;background:linear-gradient(90deg,var(--red),#ff6b6b);flex:1;border-radius:99px"></div>` : ''}
+        </div>
+      </div>
     </div>
 
-    ${liabGroups.length > 0 ? `<div>
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Liabilities</div>
-      ${iosGroupedSection(liabGroups, 'var(--red)', Math.abs(totalLiab), 'l')}
+    <!-- Assets section -->
+    <div style="padding:0 16px;margin-bottom:28px">
+      <div style="font-size:13px;font-weight:400;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;margin:0 16px 8px;padding:0">Assets · ${assetGroups.length}</div>
+      ${iosGroupedList(assetGroups, 'var(--green)', totalAssets, 'a')}
+    </div>
+
+    <!-- Liabilities section -->
+    ${liabGroups.length > 0 ? `<div style="padding:0 16px">
+      <div style="font-size:13px;font-weight:400;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;margin:0 16px 8px;padding:0">Liabilities · ${liabGroups.length}</div>
+      ${iosGroupedList(liabGroups, 'var(--red)', Math.abs(totalLiab), 'l')}
     </div>` : ''}
 
   </div>`;
