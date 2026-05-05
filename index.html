@@ -9351,7 +9351,7 @@ function renderAnalyticsForex() {
     const color = chgPos ? 'var(--green)' : 'var(--red)';
     const colorRgb = chgPos ? '22,163,74' : '220,38,38';
 
-    const W = 320, H = 64, padL = 8, padR = 8, padT = 8, padB = 18;
+    const W = 320, H = 50, padL = 8, padR = 8, padT = 6, padB = 6;
     const chartW = W - padL - padR;
     const chartH = H - padT - padB;
 
@@ -9367,20 +9367,22 @@ function renderAnalyticsForex() {
     const maxIdx = filledRates.indexOf(maxRate);
     const minIdx = filledRates.indexOf(minRate);
 
-    // Month labels — Jan + every 3rd + last
-    const labelEls = pts.map((p, i) => {
+    // Month labels — render OUTSIDE the SVG using HTML so they don't stretch with preserveAspectRatio="none"
+    const labelPositions = pts.map((p, i) => {
       const showYear = p.m.label === 'Jan';
-      if (i % 3 !== 0 && i !== pts.length - 1) return '';
+      if (i % 3 !== 0 && i !== pts.length - 1) return null;
       const isLast = i === pts.length - 1;
       const txt = showYear ? `${p.m.label} '${String(p.m.year).slice(2)}` : p.m.label;
-      return `<text x="${p.x}" y="${H - 4}" text-anchor="middle" font-size="8" fill="${isLast?'var(--accent)':'var(--text4)'}" font-family="system-ui" font-weight="${isLast?'600':'400'}">${txt}</text>`;
-    }).join('');
+      const leftPct = (p.x / W * 100).toFixed(1);
+      return `<span style="position:absolute;left:${leftPct}%;transform:translateX(-50%);font-size:10px;color:${isLast?'var(--accent)':'var(--text4)'};font-weight:${isLast?'600':'400'};white-space:nowrap">${txt}</span>`;
+    }).filter(Boolean).join('');
+    const labelEls = ''; // no longer in SVG
 
     // Gridlines at min/max
     const gridTop = (padT).toFixed(1);
     const gridBot = (padT + chartH).toFixed(1);
 
-    html += `<div class="card" style="margin-bottom:14px;padding:14px 16px">
+    html += `<div class="card" style="margin-bottom:14px;padding:14px 16px;max-width:520px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:18px">${currInfo.flag}</span>
@@ -9395,21 +9397,21 @@ function renderAnalyticsForex() {
         </div>
       </div>
 
-      <div style="margin:0 -4px">
-        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" preserveAspectRatio="none">
+      <div style="margin:0 -4px;max-width:100%;position:relative">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block" preserveAspectRatio="none">
           <defs>
             <linearGradient id="fg-${curr}" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="rgb(${colorRgb})" stop-opacity="0.2"/>
               <stop offset="100%" stop-color="rgb(${colorRgb})" stop-opacity="0.01"/>
             </linearGradient>
           </defs>
-          <line x1="${padL}" y1="${gridTop}" x2="${W-padR}" y2="${gridTop}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3"/>
-          <line x1="${padL}" y1="${gridBot}" x2="${W-padR}" y2="${gridBot}" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="${padL}" y1="${gridTop}" x2="${W-padR}" y2="${gridTop}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="3,3" vector-effect="non-scaling-stroke"/>
+          <line x1="${padL}" y1="${gridBot}" x2="${W-padR}" y2="${gridBot}" stroke="var(--border)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
           <path d="${areaPath}" fill="url(#fg-${curr})"/>
-          <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="${lastPt.x}" cy="${lastPt.y}" r="3.5" fill="${color}" stroke="var(--bg2)" stroke-width="2"/>
-          ${labelEls}
+          <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+          <circle cx="${lastPt.x}" cy="${lastPt.y}" r="3.5" fill="${color}" stroke="var(--bg2)" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg>
+        <div style="position:relative;height:14px;margin-top:2px">${labelPositions}</div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
