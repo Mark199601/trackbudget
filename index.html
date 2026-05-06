@@ -7961,7 +7961,10 @@ function editLoanPayment(paymentId, loanId, direction) {
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ep2-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Account</label><select class="form-input" id="ep2-acct">${acctOpts}</select></div>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ep2-date" value="${payment.date}"></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ep2-date" value="${payment.date}"></div>
+      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="ep2-time" value="${payment.time||''}"></div>
+    </div>
     <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ep2-notes" value="${payment.notes||''}"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="deleteLoanPayment('${paymentId}','${loanId}','${direction}')">Delete</button>
@@ -7978,6 +7981,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
   payment.currency = document.getElementById('ep2-currency')?.value || payment.currency;
   payment.accountId = document.getElementById('ep2-acct')?.value || payment.accountId;
   payment.date = document.getElementById('ep2-date')?.value || payment.date;
+  payment.time = document.getElementById('ep2-time')?.value || payment.time;
   payment.notes = document.getElementById('ep2-notes')?.value?.trim() || payment.notes;
   // Recalculate loan remaining
   const allPayments = getLoanPayments(loanId);
@@ -7985,7 +7989,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (loan.settled) loan.settledDate = today();
-  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment updated!');
+  saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment updated!');
 }
 
 function deleteLoanPayment(paymentId, loanId, direction) {
@@ -7998,7 +8002,7 @@ function deleteLoanPayment(paymentId, loanId, direction) {
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (!loan.settled) loan.settledDate = null;
-  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Payment deleted');
+  saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment deleted');
 }
 
 function editLoanMeta(loanId, direction) { editLoanFull(loanId, direction); }
