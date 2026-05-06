@@ -1663,6 +1663,10 @@ function getMonthTotals(monthKey) {
     // ── PERSONAL LOGIC SET ── (do not remove)
     // isSettlement, loanTx, loanPayment, external = not real income/expense
     if (t.isSettlement) continue;
+    // 📖 USER STORY: Pag nag-log ka ng lend o borrow, hindi kasama sa monthly income/expense
+    // totals at pie charts — kasi hindi mo naman talaga kinita o ginastos yun, pautang lang.
+    // Pero yung pera na inutang ng iba sayo (receivable) ay nag-aappear pa rin sa Assets mo sa net worth.
+    // ── PERSONAL LOGIC SET ── isLoanTx/isLoanPayment excluded from getMonthTotals + pie charts; lent loans → assets in getNetWorth
     if (t.isLoanTx || t.isLoanPayment) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
     // 📖 USER STORY: Yung remittance fee na binayaran mo (e.g. ₱150 sa WU) ay kasama sa monthly
@@ -2228,6 +2232,11 @@ function generateInsights() {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const monthPct = dayOfMonth / daysInMonth;
 
+  // 📖 USER STORY: Pag nag-rollover ka ng unused budget (e.g. may natira kang ₱4,000 sa Food
+  // noong nakaraang buwan), yung ₱4,000 na yun ay nadadagdag sa budget mo ngayong buwan.
+  // So pag ₱5,000 ang set mo, ang effective na limit ay ₱9,000 — mas malaking puwang ka na.
+  // Lahat ng budget checks (alerts, AI insights, dashboard bar) ay gumagamit ng effective limit.
+  // ── PERSONAL LOGIC SET ── effectiveLimit = b.limit + rolloverAmount; all budget checks use effectiveLimit not b.limit
   // Budget pace
   for (const bgt of db.budgets.filter(b=>b.active)) {
     const spent = db.transactions.filter(t=>
@@ -3374,7 +3383,6 @@ function renderAddSheet() {
   // ── For Expense/Income/Shared — unified single-screen design ──
   body.innerHTML = typePillsHTML + renderUnifiedAmountForm();
   setTimeout(() => {
-    if (document.getElementById('add-date') && !document.getElementById('add-date').value) dtSet('add-date','date',today());
     if (document.getElementById('add-time') && !document.getElementById('add-time').value) dtSet('add-time','time',nowTime());
     syncAddCurrency();
     if (s.type === 'shared') afterRenderShared();
@@ -3433,13 +3441,14 @@ function renderUnifiedAmountForm() {
 
     <!-- Date field -->
     <div class="field-row-wrap">
-      <div class="field-row" onclick="document.getElementById('add-date').showPicker?document.getElementById('add-date').showPicker():document.getElementById('add-date').focus()">
+      <div class="field-row" onclick="document.getElementById('add-date-native').showPicker?document.getElementById('add-date-native').showPicker():document.getElementById('add-date-native').focus()">
         <div class="fr-icon" style="background:var(--bg3)">📅</div>
         <div class="fr-label">Date</div>
         <div class="fr-value" id="add-date-display">Today</div>
         <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <input type="date" id="add-date" style="position:absolute;opacity:0;width:1px;height:1px;left:0;top:0;pointer-events:none" onchange="onAddDateChange()">
+      <input type="date" id="add-date-native" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer" onchange="onAddDateChange(this.value);document.getElementById('add-date').value=this.value" value="${today()}">
+      <input type="hidden" id="add-date" value="${today()}">
     </div>
 
     <!-- Currency hidden — auto-derived -->
@@ -3478,12 +3487,11 @@ function updateAcctDisplay() {
   if (dispEl && acct) dispEl.textContent = acct.name;
 }
 
-function onAddDateChange() {
-  const v = document.getElementById('add-date')?.value;
+function onAddDateChange(v) {
+  if (!v) v = document.getElementById('add-date-native')?.value || '';
   const dispEl = document.getElementById('add-date-display');
   if (dispEl) {
-    if (!v) dispEl.textContent = 'Today';
-    else if (v === today()) dispEl.textContent = 'Today';
+    if (!v || v === today()) dispEl.textContent = 'Today';
     else dispEl.textContent = fmtD(v);
   }
 }
@@ -3496,7 +3504,7 @@ function openCatPickerSheet() {
   if (!body) return;
   const overlay = document.createElement('div');
   overlay.id = 'cat-picker-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:flex;align-items:flex-end;justify-content:center;-webkit-tap-highlight-color:transparent';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:flex-end;justify-content:center;-webkit-tap-highlight-color:transparent';
   overlay.onclick = (e) => { if (e.target === overlay) closeCatPickerSheet(); };
   overlay.innerHTML = `<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:75vh;overflow-y:auto;padding:18px 16px 24px;animation:slideUp 0.25s cubic-bezier(.4,0,.2,1)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -3710,14 +3718,35 @@ function pickCat(catId) {
   _addState.subCatId = null;
   _addState.step = 2;
   closeCatPickerSheet();
-  renderAddSheet();
+  // Update category display in-place (avoid wiping the form)
+  _updateCatDisplay();
 }
 function pickSubCat(catId, subCatId) {
   _addState.catId = catId;
   _addState.subCatId = subCatId;
   _addState.step = 2;
   closeCatPickerSheet();
-  renderAddSheet();
+  // Update category display in-place (avoid wiping the form)
+  _updateCatDisplay();
+}
+
+function _updateCatDisplay() {
+  const s = _addState;
+  const txType = s.type === 'income' ? 'income' : 'expense';
+  const cat = s.catId ? (db.categories[txType] || []).find(c=>c.id===s.catId) : null;
+  const subCat = (cat && s.subCatId) ? cat.subcats?.find(sc=>sc.id===s.subCatId) : null;
+  const displayCat = subCat || cat;
+  // Update icon + name in the category field row (no full re-render)
+  const iconEl = document.querySelector('.field-row .fr-icon');
+  const valEl = document.querySelector('.field-row .fr-value');
+  if (iconEl && displayCat) {
+    iconEl.style.background = 'var(--accent-bg)';
+    iconEl.textContent = displayCat.icon;
+  }
+  if (valEl && displayCat) {
+    valEl.style.color = 'var(--text)';
+    valEl.textContent = displayCat.name;
+  }
 }
 
 // ── SHARED FORM PERSON ROWS ──
@@ -6477,6 +6506,11 @@ function restoreTx(txId) {
       return;
     }
     // Parent no longer in archive — allow restoring child on its own
+    // 📖 USER STORY (Guard): Pag may child transaction na naiwang mag-isa sa archive (permanently
+    // deleted na ang parent niya), at ni-restore mo siya, awtomatikong nililinis ng app ang lahat
+    // ng parent-link flags niya — para hindi siya mag-display ng nakakalitong "auto-generated
+    // entry" warning kahit wala na ang parent. Hindi ito mangyayari sa normal usage, guard lang.
+    // ── PERSONAL LOGIC SET ── orphan restore guard: cleans isAutoForex/parentId/cascadedFrom flags when parent confirmed gone
     // Clean all parent-link metadata so it behaves as a standalone tx
     delete txData.cascadedFrom;
     delete txData.parentId;
@@ -6541,6 +6575,10 @@ function promptArchiveDelete(txId, txName, childCount) {
   );
 }
 
+// 📖 USER STORY: Pag binarahan mo permanently yung parent transaction (transfer, shared, etc.),
+// lahat ng linked children niya (forex gain/loss, fees, reimbursements) ay tinatanggal kasabay —
+// hindi ka mag-iiwan ng orphaned entries na magpapakita ng nakakalitong "auto-generated" warning.
+// ── PERSONAL LOGIC SET ── confirmDeleteTx cascades children by cascadedFrom OR parentId
 function confirmDeleteTx(txId) {
   // Delete the tx itself
   const beforeCount = db.archivedTransactions.length;
@@ -7619,6 +7657,10 @@ function openBatchSettleLoans(direction, person) {
   );
 }
 
+// 📖 USER STORY: Pag pinindot mo ang "Settle All" sa loans ng isang tao, lahat ng active loans
+// niya sayo (o sayo sa kanya) ay naise-settle in one go — hindi mo na kailangang isa-isahing
+// i-settle bawat loan entry. Auto-creates settlement transactions per loan.
+// ── PERSONAL LOGIC SET ── batch settle creates settlement txs for all active loans per person
 function confirmBatchSettleLoans(direction, person) {
   const loans = db.loans[direction].filter(l => !l.settled && (l.personName||'').trim() === person);
   const acctId = document.getElementById('bsl-acct')?.value;
@@ -12161,6 +12203,10 @@ function saveAddSubCat(catId, forType) {
 function openEditCat(catId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   if (!cat) return;
+  // 📖 USER STORY: Pag may transaction na naka-link sa isang category at sinubukan mong i-delete,
+  // hindi papayagan ng app — Archive lang ang option para hindi mawala ang history. Pag walang
+  // naka-link na transaction, freely ma-delete na.
+  // ── PERSONAL LOGIC SET ── category delete blocked if has linked txs; archive/restore only
   // Check if category (or any subcat) has linked transactions
   const subcatIds = (cat.subcats||[]).map(s=>s.id);
   const allRelatedIds = [catId, ...subcatIds];
