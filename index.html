@@ -7494,15 +7494,15 @@ let _loanTab = 'lent';
 function renderLoans() {
   const pendingLent = db.loans.lent.filter(l=>!l.settled).length;
   const pendingBorrowed = db.loans.borrowed.filter(l=>!l.settled).length;
+  // Migrate old archive tab state
+  if (_loanTab==='archive') _loanTab='lent';
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_loanTab==='lent'?'active':''}" onclick="setLoanTab('lent')">Lent Out ${pendingLent>0?`<span style="background:var(--amber);color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;margin-left:4px">${pendingLent}</span>`:''}</button>
     <button class="tab-btn ${_loanTab==='borrowed'?'active':''}" onclick="setLoanTab('borrowed')">Borrowed ${pendingBorrowed>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;margin-left:4px">${pendingBorrowed}</span>`:''}</button>
-    <button class="tab-btn ${_loanTab==='archive'?'active':''}" onclick="setLoanTab('archive')">Archive</button>
   </div>`;
   let content = '';
   if (_loanTab==='lent') content = renderLoanList('lent');
-  else if (_loanTab==='borrowed') content = renderLoanList('borrowed');
-  else content = renderLoanArchive();
+  else content = renderLoanList('borrowed');
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
 
@@ -7518,10 +7518,12 @@ function renderLoanList(direction) {
   const active = loans.filter(l=>!l.settled);
   const settled = loans.filter(l=>l.settled);
   const totalPhp = active.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+  const archivedCount = (db.archivedLoans||[]).length;
 
   let html = `<div class="page-pad">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-      <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openLoanArchiveSheet()">Archive →</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openSettledLoansSheet('${direction}')">✓ Settled${settled.length>0?` (${settled.length})`:''}</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openLoanArchiveSheet()">🗃️ Archive${archivedCount>0?` (${archivedCount})`:''}</button>
     </div>`;
   if (active.length > 0) {
     html += `<div style="background:var(--bg3);border-radius:var(--r-md);padding:12px 15px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
@@ -7596,29 +7598,6 @@ function renderLoanList(direction) {
         </div>
       </div>` : ''}
     </div>`;
-  }
-
-  // Settled loans (still listed individually below active)
-  if (settled.length > 0) {
-    html += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:16px 0 8px">Settled</div>`;
-    for (const loan of settled) {
-      const payments = getLoanPayments(loan.id);
-      html += `<div class="loan-card" style="opacity:0.7;margin-bottom:8px" onclick="openLoanDetail('${loan.id}','${direction}')">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div class="pool-avatar">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-            <div>
-              <div style="font-size:13px;font-weight:500">${loan.personName||'Unknown'}</div>
-              <div style="font-size:11px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:var(--mono);font-weight:500;color:var(--text3)">${fmt(loan.amount, loan.currency)}</div>
-            <span class="pill pill-green" style="margin-top:4px">Settled</span>
-          </div>
-        </div>
-      </div>`;
-    }
   }
 
   html += `<div style="margin-top:8px"><button class="pool-add-btn" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div></div>`;
@@ -7947,7 +7926,7 @@ function saveLoanFull(loanId, direction) {
     parentTx.notes = `${direction==='lent'?'Lent to':'Borrowed from'} ${loan.personName}`;
   }
 
-  saveDBWithSync(); closeDlg(); openLoanDetail(loanId, direction); showToast('Loan updated!');
+  saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Loan updated!');
 }
 
 function editLoanPayment(paymentId, loanId, direction) {
@@ -8008,6 +7987,10 @@ function deleteLoanPayment(paymentId, loanId, direction) {
 function editLoanMeta(loanId, direction) { editLoanFull(loanId, direction); }
 function saveLoanMeta(loanId, direction) { saveLoanFull(loanId, direction); }
 
+// 📖 USER STORY: Settled at archived ay dalawang magkaibang estado. Settled = fully paid na, sariling
+// sheet niya, nasa db.loans[direction] pa rin. Archived = manually mo inalis sa active list, lumipat
+// na sa db.archivedLoans. Hindi sila magkapalit.
+// ── PERSONAL LOGIC SET ── settled stays in db.loans[direction] with settled:true flag; archived moves to db.archivedLoans
 function archiveLoan(loanId, direction) {
   const loans = direction==='lent' ? db.loans.lent : db.loans.borrowed;
   const idx = loans.findIndex(l=>l.id===loanId);
@@ -8038,28 +8021,126 @@ function archiveLoan(loanId, direction) {
   saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
 }
 
-function openLoanArchiveSheet() {
-  const all = (db.archivedLoans || []).slice().sort((a,b)=>(b.archivedAt||b.date||'').localeCompare(a.archivedAt||a.date||''));
-
-  if (all.length === 0) {
-    openDlg('Loan Archive',
-      '<div style="font-size:14px;color:var(--text3);text-align:center;padding:16px">No archived loans</div>',
-      '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>'
+// 📖 USER STORY: Pag na-settle na ang loan ni isang tao, hindi na siya lumalabas sa active list mo —
+// para malinis lang ang tingin. Para makita mo sila, i-tap mo yung "Settled" button sa taas. Nandoon
+// pa rin sila, hindi nawawala — naka-tago lang para hindi mag-clutter.
+// ── PERSONAL LOGIC SET ── settled loans hidden from active list; viewable via openSettledLoansSheet, still in db.loans[direction]
+function openSettledLoansSheet(direction) {
+  const settled = db.loans[direction].filter(l=>l.settled).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if (settled.length === 0) {
+    openSheet('gen', `Settled ${direction==='lent'?'Loans Out':'Debts'}`,
+      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled ${direction==='lent'?'loans':'debts'} yet</div><div class="empty-sub">Settled ${direction==='lent'?'loans':'debts'} will appear here once paid in full.</div></div>`
     );
     return;
   }
 
-  const rows = all.map(l => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div style="font-size:13px;font-weight:500">${l.personName||'Unknown'}</div>
-        <div style="font-size:11px;color:var(--text4)">${l.direction==='lent'?'Lent':'Borrowed'} · ${fmtD(l.date)} · ${fmt(l.amount,l.currency)}</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="restoreLoan('${l.id}')">↩ Restore</button>
-    </div>`).join('');
+  // Group by month-year period (newest first)
+  const byPeriod = {};
+  const periodOrder = [];
+  for (const loan of settled) {
+    const dt = loan.date ? new Date(loan.date) : new Date();
+    const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+    const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
+    if (!byPeriod[key]) { byPeriod[key] = {label, loans:[]}; periodOrder.push(key); }
+    byPeriod[key].loans.push(loan);
+  }
+  periodOrder.sort((a,b)=>b.localeCompare(a)); // newest first
 
-  openSheet('gen', `Loan Archive (${all.length})`,
-    `<div>${rows}</div>`
+  const totalPhp = settled.reduce((s,l)=>s+toPhp(l.amount,l.currency),0);
+
+  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ₱${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
+
+  for (const key of periodOrder) {
+    const period = byPeriod[key];
+    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>
+      <div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">`;
+    for (let i=0; i<period.loans.length; i++) {
+      const loan = period.loans[i];
+      const payments = getLoanPayments(loan.id);
+      const isLast = i === period.loans.length - 1;
+      body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
+        <div class="pool-avatar" style="flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:500">${loan.personName||'Unknown'}</div>
+          <div style="font-size:11px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(loan.amount, loan.currency)}</div>
+          <div style="color:var(--text4);font-size:14px">›</div>
+        </div>
+      </div>`;
+    }
+    body += `</div>`;
+  }
+
+  openSheet('gen', `Settled ${direction==='lent'?'Loans Out':'Debts'} (${settled.length})`, body);
+}
+
+
+function openLoanArchiveSheet() {
+  const all = (db.archivedLoans || []).slice().sort((a,b)=>(b.archivedAt||b.date||'').localeCompare(a.archivedAt||a.date||''));
+
+  if (all.length === 0) {
+    openSheet('gen', 'Loan Archive',
+      `<div class="empty-state"><div class="empty-icon">🗃️</div><div class="empty-text">No archived loans</div></div>`
+    );
+    return;
+  }
+
+  // Group by month-year period of archivedAt (newest first)
+  const byPeriod = {};
+  const periodOrder = [];
+  for (const loan of all) {
+    const dt = loan.archivedAt ? new Date(loan.archivedAt) : (loan.date ? new Date(loan.date) : new Date());
+    const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+    const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
+    if (!byPeriod[key]) { byPeriod[key] = {label, loans:[]}; periodOrder.push(key); }
+    byPeriod[key].loans.push(loan);
+  }
+  periodOrder.sort((a,b)=>b.localeCompare(a));
+
+  let body = `<div style="padding:12px 20px;font-size:12px;color:var(--text3)">Restoring or deleting an archived loan also affects its linked payments and forex children.</div>`;
+
+  for (const key of periodOrder) {
+    const period = byPeriod[key];
+    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>
+      <div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">`;
+    for (let i=0; i<period.loans.length; i++) {
+      const loan = period.loans[i];
+      const dir = loan.direction || 'lent';
+      const archivedTx = db.archivedTransactions || [];
+      const parentTxIds = archivedTx.filter(t => t.isLoanTx && t.loanId === loan.id).map(t => t.id);
+      const payments = archivedTx.filter(t => t.parentId === loan.id && t.isLoanPayment);
+      const forexChildren = archivedTx.filter(t => t.isAutoForex && parentTxIds.includes(t.parentId));
+      const linkedCount = payments.length + forexChildren.length;
+      const isLast = i === period.loans.length - 1;
+      const safeName = (loan.personName||'Unknown').replace(/'/g,"\\'");
+
+      body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${isLast?'':'border-bottom:0.5px solid var(--border)'}">
+        <div class="pool-avatar" style="flex-shrink:0;opacity:0.7">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:500">${loan.personName||'Unknown'}</div>
+          <div style="font-size:11px;color:var(--text4)">${dir==='lent'?'Lent':'Borrowed'} · ${fmtD(loan.date)}${linkedCount>0?` · ${linkedCount} linked`:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div style="font-family:var(--mono);font-size:13px;color:var(--text3)">${fmt(loan.amount, loan.currency)}</div>
+          <button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="restoreLoan('${loan.id}')" title="Restore">↩</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="promptArchiveDeleteLoan('${loan.id}','${safeName}',${linkedCount})" title="Delete permanently">🗑</button>
+        </div>
+      </div>`;
+    }
+    body += `</div>`;
+  }
+
+  openSheet('gen', `Loan Archive (${all.length})`, body);
+}
+
+function promptArchiveDeleteLoan(loanId, personName, linkedCount) {
+  const linkedNote = linkedCount>0 ? `<p style="font-size:13px;color:var(--text3);margin-top:8px"><strong>${linkedCount} linked transaction${linkedCount>1?'s':''}</strong> (payments, forex) will also be permanently deleted.</p>` : '';
+  openDlg('Delete Loan Permanently?',
+    `<p style="font-size:14px;color:var(--text2);line-height:1.6">Permanently delete loan from <strong>${personName}</strong>? This cannot be undone.</p>${linkedNote}`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmDeleteLoan('${loanId}')">Delete All</button>`
   );
 }
 
@@ -8094,6 +8175,11 @@ function restoreLoan(loanId) {
   saveDBWithSync();
   renderLoans();
   showToast('Loan restored');
+  // Refresh open archive sheet if still mounted
+  if (document.getElementById('gen-sheet')?.classList.contains('open')) {
+    if ((db.archivedLoans||[]).length > 0) openLoanArchiveSheet();
+    else closeSheet('gen');
+  }
 }
 
 function renderLoanArchive() {
@@ -8144,6 +8230,10 @@ function deleteLoanPerm(loanId) {
   );
 }
 
+// 📖 USER STORY: Pag na-archive o na-permanently delete ang isang loan, lahat ng linked transactions
+// niya (yung payment records at forex children) ay kasabay na natatanggal o naa-archive — hindi ka
+// mag-iiwan ng orphaned payment entries na walang parent loan na mahahanap.
+// ── PERSONAL LOGIC SET ── loan archive/delete cascades to: parent loan tx (isLoanTx+loanId), payments (isLoanPayment+parentId), forex children (isAutoForex+parentId in parentLoanTxIds)
 function confirmDeleteLoan(loanId) {
   // Find parent loan tx ids (in both active and archived) for cascade cleanup of forex children
   const parentLoanTxIds = [
@@ -8162,6 +8252,11 @@ function confirmDeleteLoan(loanId) {
   db.transactions = db.transactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
   db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
   saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
+  // Refresh open archive sheet if still mounted
+  if (document.getElementById('gen-sheet')?.classList.contains('open')) {
+    if ((db.archivedLoans||[]).length > 0) openLoanArchiveSheet();
+    else closeSheet('gen');
+  }
 }
 
 function openAddLoan(direction='lent') {
