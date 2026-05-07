@@ -7109,8 +7109,7 @@ function toggleReimbPerson(id) {
 // ── PERSONAL LOGIC SET ── settled shared txs hidden from active list; viewable via openSettledReimbSheet
 function openSettledReimbSheet() {
   const settled = db.transactions
-    .filter(t => t.type === 'shared' && !t.archived && t.settled)
-    .sort((a,b)=>(b.settledAt||b.date||'').localeCompare(a.settledAt||a.date||''));
+    .filter(t => t.type === 'shared' && !t.archived && t.settled);
 
   if (settled.length === 0) {
     openSheet('gen', 'Settled Reimbursements',
@@ -7119,16 +7118,36 @@ function openSettledReimbSheet() {
     return;
   }
 
-  // Group by month-year of settledAt (newest first)
+  // 📖 USER STORY: Yung mga shared txs na sabay-sabay nai-settle via batch ay grouped under
+  // isang Batch Settlement card. Yung individually-settled txs ay standalone rows. Sort by
+  // latest activity (batch settlement date or settledAt), newest on top.
+  // ── PERSONAL LOGIC SET ── settled reimb sheet: groups shared txs by batch reimb settlement parent (db.transactions where isBatchReimbSettlement && batchTxIds includes tx.id); individuals shown standalone; sorted by activity date newest first
+  const batchParents = db.transactions.filter(t => !t.archived && t.isBatchReimbSettlement)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const settledIdsInBatch = new Set();
+  for (const bp of batchParents) (bp.batchTxIds||[]).forEach(id => settledIdsInBatch.add(id));
+  const individualSettled = settled.filter(tx => !settledIdsInBatch.has(tx.id));
+
+  const cards = [];
+  for (const bp of batchParents) {
+    const linkedTxs = (bp.batchTxIds||[]).map(id => settled.find(t => t.id === id)).filter(Boolean);
+    if (linkedTxs.length === 0) continue;
+    cards.push({ type:'batch', sortDate: bp.date || '', batchTx: bp, txs: linkedTxs });
+  }
+  for (const tx of individualSettled) {
+    cards.push({ type:'individual', sortDate: tx.settledAt || tx.date || '', tx });
+  }
+  cards.sort((a,b)=>(b.sortDate||'').localeCompare(a.sortDate||''));
+
+  // Group by month-year
   const byPeriod = {};
   const periodOrder = [];
-  for (const tx of settled) {
-    const refDate = tx.settledAt || tx.date;
-    const dt = refDate ? new Date(refDate) : new Date();
+  for (const card of cards) {
+    const dt = card.sortDate ? new Date(card.sortDate) : new Date();
     const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
     const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
-    if (!byPeriod[key]) { byPeriod[key] = {label, txs:[]}; periodOrder.push(key); }
-    byPeriod[key].txs.push(tx);
+    if (!byPeriod[key]) { byPeriod[key] = {label, cards:[]}; periodOrder.push(key); }
+    byPeriod[key].cards.push(card);
   }
   periodOrder.sort((a,b)=>b.localeCompare(a));
 
@@ -7138,30 +7157,69 @@ function openSettledReimbSheet() {
 
   for (const key of periodOrder) {
     const period = byPeriod[key];
-    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>
-      <div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">`;
-    for (let i=0; i<period.txs.length; i++) {
-      const tx = period.txs[i];
-      const isLast = i === period.txs.length - 1;
-      const cat = getCategoryDisplay(tx.categoryId);
-      // Person summary
-      const personNames = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
-      const personLabel = personNames.length === 1 ? personNames[0]
-        : personNames.length === 2 ? personNames.join(' & ')
-        : `${personNames[0]} +${personNames.length-1}`;
-      body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cat.icon}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
-          <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)} · ${personLabel}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(tx.totalBill || tx.amount, tx.currency)}</div>
-          <div style="color:var(--text4);font-size:14px">›</div>
-        </div>
-      </div>`;
+    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>`;
+
+    for (const card of period.cards) {
+      if (card.type === 'batch') {
+        const bp = card.batchTx;
+        const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isReimbSettlementGain);
+        const gainBadge = gainChild
+          ? `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+          : '';
+        const periodPill = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Batch · ${fmtD(bp.date)}</span>`;
+        const personName = bp.batchPerson || bp.reimbPerson || 'Unknown';
+        const nestedRows = card.txs.map(tx => {
+          const cat = getCategoryDisplay(tx.categoryId);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${cat.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
+              <div style="font-size:10px;color:var(--text4)">${fmtD(tx.date)}</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0">${fmt(tx.totalBill||tx.amount, tx.currency)}</div>
+          </div>`;
+        }).join('');
+        const batchId = 'ssrbatch-'+bp.id;
+        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;cursor:pointer" onclick="toggleSpendingDrill('${batchId}')">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+                <span style="font-size:13px;font-weight:600">💰 Batch Settlement</span>
+                ${periodPill}
+                ${gainBadge}
+              </div>
+              <div style="font-size:11px;color:var(--text4)">${card.txs.length} entries · ${personName} · ${fmt(bp.amount, bp.currency)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button>
+              <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
+            ${nestedRows}
+          </div>
+        </div>`;
+      } else {
+        // Individual settled
+        const tx = card.tx;
+        const cat = getCategoryDisplay(tx.categoryId);
+        const personNames = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
+        const personLabel = personNames.length === 1 ? personNames[0]
+          : personNames.length === 2 ? personNames.join(' & ')
+          : `${personNames[0]} +${personNames.length-1}`;
+        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cat.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
+            <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)} · ${personLabel}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(tx.totalBill || tx.amount, tx.currency)}</div>
+            <div style="color:var(--text4);font-size:14px">›</div>
+          </div>
+        </div>`;
+      }
     }
-    body += `</div>`;
   }
 
   openSheet('gen', `Settled Reimbursements (${settled.length})`, body);
@@ -9197,7 +9255,7 @@ function confirmWriteOffLoan(loanId, direction) {
 // pa rin sila, hindi nawawala — naka-tago lang para hindi mag-clutter.
 // ── PERSONAL LOGIC SET ── settled loans hidden from active list; viewable via openSettledLoansSheet, still in db.loans[direction]
 function openSettledLoansSheet(direction) {
-  const settled = db.loans[direction].filter(l=>l.settled).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const settled = db.loans[direction].filter(l=>l.settled);
   if (settled.length === 0) {
     openSheet('gen', `Settled ${direction==='lent'?'Loans Out':'Debts'}`,
       `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled ${direction==='lent'?'loans':'debts'} yet</div><div class="empty-sub">Settled ${direction==='lent'?'loans':'debts'} will appear here once paid in full.</div></div>`
@@ -9205,17 +9263,40 @@ function openSettledLoansSheet(direction) {
     return;
   }
 
-  // Group by month-year period (newest first)
+  // 📖 USER STORY: Yung mga loans na sabay-sabay nai-settle via batch ay grouped under isang
+  // Batch Settlement card. Yung individually-settled loans ay standalone rows pa rin. Sort
+  // by latest activity (batch settlement date or loan settledDate), newest on top.
+  // ── PERSONAL LOGIC SET ── settled loans sheet: groups loans by batch settlement parent (db.transactions where isBatchSettlement && batchLoanIds includes loan.id); individually-settled loans shown standalone; sorted by activity date newest first
+  // Build groups: batch parents (each = one card) + individual settled loans
+  const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && t.batchDirection === direction)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const settledIdsInBatch = new Set();
+  for (const bp of batchParents) (bp.batchLoanIds||[]).forEach(id => settledIdsInBatch.add(id));
+  const individualSettled = settled.filter(l => !settledIdsInBatch.has(l.id));
+
+  // Build unified list of cards: each card = {type, sortDate, content...}
+  const cards = [];
+  for (const bp of batchParents) {
+    const linkedLoans = (bp.batchLoanIds||[]).map(id => settled.find(l => l.id === id)).filter(Boolean);
+    if (linkedLoans.length === 0) continue; // batch parent exists but linked loans gone
+    cards.push({ type:'batch', sortDate: bp.date || '', batchTx: bp, loans: linkedLoans });
+  }
+  for (const loan of individualSettled) {
+    cards.push({ type:'individual', sortDate: loan.settledDate || loan.date || '', loan });
+  }
+  cards.sort((a,b)=>(b.sortDate||'').localeCompare(a.sortDate||''));
+
+  // Group cards by month-year of sortDate
   const byPeriod = {};
   const periodOrder = [];
-  for (const loan of settled) {
-    const dt = loan.date ? new Date(loan.date) : new Date();
+  for (const card of cards) {
+    const dt = card.sortDate ? new Date(card.sortDate) : new Date();
     const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
     const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
-    if (!byPeriod[key]) { byPeriod[key] = {label, loans:[]}; periodOrder.push(key); }
-    byPeriod[key].loans.push(loan);
+    if (!byPeriod[key]) { byPeriod[key] = {label, cards:[]}; periodOrder.push(key); }
+    byPeriod[key].cards.push(card);
   }
-  periodOrder.sort((a,b)=>b.localeCompare(a)); // newest first
+  periodOrder.sort((a,b)=>b.localeCompare(a));
 
   const totalPhp = settled.reduce((s,l)=>s+toPhp(l.amount,l.currency),0);
 
@@ -9223,25 +9304,67 @@ function openSettledLoansSheet(direction) {
 
   for (const key of periodOrder) {
     const period = byPeriod[key];
-    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>
-      <div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">`;
-    for (let i=0; i<period.loans.length; i++) {
-      const loan = period.loans[i];
-      const payments = getLoanPayments(loan.id);
-      const isLast = i === period.loans.length - 1;
-      body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
-        <div class="pool-avatar" style="flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:500">${loan.personName||'Unknown'}</div>
-          <div style="font-size:11px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(loan.amount, loan.currency)}</div>
-          <div style="color:var(--text4);font-size:14px">›</div>
-        </div>
-      </div>`;
+    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>`;
+
+    for (const card of period.cards) {
+      if (card.type === 'batch') {
+        const bp = card.batchTx;
+        const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementGain);
+        const lossChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementLoss);
+        const gainBadge = gainChild
+          ? `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+          : lossChild
+          ? `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(lossChild.amount,lossChild.currency)} loss</span>`
+          : '';
+        const periodPill = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Batch · ${fmtD(bp.date)}</span>`;
+        const nestedRows = card.loans.map(loan => {
+          const payments = getLoanPayments(loan.id);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
+            <div class="pool-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:500">${loan.personName||'Unknown'}</div>
+              <div style="font-size:10px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0">${fmt(loan.amount, loan.currency)}</div>
+          </div>`;
+        }).join('');
+        const batchId = 'sslbatch-'+bp.id;
+        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;cursor:pointer" onclick="toggleSpendingDrill('${batchId}')">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+                <span style="font-size:13px;font-weight:600">💰 Batch Settlement</span>
+                ${periodPill}
+                ${gainBadge}
+              </div>
+              <div style="font-size:11px;color:var(--text4)">${card.loans.length} loans · ${fmt(bp.amount, bp.currency)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>
+              <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
+            ${nestedRows}
+          </div>
+        </div>`;
+      } else {
+        // Individual settled loan
+        const loan = card.loan;
+        const payments = getLoanPayments(loan.id);
+        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
+          <div class="pool-avatar" style="flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500">${loan.personName||'Unknown'}</div>
+            <div style="font-size:11px;color:var(--text4)">${fmtD(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(loan.amount, loan.currency)}</div>
+            <div style="color:var(--text4);font-size:14px">›</div>
+          </div>
+        </div>`;
+      }
     }
-    body += `</div>`;
   }
 
   openSheet('gen', `Settled ${direction==='lent'?'Loans Out':'Debts'} (${settled.length})`, body);
