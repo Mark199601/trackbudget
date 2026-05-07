@@ -5490,6 +5490,63 @@ function openTxDetail(txId) {
 
   // FX snapshot badge with source + clickable link to Settings
   let fxBadge = '';
+
+  // ── Payment Timeline for shared (reimbursement) txs ──
+  // 📖 USER STORY: Sa shared tx detail, makikita mo yung history ng lahat ng payments received
+  // (reimb settlements). Tap row → opens detail. Delete button → archives payment + reverts
+  // paidSoFar. Pag nadelete yung parent → lahat ng children cascade-deleted permanently.
+  // ── PERSONAL LOGIC SET ── shared tx payment timeline: reads all isAutoReimb + isBatchReimbSettlement children by parentId; delete archives child + reverts paidSoFar; parent delete = cascade permanent delete all children + grandchildren
+  let reimbTimelineHTML = '';
+  if (tx.type === 'shared') {
+    // Get all settlement children (direct: isAutoReimb/isBatchReimbSettlement; and gain children of batch)
+    const directPayments = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isAutoReimb || t.isBatchReimbSettlement));
+    const directIds = directPayments.map(t=>t.id);
+    const gainChildren = db.transactions.filter(t => !t.archived && directIds.includes(t.parentId) && (t.isReimbSettlementGain || t.isReimbSettlementLoss));
+    const allPayments = [...directPayments].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+    if (allPayments.length > 0) {
+      const timelineRows = allPayments.map((p, i) => {
+        const pAcct = getAccountDisplay(p.accountId);
+        const isLast = i === allPayments.length - 1;
+        const isGain = gainChildren.some(g => g.parentId === p.id);
+        const gainChild = gainChildren.find(g => g.parentId === p.id);
+        const isBatch = p.isBatchReimbSettlement;
+        const label = isBatch
+          ? `Batch reimb from ${p.batchPerson||p.reimbPerson||'?'}`
+          : `Reimb from ${p.reimbPerson||'?'}`;
+
+        return `<div style="position:relative;${!isLast?'border-bottom:1px solid var(--border)':''}">
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px">
+            <div style="position:relative;flex-shrink:0;width:24px;display:flex;flex-direction:column;align-items:center;padding-top:4px">
+              <div style="width:10px;height:10px;border-radius:50%;background:var(--green);border:2px solid var(--bg2);box-shadow:0 0 0 1px var(--border);z-index:1"></div>
+              ${!isLast?`<div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:1.5px;height:100%;background:var(--border)"></div>`:''}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                <div style="font-size:13px;font-weight:600">${fmtDFull(p.date)}</div>
+                <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${label} · ${pAcct.name}${p.notes?' · '+p.notes:''}</div>
+              ${isGain && gainChild ? `<div style="font-size:10px;color:var(--green);margin-top:2px">📈 +${fmt(gainChild.amount,gainChild.currency)} settlement gain</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+              <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();closeDlg();setTimeout(()=>openTxDetail('${p.id}'),100)" title="View">→</button>
+              <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--red)" onclick="event.stopPropagation();deleteChildReimb('${p.id}','${tx.id}')" title="Archive payment">🗑</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      reimbTimelineHTML = `<div style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Payment Timeline · ${allPayments.length}</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)">
+          ${timelineRows}
+        </div>
+      </div>`;
+    }
+  }
   if (tx.fxSnapshot && tx.currency !== 'PHP') {
     const snapRate = tx.fxSnapshot[tx.currency];
     if (snapRate) {
@@ -5641,7 +5698,7 @@ function openTxDetail(txId) {
   }
 
   openDlg('Transaction Detail',
-    `${detailHeader}${rows}${fxBadge}${childrenSection}`,
+    `${detailHeader}${rows}${fxBadge}${reimbTimelineHTML}${childrenSection}`,
     footer
   );
 }
@@ -6599,51 +6656,64 @@ function archiveTx(txId, skipConfirm) {
 }
 
 function deleteChildReimb(childId, parentId) {
-  openDlg('Delete Settlement?',
+  openDlg('Archive Payment?',
     `<div style="font-size:14px;color:var(--text2);line-height:1.6">
-      This will delete the reimbursement settlement and reset the status back to <strong>unsettled</strong>.<br><br>
-      The original shared transaction will remain intact.
+      Archive this settlement payment? The shared transaction will revert to <strong>unsettled</strong> for this amount.<br><br>
+      You can restore it from the Archive if needed.
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="confirmDeleteChildReimb('${childId}','${parentId}')">Delete</button>`
+     <button class="btn btn-warning btn-sm" onclick="confirmDeleteChildReimb('${childId}','${parentId}')">Archive</button>`
   );
 }
 
 function confirmDeleteChildReimb(childId, parentId) {
-  // Get child FIRST before deleting
-  const child = db.transactions.find(t => t.id === childId)
-             || (db.archivedTransactions||[]).find(t => t.id === childId);
-  const reimbPerson = child?.reimbPerson;
-  const childAmt = child?.amount || 0;
+  if (!Array.isArray(db.archivedTransactions)) db.archivedTransactions = [];
+  const archiveStamp = new Date().toISOString();
 
-  // Now remove child from transactions
+  // Get child FIRST before archiving
+  const child = db.transactions.find(t => t.id === childId);
+  if (!child) { closeDlg(); showToast('Payment not found'); return; }
+  const reimbPerson = child.reimbPerson || child.batchPerson;
+  const childAmt = child.amount || 0;
+
+  // Archive gain/loss grandchildren first (parentId = childId)
+  const grandChildren = db.transactions.filter(t => t.parentId === childId && (t.isReimbSettlementGain || t.isReimbSettlementLoss));
+  for (const gc of grandChildren) {
+    const gcIdx = db.transactions.findIndex(t => t.id === gc.id);
+    if (gcIdx >= 0) {
+      db.archivedTransactions.push({ ...db.transactions[gcIdx], archived: true, archivedAt: archiveStamp, cascadedFrom: childId });
+      db.transactions.splice(gcIdx, 1);
+    }
+  }
+
+  // Archive the child itself
   const childIdx = db.transactions.findIndex(t => t.id === childId);
-  if (childIdx >= 0) db.transactions.splice(childIdx, 1);
-  const archIdx = (db.archivedTransactions||[]).findIndex(t => t.id === childId);
-  if (archIdx >= 0) db.archivedTransactions.splice(archIdx, 1);
+  if (childIdx >= 0) {
+    db.archivedTransactions.push({ ...db.transactions[childIdx], archived: true, archivedAt: archiveStamp, cascadedFrom: parentId });
+    db.transactions.splice(childIdx, 1);
+  }
 
   // Reset parent paidSoFar for this person
   const parent = db.transactions.find(t => t.id === parentId);
-  if (parent) {
-    if (reimbPerson && parent.paidSoFar && parent.paidSoFar[reimbPerson]) {
+  if (parent && reimbPerson) {
+    if (parent.paidSoFar && typeof parent.paidSoFar === 'object') {
       parent.paidSoFar[reimbPerson] = Math.max(0, (parent.paidSoFar[reimbPerson] || 0) - childAmt);
-      if (parent.paidSoFar[reimbPerson] === 0) delete parent.paidSoFar[reimbPerson];
+      if (parent.paidSoFar[reimbPerson] <= 0.001) delete parent.paidSoFar[reimbPerson];
     }
     // Recalculate settled status
     const persons = parent.persons || [];
     const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
-    const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+v, 0);
-    parent.settled = totalPaid >= totalOwed && totalOwed > 0;
+    const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+(parseFloat(v)||0), 0);
+    parent.settled = totalPaid >= totalOwed - 0.01 && totalOwed > 0;
   }
 
   saveDBWithSync();
   closeDlg();
-  // Re-render current page so transaction list updates immediately
   if (currentPage === 'transactions') renderTransactions();
   else if (currentPage === 'dashboard') renderDashboard();
   else if (currentPage === 'reimbursements') renderReimbursementsPage();
   setTimeout(() => openTxDetail(parentId), 100);
-  showToast('Settlement deleted — reverted to pending');
+  showToast('Payment archived — reverted to pending');
 }
 
 function restoreTx(txId) {
@@ -6745,14 +6815,25 @@ function promptArchiveDelete(txId, txName, childCount) {
 // 📖 USER STORY: Pag binarahan mo permanently yung parent transaction (transfer, shared, etc.),
 // lahat ng linked children niya (forex gain/loss, fees, reimbursements) ay tinatanggal kasabay —
 // hindi ka mag-iiwan ng orphaned entries na magpapakita ng nakakalitong "auto-generated" warning.
-// ── PERSONAL LOGIC SET ── confirmDeleteTx cascades children by cascadedFrom OR parentId
+// For shared txs specifically: pag nadeleted parent → lahat ng reimb payments + gain/loss grandchildren
+// cascade-deleted permanently din. Walang survivor.
+// ── PERSONAL LOGIC SET ── confirmDeleteTx cascades children by cascadedFrom OR parentId, 2 levels deep (children + grandchildren)
 function confirmDeleteTx(txId) {
-  // Delete the tx itself
+  // Delete the tx itself + direct children
   const beforeCount = db.archivedTransactions.length;
-  db.archivedTransactions = db.archivedTransactions.filter(t => t.id !== txId);
-  // Cascade-delete all children archived with this parent (cascadedFrom) OR linked via parentId
-  db.archivedTransactions = db.archivedTransactions.filter(t => t.cascadedFrom !== txId && t.parentId !== txId);
-  const deleted = beforeCount - db.archivedTransactions.length - 1; // -1 for parent itself
+  // Find direct children first
+  const directChildIds = db.archivedTransactions
+    .filter(t => t.cascadedFrom === txId || t.parentId === txId)
+    .map(t => t.id);
+  // Find grandchildren (children of direct children)
+  const grandChildIds = directChildIds.length > 0
+    ? db.archivedTransactions
+        .filter(t => directChildIds.includes(t.cascadedFrom) || directChildIds.includes(t.parentId))
+        .map(t => t.id)
+    : [];
+  const allToDelete = new Set([txId, ...directChildIds, ...grandChildIds]);
+  db.archivedTransactions = db.archivedTransactions.filter(t => !allToDelete.has(t.id));
+  const deleted = beforeCount - db.archivedTransactions.length - 1;
   saveDBWithSync();
   closeDlg();
   openTxArchiveSheet();
