@@ -1684,15 +1684,10 @@ function getMonthTotals(monthKey) {
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
     // isAutoFee INCLUDED: real remittance fee expense — UNLESS reimbursable + linked shared tx settled (then offset → neutral)
     // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
-    // isLoanSettlementGain/Loss EXCLUDED: not real income/expense — settlement adjustments only
-    if (t.isAutoReimb) continue;
-    if (t.isLoanSettlementGain || t.isLoanSettlementLoss) continue;
-    if (t.isReimbSettlementGain) continue;
-    // Fee fully reimbursed → neutral, exclude from monthly totals (offset by reimbursement income)
-    if (t.isAutoFee && t.feeReimbSharedTxId) {
-      const linkedShared = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
-      if (linkedShared?.settled) continue;
-    }
+    // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
+    // Gain/Loss INCLUDED: real income/expense from FX arbitrage on settlements
+    // ── PERSONAL LOGIC SET #47 ── Gain/Loss INCLUDED in monthly income/expense: isReimbSettlementGain/Loss + isLoanSettlementGain/Loss are real FX arbitrage earnings/losses (Mark prices lower exchange rate to profit). isAutoReimb batch settlement parents still excluded (accounts receivable, not income).
+    if (t.isAutoReimb && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -1739,10 +1734,13 @@ function getCategoryDisplay(catId) {
 // ── PERSONAL LOGIC SET ── tx-aware category display: returns dedicated label for auto-children flags; falls back to getCategoryDisplay for normal txs
 function txCategoryDisplay(tx) {
   if (!tx) return {icon:'📌',name:'Uncategorized'};
-  if (tx.isLoanSettlementGain)  return {icon:'📈', name:'Loan Settlement Gain'};
-  if (tx.isLoanSettlementLoss)  return {icon:'📉', name:'Loan Settlement Loss'};
-  if (tx.isReimbSettlementGain) return {icon:'📈', name:'Reimbursement Gain'};
-  if (tx.isReimbSettlementLoss) return {icon:'📉', name:'Reimbursement Loss'};
+  // ── PERSONAL LOGIC SET #48 ── txCategoryDisplay dedicated labels: isBatchReimbSettlement = 💰 Reimbursement Received (accounts receivable, not income); isBatchSettlement = 💰 Loan Settlement Received; Gain/Loss flags get 📈/📉 labels. All hidden from category pickers.
+  if (tx.isBatchReimbSettlement) return {icon:'💰', name:'Reimbursement Received'};
+  if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
+  if (tx.isLoanSettlementGain)   return {icon:'📈', name:'Loan Settlement Gain'};
+  if (tx.isLoanSettlementLoss)   return {icon:'📉', name:'Loan Settlement Loss'};
+  if (tx.isReimbSettlementGain)  return {icon:'📈', name:'Reimbursement Gain'};
+  if (tx.isReimbSettlementLoss)  return {icon:'📉', name:'Reimbursement Loss'};
   return getCategoryDisplay(tx.categoryId);
 }
 
@@ -3082,6 +3080,24 @@ function confirmBulkRecategorize() {
   showToast(`🏷️ Re-categorized ${updated} transactions`);
 }
 
+// ── PERSONAL LOGIC SET #46 ── isAutoFee with feeReimbSharedTxId: shows nested pill under fee row in tx log (person + amount + Pending/Settled). isFeeReimbursable shared tx hidden from tx log — visible in Reimbursements tab only. Fee always expense; offset by income tx when settled.
+function feeReimbNestedHTML(tx) {
+  if (!tx.isAutoFee || !tx.feeReimbSharedTxId) return '';
+  const s = db.transactions.find(t => t.id === tx.feeReimbSharedTxId);
+  if (!s) return '';
+  const person = s.feeReimbPerson || s.personName || '?';
+  const ini = person.slice(0,2).toUpperCase();
+  const pill = s.settled
+    ? '<span class="pill pill-green" style="font-size:9px;padding:1px 6px">Settled \u2713</span>'
+    : '<span class="pill" style="font-size:9px;padding:1px 6px;background:var(--amber-bg);color:var(--amber)">Pending</span>';
+  return '<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;display:flex;align-items:center;justify-content:space-between" onclick="event.stopPropagation();openTxDetail(\'' + s.id + '\')">'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<div style="width:24px;height:24px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--accent);flex-shrink:0">' + ini + '</div>'
+    + '<div><div style="font-size:11px;font-weight:500;color:var(--text2)">' + person + ' owes ' + fmt(s.amount, s.currency) + '</div>'
+    + '<div style="font-size:10px;color:var(--text4)">Reimbursable fee</div></div>'
+    + '</div><div style="display:flex;align-items:center;gap:6px">' + pill + '</div></div>';
+}
+
 function renderTxRowBody(tx, showDate, acct, amtD) {
 
   // ── isLoanTx: parent loan transaction (Borrowed / Lent Out) ──
@@ -3457,7 +3473,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
       ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
     </div>
-  </div>${settlementRows}${genericChildrenHTML}${batchSettleHTML}${batchReimbHTML}`;
+  </div>${settlementRows}${feeReimbNestedHTML(tx)}${genericChildrenHTML}${batchSettleHTML}${batchReimbHTML}`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -5319,6 +5335,8 @@ function renderTxLog() {
     // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
     // BUT show batch reimb settlement parents since they are actual cash movement
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
+    // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
+    if (t.isFeeReimbursable) return false;
     // Type filter (still applies during search)
     if (_txFilter !== 'all') {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
@@ -7692,7 +7710,27 @@ function confirmReimbSettlement(person) {
     const totalOwed = parent.persons?.reduce((sum, p) => sum + (p.share || 0), 0)
       || ((parent.totalBill || parent.amount) - (parent.myShare || 0));
     const totalPaid = Object.values(parent.paidSoFar).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-    if (totalPaid >= totalOwed - 0.01) { parent.settled = true; parent.settledAt = date; }
+    if (totalPaid >= totalOwed - 0.01) {
+      parent.settled = true;
+      parent.settledAt = date;
+      // If this is a fee reimbursable shared tx, create an income tx for the fee reimbursement
+      if (parent.isFeeReimbursable) {
+        db.transactions.push({
+          id: 'tx-'+genId(),
+          type: 'income',
+          amount: s.paidInTxCurr,
+          currency: parent.currency,
+          accountId: acctId,
+          date, time,
+          notes: `Bank transfer fee reimb from ${person}`,
+          categoryId: 'sc-bankcharges',
+          isAutoReimb: true,
+          parentId: parent.id,
+          fxSnapshot: snap,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
   }
 
   // Create ONE parent settlement tx for the actual received amount in target currency
@@ -10707,11 +10745,7 @@ function renderAnalyticsSpending() {
     if (t.currency !== view) return false;
     if (!mks.some(mk => t.date?.startsWith(mk))) return false;
     if (t.type !== 'expense' && t.type !== 'shared') return false;
-    // Skip fully-reimbursed fees
-    if (t.isAutoFee && t.feeReimbSharedTxId) {
-      const linked = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
-      if (linked?.settled) return false;
-    }
+    // isAutoFee always counted as expense — offset by income tx when person reimburses
     return true;
   });
 
@@ -16133,12 +16167,7 @@ function aiCashFlowForecast() {
   const monthTxs = db.transactions.filter(t=>{
     if (t.archived || !t.date || !t.date.startsWith(mk)) return false;
     if (t.isSettlement || t.isAutoReimb) return false;
-    if (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) return false;
-    if (t.isAutoFee && t.feeReimbSharedTxId) {
-      const linked = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
-      if (linked?.settled) return false;
-    }
-    return true;
+    // Gain/Loss included — real income/expense from FX arbitrage
   });
   const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
   const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
