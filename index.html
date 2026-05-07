@@ -1496,6 +1496,11 @@ function getAcctBalance(acctId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
       if (parent?.toAmountIsActual) continue;
     }
+    // 📖 USER STORY: Yung loan settlement gain/loss children ay para lang sa tracking — hindi sila
+    // nag-aaffect ng account balance kasi yung parent settlement tx (or yung original loan tx) ang
+    // mismo nag-handle ng cash movement. Skipping prevents double-counting.
+    // ── PERSONAL LOGIC SET ── isLoanSettlementGain/Loss skip in balance — parent settlement already moves cash; children are tracking labels only
+    if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
     // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
     // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
     // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
@@ -1676,7 +1681,9 @@ function getMonthTotals(monthKey) {
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
     // isAutoFee INCLUDED: real remittance fee expense
     // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
+    // isLoanSettlementGain/Loss EXCLUDED: not real income/expense — settlement adjustments only
     if (t.isAutoReimb) continue;
+    if (t.isLoanSettlementGain || t.isLoanSettlementLoss) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -1731,6 +1738,11 @@ function txTypeIcon(tx) {
   return cat.icon || (tx.type==='income'?'💰':tx.type==='transfer'?'↔️':tx.type==='lend'?'🤲':tx.type==='borrow'?'🤏':'💸');
 }
 function txAmountDisplay(tx) {
+  if (tx.isLoanSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
+  if (tx.isLoanSettlementLoss) {
+    const isGain = tx.type === 'income'; // borrowed write-off (forgiveness)
+    return {cls: isGain ? 'tx-pos' : 'tx-neg', str: '📉 ' + (isGain?'+':'-') + fmt(tx.amount,tx.currency)};
+  }
   if (tx.isSettlement && tx.type==='income') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='expense') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
@@ -5426,6 +5438,13 @@ function openTxDetail(txId) {
         <span>💡 Auto-generated remittance fee. Archive parent to remove.</span>
         ${parentFeeExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
       </div>`;
+    } else if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) {
+      const parentExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
+      const labelTxt = tx.isLoanSettlementGain ? 'Auto-generated loan settlement gain.' : 'Auto-generated loan settlement loss.';
+      footer = `<div style="font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
+        <span>💡 ${labelTxt} Manage via parent settlement.</span>
+        ${parentExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
+      </div>`;
     } else {
       footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openTxReceipt('${tx.id}')">🧾 Receipt</button>
        <button class="btn btn-ghost btn-sm" onclick="closeDlg();openEditTx('${tx.id}')">Edit</button>
@@ -6374,6 +6393,10 @@ function archiveTx(txId, skipConfirm) {
     showToast('💡 Archive the parent remittance to remove this fee entry.');
     return;
   }
+  if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) {
+    showToast('💡 Manage via the parent loan settlement transaction.');
+    return;
+  }
   // Block archiving loan payment and parent loan transactions directly
   if (tx.isLoanPayment) {
     showToast('💡 Manage this via the parent Loan record in Loans.');
@@ -6521,6 +6544,10 @@ function restoreTx(txId) {
     delete txData.isAutoForex;
     delete txData.isAutoReimb;
     delete txData.isAutoFee;
+    delete txData.isLoanSettlementGain;
+    delete txData.isLoanSettlementLoss;
+    delete txData.isBatchSettlement;
+    delete txData.batchLoanIds;
   }
 
   // Restore the parent
@@ -7490,6 +7517,16 @@ function deleteInv(id) {
 // LOANS PAGE
 // ════════════════════════════════════════════════════════════
 let _loanTab = 'lent';
+const LOAN_OVERDUE_DAYS = 90; // After due date, loan flagged as overdue and write-off pill shown
+
+// Helper: returns null if no dueDate or not overdue, else number of days past due
+function getLoanOverdueDays(loan) {
+  if (!loan.dueDate || loan.settled) return null;
+  const days = daysUntil(loan.dueDate);
+  if (days === null || days >= 0) return null;
+  const overdueDays = Math.abs(days);
+  return overdueDays >= LOAN_OVERDUE_DAYS ? overdueDays : null;
+}
 
 function renderLoans() {
   const pendingLent = db.loans.lent.filter(l=>!l.settled).length;
@@ -7614,72 +7651,281 @@ function toggleLoanPersonGroup(direction, person) {
 
 // Batch settle all of a person's loans
 function openBatchSettleLoans(direction, person) {
-  const loans = db.loans[direction].filter(l => !l.settled && (l.personName||'').trim() === person);
+  const loans = db.loans[direction]
+    .filter(l => !l.settled && (l.personName||'').trim() === person)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||'')); // FIFO: oldest first
   if (loans.length === 0) return;
+
+  // Group totals by currency for display
   const totalsByCurr = {};
   for (const l of loans) {
     const c = l.currency || 'PHP';
     totalsByCurr[c] = (totalsByCurr[c]||0) + (l.remaining||l.amount);
   }
-  const totalsList = Object.entries(totalsByCurr).map(([c,amt])=>`<li style="margin:4px 0">${fmt(amt, c)}</li>`).join('');
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  const currList = Object.keys(totalsByCurr);
+  // Default settlement currency: most common loan currency
+  const defaultCurr = currList.sort((a,b)=>{
+    const aCount = loans.filter(l=>(l.currency||'PHP')===a).length;
+    const bCount = loans.filter(l=>(l.currency||'PHP')===b).length;
+    return bCount - aCount;
+  })[0];
+
+  // Loan rows summary (read-only)
+  const loanRowsHTML = loans.map(l => {
+    const remain = l.remaining || l.amount;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--text2)">${fmtD(l.date)}${l.dueDate?` · Due ${fmtD(l.dueDate)}`:''}</div>
+        ${l.notes?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${l.notes}</div>`:''}
+      </div>
+      <div style="font-family:var(--mono);color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(remain, l.currency)}</div>
+    </div>`;
+  }).join('');
+
+  // Currency selector (only show if multi-currency)
+  const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
+  const currSelectorHtml = currList.length > 1
+    ? `<div class="form-group"><label class="form-label">Settlement currency</label>
+         <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
+         <div style="font-size:11px;color:var(--text4);margin-top:4px">Other currency loans will be converted using snapshot FX rate</div>
+       </div>`
+    : `<input type="hidden" id="bsl-curr" value="${defaultCurr}">`;
+
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+
+  const totalLabel = direction==='lent' ? 'Total received' : 'Total paid';
+
   openDlg(`Batch Settle: ${person}`,
-    `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Settle all ${loans.length} ${direction==='lent'?'loan':'debt'}${loans.length>1?'s':''} with <strong>${person}</strong>:</div>
-     <ul style="margin:0 0 12px 20px;padding:0;font-family:var(--mono);font-size:13px;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${totalsList}</ul>
-     <div class="form-group"><label class="form-label">${direction==='lent'?'Receive payment to':'Pay from'}</label>
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">${loans.length} ${direction==='lent'?'loan':'debt'}${loans.length>1?'s':''} · settled oldest first</div>
+     <div style="background:var(--bg3);border-radius:var(--r-md);max-height:180px;overflow-y:auto;margin-bottom:14px">${loanRowsHTML}</div>
+     ${currSelectorHtml}
+     <div class="form-group"><label class="form-label">${totalLabel}</label>
+       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="bsl-amount" value="" placeholder="0.00" oninput="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+     </div>
+     <div id="bsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
+     <div class="form-group"><label class="form-label">${direction==='lent'?'Receive into':'Pay from'}</label>
        <select class="form-input" id="bsl-acct">${acctOpts}</select>
      </div>
      <div class="form-group"><label class="form-label">Date</label>
-       <input class="form-input" type="date" id="bsl-date" value="${today()}">
+       <input class="form-input" type="date" id="bsl-date" value="${today()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
      </div>
      <div class="form-group"><label class="form-label">Notes (optional)</label>
        <input class="form-input" id="bsl-notes" placeholder="e.g. paid in full">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle All</button>`
+     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
+  // Auto-fill with grand total in settlement currency
+  setTimeout(()=>{
+    const total = computeBatchSettleTotal(loans, defaultCurr, today());
+    const inp = document.getElementById('bsl-amount');
+    if (inp) { inp.value = total.toFixed(2); updateBatchSettlePreview(direction, person); }
+  }, 50);
+}
+
+// Convert all loans to target currency using snapshot FX of settlement date
+function computeBatchSettleTotal(loans, targetCurr, settlementDate) {
+  const snap = buildFxSnapshot(settlementDate);
+  let total = 0;
+  for (const l of loans) {
+    const remain = l.remaining || l.amount;
+    if ((l.currency||'PHP') === targetCurr) {
+      total += remain;
+    } else {
+      // Convert via PHP base: amt_in_target = (amt_in_loan_curr * snap[loan_curr]) / snap[target]
+      const phpVal = (l.currency==='PHP') ? remain : remain * (snap[l.currency] || 1);
+      const targetVal = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+      total += targetVal;
+    }
+  }
+  return total;
+}
+
+function updateBatchSettlePreview(direction, person) {
+  const loans = db.loans[direction]
+    .filter(l => !l.settled && (l.personName||'').trim() === person)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0]?.currency || 'PHP');
+  const date = document.getElementById('bsl-date')?.value || today();
+  const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
+  const grandTotal = computeBatchSettleTotal(loans, targetCurr, date);
+  const preview = document.getElementById('bsl-preview');
+  if (!preview) return;
+
+  if (received <= 0) {
+    preview.innerHTML = `<div style="color:var(--text4)">Total owed: <strong style="font-family:var(--mono);color:var(--text2)">${fmt(grandTotal, targetCurr)}</strong></div>`;
+    return;
+  }
+
+  const diff = received - grandTotal;
+  const dispCurr = targetCurr;
+
+  if (Math.abs(diff) < 0.01) {
+    preview.innerHTML = `<div style="color:var(--green)">✓ Exact — settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
+  } else if (diff > 0) {
+    // Sobra — gain for lent, loss for borrowed
+    const excessIsGain = direction === 'lent';
+    const excessLabel = excessIsGain ? 'Loan Settlement Gain' : 'Overpayment (Loss)';
+    const excessColor = excessIsGain ? 'var(--green)' : 'var(--red)';
+    preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>
+      <div style="color:var(--text3);margin-top:3px">Excess: <strong style="font-family:var(--mono);color:${excessColor}">+${fmt(diff, dispCurr)}</strong> → logged as ${excessLabel}</div>`;
+  } else {
+    // Kulang — FIFO partial
+    let remainAmt = received;
+    let fullyPaid = 0;
+    let partialAmt = 0;
+    for (const l of loans) {
+      const r = l.remaining || l.amount;
+      let rInTarget;
+      if ((l.currency||'PHP')===targetCurr) {
+        rInTarget = r;
+      } else {
+        const snap = buildFxSnapshot(date);
+        const phpVal = (l.currency==='PHP') ? r : r * (snap[l.currency] || 1);
+        rInTarget = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+      }
+      if (remainAmt >= rInTarget - 0.01) {
+        remainAmt -= rInTarget;
+        fullyPaid++;
+      } else if (remainAmt > 0) {
+        partialAmt = remainAmt;
+        remainAmt = 0;
+        break;
+      } else break;
+    }
+    const untouched = loans.length - fullyPaid - (partialAmt > 0 ? 1 : 0);
+    let msg = `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
+    if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next loan: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
+    if (untouched > 0) msg += `<div style="color:var(--text4);margin-top:2px">${untouched} ${untouched>1?'loans':'loan'} untouched</div>`;
+    preview.innerHTML = msg;
+  }
 }
 
 // 📖 USER STORY: Pag pinindot mo ang "Settle All" sa loans ng isang tao, lahat ng active loans
-// niya sayo (o sayo sa kanya) ay naise-settle in one go — hindi mo na kailangang isa-isahing
-// i-settle bawat loan entry. Auto-creates settlement transactions per loan.
-// ── PERSONAL LOGIC SET ── batch settle creates settlement txs for all active loans per person
+// niya sayo (o sayo sa kanya) ay naise-settle in FIFO order — oldest loan muna. Pag may sobra
+// sa bayad, auto na siyang nilo-log as Loan Settlement Gain. Pag kulang naman, partial lang
+// yung last loan na natamaan, untouched yung iba pa.
+// ── PERSONAL LOGIC SET ── batch settle: FIFO order with snapshot FX conversion; sobra=isLoanSettlementGain child, kulang=partial last loan
 function confirmBatchSettleLoans(direction, person) {
-  const loans = db.loans[direction].filter(l => !l.settled && (l.personName||'').trim() === person);
+  const loans = db.loans[direction]
+    .filter(l => !l.settled && (l.personName||'').trim() === person)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if (loans.length === 0) { showToast('No active loans'); return; }
+
   const acctId = document.getElementById('bsl-acct')?.value;
   const date = document.getElementById('bsl-date')?.value || today();
   const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
+  const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0].currency || 'PHP');
+  const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) { showToast('Pick an account'); return; }
+  if (received <= 0) { showToast('Enter received amount'); return; }
 
+  const snap = buildFxSnapshot(date);
+
+  // Helper: convert amount from one currency to another using snapshot
+  const conv = (amt, from, to) => {
+    if (from === to) return amt;
+    const phpVal = (from==='PHP') ? amt : amt * (snap[from] || 1);
+    return (to==='PHP') ? phpVal : phpVal / (snap[to] || 1);
+  };
+
+  // FIFO walk: deduct from received, settling loans in order
+  let remainingReceived = received;
+  const settledNow = [];
   for (const loan of loans) {
-    const payAmt = loan.remaining || loan.amount;
-    // Create settlement transaction
-    const txId = 'tx-'+genId();
+    if (remainingReceived <= 0.001) break;
+    const loanCurr = loan.currency || 'PHP';
+    const loanRemain = loan.remaining || loan.amount;
+    const loanRemainInTarget = conv(loanRemain, loanCurr, targetCurr);
+
+    if (remainingReceived >= loanRemainInTarget - 0.01) {
+      // Full settle
+      remainingReceived -= loanRemainInTarget;
+      loan.remaining = 0;
+      loan.settled = true;
+      loan.settledDate = date;
+      settledNow.push({loan, paidInTarget: loanRemainInTarget, paidInLoanCurr: loanRemain, full: true});
+    } else {
+      // Partial settle — convert received-remainder back to loan currency
+      const partialInTarget = remainingReceived;
+      const partialInLoanCurr = conv(partialInTarget, targetCurr, loanCurr);
+      loan.remaining = Math.max(0, loanRemain - partialInLoanCurr);
+      settledNow.push({loan, paidInTarget: partialInTarget, paidInLoanCurr: partialInLoanCurr, full: false});
+      remainingReceived = 0;
+      break;
+    }
+  }
+
+  // Excess (sobra) — gain
+  const excess = remainingReceived;
+
+  if (settledNow.length === 0 && excess <= 0) { showToast('Nothing settled'); return; }
+
+  // Create ONE parent settlement tx for the actual received amount in target currency
+  const parentTxId = 'tx-'+genId();
+  const fullyPaid = settledNow.filter(s=>s.full).length;
+  const partialPaid = settledNow.filter(s=>!s.full).length;
+  const parentNotes = notes || `Batch settled with ${person} (${fullyPaid} full${partialPaid?` + ${partialPaid} partial`:''})`;
+
+  // Link parent settlement to first settled loan (or any loan), tag with batch info
+  const primaryLoan = settledNow[0]?.loan || loans[0];
+  db.transactions.push({
+    id: parentTxId,
+    type: direction === 'lent' ? 'income' : 'expense',
+    amount: received,
+    currency: targetCurr,
+    accountId: acctId,
+    date,
+    time: nowTime(),
+    notes: parentNotes,
+    isSettlement: true,
+    isLoanPayment: true,
+    isBatchSettlement: true,
+    parentId: primaryLoan.id,
+    batchLoanIds: settledNow.map(s=>s.loan.id),
+    batchPerson: person,
+    batchDirection: direction,
+    categoryId: primaryLoan.categoryId || null,
+    fxSnapshot: snap,
+    createdAt: new Date().toISOString(),
+  });
+
+  // Create gain/loss child if sobra
+  // 📖 LOGIC: For lent direction, sobra = gain (received more than owed). For borrowed direction,
+  // sobra = loss (paid more than owed — overpayment, gift to creditor).
+  if (excess > 0.01) {
+    const isExcessGain = direction === 'lent'; // received more than expected
     db.transactions.push({
-      id: txId,
-      type: direction === 'lent' ? 'income' : 'expense',
-      amount: payAmt,
-      currency: loan.currency,
+      id: 'tx-'+genId(),
+      type: isExcessGain ? 'income' : 'expense',
+      amount: excess,
+      currency: targetCurr,
       accountId: acctId,
       date,
       time: nowTime(),
-      notes: notes || `Batch settled with ${person}`,
+      notes: isExcessGain ? `Settlement gain from ${person}` : `Overpayment to ${person}`,
+      isLoanSettlementGain: isExcessGain,
+      isLoanSettlementLoss: !isExcessGain,
       isSettlement: true,
-      isLoanPayment: true,
-      parentId: loan.id,
-      categoryId: loan.categoryId || null,
-      fxSnapshot: buildFxSnapshot(date),
+      parentId: parentTxId,
+      batchPerson: person,
+      fxSnapshot: snap,
       createdAt: new Date().toISOString(),
     });
-    loan.remaining = 0;
-    loan.settled = true;
-    loan.settledDate = date;
   }
+
   saveDBWithSync();
   closeDlg();
   renderLoans();
-  showToast(`✓ Settled ${loans.length} ${direction==='lent'?'loan':'debt'}${loans.length>1?'s':''} with ${person}`);
+
+  const excessLabel = direction === 'lent' ? 'gain' : 'overpayment';
+  const summary = excess > 0.01
+    ? `✓ Settled ${fullyPaid} ${fullyPaid===1?'loan':'loans'} + ${fmt(excess, targetCurr)} ${excessLabel}`
+    : partialPaid > 0
+      ? `✓ Settled ${fullyPaid} fully + 1 partial`
+      : `✓ Settled ${fullyPaid} ${fullyPaid===1?'loan':'loans'}`;
+  showToast(summary);
 }
 
 function openLoanDetail(loanId, direction) {
@@ -7823,9 +8069,10 @@ function openLoanDetail(loanId, direction) {
           <button class="btn btn-primary" style="flex:1" onclick="settleLoan('${loanId}','${direction}',true)">Settle All</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="editLoanFull('${loanId}','${direction}')">Edit Loan</button>
         <button class="btn btn-warning btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
+        ${getLoanOverdueDays(loan)!==null?`<button class="btn btn-danger btn-sm" onclick="openWriteOffLoan('${loanId}','${direction}')">⚠️ Write off (${getLoanOverdueDays(loan)}d overdue)</button>`:''}
       </div>
     `:`
       <div style="display:flex;gap:8px;margin-top:10px">
@@ -8003,15 +8250,22 @@ function archiveLoan(loanId, direction) {
   // - Parent loan tx (isLoanTx + loanId match)
   // - Loan payments (isLoanPayment + parentId === loanId)
   // - Auto forex gain/loss children (isAutoForex with parentId pointing to parent loan tx)
+  // - Loan settlement gain/loss children (parentId points to batch settlement tx OR loan id)
+  // - Batch settlement parent txs (isBatchSettlement with this loanId in batchLoanIds)
   if (!Array.isArray(db.archivedTransactions)) db.archivedTransactions = [];
   // Find parent loan tx id(s) so we can find their forex children
   const parentLoanTxIds = db.transactions.filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id);
+  // Find batch settlement parent tx ids that include this loan
+  const batchSettleTxIds = db.transactions.filter(t => t.isBatchSettlement && (t.batchLoanIds||[]).includes(loanId)).map(t => t.id);
+  const allParentIds = [...parentLoanTxIds, ...batchSettleTxIds, loanId];
   const archiveStamp = new Date().toISOString();
   db.transactions = db.transactions.filter(t => {
     const isParent = t.isLoanTx && t.loanId === loanId;
     const isPayment = t.isLoanPayment && t.parentId === loanId;
+    const isBatchSettleParent = t.isBatchSettlement && (t.batchLoanIds||[]).includes(loanId);
     const isForexChild = t.isAutoForex && parentLoanTxIds.includes(t.parentId);
-    if (isParent || isPayment || isForexChild) {
+    const isSettlementGainLoss = (t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId);
+    if (isParent || isPayment || isBatchSettleParent || isForexChild || isSettlementGainLoss) {
       db.archivedTransactions.push({ ...t, archived: true, archivedAt: archiveStamp, cascadedFrom: 'loan:'+loanId });
       return false; // remove from active
     }
@@ -8019,6 +8273,89 @@ function archiveLoan(loanId, direction) {
   });
 
   saveDBWithSync(); closeSheet('gen'); renderLoans(); showToast('Loan archived');
+}
+
+// 📖 USER STORY: Pag matagal nang overdue ang loan ni isang tao (default 90 days past due) at
+// hindi na talaga magbabayad, pwede mo siyang i-write off as loss. Auto-creates a Loan Settlement
+// Loss expense child tx, ma-mark settled yung loan, at hindi mawawala — visible pa rin sa Settled.
+// ── PERSONAL LOGIC SET ── write-off creates isLoanSettlementLoss expense child; loan.settledAs='writeoff'; reason stored on parent
+function openWriteOffLoan(loanId, direction) {
+  const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
+  if (!loan) return;
+  const remaining = loan.remaining ?? loan.amount;
+  const overdueDays = getLoanOverdueDays(loan);
+  const reasons = [
+    'Uncollectible',
+    'Forgiven',
+    'Disputed',
+    'Person unreachable',
+    'Other'
+  ];
+  const reasonOpts = reasons.map(r=>`<option value="${r}">${r}</option>`).join('');
+
+  openDlg(`Write off loan from ${loan.personName}?`,
+    `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">
+      This loan is <strong>${overdueDays||'?'} days overdue</strong>. Writing off will:
+      <ul style="margin:8px 0 0 20px;padding:0;font-size:12px;color:var(--text3)">
+        <li>Mark loan as settled (won't appear in active list)</li>
+        <li>Log <strong>${fmt(remaining, loan.currency)}</strong> as Loan Settlement Loss</li>
+        <li>Cannot be undone (but you can restore from settled list)</li>
+      </ul>
+    </div>
+    <div class="form-group"><label class="form-label">Reason</label>
+      <select class="form-input" id="wol-reason">${reasonOpts}</select>
+    </div>
+    <div class="form-group"><label class="form-label">Notes (optional)</label>
+      <input class="form-input" id="wol-notes" placeholder="Additional context...">
+    </div>
+    <div class="form-group"><label class="form-label">Date</label>
+      <input class="form-input" type="date" id="wol-date" value="${today()}">
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmWriteOffLoan('${loanId}','${direction}')">Write off</button>`
+  );
+}
+
+function confirmWriteOffLoan(loanId, direction) {
+  const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
+  if (!loan) return;
+  const reason = document.getElementById('wol-reason')?.value || 'Uncollectible';
+  const notes = document.getElementById('wol-notes')?.value?.trim() || '';
+  const date = document.getElementById('wol-date')?.value || today();
+  const remaining = loan.remaining ?? loan.amount;
+  const lossNotes = notes ? `${reason} — ${notes}` : reason;
+
+  // Create loss child tx (expense type, but excluded from regular expense totals)
+  const lossTxId = 'tx-'+genId();
+  db.transactions.push({
+    id: lossTxId,
+    type: direction === 'lent' ? 'expense' : 'income', // lent loss = our expense; borrowed write-off = our gain
+    amount: remaining,
+    currency: loan.currency,
+    accountId: loan.accountId,
+    date,
+    time: nowTime(),
+    notes: `Loan Settlement Loss from ${loan.personName} — ${lossNotes}`,
+    isLoanSettlementLoss: true,
+    isSettlement: true,
+    parentId: loanId,
+    writeOffReason: reason,
+    fxSnapshot: buildFxSnapshot(date),
+    createdAt: new Date().toISOString(),
+  });
+
+  // Mark loan settled
+  loan.remaining = 0;
+  loan.settled = true;
+  loan.settledDate = date;
+  loan.settledAs = 'writeoff';
+  loan.writeOffReason = reason;
+
+  saveDBWithSync();
+  closeDlg();
+  closeSheet('gen');
+  renderLoans();
+  showToast(`Wrote off ${fmt(remaining, loan.currency)} loss`);
 }
 
 // 📖 USER STORY: Pag na-settle na ang loan ni isang tao, hindi na siya lumalabas sa active list mo —
@@ -8110,9 +8447,13 @@ function openLoanArchiveSheet() {
       const dir = loan.direction || 'lent';
       const archivedTx = db.archivedTransactions || [];
       const parentTxIds = archivedTx.filter(t => t.isLoanTx && t.loanId === loan.id).map(t => t.id);
+      const batchSettleTxIds = archivedTx.filter(t => t.isBatchSettlement && (t.batchLoanIds||[]).includes(loan.id)).map(t => t.id);
+      const allParentIds = [...parentTxIds, ...batchSettleTxIds, loan.id];
       const payments = archivedTx.filter(t => t.parentId === loan.id && t.isLoanPayment);
       const forexChildren = archivedTx.filter(t => t.isAutoForex && parentTxIds.includes(t.parentId));
-      const linkedCount = payments.length + forexChildren.length;
+      const settlementChildren = archivedTx.filter(t => (t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId));
+      const batchParents = archivedTx.filter(t => batchSettleTxIds.includes(t.id));
+      const linkedCount = payments.length + forexChildren.length + settlementChildren.length + batchParents.length;
       const isLast = i === period.loans.length - 1;
       const safeName = (loan.personName||'Unknown').replace(/'/g,"\\'");
 
@@ -8240,6 +8581,12 @@ function confirmDeleteLoan(loanId) {
     ...db.transactions.filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id),
     ...(db.archivedTransactions||[]).filter(t => t.isLoanTx && t.loanId === loanId).map(t => t.id),
   ];
+  // Find batch settlement tx ids that include this loan (for cascade of their gain/loss children)
+  const batchSettleTxIds = [
+    ...db.transactions.filter(t => t.isBatchSettlement && (t.batchLoanIds||[]).includes(loanId)).map(t => t.id),
+    ...(db.archivedTransactions||[]).filter(t => t.isBatchSettlement && (t.batchLoanIds||[]).includes(loanId)).map(t => t.id),
+  ];
+  const allParentIds = [...parentLoanTxIds, ...batchSettleTxIds, loanId];
   // Remove from archivedLoans
   db.archivedLoans = db.archivedLoans.filter(l=>l.id!==loanId);
   // Remove parent loan transaction (isLoanTx)
@@ -8251,6 +8598,9 @@ function confirmDeleteLoan(loanId) {
   // Remove auto forex children (parentId points to parent loan tx)
   db.transactions = db.transactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
   db.archivedTransactions = db.archivedTransactions.filter(t=>!(t.isAutoForex && parentLoanTxIds.includes(t.parentId)));
+  // Remove loan settlement gain/loss children (parentId points to batch settlement tx OR loan id directly for write-offs)
+  db.transactions = db.transactions.filter(t=>!((t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId)));
+  db.archivedTransactions = db.archivedTransactions.filter(t=>!((t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId)));
   saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
   // Refresh open archive sheet if still mounted
   if (document.getElementById('gen-sheet')?.classList.contains('open')) {
@@ -12599,7 +12949,7 @@ function exportXLSX() {
     // ── Sheet 1: Transactions ──
     const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency','PHP Equivalent','Account','To Account','Notes','Tags']];
     for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
-      if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee) continue; // skip auto-children
+      if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue; // skip auto-children
       const cat = getCategoryDisplay(tx.categoryId);
       const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
       const toAcct = tx.toAccountId ? getAccountDisplay(tx.toAccountId) : '';
@@ -14095,6 +14445,7 @@ function runAIAnalysis() {
   // New analyzers
   _aiInsights.push(...aiAccountBalanceAlert());
   _aiInsights.push(...aiInstallmentReminder());
+  _aiInsights.push(...aiLoanOverdueAlert());
   _aiInsights.push(...aiSpendingVelocity());
   _aiInsights.push(...aiSavingRate());
   _aiInsights.push(...aiContractMilestone());
@@ -14770,6 +15121,46 @@ function aiInstallmentReminder() {
   return insights.slice(0,5);
 }
 
+// 📖 USER STORY: Pag may loan na sobrang tagal nang overdue (default 90 days past due) at hindi
+// pa rin nakapag-settle, mag-aappear na siya as alert sa AI Insights — para hindi mo malimutan
+// at para magkaroon ka ng option na i-write off as loss.
+// ── PERSONAL LOGIC SET ── overdue loan alert: only when getLoanOverdueDays(loan) !== null; tap action = open loan detail with write-off pill
+function aiLoanOverdueAlert() {
+  const insights = [];
+  const allLoans = [
+    ...(db.loans?.lent||[]).map(l=>({...l, _direction:'lent'})),
+    ...(db.loans?.borrowed||[]).map(l=>({...l, _direction:'borrowed'}))
+  ];
+  for (const loan of allLoans) {
+    const overdueDays = getLoanOverdueDays(loan);
+    if (overdueDays === null) continue;
+    const id = 'loanoverdue-'+loan.id;
+    const remaining = loan.remaining ?? loan.amount;
+    const isLent = loan._direction === 'lent';
+    const titles = [
+      `${loan.personName} loan ${overdueDays}d overdue`,
+      `Overdue: ${loan.personName} — ${overdueDays} days past due`,
+      `${loan.personName} hasn't ${isLent?'paid':'been paid'} — ${overdueDays}d overdue`,
+    ];
+    const bodies = [
+      `${fmt(remaining, loan.currency)} still ${isLent?'owed to you':'owed by you'}. Consider writing off as a loss if uncollectible.`,
+      `${fmt(remaining, loan.currency)} outstanding. Past your ${LOAN_OVERDUE_DAYS}-day threshold — review and decide.`,
+      `${fmt(remaining, loan.currency)} unsettled. Tap to write off if you've given up on collecting.`,
+    ];
+    insights.push({
+      id, type: 'loan-overdue',
+      priority: overdueDays > 180 ? 'high' : 'medium',
+      icon: '⚠️',
+      title: aiPick(titles, id),
+      body: aiPick(bodies, id),
+      action: 'View Loans',
+      _loanId: loan.id,
+      _direction: loan._direction
+    });
+  }
+  return insights.slice(0, 5);
+}
+
 function aiSpendingVelocity() {
   const insights = [];
   const today = new Date();
@@ -15126,6 +15517,12 @@ function renderAIPage() {
       'View Accounts': ()=>{ nav('accounts'); },
       'View Installments': ()=>{ nav('installments'); },
       'View Analytics': ()=>{ nav('analytics'); },
+      'View Loans': ()=>{
+        nav('loans');
+        if (ins._loanId && ins._direction) {
+          setTimeout(()=>{ _loanTab = ins._direction; renderLoans(); openLoanDetail(ins._loanId, ins._direction); }, 150);
+        }
+      },
     };
     const navFn = ins.action && actionNav[ins.action] ? actionNav[ins.action] : null;
     const actionId = ins.id ? 'ai-act-'+ins.id.replace(/[^a-z0-9]/gi,'-') : '';
@@ -15192,6 +15589,12 @@ function aiNavigate(insId) {
     'View Accounts': ()=>{ nav('accounts'); },
     'View Installments': ()=>{ nav('installments'); },
     'View Analytics': ()=>{ nav('analytics'); },
+    'View Loans': ()=>{
+      nav('loans');
+      if (ins._loanId && ins._direction) {
+        setTimeout(()=>{ _loanTab = ins._direction; renderLoans(); openLoanDetail(ins._loanId, ins._direction); }, 150);
+      }
+    },
   };
   const fn = actionNav[ins.action];
   if (fn) fn();
