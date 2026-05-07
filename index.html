@@ -1726,6 +1726,19 @@ function getCategoryDisplay(catId) {
   return {icon:'📌',name:'Category'};
 }
 
+// 📖 USER STORY: Auto-generated children (gain/loss) ay may dedicated display labels imbes
+// na ipakita as "Uncategorized" o random category. Para mas malinaw kung anong klase ng
+// transaction sila — Loan Settlement Gain, Reimbursement Loss, etc.
+// ── PERSONAL LOGIC SET ── tx-aware category display: returns dedicated label for auto-children flags; falls back to getCategoryDisplay for normal txs
+function txCategoryDisplay(tx) {
+  if (!tx) return {icon:'📌',name:'Uncategorized'};
+  if (tx.isLoanSettlementGain)  return {icon:'📈', name:'Loan Settlement Gain'};
+  if (tx.isLoanSettlementLoss)  return {icon:'📉', name:'Loan Settlement Loss'};
+  if (tx.isReimbSettlementGain) return {icon:'📈', name:'Reimbursement Gain'};
+  if (tx.isReimbSettlementLoss) return {icon:'📉', name:'Reimbursement Loss'};
+  return getCategoryDisplay(tx.categoryId);
+}
+
 function getAccountDisplay(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   return a ? a : {name:'Unknown',currency:'PHP'};
@@ -1736,7 +1749,7 @@ function txTypeColor(type) {
   return map[type] || 'gray';
 }
 function txTypeIcon(tx) {
-  const cat = getCategoryDisplay(tx.categoryId);
+  const cat = txCategoryDisplay(tx);
   return cat.icon || (tx.type==='income'?'💰':tx.type==='transfer'?'↔️':tx.type==='lend'?'🤲':tx.type==='borrow'?'🤏':'💸');
 }
 function txAmountDisplay(tx) {
@@ -3065,20 +3078,54 @@ function confirmBulkRecategorize() {
 function renderTxRowBody(tx, showDate, acct, amtD) {
 
   // ── isLoanTx: parent loan transaction (Borrowed / Lent Out) ──
+  // 📖 USER STORY: Yung parent loan tx (Lent Out / Borrowed) ay may breakdown card sa baba —
+  // expanded by default, ipinapakita lahat ng linked: payments, batch settlement parents, at
+  // gain/loss children. Tap mo yung child → opens its detail (read-only or fully editable).
+  // ── PERSONAL LOGIC SET ── isLoanTx parent renders expandable iOS card with: payments + batch settlement parents + gain/loss children; default expanded; chevron toggles
   if (tx.isLoanTx) {
     const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
     const icon  = tx.loanDirection==='lent' ? '🤲' : '🤏';
     const iconBg = tx.loanDirection==='lent' ? 'tx-icon-lend' : 'tx-icon-borrow';
-    const children = db.transactions.filter(t => t.parentId === tx.loanId && t.isLoanPayment && !t.archived);
-    const childHTML = children.length > 0
-      ? `<div style="padding:4px 20px 6px;background:var(--bg3);border-bottom:1px solid var(--border)">
-          ${children.map(c=>{
-            const cAcct = getAccountDisplay(c.accountId);
-            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);background:var(--bg4);padding:2px 8px;border-radius:var(--r-full);margin-right:4px">
-              ↳ Payment: ${fmt(c.amount,c.currency)} · ${cAcct.name} · ${fmtD(c.date)}
-            </span>`;
-          }).join('')}
-        </div>` : '';
+    // Gather all linked children: payments, batch settlement parents, gain/loss
+    const payments = db.transactions.filter(t => !t.archived && t.parentId === tx.loanId && t.isLoanPayment && !t.isBatchSettlement);
+    const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && (t.batchLoanIds||[]).includes(tx.loanId));
+    const batchParentIds = batchParents.map(t=>t.id);
+    const gainLoss = db.transactions.filter(t => !t.archived && (t.isLoanSettlementGain || t.isLoanSettlementLoss) && (t.parentId === tx.loanId || batchParentIds.includes(t.parentId)));
+    const allChildren = [...payments, ...batchParents, ...gainLoss].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+    let breakdownHTML = '';
+    if (allChildren.length > 0) {
+      const breakdownId = 'loanbreak-' + tx.id;
+      const childRows = allChildren.map(c => {
+        const cAcct = getAccountDisplay(c.accountId);
+        const cAmtD = txAmountDisplay(c);
+        let childLabel, badge = '';
+        if (c.isBatchSettlement) { childLabel = `Batch settlement · ${c.batchPerson||''}`; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Batch</span>`; }
+        else if (c.isLoanSettlementGain) { childLabel = '📈 Settlement gain'; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">Gain</span>`; }
+        else if (c.isLoanSettlementLoss) { childLabel = '📉 Settlement loss'; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`; }
+        else { childLabel = `Payment · ${cAcct.name}`; }
+        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <div style="font-size:12px;color:var(--text2);min-width:0">${childLabel}</div>
+            ${badge}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="font-size:10px;color:var(--text4);font-family:var(--mono)">${fmtD(c.date)}</span>
+            <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600">${cAmtD.str}</span>
+          </div>
+        </div>`;
+      }).join('');
+      breakdownHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${allChildren.length}</span>
+          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
+          ${childRows}
+        </div>
+      </div>`;
+    }
+
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon ${iconBg}">${icon}</div>
       <div class="tx-meta">
@@ -3089,7 +3136,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         <div class="tx-amount tx-neu">⇄ ${fmt(tx.amount,tx.currency)}</div>
         ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
       </div>
-    </div>${childHTML}`;
+    </div>${breakdownHTML}`;
   }
 
   // ── isLoanPayment: child settlement transaction ──
@@ -3131,7 +3178,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   }
 
   // ── Standard transaction ──
-  const cat = getCategoryDisplay(tx.categoryId);
+  const cat = txCategoryDisplay(tx);
   const color = txTypeColor(tx.type);
   let detail = '';
   if (tx.type==='transfer') {
@@ -3181,9 +3228,13 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       </div>`;
 
     // Other persons
+    // 📖 USER STORY: Yung "paid" amount per person ay galing sa tx.paidSoFar[name] kasi yan ang
+    // updated tracker — pwedeng dumating sa per-tx settlement (legacy isAutoReimb children) o
+    // sa batch reimb settlement (updates paidSoFar directly without per-tx children).
+    // ── PERSONAL LOGIC SET ── shared tx breakdown reads from tx.paidSoFar (authoritative source) instead of summing children — works for both legacy per-tx and new batch reimb settlement flows
+    const paidSoFarMap = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? tx.paidSoFar : {};
     for (const p of persons) {
-      const personReibs = settlements.filter(s => s.reimbPerson === p.name);
-      const totalReimbursed = personReibs.reduce((s, r) => s + (r.amount || 0), 0);
+      const totalReimbursed = parseFloat(paidSoFarMap[p.name]) || 0;
       const remaining = Math.max(0, (p.share || 0) - totalReimbursed);
       const fullyPaid = remaining <= 0.01;
 
@@ -3212,8 +3263,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         </div>`;
     }
 
-    // Compute summary for collapsed state
-    const totalReimb = settlements.reduce((s,r)=>s+(r.amount||0),0);
+    // Compute summary for collapsed state — sum from paidSoFar (authoritative)
+    const totalReimb = Object.values(paidSoFarMap).reduce((s,v)=>s+(parseFloat(v)||0),0);
     const totalOwed = persons.reduce((s,p)=>s+(p.share||0),0);
     const totalRemaining = Math.max(0, totalOwed - totalReimb);
     const summaryBadge = totalRemaining <= 0.01 && totalOwed > 0
@@ -3229,12 +3280,49 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
           <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Split (${totalPeople} people)</span>
           ${summaryBadge}
         </div>
-        <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div id="${breakdownId}" style="display:none;padding:0 12px;border-top:1px solid var(--border)">
+      <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
         ${personRows}
       </div>
     </div>`;
+  }
+
+  // 📖 USER STORY: Pag yung tx ay parent ng auto-children (gain/loss, forex, fees) o batch
+  // settlement, ipinapakita yung mga linked children sa baba ng row — para makita mo agad
+  // anong nadagdag/nawala. Tap mo yung child → opens its detail (read-only).
+  // ── PERSONAL LOGIC SET ── generic parent children block: shows isLoanSettlementGain/Loss, isReimbSettlementGain/Loss, isAutoForex children directly nested under parent in tx log
+  let genericChildrenHTML = '';
+  if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
+    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee));
+    if (directChildren.length > 0) {
+      const breakdownId = 'genbreak-' + tx.id;
+      const childRows = directChildren.map(c => {
+        const cAmtD = txAmountDisplay(c);
+        const cCat = txCategoryDisplay(c);
+        let badge = '';
+        if (c.isLoanSettlementGain || c.isReimbSettlementGain) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">Gain</span>`;
+        else if (c.isLoanSettlementLoss || c.isReimbSettlementLoss) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`;
+        else if (c.isAutoForex) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Forex</span>`;
+        else if (c.isAutoFee) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--amber-bg);color:var(--amber);font-weight:600">Fee</span>`;
+        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <div style="font-size:12px;color:var(--text2);min-width:0">${cCat.name.replace(/^[^ ]+ /,'')}</div>
+            ${badge}
+          </div>
+          <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0">${cAmtD.str}</span>
+        </div>`;
+      }).join('');
+      genericChildrenHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${directChildren.length}</span>
+          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
+          ${childRows}
+        </div>
+      </div>`;
+    }
   }
 
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
@@ -3247,7 +3335,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
       ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
     </div>
-  </div>${settlementRows}`;
+  </div>${settlementRows}${genericChildrenHTML}`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -5016,10 +5104,17 @@ function renderTxLog() {
       if (dateFrom && t.date < dateFrom) return false;
       if (dateTo && t.date > dateTo) return false;
     }
+    // 📖 USER STORY: Yung batch settlement parent (loan or reimb) ay actual cash movement —
+    // dapat lumalabas sa Transactions log. Yung individual loan payments at auto-reimb children
+    // ay hidden (visible sa Loans/Reimbursements tabs lang). Pero exception: pag pinindot mo ang
+    // 'loans' filter, makikita mo lahat ng loan-related para visible parent + payments.
+    // ── PERSONAL LOGIC SET ── txn log filter: hide isLoanPayment children EXCEPT batch parents (isBatchSettlement); hide isAutoReimb children EXCEPT batch reimb parents (isBatchReimbSettlement)
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
-    if (t.isLoanPayment && _txFilter !== 'loans') return false;
+    // BUT show batch settlement parents (even if isLoanPayment) since they are actual cash movement
+    if (t.isLoanPayment && !t.isBatchSettlement && _txFilter !== 'loans') return false;
     // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
-    if (t.isAutoReimb) return false;
+    // BUT show batch reimb settlement parents since they are actual cash movement
+    if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     // Type filter (still applies during search)
     if (_txFilter !== 'all') {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
@@ -5342,6 +5437,11 @@ function openTxDetail(txId) {
   const amtD = txAmountDisplay(tx);
   const acct = tx.type==='transfer' ? null : getAccountDisplay(tx.accountId);
 
+  // Override label for auto-children with dedicated display
+  const dispCat = (tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain || tx.isReimbSettlementLoss)
+    ? txCategoryDisplay(tx)
+    : cat;
+
   let rows = '';
   rows += `<div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${txTypeColor(tx.type)}">${tx.type}</span></div></div>`;
   if (tx.type === 'shared') {
@@ -5493,26 +5593,38 @@ function openTxDetail(txId) {
     </div>`;
   } else {
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-      <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${cat.icon}</div>
-      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':cat.name.replace(/^[^ ]+ /,'')}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
+      <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${dispCat.icon}</div>
+      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':dispCat.name.replace(/^[^ ]+ /,'')}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
     </div>`;
   }
 
   // Build children section for parent transactions
   let childrenSection = '';
-  const activeChildren = db.transactions.filter(t => t.parentId === txId && !t.archived);
-  const archivedChildren = db.archivedTransactions.filter(t => t.parentId === txId);
-  const allChildren = [...activeChildren, ...archivedChildren];
+  // 📖 Two-level: include grandchildren (gain/loss children of batch settlement parents)
+  // ── PERSONAL LOGIC SET ── tx detail children: 2-level lookup so gain/loss grandchildren are shown alongside payment children
+  const directActiveChildren = db.transactions.filter(t => t.parentId === txId && !t.archived);
+  const directArchivedChildren = db.archivedTransactions.filter(t => t.parentId === txId);
+  const directChildren = [...directActiveChildren, ...directArchivedChildren];
+  const directChildIds = directChildren.map(c => c.id);
+  const grandActiveChildren = directChildIds.length > 0 ? db.transactions.filter(t => directChildIds.includes(t.parentId) && !t.archived) : [];
+  const grandArchivedChildren = directChildIds.length > 0 ? db.archivedTransactions.filter(t => directChildIds.includes(t.parentId)) : [];
+  const allChildren = [...directChildren, ...grandActiveChildren, ...grandArchivedChildren];
   if (allChildren.length > 0) {
     const childRows = allChildren.map(c => {
       const cAmtD = txAmountDisplay(c);
-      const childLabel = c.isAutoForex
-        ? (c.type === 'income' ? '📈 Forex Gain' : '📉 Forex Loss')
-        : c.isAutoReimb
-        ? `💰 Reimb. from ${c.reimbPerson||'someone'}`
-        : c.notes || 'Child';
+      const cCat = txCategoryDisplay(c);
+      let childLabel;
+      if (c.isLoanSettlementGain) childLabel = '📈 Loan Settlement Gain';
+      else if (c.isLoanSettlementLoss) childLabel = '📉 Loan Settlement Loss';
+      else if (c.isReimbSettlementGain) childLabel = '📈 Reimbursement Gain';
+      else if (c.isReimbSettlementLoss) childLabel = '📉 Reimbursement Loss';
+      else if (c.isAutoForex) childLabel = (c.type === 'income' ? '📈 Forex Gain' : '📉 Forex Loss');
+      else if (c.isBatchReimbSettlement) childLabel = `💰 Batch reimb from ${c.batchPerson || c.reimbPerson || 'someone'}`;
+      else if (c.isBatchSettlement) childLabel = `💰 Batch settlement (${c.batchPerson||'someone'})`;
+      else if (c.isAutoReimb) childLabel = `💰 Reimb. from ${c.reimbPerson||'someone'}`;
+      else childLabel = c.notes || 'Child';
       const archivedTag = c.archived ? `<span style="font-size:9px;color:var(--text4);margin-left:4px">[archived]</span>` : '';
-      const isReimb = c.isAutoReimb;
+      const isReimb = c.isAutoReimb && !c.isBatchReimbSettlement;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:12px;color:var(--text2);flex:1;cursor:pointer" onclick="closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)">${childLabel}${archivedTag}</div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -5523,7 +5635,7 @@ function openTxDetail(txId) {
       </div>`;
     }).join('');
     childrenSection = `<div style="margin-top:14px">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:6px">Linked Transactions</div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:6px">Linked Transactions · ${allChildren.length}</div>
       ${childRows}
     </div>`;
   }
@@ -8267,6 +8379,48 @@ function openLoanDetail(loanId, direction) {
     </div>`;
   })() : '';
 
+  // 📖 USER STORY: Sa loan detail sheet, makikita mo lahat ng linked transactions — payment
+  // entries, batch settlement parents, gain/loss children, write-off entries. Tap any to view
+  // its full detail (auto-children read-only with "View Parent" link; payments fully editable).
+  // ── PERSONAL LOGIC SET ── linked tx section: lists batch settlement parents (isBatchSettlement+batchLoanIds), gain/loss children (parentId in [loan,batchParent]), write-off children. Excludes individual payments (covered by payHistHTML).
+  // Build linked txns (excluding individual payments — those are in payHistHTML)
+  const linkedTxs = (()=>{
+    // Find batch settlement parent txs that include this loan
+    const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && (t.batchLoanIds||[]).includes(loanId));
+    const batchParentIds = batchParents.map(t=>t.id);
+    // Gain/loss children: parentId could be the loan ID (for write-offs) OR a batch settlement tx ID
+    const gainLossChildren = db.transactions.filter(t => !t.archived && (t.isLoanSettlementGain || t.isLoanSettlementLoss) && (t.parentId === loanId || batchParentIds.includes(t.parentId)));
+    return [...batchParents, ...gainLossChildren].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  })();
+
+  const linkedTxsHTML = linkedTxs.length > 0 ? `
+    <div style="margin-top:4px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);padding:12px 0 8px">Linked Transactions · ${linkedTxs.length}</div>
+      <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)">
+        ${linkedTxs.map((t,i)=>{
+          const isLast = i === linkedTxs.length - 1;
+          const cat = txCategoryDisplay(t);
+          const acctName = db.accounts.find(a=>a.id===t.accountId)?.name || '?';
+          const amtD = txAmountDisplay(t);
+          let badge = '';
+          if (t.isBatchSettlement) badge = '<span class="pill" style="font-size:9px;padding:1px 6px;background:var(--accent-bg);color:var(--accent)">Batch Parent</span>';
+          else if (t.isLoanSettlementGain) badge = '<span class="pill" style="font-size:9px;padding:1px 6px;background:var(--green-bg);color:var(--green)">Gain</span>';
+          else if (t.isLoanSettlementLoss) badge = '<span class="pill" style="font-size:9px;padding:1px 6px;background:var(--red-bg);color:var(--red)">Loss</span>';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${t.id}'),200)">
+            <div style="font-size:18px;flex-shrink:0">${cat.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">${cat.name.replace(/^[^ ]+ /,'')} ${badge}</div>
+              <div style="font-size:11px;color:var(--text4)">${fmtD(t.date)} · ${acctName}${t.notes?' · '+t.notes:''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <div class="tx-amount ${amtD.cls}" style="font-size:13px">${amtD.str}</div>
+              <div style="color:var(--text4);font-size:14px">›</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   openSheet('gen', '', `
     <!-- Person header card -->
     <div style="background:var(--bg2);border-radius:var(--r-lg);border:1px solid var(--border);padding:16px;margin-bottom:12px">
@@ -8307,6 +8461,8 @@ function openLoanDetail(loanId, direction) {
     </div>
 
     ${payHistHTML}
+
+    ${linkedTxsHTML}
 
     ${!loan.settled?`
       <!-- Record payment card -->
@@ -9943,12 +10099,12 @@ function setSpendingView(view) {
 function toggleSpendingDrill(id) {
   const el = document.getElementById(id);
   if (el) {
-    const isOpen = el.style.display === 'none' ? false : true;
+    const isOpen = el.style.display !== 'none';
     el.style.display = isOpen ? 'none' : 'block';
     const arrow = document.getElementById(id + '-arrow');
     if (arrow) {
       arrow.style.transition = 'transform 0.25s cubic-bezier(.4,0,.2,1)';
-      arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+      arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
     }
   }
 }
