@@ -7039,6 +7039,55 @@ function renderReimbTab() {
       </div>
       <div id="rp-${person.replace(/\s/g,'_')}" style="display:none;border-top:1px solid var(--border)">
         ${rowsHTML}
+        ${(()=>{
+          // Batch reimb settlement parents for this person
+          const batchParents = db.transactions.filter(t =>
+            !t.archived && t.isBatchReimbSettlement &&
+            (t.batchPerson||t.reimbPerson||'').trim() === person
+          ).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+          if (batchParents.length === 0) return '';
+          return batchParents.map(bp => {
+            const settledTxs = (bp.batchTxIds||[]).map(id =>
+              db.transactions.find(t=>t.id===id)
+            ).filter(Boolean);
+            const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isReimbSettlementGain);
+            const childBadge = gainChild
+              ? `<span style="font-size:9px;padding:1px 5px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+              : '';
+            const batchId = 'batchreimb-'+bp.id;
+            const nestedRows = settledTxs.map(tx => {
+              const cat = getCategoryDisplay(tx.categoryId);
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px 7px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="event.stopPropagation();openTxDetail('${tx.id}')">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:11px;color:var(--text2)">${cat.icon} ${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(tx.date)}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmt(tx.totalBill||tx.amount,tx.currency)}</div>
+                  <span class="pill pill-green" style="font-size:9px;padding:1px 5px">✓</span>
+                </div>
+              </div>`;
+            }).join('');
+            return `<div style="background:var(--bg3);border-radius:var(--r-md);border:1px solid var(--border);margin:8px 16px;overflow:hidden">
+              <div onclick="event.stopPropagation();toggleSpendingDrill('${batchId}')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <span style="font-size:12px;font-weight:600">Batch Settlement</span>
+                    <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">${settledTxs.length} entries</span>
+                    ${childBadge}
+                  </div>
+                  <div style="font-size:10px;color:var(--text4);margin-top:2px">${fmtD(bp.date)} · ${fmt(bp.amount,bp.currency)}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                  <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button>
+                  <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+              <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
+                ${nestedRows}
+              </div>
+            </div>`;
+          }).join('');
+        })()}
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
           <button class="btn btn-success btn-sm" onclick="settleReim('${person.replace(/'/g,"\\'")}')">Receive Payment</button>
         </div>
@@ -8069,6 +8118,9 @@ function renderLoanList(direction) {
         ${personLoans.map(loan => {
           const d = daysUntil(loan.dueDate);
           const pl = getLoanPayments(loan.id);
+          // Check if this loan was settled via batch — if so, skip (will show under batch parent)
+          const batchParent = db.transactions.find(t => !t.archived && t.isBatchSettlement && (t.batchLoanIds||[]).includes(loan.id));
+          if (batchParent) return ''; // handled below
           return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;cursor:pointer;border-bottom:1px solid var(--border)" onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')">
             <div style="flex:1;min-width:0">
               <div style="font-size:12px;color:var(--text2)">${fmtD(loan.date)}${loan.dueDate?` · Due ${fmtD(loan.dueDate)}`:''}</div>
@@ -8078,6 +8130,56 @@ function renderLoanList(direction) {
             <div style="font-family:var(--mono);font-size:12px;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
           </div>`;
         }).join('')}
+        ${(()=>{
+          // Show batch settlement parents for this person — each as a card with nested settled loans
+          const batchParents = db.transactions.filter(t =>
+            !t.archived && t.isBatchSettlement && t.batchDirection === direction &&
+            (t.batchPerson||'').trim() === person
+          ).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+          if (batchParents.length === 0) return '';
+          return batchParents.map(bp => {
+            const settledLoans = (bp.batchLoanIds||[]).map(id =>
+              db.loans[direction].find(l=>l.id===id)
+            ).filter(Boolean);
+            const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementGain);
+            const lossChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementLoss);
+            const childBadge = gainChild
+              ? `<span style="font-size:9px;padding:1px 5px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+              : lossChild
+              ? `<span style="font-size:9px;padding:1px 5px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(lossChild.amount,lossChild.currency)} loss</span>`
+              : '';
+            const batchId = 'batchloan-'+bp.id;
+            const nestedRows = settledLoans.map(loan => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px 7px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:11px;color:var(--text2)">${fmtD(loan.date)}${loan.notes?` · ${loan.notes}`:''}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmt(loan.amount,loan.currency)}</div>
+                  <span class="pill pill-green" style="font-size:9px;padding:1px 5px">✓</span>
+                </div>
+              </div>`).join('');
+            return `<div style="background:var(--bg3);border-radius:var(--r-md);border:1px solid var(--border);margin-top:8px;overflow:hidden">
+              <div onclick="event.stopPropagation();toggleSpendingDrill('${batchId}')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <span style="font-size:12px;font-weight:600">Batch Settlement</span>
+                    <span style="font-size:9px;padding:1px 5px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">${settledLoans.length} loans</span>
+                    ${childBadge}
+                  </div>
+                  <div style="font-size:10px;color:var(--text4);margin-top:2px">${fmtD(bp.date)} · ${fmt(bp.amount,bp.currency)}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                  <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>
+                  <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+              <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
+                ${nestedRows}
+              </div>
+            </div>`;
+          }).join('');
+        })()}
         <div style="display:flex;gap:6px;margin-top:10px">
           <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">💰 Batch Settle All</button>
         </div>
@@ -8098,6 +8200,234 @@ function toggleLoanPersonGroup(direction, person) {
 }
 
 // Batch settle all of a person's loans
+function openBatchSettleEdit(txId, direction) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const loans = (tx.batchLoanIds||[]).map(id =>
+    db.loans[direction||tx.batchDirection||'lent'].find(l=>l.id===id)
+  ).filter(Boolean);
+  const gainChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isLoanSettlementGain);
+  const lossChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isLoanSettlementLoss);
+
+  const loansHTML = loans.map(l => `
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+      <div style="color:var(--text2)">${l.personName||'?'} · ${fmtD(l.date)}${l.notes?' · '+l.notes:''}</div>
+      <div style="font-family:var(--mono);color:var(--green)">${fmt(l.amount,l.currency)}</div>
+    </div>`).join('');
+
+  const gainRow = gainChild
+    ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <div style="color:var(--green)">📈 Settlement gain</div>
+        <div style="font-family:var(--mono);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)}</div>
+       </div>` : '';
+  const lossRow = lossChild
+    ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+        <div style="color:var(--red)">📉 Settlement loss</div>
+        <div style="font-family:var(--mono);color:var(--red)">-${fmt(lossChild.amount,lossChild.currency)}</div>
+       </div>` : '';
+
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+
+  openDlg(`Edit Batch Settlement`,
+    `<div style="font-size:11px;color:var(--text4);margin-bottom:10px">Settled loans (${loans.length})</div>
+     <div style="background:var(--bg3);border-radius:var(--r-md);padding:0 12px;margin-bottom:14px">
+       ${loansHTML}${gainRow}${lossRow}
+     </div>
+     <div class="form-group"><label class="form-label">Settlement Amount (${tx.currency})</label>
+       <input class="form-input numpad-input" type="number" step="any" id="bse-amount" value="${tx.amount}" inputmode="none">
+       <div style="font-size:11px;color:var(--text4);margin-top:3px">Editing this updates the gain/loss child automatically.</div>
+     </div>
+     <div class="form-group"><label class="form-label">Account</label>
+       <select class="form-input" id="bse-acct">${acctOpts}</select>
+     </div>
+     <div class="form-row fr2">
+       <div class="form-group"><label class="form-label">Date</label>
+         <input class="form-input" type="date" id="bse-date" value="${tx.date}">
+       </div>
+       <div class="form-group"><label class="form-label">Time</label>
+         <input class="form-input" type="time" id="bse-time" value="${tx.time||''}">
+       </div>
+     </div>
+     <div class="form-group"><label class="form-label">Notes</label>
+       <input class="form-input" id="bse-notes" value="${tx.notes||''}">
+     </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleEdit('${txId}','${direction||tx.batchDirection||'lent'}')">Save</button>`
+  );
+}
+
+function confirmBatchSettleEdit(txId, direction) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const newAmount = parseFloat(document.getElementById('bse-amount')?.value) || tx.amount;
+  const newAcctId = document.getElementById('bse-acct')?.value || tx.accountId;
+  const newDate = document.getElementById('bse-date')?.value || tx.date;
+  const newTime = document.getElementById('bse-time')?.value || tx.time;
+  const newNotes = document.getElementById('bse-notes')?.value?.trim() || tx.notes;
+
+  // Compute what the correct total owed was (sum of settled loans in tx.currency)
+  const snap = tx.fxSnapshot || buildFxSnapshot(newDate);
+  const loans = (tx.batchLoanIds||[]).map(id => db.loans[direction].find(l=>l.id===id)).filter(Boolean);
+  const totalOwed = loans.reduce((s,l) => {
+    const c = l.currency || 'PHP';
+    if (c === tx.currency) return s + l.amount;
+    const phpVal = (c==='PHP') ? l.amount : l.amount * (snap[c]||1);
+    return s + ((tx.currency==='PHP') ? phpVal : phpVal / (snap[tx.currency]||1));
+  }, 0);
+
+  const excess = newAmount - totalOwed;
+
+  // Update parent tx
+  tx.amount = newAmount;
+  tx.accountId = newAcctId;
+  tx.date = newDate;
+  tx.time = newTime;
+  tx.notes = newNotes;
+
+  // Update or remove gain/loss child
+  const gainChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isLoanSettlementGain);
+  const lossChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isLoanSettlementLoss);
+  // Remove existing child first
+  if (gainChild) db.transactions.splice(db.transactions.indexOf(gainChild), 1);
+  if (lossChild) db.transactions.splice(db.transactions.indexOf(lossChild), 1);
+  // Re-create if needed
+  if (Math.abs(excess) > 0.01) {
+    const isGain = excess > 0;
+    db.transactions.push({
+      id: 'tx-'+genId(),
+      type: isGain ? 'income' : 'expense',
+      amount: Math.abs(excess),
+      currency: tx.currency,
+      accountId: newAcctId,
+      date: newDate,
+      time: newTime,
+      notes: isGain ? `Settlement gain from ${tx.batchPerson}` : `Overpayment to ${tx.batchPerson}`,
+      isLoanSettlementGain: isGain,
+      isLoanSettlementLoss: !isGain,
+      isSettlement: true,
+      parentId: txId,
+      batchPerson: tx.batchPerson,
+      categoryId: isGain ? 'sc-investreturns' : 'sc-misc',
+      fxSnapshot: snap,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  saveDBWithSync();
+  closeDlg();
+  renderLoans();
+  showToast('Batch settlement updated');
+}
+
+function openBatchReimbSettleEdit(txId) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const settledTxs = (tx.batchTxIds||[]).map(id => db.transactions.find(t=>t.id===id)).filter(Boolean);
+  const gainChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isReimbSettlementGain);
+
+  const txRowsHTML = settledTxs.map(st => {
+    const cat = getCategoryDisplay(st.categoryId);
+    return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+      <div style="color:var(--text2)">${cat.icon} ${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(st.date)}</div>
+      <div style="font-family:var(--mono);color:var(--green)">${fmt(st.totalBill||st.amount,st.currency)}</div>
+    </div>`;
+  }).join('');
+
+  const gainRow = gainChild
+    ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0">
+        <div style="color:var(--green)">📈 Reimbursement gain</div>
+        <div style="font-family:var(--mono);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)}</div>
+       </div>` : '';
+
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+
+  openDlg(`Edit Batch Reimbursement`,
+    `<div style="font-size:11px;color:var(--text4);margin-bottom:10px">Settled entries (${settledTxs.length})</div>
+     <div style="background:var(--bg3);border-radius:var(--r-md);padding:0 12px;margin-bottom:14px">
+       ${txRowsHTML}${gainRow}
+     </div>
+     <div class="form-group"><label class="form-label">Amount received (${tx.currency})</label>
+       <input class="form-input numpad-input" type="number" step="any" id="brse-amount" value="${tx.amount}" inputmode="none">
+       <div style="font-size:11px;color:var(--text4);margin-top:3px">Editing this updates the gain child automatically.</div>
+     </div>
+     <div class="form-group"><label class="form-label">Account</label>
+       <select class="form-input" id="brse-acct">${acctOpts}</select>
+     </div>
+     <div class="form-row fr2">
+       <div class="form-group"><label class="form-label">Date</label>
+         <input class="form-input" type="date" id="brse-date" value="${tx.date}">
+       </div>
+       <div class="form-group"><label class="form-label">Time</label>
+         <input class="form-input" type="time" id="brse-time" value="${tx.time||''}">
+       </div>
+     </div>
+     <div class="form-group"><label class="form-label">Notes</label>
+       <input class="form-input" id="brse-notes" value="${tx.notes||''}">
+     </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBatchReimbSettleEdit('${txId}')">Save</button>`
+  );
+}
+
+function confirmBatchReimbSettleEdit(txId) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const newAmount = parseFloat(document.getElementById('brse-amount')?.value) || tx.amount;
+  const newAcctId = document.getElementById('brse-acct')?.value || tx.accountId;
+  const newDate = document.getElementById('brse-date')?.value || tx.date;
+  const newTime = document.getElementById('brse-time')?.value || tx.time;
+  const newNotes = document.getElementById('brse-notes')?.value?.trim() || tx.notes;
+
+  // Compute total owed
+  const snap = tx.fxSnapshot || buildFxSnapshot(newDate);
+  const entries = getReimbEntriesForPerson(tx.batchPerson||tx.reimbPerson||'');
+  const settledEntries = (tx.batchTxIds||[]).map(id => {
+    const sharedTx = db.transactions.find(t=>t.id===id);
+    if (!sharedTx) return 0;
+    const person = tx.batchPerson||tx.reimbPerson||'';
+    if (sharedTx.paidSoFar && typeof sharedTx.paidSoFar === 'object') {
+      return sharedTx.paidSoFar[person] || 0;
+    }
+    return (sharedTx.totalBill||sharedTx.amount) - (sharedTx.myShare||0);
+  }).reduce((s,v)=>s+v, 0);
+
+  const excess = newAmount - settledEntries;
+
+  tx.amount = newAmount;
+  tx.accountId = newAcctId;
+  tx.date = newDate;
+  tx.time = newTime;
+  tx.notes = newNotes;
+
+  // Update gain child
+  const gainChild = db.transactions.find(t => !t.archived && t.parentId === txId && t.isReimbSettlementGain);
+  if (gainChild) db.transactions.splice(db.transactions.indexOf(gainChild), 1);
+  if (excess > 0.01) {
+    db.transactions.push({
+      id: 'tx-'+genId(),
+      type: 'income',
+      amount: excess,
+      currency: tx.currency,
+      accountId: newAcctId,
+      date: newDate,
+      time: newTime,
+      notes: `Reimbursement gain from ${tx.batchPerson||tx.reimbPerson}`,
+      isReimbSettlementGain: true,
+      isSettlement: true,
+      parentId: txId,
+      batchPerson: tx.batchPerson||tx.reimbPerson,
+      categoryId: 'sc-investreturns',
+      fxSnapshot: snap,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  saveDBWithSync();
+  closeDlg();
+  renderReimbursementsPage();
+  showToast('Batch reimbursement updated');
+}
+
 function openBatchSettleLoans(direction, person) {
   const loans = db.loans[direction]
     .filter(l => !l.settled && (l.personName||'').trim() === person)
