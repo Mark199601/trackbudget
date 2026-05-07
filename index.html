@@ -1525,7 +1525,9 @@ function getAcctBalance(acctId) {
     // sayo ng share niya yung kasama mo (e.g. ₱333), hindi yan mag-aappear as income — binalik
     // lang niya yung pera mo, hindi mo kinita.
     // ── PERSONAL LOGIC SET ── shared tx: deduct full totalBill from account (you paid upfront); isAutoReimb adds back others' shares
-    else if (tx.type === 'shared' && tx.accountId === acctId) bal -= (tx.totalBill || tx.amount);
+    // 📖 EXCEPTION: isFeeReimbursable shared txs are tracking-only — the fee expense (isAutoFee)
+    // already deducted the cash. Don't double-deduct here.
+    else if (tx.type === 'shared' && tx.accountId === acctId && !tx.isFeeReimbursable) bal -= (tx.totalBill || tx.amount);
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) {
         // Deduct in account's currency
@@ -1680,12 +1682,17 @@ function getMonthTotals(monthKey) {
     // ── PERSONAL LOGIC SET ── inclusion/exclusion rules for getMonthTotals (do not remove)
     // isAutoReimb EXCLUDED: full totalBill already counted on shared tx — reimb is NOT income
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
-    // isAutoFee INCLUDED: real remittance fee expense
+    // isAutoFee INCLUDED: real remittance fee expense — UNLESS reimbursable + linked shared tx settled (then offset → neutral)
     // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
     // isLoanSettlementGain/Loss EXCLUDED: not real income/expense — settlement adjustments only
     if (t.isAutoReimb) continue;
     if (t.isLoanSettlementGain || t.isLoanSettlementLoss) continue;
     if (t.isReimbSettlementGain) continue;
+    // Fee fully reimbursed → neutral, exclude from monthly totals (offset by reimbursement income)
+    if (t.isAutoFee && t.feeReimbSharedTxId) {
+      const linkedShared = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
+      if (linkedShared?.settled) continue;
+    }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -3086,7 +3093,11 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
     const icon  = tx.loanDirection==='lent' ? '🤲' : '🤏';
     const iconBg = tx.loanDirection==='lent' ? 'tx-icon-lend' : 'tx-icon-borrow';
-    // Gather all linked children: payments, batch settlement parents, gain/loss
+    // Find the corresponding loan record for status
+    const loanRec = [...(db.loans?.lent||[]), ...(db.loans?.borrowed||[])].find(l => l.id === tx.loanId);
+    const isSettled = !!loanRec?.settled;
+    const remaining = loanRec?.remaining ?? loanRec?.amount ?? 0;
+    // Linked children
     const payments = db.transactions.filter(t => !t.archived && t.parentId === tx.loanId && t.isLoanPayment && !t.isBatchSettlement);
     const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && (t.batchLoanIds||[]).includes(tx.loanId));
     const batchParentIds = batchParents.map(t=>t.id);
@@ -3094,34 +3105,51 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const allChildren = [...payments, ...batchParents, ...gainLoss].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
     let breakdownHTML = '';
-    if (allChildren.length > 0) {
+    if (allChildren.length > 0 || isSettled) {
       const breakdownId = 'loanbreak-' + tx.id;
+      const statusPill = isSettled
+        ? `<span class="pill pill-green" style="font-size:9px;padding:1px 8px">Settled ✓</span>`
+        : remaining < (loanRec?.amount || tx.amount)
+          ? `<span class="pill pill-amber" style="font-size:9px;padding:1px 8px">Partial</span>`
+          : `<span class="pill pill-amber" style="font-size:9px;padding:1px 8px">Pending</span>`;
+
       const childRows = allChildren.map(c => {
         const cAcct = getAccountDisplay(c.accountId);
         const cAmtD = txAmountDisplay(c);
         let childLabel, badge = '';
-        if (c.isBatchSettlement) { childLabel = `Batch settlement · ${c.batchPerson||''}`; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Batch</span>`; }
+        if (c.isBatchSettlement) { childLabel = `💰 Batch settlement`; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Batch</span>`; }
         else if (c.isLoanSettlementGain) { childLabel = '📈 Settlement gain'; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">Gain</span>`; }
         else if (c.isLoanSettlementLoss) { childLabel = '📉 Settlement loss'; badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`; }
-        else { childLabel = `Payment · ${cAcct.name}`; }
-        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        else { childLabel = `💳 Payment`; }
+        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-            <div style="font-size:12px;color:var(--text2);min-width:0">${childLabel}</div>
+            <div style="font-size:13px;color:var(--text2);min-width:0;font-weight:500">${childLabel}</div>
             ${badge}
           </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
             <span style="font-size:10px;color:var(--text4);font-family:var(--mono)">${fmtD(c.date)}</span>
             <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600">${cAmtD.str}</span>
           </div>
         </div>`;
       }).join('');
+
+      const summaryLine = isSettled
+        ? `<div style="font-size:11px;color:var(--green);padding:8px 0">Fully repaid ✓</div>`
+        : remaining > 0
+          ? `<div style="font-size:11px;color:var(--text3);padding:8px 0">Remaining: <span style="font-family:var(--mono);color:var(--amber)">${fmt(remaining, tx.currency)}</span></div>`
+          : '';
+
       breakdownHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
         <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${allChildren.length}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">${tx.loanDirection==='lent'?'Loan':'Debt'} · ${allChildren.length} linked</span>
+            ${statusPill}
+          </div>
           <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
           ${childRows}
+          ${summaryLine}
         </div>
       </div>`;
     }
@@ -3325,6 +3353,100 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     }
   }
 
+  // 📖 USER STORY: Yung batch settlement parent (isBatchSettlement) ay ipinapakita din ng
+  // expandable card sa baba ng row, listing yung mga loans na nai-settle (kasama yung gain/loss
+  // children). Para makita mo agad sa txn log kung anong mga loans ang nasettle.
+  // ── PERSONAL LOGIC SET ── batch settlement parent in tx log: shows nested settled loans + gain/loss as breakdown card; expanded by default
+  let batchSettleHTML = '';
+  if (tx.isBatchSettlement && Array.isArray(tx.batchLoanIds)) {
+    const direction = tx.batchDirection || 'lent';
+    const linkedLoans = tx.batchLoanIds.map(id => db.loans[direction]?.find(l => l.id === id)).filter(Boolean);
+    const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementGain);
+    const lossChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementLoss);
+    if (linkedLoans.length > 0 || gainChild || lossChild) {
+      const breakdownId = 'batchparenttx-' + tx.id;
+      const childBadge = gainChild
+        ? `<span class="pill" style="font-size:9px;padding:1px 8px;background:var(--green-bg);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+        : lossChild
+        ? `<span class="pill" style="font-size:9px;padding:1px 8px;background:var(--red-bg);color:var(--red)">-${fmt(lossChild.amount,lossChild.currency)} loss</span>`
+        : '';
+      const loanRows = linkedLoans.map(loan => {
+        return `<div onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <div class="pool-avatar" style="width:24px;height:24px;font-size:10px">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${loan.personName||'Unknown'} · ${fmtD(loan.date)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(loan.amount, loan.currency)}</span>
+            <span class="pill pill-green" style="font-size:9px;padding:1px 6px">✓</span>
+          </div>
+        </div>`;
+      }).join('');
+      const gainRow = gainChild ? `<div onclick="event.stopPropagation();openTxDetail('${gainChild.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
+        <div style="font-size:12px;color:var(--green);font-weight:500">📈 Settlement gain</div>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)}</span>
+      </div>` : '';
+      const lossRow = lossChild ? `<div onclick="event.stopPropagation();openTxDetail('${lossChild.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
+        <div style="font-size:12px;color:var(--red);font-weight:500">📉 Settlement loss</div>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--red)">-${fmt(lossChild.amount,lossChild.currency)}</span>
+      </div>` : '';
+      batchSettleHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Batch · ${linkedLoans.length} loans</span>
+            ${childBadge}
+          </div>
+          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
+          ${loanRows}${gainRow}${lossRow}
+        </div>
+      </div>`;
+    }
+  }
+
+  // Same for batch reimb settlement
+  let batchReimbHTML = '';
+  if (tx.isBatchReimbSettlement && Array.isArray(tx.batchTxIds)) {
+    const linkedTxs = tx.batchTxIds.map(id => db.transactions.find(t => t.id === id)).filter(Boolean);
+    const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isReimbSettlementGain);
+    if (linkedTxs.length > 0 || gainChild) {
+      const breakdownId = 'batchparentreimb-' + tx.id;
+      const childBadge = gainChild
+        ? `<span class="pill" style="font-size:9px;padding:1px 8px;background:var(--green-bg);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
+        : '';
+      const linkedRows = linkedTxs.map(lx => {
+        const cat = getCategoryDisplay(lx.categoryId);
+        return `<div onclick="event.stopPropagation();openTxDetail('${lx.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <span style="font-size:14px">${cat.icon}</span>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(lx.date)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(lx.totalBill||lx.amount, lx.currency)}</span>
+            <span class="pill pill-green" style="font-size:9px;padding:1px 6px">✓</span>
+          </div>
+        </div>`;
+      }).join('');
+      const gainRow = gainChild ? `<div onclick="event.stopPropagation();openTxDetail('${gainChild.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
+        <div style="font-size:12px;color:var(--green);font-weight:500">📈 Reimbursement gain</div>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)}</span>
+      </div>` : '';
+      batchReimbHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Batch · ${linkedTxs.length} entries</span>
+            ${childBadge}
+          </div>
+          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
+          ${linkedRows}${gainRow}
+        </div>
+      </div>`;
+    }
+  }
+
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
@@ -3335,7 +3457,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
       ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
     </div>
-  </div>${settlementRows}${genericChildrenHTML}`;
+  </div>${settlementRows}${genericChildrenHTML}${batchSettleHTML}${batchReimbHTML}`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4514,6 +4636,27 @@ function renderTransferForm() {
           </div>
           <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either — auto-syncs. Leave blank to use snapshot.</div>
         </div>
+
+        <!-- Transfer fee + reimbursable person -->
+        <div style="margin-top:8px;padding:12px 14px;background:var(--bg2);border-radius:12px;border:1px solid var(--border);margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Transfer fee</div>
+          <div class="form-row fr2" style="margin-bottom:6px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">Fee amount</label>
+              <input class="form-input numpad-input" type="number" id="tf-fee-amount" placeholder="0.00" step="any" inputmode="none">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">Charged to</label>
+              <select class="form-input" id="tf-fee-acct"><option value="">— Same as From —</option>${acctOpts(false)}</select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:8px;margin-bottom:0">
+            <label class="form-label" style="font-size:11px">Reimbursable from <span style="color:var(--text4);font-weight:400">(optional)</span></label>
+            <input class="form-input" type="text" id="tf-fee-reimb-person" placeholder="Person name — leave blank if none">
+            <div style="font-size:10px;color:var(--text4);margin-top:4px;line-height:1.3">💡 If filled, this fee will become a Shared transaction reimbursable from that person.</div>
+          </div>
+        </div>
+
         <div class="form-group" style="margin-top:8px"><label class="form-label">Time</label>${dtField('tf-time','time','Now')}</div>
         <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
       </div>
@@ -5002,6 +5145,67 @@ function submitTransfer() {
   if (fromAcct) fromAcct.lastTxDate = date;
   const toAcct = db.accounts.find(a=>a.id===toId);
   if (toAcct) toAcct.lastTxDate = date;
+
+  // 📖 USER STORY: Pag may transfer fee, gumagawa siya ng dedicated expense tx (isAutoFee).
+  // Pag may "Reimbursable from [Person]" filled, automatic gumagawa pa ng linked SHARED tx
+  // sa Reimbursements page — kung saan si Person ay 100% owes the fee. Pag fully reimbursed
+  // na, yung fee ay marked as offsetByReimb (excluded from monthly totals para neutral).
+  // ── PERSONAL LOGIC SET ── transfer fee: isAutoFee + parentId=transfer; if reimbursable, auto-create linked shared tx (type=shared) with picked person; cascade-archives with parent transfer
+  const feeAmount = parseFloat(document.getElementById('tf-fee-amount')?.value) || 0;
+  const feeAcctId = document.getElementById('tf-fee-acct')?.value || fromId;
+  const feeReimbPerson = (document.getElementById('tf-fee-reimb-person')?.value || '').trim();
+  if (feeAmount > 0) {
+    const feeAcct = db.accounts.find(a=>a.id===feeAcctId) || fromAcct;
+    const feeTxId = 'tx-'+genId();
+    const feeCurrency = feeAcct?.currency || currency;
+    db.transactions.push({
+      id: feeTxId,
+      type: 'expense',
+      amount: feeAmount,
+      currency: feeCurrency,
+      categoryId: 'sc-bankcharges',
+      accountId: feeAcct?.id || fromId,
+      date, time: time||nowTime(),
+      notes: `Transfer fee${feeReimbPerson?` (reimbursable from ${feeReimbPerson})`:''}`,
+      fxSnapshot,
+      parentId,
+      isAutoFee: true,
+      ...(feeReimbPerson ? { feeReimbPerson } : {}),
+      createdAt: new Date().toISOString()
+    });
+
+    // If reimbursable, create linked shared tx
+    if (feeReimbPerson) {
+      const sharedTxId = 'tx-'+genId();
+      db.transactions.push({
+        id: sharedTxId,
+        type: 'shared',
+        amount: feeAmount,
+        totalBill: feeAmount,
+        myShare: 0, // I paid the fee but person owes 100% (it's their reimbursement)
+        currency: feeCurrency,
+        categoryId: 'sc-bankcharges',
+        accountId: feeAcct?.id || fromId,
+        date, time: time||nowTime(),
+        notes: `Transfer fee — reimbursable from ${feeReimbPerson}`,
+        sharedWith: feeReimbPerson,
+        personName: feeReimbPerson,
+        persons: [{ name: feeReimbPerson, share: feeAmount }],
+        paidSoFar: {},
+        settled: false,
+        fxSnapshot,
+        parentId, // links to original transfer for cascade
+        isFeeReimbursable: true,
+        feeTxId, // back-reference to the fee expense tx
+        feeReimbPerson,
+        createdAt: new Date().toISOString()
+      });
+      // Mark fee tx with the shared tx id for back-reference
+      const feeTx = db.transactions.find(t => t.id === feeTxId);
+      if (feeTx) feeTx.feeReimbSharedTxId = sharedTxId;
+    }
+  }
+
   saveDBWithSync();
   closeSheet('add');
   if (currentPage==='dashboard') renderDashboard();
@@ -10494,12 +10698,22 @@ function renderAnalyticsSpending() {
   }
 
   // Filter by currency view — pure native, no conversion
-  const txs = db.transactions.filter(t =>
-    !t.archived && !t.isSettlement &&
-    t.currency === view &&
-    mks.some(mk => t.date?.startsWith(mk)) &&
-    (t.type==='expense' || t.type==='shared')
-  );
+  // 📖 USER STORY: Sa Spending pie, dapat hindi kasama yung mga settlement adjustments at
+  // mga fully-reimbursed fees — para tama yung totals at hindi makaapekto sa category breakdown.
+  // ── PERSONAL LOGIC SET ── spending pie excludes: isSettlement (covers gain/loss + batch parents), isAutoReimb children, fees fully reimbursed (feeReimbSharedTxId + linked shared.settled), isFeeReimbursable shared (tracking-only, fee tx is the real expense)
+  const txs = db.transactions.filter(t => {
+    if (t.archived || t.isSettlement || t.isAutoReimb) return false;
+    if (t.isFeeReimbursable) return false; // tracking-only, fee tx counted instead
+    if (t.currency !== view) return false;
+    if (!mks.some(mk => t.date?.startsWith(mk))) return false;
+    if (t.type !== 'expense' && t.type !== 'shared') return false;
+    // Skip fully-reimbursed fees
+    if (t.isAutoFee && t.feeReimbSharedTxId) {
+      const linked = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
+      if (linked?.settled) return false;
+    }
+    return true;
+  });
 
   // Group by parent category with subcategory drill-down + track transactions
   const catTotals = {};
@@ -15802,7 +16016,8 @@ function aiSavingsPace() {
 
 function aiRecurringDetector() {
   const insights = []; const groups = {};
-  for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date)) {
+  // Skip auto-generated children (settlement gain/loss, fees, forex) — false positives sa recurring detection
+  for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoForex&&!t.isAutoReimb&&!t.isAutoFee&&!t.isLoanSettlementGain&&!t.isLoanSettlementLoss&&!t.isReimbSettlementGain&&!t.isReimbSettlementLoss)) {
     const key = Math.round(t.amount/10)*10+'-'+t.categoryId;
     if (!groups[key]) groups[key]=[];
     groups[key].push(t);
@@ -15914,7 +16129,17 @@ function aiCashFlowForecast() {
   const mk = today.toISOString().slice(0,7);
   const daysInMonth = new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
   const daysPassed = today.getDate(); const daysLeft = daysInMonth - daysPassed;
-  const monthTxs = db.transactions.filter(t=>!t.archived&&t.date&&t.date.startsWith(mk));
+  // Skip auto-generated children + already-reimbursed fees from cash flow projection
+  const monthTxs = db.transactions.filter(t=>{
+    if (t.archived || !t.date || !t.date.startsWith(mk)) return false;
+    if (t.isSettlement || t.isAutoReimb) return false;
+    if (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) return false;
+    if (t.isAutoFee && t.feeReimbSharedTxId) {
+      const linked = db.transactions.find(s => s.id === t.feeReimbSharedTxId);
+      if (linked?.settled) return false;
+    }
+    return true;
+  });
   const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
   const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
   const daily = daysPassed > 0 ? spent/daysPassed : 0;
@@ -16000,6 +16225,7 @@ function aiAccountBalanceAlert() {
     const recent = db.transactions.filter(t => 
       !t.archived && t.accountId === acct.id && 
       (t.type === 'expense' || t.type === 'shared') &&
+      !t.isSettlement && !t.isLoanSettlementLoss && !t.isReimbSettlementLoss &&
       new Date(t.date) >= thirtyAgo
     );
     if (recent.length < 3) continue;
