@@ -1501,6 +1501,7 @@ function getAcctBalance(acctId) {
     // mismo nag-handle ng cash movement. Skipping prevents double-counting.
     // ── PERSONAL LOGIC SET ── isLoanSettlementGain/Loss skip in balance — parent settlement already moves cash; children are tracking labels only
     if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
+    if (tx.isReimbSettlementGain) continue;
     // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
     // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
     // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
@@ -1684,6 +1685,7 @@ function getMonthTotals(monthKey) {
     // isLoanSettlementGain/Loss EXCLUDED: not real income/expense — settlement adjustments only
     if (t.isAutoReimb) continue;
     if (t.isLoanSettlementGain || t.isLoanSettlementLoss) continue;
+    if (t.isReimbSettlementGain) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -1743,6 +1745,7 @@ function txAmountDisplay(tx) {
     const isGain = tx.type === 'income'; // borrowed write-off (forgiveness)
     return {cls: isGain ? 'tx-pos' : 'tx-neg', str: '📉 ' + (isGain?'+':'-') + fmt(tx.amount,tx.currency)};
   }
+  if (tx.isReimbSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='income') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='expense') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
@@ -5445,6 +5448,12 @@ function openTxDetail(txId) {
         <span>💡 ${labelTxt} Manage via parent settlement.</span>
         ${parentExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
       </div>`;
+    } else if (tx.isReimbSettlementGain) {
+      const parentExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
+      footer = `<div style="font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
+        <span>💡 Auto-generated reimbursement gain. Manage via parent settlement.</span>
+        ${parentExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
+      </div>`;
     } else {
       footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openTxReceipt('${tx.id}')">🧾 Receipt</button>
        <button class="btn btn-ghost btn-sm" onclick="closeDlg();openEditTx('${tx.id}')">Edit</button>
@@ -6397,6 +6406,10 @@ function archiveTx(txId, skipConfirm) {
     showToast('💡 Manage via the parent loan settlement transaction.');
     return;
   }
+  if (tx.isReimbSettlementGain) {
+    showToast('💡 Manage via the parent reimbursement settlement transaction.');
+    return;
+  }
   // Block archiving loan payment and parent loan transactions directly
   if (tx.isLoanPayment) {
     showToast('💡 Manage this via the parent Loan record in Loans.');
@@ -6414,7 +6427,15 @@ function archiveTx(txId, skipConfirm) {
   }
 
   // Check for linked children — warn user if any exist
-  const children = db.transactions.filter(t => t.parentId === txId);
+  // 📖 Two-level cascade: direct children (parentId === txId) PLUS grandchildren (parentId IN child IDs).
+  // Why: Batch reimb settlement creates a parent tx with shared tx as parentId, then gain child
+  // with batch parent as parentId. Single-level cascade would orphan the gain child.
+  const directChildren = db.transactions.filter(t => t.parentId === txId);
+  const childIds = directChildren.map(c => c.id);
+  const grandChildren = childIds.length > 0
+    ? db.transactions.filter(t => childIds.includes(t.parentId))
+    : [];
+  const children = [...directChildren, ...grandChildren];
   if (children.length > 0 && !skipConfirm) {
     // Summarize linked children for the warning
     const summary = children.map(c => {
@@ -6548,6 +6569,9 @@ function restoreTx(txId) {
     delete txData.isLoanSettlementLoss;
     delete txData.isBatchSettlement;
     delete txData.batchLoanIds;
+    delete txData.isReimbSettlementGain;
+    delete txData.isBatchReimbSettlement;
+    delete txData.batchTxIds;
   }
 
   // Restore the parent
@@ -6764,14 +6788,22 @@ function renderReimbTab() {
     }
   }
 
+  // Count settled and archived shared txs for the buttons (compute once)
+  const settledCount = db.transactions.filter(t => t.type === 'shared' && !t.archived && t.settled).length;
+  const archivedCount = (db.archivedTransactions||[]).filter(t => t.type === 'shared').length;
+  const topButtons = `<div class="page-pad" style="padding-bottom:0">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openSettledReimbSheet()">✓ Settled${settledCount>0?` (${settledCount})`:''}</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openTxArchiveSheet()">🗃️ Archive${archivedCount>0?` (${archivedCount})`:''}</button>
+    </div>
+  </div>`;
+
   if (Object.keys(persons).length === 0) {
-    return `<div class="empty-state page-pad"><div class="empty-icon">🤝</div><div class="empty-text">No pending reimbursements</div><div style="font-size:12px;color:var(--text4)">Add a "Shared" transaction to track split expenses</div></div>`;
+    return topButtons + `<div class="empty-state page-pad"><div class="empty-icon">🤝</div><div class="empty-text">No pending reimbursements</div><div style="font-size:12px;color:var(--text4)">Add a "Shared" transaction to track split expenses</div></div>`;
   }
 
-  let html = `<div style="display:flex;justify-content:flex-end;padding:10px 20px 0">
-    <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="openTxArchiveSheet()">Archive →</button>
-  </div>`;
-  html += '<div class="page-pad">';
+  let html = topButtons;
+  html += '<div class="page-pad" style="padding-top:0">';
   for (const [person, entries] of Object.entries(persons)) {
     // Aggregate totals per currency for this person
     const byCurr = {};
@@ -6829,6 +6861,70 @@ function toggleReimbPerson(id) {
   if (el) el.style.display = el.style.display==='none'?'block':'none';
 }
 
+// 📖 USER STORY: Pag na-settle na ang isang shared txn (fully paid by all persons), hindi na siya
+// lumalabas sa main reimbursement list. Para makita pa rin yung history ng nai-settle, may
+// dedicated "Settled" sheet (grouped by month-year, iOS style).
+// ── PERSONAL LOGIC SET ── settled shared txs hidden from active list; viewable via openSettledReimbSheet
+function openSettledReimbSheet() {
+  const settled = db.transactions
+    .filter(t => t.type === 'shared' && !t.archived && t.settled)
+    .sort((a,b)=>(b.settledAt||b.date||'').localeCompare(a.settledAt||a.date||''));
+
+  if (settled.length === 0) {
+    openSheet('gen', 'Settled Reimbursements',
+      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled reimbursements yet</div><div class="empty-sub">Fully-paid shared transactions will appear here.</div></div>`
+    );
+    return;
+  }
+
+  // Group by month-year of settledAt (newest first)
+  const byPeriod = {};
+  const periodOrder = [];
+  for (const tx of settled) {
+    const refDate = tx.settledAt || tx.date;
+    const dt = refDate ? new Date(refDate) : new Date();
+    const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+    const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
+    if (!byPeriod[key]) { byPeriod[key] = {label, txs:[]}; periodOrder.push(key); }
+    byPeriod[key].txs.push(tx);
+  }
+  periodOrder.sort((a,b)=>b.localeCompare(a));
+
+  const totalPhp = settled.reduce((s,t)=>s+toPhp(t.totalBill||t.amount, t.currency),0);
+
+  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ₱${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
+
+  for (const key of periodOrder) {
+    const period = byPeriod[key];
+    body += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;padding:14px 20px 6px">${period.label}</div>
+      <div style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">`;
+    for (let i=0; i<period.txs.length; i++) {
+      const tx = period.txs[i];
+      const isLast = i === period.txs.length - 1;
+      const cat = getCategoryDisplay(tx.categoryId);
+      // Person summary
+      const personNames = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
+      const personLabel = personNames.length === 1 ? personNames[0]
+        : personNames.length === 2 ? personNames.join(' & ')
+        : `${personNames[0]} +${personNames.length-1}`;
+      body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cat.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
+          <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)} · ${personLabel}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(tx.totalBill || tx.amount, tx.currency)}</div>
+          <div style="color:var(--text4);font-size:14px">›</div>
+        </div>
+      </div>`;
+    }
+    body += `</div>`;
+  }
+
+  openSheet('gen', `Settled Reimbursements (${settled.length})`, body);
+}
+
 function settleReim(person) {
   // Open unified reimbursement dialog with checkboxes per pending parent tx
   openReimbDialog(person);
@@ -6839,61 +6935,170 @@ function partialSettleReim(person) {
   openReimbDialog(person);
 }
 
-function openReimbDialog(person) {
-  // Get all unsettled shared txs involving this person
+// Helper: get all unsettled reimbursement entries for a person (each = parent tx + remaining owed)
+function getReimbEntriesForPerson(person) {
   const txs = db.transactions.filter(t =>
     t.type === 'shared' && !t.archived && !t.settled &&
-    (t.sharedWith === person || t.personName?.split(', ').includes(person))
+    (t.sharedWith === person ||
+     (t.persons && t.persons.some(p => p.name === person)) ||
+     t.personName?.split(', ').includes(person))
   );
-  if (txs.length === 0) { showToast('No pending reimbursements'); return; }
-
-  // Determine common currency (use first tx's currency — grouped display)
-  const txCurr = txs[0].currency || 'PHP';
-  const currSym = sym(txCurr);
-
-  // Build rows — one per parent tx with checkbox + individual amount input
-  const rowsHTML = txs.map(tx => {
-    // Compute this person's share from the parent tx
+  const entries = [];
+  for (const tx of txs) {
     let personShare = 0;
     if (tx.persons && tx.persons.length > 0) {
       const p = tx.persons.find(p => p.name === person);
       personShare = p ? (p.share || 0) : 0;
     } else {
-      // Fallback: equal split among unnamed persons
       personShare = (tx.totalBill || tx.amount) - (tx.myShare || 0);
     }
-    const paid = tx.paidSoFar?.[person] || 0;
+    const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? (tx.paidSoFar[person] || 0)
+               : typeof tx.paidSoFar === 'number' ? tx.paidSoFar : 0;
     const remaining = Math.max(0, personShare - paid);
-    if (remaining <= 0.001) return ''; // already fully paid by this person
-    const catDisp = getCategoryDisplay(tx.categoryId);
-    const paidLabel = paid > 0 ? ` <span style="color:var(--text4);font-size:11px">(${fmt(paid, tx.currency)} paid)</span>` : '';
-    return `<div class="reimb-tx-row" data-tx-id="${tx.id}" data-remaining="${remaining}" data-currency="${tx.currency}" style="display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--border)">
-      <input type="checkbox" class="reimb-tx-check" data-tx-id="${tx.id}" checked onchange="updateReimbTotal()">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500">${catDisp.icon} ${catDisp.name.replace(/^[^ ]+ /,'')} <span style="color:var(--text4);font-weight:normal;font-size:11px">${fmtD(tx.date)}</span></div>
-        <div style="font-size:11px;color:var(--text3)">Owes: <strong>${fmt(remaining, tx.currency)}</strong>${paidLabel}</div>
-      </div>
-      <div style="position:relative;width:110px">
-        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-family:var(--mono);font-size:12px">${sym(tx.currency)}</span>
-        <input class="form-input reimb-tx-amt numpad-input" data-tx-id="${tx.id}" type="number" step="any" value="${remaining.toFixed(2)}" style="padding-left:24px;padding-right:8px;font-size:13px;text-align:right" oninput="updateReimbTotal()" inputmode="none">
-      </div>
-    </div>`;
-  }).filter(Boolean).join('');
+    if (remaining <= 0.001) continue;
+    entries.push({ tx, owed: personShare, paid, remaining });
+  }
+  // FIFO: oldest first
+  entries.sort((a,b) => (a.tx.date||'').localeCompare(b.tx.date||''));
+  return entries;
+}
 
-  if (!rowsHTML) { showToast('All transactions already fully paid by ' + person); return; }
+function openReimbDialog(person) {
+  const entries = getReimbEntriesForPerson(person);
+  if (entries.length === 0) { showToast('No pending reimbursements'); return; }
+
+  // Group totals by currency for default selection
+  const totalsByCurr = {};
+  for (const e of entries) {
+    const c = e.tx.currency || 'PHP';
+    totalsByCurr[c] = (totalsByCurr[c]||0) + e.remaining;
+  }
+  const currList = Object.keys(totalsByCurr);
+  const defaultCurr = currList.sort((a,b)=>{
+    const aCount = entries.filter(e=>(e.tx.currency||'PHP')===a).length;
+    const bCount = entries.filter(e=>(e.tx.currency||'PHP')===b).length;
+    return bCount - aCount;
+  })[0];
+
+  // Read-only entries summary
+  const rowsHTML = entries.map(e => {
+    const tx = e.tx;
+    const cat = getCategoryDisplay(tx.categoryId);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--text2)">${cat.icon} ${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(tx.date)}</div>
+        ${e.paid>0?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
+      </div>
+      <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
+    </div>`;
+  }).join('');
+
+  // Currency selector (only show if multi-currency)
+  const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
+  const currSelectorHtml = currList.length > 1
+    ? `<div class="form-group"><label class="form-label">Settlement currency</label>
+         <select class="form-input" id="rsl-curr" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
+         <div style="font-size:11px;color:var(--text4);margin-top:4px">Other currency entries will be converted using snapshot FX rate</div>
+       </div>`
+    : `<input type="hidden" id="rsl-curr" value="${defaultCurr}">`;
+
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${a.name} (${a.currency})</option>`).join('');
 
   openDlg(`Receive from ${person}`,
-    `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">Check the transactions to settle and adjust the amount received per each:</div>
-    <div style="max-height:300px;overflow-y:auto;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px">${rowsHTML}</div>
-    <div id="reimb-total-display" style="text-align:right;font-size:13px;color:var(--text2);margin-bottom:12px"></div>
-    <div class="form-group">
-      <label class="form-label">Receive into account</label>
-      <select class="form-input" id="reimb-acct-sel">${buildReimbAcctOptions(txCurr)}</select>
-    </div>`,
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">${entries.length} pending · settled oldest first</div>
+     <div style="background:var(--bg3);border-radius:var(--r-md);max-height:180px;overflow-y:auto;margin-bottom:14px">${rowsHTML}</div>
+     ${currSelectorHtml}
+     <div class="form-group"><label class="form-label">Total received</label>
+       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="rsl-amount" value="" placeholder="0.00" oninput="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
+       <div id="rsl-amount-fmt" style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
+     </div>
+     <div id="rsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
+     <div class="form-group"><label class="form-label">Receive into</label>
+       <select class="form-input" id="rsl-acct">${acctOpts}</select>
+     </div>
+     <div class="form-row fr2">
+       <div class="form-group"><label class="form-label">Date</label>
+         <input class="form-input" type="date" id="rsl-date" value="${today()}" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
+       </div>
+       <div class="form-group"><label class="form-label">Time</label>
+         <input class="form-input" type="time" id="rsl-time" value="${nowTime()}">
+       </div>
+     </div>
+     <div class="form-group"><label class="form-label">Notes (optional)</label>
+       <input class="form-input" id="rsl-notes" placeholder="e.g. paid in full">
+     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-success btn-sm" onclick="confirmReimbSettlement('${person.replace(/'/g,'\\\'')}')">Confirm</button>`
+     <button class="btn btn-success btn-sm" onclick="confirmReimbSettlement('${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
-  setTimeout(updateReimbTotal, 0);
+  // Auto-fill total
+  setTimeout(()=>{
+    const total = computeReimbBatchTotal(entries, defaultCurr, today());
+    const inp = document.getElementById('rsl-amount');
+    if (inp) { inp.value = total.toFixed(2); updateReimbBatchPreview(person); }
+  }, 50);
+}
+
+// Compute grand total in target currency using snapshot FX
+function computeReimbBatchTotal(entries, targetCurr, settlementDate) {
+  const snap = buildFxSnapshot(settlementDate);
+  let total = 0;
+  for (const e of entries) {
+    const c = e.tx.currency || 'PHP';
+    if (c === targetCurr) total += e.remaining;
+    else {
+      const phpVal = (c==='PHP') ? e.remaining : e.remaining * (snap[c] || 1);
+      total += (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+    }
+  }
+  return total;
+}
+
+function updateReimbBatchPreview(person) {
+  const entries = getReimbEntriesForPerson(person);
+  const targetCurr = document.getElementById('rsl-curr')?.value || (entries[0]?.tx.currency || 'PHP');
+  const date = document.getElementById('rsl-date')?.value || today();
+  const received = parseFloat(document.getElementById('rsl-amount')?.value) || 0;
+  const grandTotal = computeReimbBatchTotal(entries, targetCurr, date);
+  const preview = document.getElementById('rsl-preview');
+  const fmtEl = document.getElementById('rsl-amount-fmt');
+  if (fmtEl) fmtEl.textContent = received > 0 ? fmt(received, targetCurr) : '';
+  if (!preview) return;
+
+  if (received <= 0) {
+    preview.innerHTML = `<div style="color:var(--text4)">Total owed: <strong style="font-family:var(--mono);color:var(--text2)">${fmt(grandTotal, targetCurr)}</strong></div>`;
+    return;
+  }
+
+  const diff = received - grandTotal;
+  if (Math.abs(diff) < 0.01) {
+    preview.innerHTML = `<div style="color:var(--green)">✓ Exact — settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
+  } else if (diff > 0) {
+    preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>
+      <div style="color:var(--text3);margin-top:3px">Excess: <strong style="font-family:var(--mono);color:var(--green)">+${fmt(diff, targetCurr)}</strong> → logged as Reimbursement Gain</div>`;
+  } else {
+    // Kulang FIFO walk
+    let remainAmt = received;
+    let fullyPaid = 0;
+    let partialAmt = 0;
+    const snap = buildFxSnapshot(date);
+    for (const e of entries) {
+      const c = e.tx.currency || 'PHP';
+      let rInTarget;
+      if (c===targetCurr) rInTarget = e.remaining;
+      else {
+        const phpVal = (c==='PHP') ? e.remaining : e.remaining * (snap[c] || 1);
+        rInTarget = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+      }
+      if (remainAmt >= rInTarget - 0.01) { remainAmt -= rInTarget; fullyPaid++; }
+      else if (remainAmt > 0) { partialAmt = remainAmt; remainAmt = 0; break; }
+      else break;
+    }
+    const untouched = entries.length - fullyPaid - (partialAmt > 0 ? 1 : 0);
+    let msg = `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
+    if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next entry: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
+    if (untouched > 0) msg += `<div style="color:var(--text4);margin-top:2px">${untouched} ${untouched>1?'entries':'entry'} untouched</div>`;
+    preview.innerHTML = msg;
+  }
 }
 
 function buildReimbAcctOptions(preferredCurrency) {
@@ -6923,79 +7128,129 @@ function updateReimbTotal() {
   el.innerHTML = `Total: <strong style="color:var(--green);font-family:var(--mono)">${parts.join(' + ')}</strong>`;
 }
 
+// 📖 USER STORY: Pag pinindot mo ang "Settle" sa reimbursement ng isang tao, lahat ng pending
+// shared txs niya ay naise-settle in FIFO order — oldest entry muna. Pag may sobra sa bayad,
+// auto na siyang nilo-log as Reimbursement Gain. Pag kulang naman, partial lang yung last
+// entry na natamaan, untouched yung iba pa.
+// ── PERSONAL LOGIC SET ── batch reimb settle: FIFO with snapshot FX; sobra=isReimbSettlementGain child; kulang=partial last entry
 function confirmReimbSettlement(person) {
-  const acctId = document.getElementById('reimb-acct-sel')?.value;
-  if (!acctId) { showToast('Select an account'); return; }
+  const entries = getReimbEntriesForPerson(person);
+  if (entries.length === 0) { showToast('No pending reimbursements'); return; }
 
-  // Collect all checked rows with their amounts
-  const settlements = []; // { txId, amount, currency }
-  document.querySelectorAll('.reimb-tx-row').forEach(row => {
-    const cb = row.querySelector('.reimb-tx-check');
-    if (!cb?.checked) return;
-    const txId = row.dataset.txId;
-    const amt = parseFloat(row.querySelector('.reimb-tx-amt')?.value) || 0;
-    const remaining = parseFloat(row.dataset.remaining) || 0;
-    if (amt <= 0) return;
-    if (amt > remaining + 0.01) {
-      showToast(`Amount for one tx exceeds remaining balance — check amounts`);
-      return;
+  const acctId = document.getElementById('rsl-acct')?.value;
+  const date = document.getElementById('rsl-date')?.value || today();
+  const time = document.getElementById('rsl-time')?.value || nowTime();
+  const notes = document.getElementById('rsl-notes')?.value?.trim() || '';
+  const targetCurr = document.getElementById('rsl-curr')?.value || (entries[0].tx.currency || 'PHP');
+  const received = parseFloat(document.getElementById('rsl-amount')?.value) || 0;
+  const acct = db.accounts.find(a=>a.id===acctId);
+  if (!acct) { showToast('Pick an account'); return; }
+  if (received <= 0) { showToast('Enter received amount'); return; }
+
+  const snap = buildFxSnapshot(date);
+
+  // Helper: convert with snapshot
+  const conv = (amt, from, to) => {
+    if (from === to) return amt;
+    const phpVal = (from==='PHP') ? amt : amt * (snap[from] || 1);
+    return (to==='PHP') ? phpVal : phpVal / (snap[to] || 1);
+  };
+
+  // FIFO walk: deduct from received, settling entries in order
+  let remainingReceived = received;
+  const settledNow = [];
+  for (const e of entries) {
+    if (remainingReceived <= 0.001) break;
+    const txCurr = e.tx.currency || 'PHP';
+    const remainInTarget = conv(e.remaining, txCurr, targetCurr);
+    if (remainingReceived >= remainInTarget - 0.01) {
+      remainingReceived -= remainInTarget;
+      settledNow.push({ entry: e, paidInTarget: remainInTarget, paidInTxCurr: e.remaining, full: true });
+    } else {
+      const partialInTarget = remainingReceived;
+      const partialInTxCurr = conv(partialInTarget, targetCurr, txCurr);
+      settledNow.push({ entry: e, paidInTarget: partialInTarget, paidInTxCurr: partialInTxCurr, full: false });
+      remainingReceived = 0;
+      break;
     }
-    settlements.push({ txId, amount: amt, currency: row.dataset.currency });
+  }
+
+  const excess = remainingReceived;
+  if (settledNow.length === 0 && excess <= 0) { showToast('Nothing settled'); return; }
+
+  // Update each parent tx's paidSoFar (in tx's own currency)
+  for (const s of settledNow) {
+    const parent = db.transactions.find(t => t.id === s.entry.tx.id);
+    if (!parent) continue;
+    if (!parent.paidSoFar || typeof parent.paidSoFar !== 'object') parent.paidSoFar = {};
+    parent.paidSoFar[person] = (parent.paidSoFar[person] || 0) + s.paidInTxCurr;
+    // Check if parent is now fully settled (all persons)
+    const totalOwed = parent.persons?.reduce((sum, p) => sum + (p.share || 0), 0)
+      || ((parent.totalBill || parent.amount) - (parent.myShare || 0));
+    const totalPaid = Object.values(parent.paidSoFar).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+    if (totalPaid >= totalOwed - 0.01) { parent.settled = true; parent.settledAt = date; }
+  }
+
+  // Create ONE parent settlement tx for the actual received amount in target currency
+  const parentTxId = 'tx-'+genId();
+  const fullyPaid = settledNow.filter(s=>s.full).length;
+  const partialPaid = settledNow.filter(s=>!s.full).length;
+  const parentNotes = notes || `Batch reimbursement from ${person} (${fullyPaid} full${partialPaid?` + ${partialPaid} partial`:''})`;
+  const primaryTxId = settledNow[0]?.entry.tx.id || entries[0].tx.id;
+  db.transactions.push({
+    id: parentTxId,
+    type: 'income',
+    amount: received,
+    currency: targetCurr,
+    accountId: acctId,
+    date,
+    time,
+    notes: parentNotes,
+    isSettlement: true,
+    isAutoReimb: true,
+    isBatchReimbSettlement: true,
+    parentId: primaryTxId,
+    batchTxIds: settledNow.map(s=>s.entry.tx.id),
+    batchPerson: person,
+    reimbPerson: person,
+    categoryId: 'sc-reimbreceived',
+    fxSnapshot: snap,
+    createdAt: new Date().toISOString(),
   });
 
-  if (settlements.length === 0) { showToast('No valid settlements entered'); return; }
-
-  // Group by currency for account creation
-  const byCurr = {};
-  settlements.forEach(s => { byCurr[s.currency] = (byCurr[s.currency] || 0) + s.amount; });
-
-  // Create ONE child income tx per currency, with array of parentIds this covers
-  // Actually simpler: create one child per parent tx, with its own amount and parentId
-  for (const s of settlements) {
-    const parent = db.transactions.find(t => t.id === s.txId);
-    if (!parent) continue;
-
-    // Update parent's paidSoFar (per-person structure)
-    if (!parent.paidSoFar || typeof parent.paidSoFar !== 'object') parent.paidSoFar = {};
-    parent.paidSoFar[person] = (parent.paidSoFar[person] || 0) + s.amount;
-
-    // Check if parent is fully settled (all persons fully paid)
-    const totalOwed = parent.persons?.reduce((sum, p) => sum + (p.share || 0), 0) ||
-                      ((parent.totalBill || parent.amount) - (parent.myShare || 0));
-    const totalPaid = Object.values(parent.paidSoFar).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-    if (totalPaid >= totalOwed - 0.01) {
-      parent.settled = true;
-      parent.settledAt = today();
-    }
-
-    // Create child income tx linked to parent
+  // Sobra → gain child
+  if (excess > 0.01) {
     db.transactions.push({
-      id: genId(),
+      id: 'tx-'+genId(),
       type: 'income',
-      amount: s.amount,
-      currency: s.currency,
-      categoryId: 'sc-reimbreceived',
+      amount: excess,
+      currency: targetCurr,
       accountId: acctId,
-      date: today(),
-      time: nowTime(),
-      notes: `Reimbursement from ${person}`,
-      fxSnapshot: buildFxSnapshot(today()),
-      parentId: s.txId,
-      isAutoReimb: true,
-      isSettlement: true,   // Not true income — excluded from income totals
-      reimbPerson: person,
-      createdAt: new Date().toISOString()
+      date,
+      time,
+      notes: `Reimbursement gain from ${person}`,
+      isReimbSettlementGain: true,
+      isSettlement: true,
+      parentId: parentTxId,
+      batchPerson: person,
+      categoryId: 'sc-investreturns',
+      fxSnapshot: snap,
+      createdAt: new Date().toISOString(),
     });
   }
 
   saveDBWithSync();
   closeDlg();
-  // Refresh whichever page is currently showing
   if (currentPage === 'reimbursements') renderReimbursementsPage();
   else if (currentPage === 'transactions') renderTransactions();
   if (currentPage === 'dashboard') renderDashboard();
-  const summary = Object.entries(byCurr).map(([c, v]) => fmt(v, c)).join(' + ');
-  showToast(`Received ${summary} from ${person}`);
+
+  const summary = excess > 0.01
+    ? `✓ Settled ${fullyPaid} ${fullyPaid===1?'entry':'entries'} + ${fmt(excess, targetCurr)} gain`
+    : partialPaid > 0
+      ? `✓ Settled ${fullyPaid} fully + 1 partial`
+      : `✓ Settled ${fullyPaid} ${fullyPaid===1?'entry':'entries'}`;
+  showToast(summary);
 }
 
 // Legacy function stubs for any lingering references
@@ -7701,13 +7956,19 @@ function openBatchSettleLoans(direction, person) {
      ${currSelectorHtml}
      <div class="form-group"><label class="form-label">${totalLabel}</label>
        <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="bsl-amount" value="" placeholder="0.00" oninput="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+       <div id="bsl-amount-fmt" style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
      </div>
      <div id="bsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
      <div class="form-group"><label class="form-label">${direction==='lent'?'Receive into':'Pay from'}</label>
        <select class="form-input" id="bsl-acct">${acctOpts}</select>
      </div>
-     <div class="form-group"><label class="form-label">Date</label>
-       <input class="form-input" type="date" id="bsl-date" value="${today()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+     <div class="form-row fr2">
+       <div class="form-group"><label class="form-label">Date</label>
+         <input class="form-input" type="date" id="bsl-date" value="${today()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+       </div>
+       <div class="form-group"><label class="form-label">Time</label>
+         <input class="form-input" type="time" id="bsl-time" value="${nowTime()}">
+       </div>
      </div>
      <div class="form-group"><label class="form-label">Notes (optional)</label>
        <input class="form-input" id="bsl-notes" placeholder="e.g. paid in full">
@@ -7750,6 +8011,9 @@ function updateBatchSettlePreview(direction, person) {
   const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
   const grandTotal = computeBatchSettleTotal(loans, targetCurr, date);
   const preview = document.getElementById('bsl-preview');
+  // Format display below input (comma separators)
+  const fmtEl = document.getElementById('bsl-amount-fmt');
+  if (fmtEl) fmtEl.textContent = received > 0 ? fmt(received, targetCurr) : '';
   if (!preview) return;
 
   if (received <= 0) {
@@ -7814,6 +8078,7 @@ function confirmBatchSettleLoans(direction, person) {
 
   const acctId = document.getElementById('bsl-acct')?.value;
   const date = document.getElementById('bsl-date')?.value || today();
+  const time = document.getElementById('bsl-time')?.value || nowTime();
   const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
   const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0].currency || 'PHP');
   const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
@@ -7877,7 +8142,7 @@ function confirmBatchSettleLoans(direction, person) {
     currency: targetCurr,
     accountId: acctId,
     date,
-    time: nowTime(),
+    time,
     notes: parentNotes,
     isSettlement: true,
     isLoanPayment: true,
@@ -7886,7 +8151,7 @@ function confirmBatchSettleLoans(direction, person) {
     batchLoanIds: settledNow.map(s=>s.loan.id),
     batchPerson: person,
     batchDirection: direction,
-    categoryId: primaryLoan.categoryId || null,
+    categoryId: direction === 'lent' ? 'sc-investreturns' : 'sc-misc',
     fxSnapshot: snap,
     createdAt: new Date().toISOString(),
   });
@@ -7903,13 +8168,14 @@ function confirmBatchSettleLoans(direction, person) {
       currency: targetCurr,
       accountId: acctId,
       date,
-      time: nowTime(),
+      time,
       notes: isExcessGain ? `Settlement gain from ${person}` : `Overpayment to ${person}`,
       isLoanSettlementGain: isExcessGain,
       isLoanSettlementLoss: !isExcessGain,
       isSettlement: true,
       parentId: parentTxId,
       batchPerson: person,
+      categoryId: isExcessGain ? 'sc-investreturns' : 'sc-misc',
       fxSnapshot: snap,
       createdAt: new Date().toISOString(),
     });
@@ -8340,6 +8606,7 @@ function confirmWriteOffLoan(loanId, direction) {
     isSettlement: true,
     parentId: loanId,
     writeOffReason: reason,
+    categoryId: direction === 'lent' ? 'sc-misc' : 'sc-investreturns',
     fxSnapshot: buildFxSnapshot(date),
     createdAt: new Date().toISOString(),
   });
@@ -12949,7 +13216,7 @@ function exportXLSX() {
     // ── Sheet 1: Transactions ──
     const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency','PHP Equivalent','Account','To Account','Notes','Tags']];
     for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
-      if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue; // skip auto-children
+      if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain) continue; // skip auto-children
       const cat = getCategoryDisplay(tx.categoryId);
       const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
       const toAcct = tx.toAccountId ? getAccountDisplay(tx.toAccountId) : '';
