@@ -1600,7 +1600,7 @@ function getNetWorth() {
     }
   }
   for (const inv of db.investments) {
-    if (!inv.archived) {
+    if (!inv.archived && inv.status !== 'sold') {
       const phpVal = toPhp(inv.currentValue || inv.amount, inv.currency);
       assets += phpVal;
       assetRows.push({ name: inv.name, type: inv.type || 'Investment', bal: inv.currentValue || inv.amount, currency: inv.currency, phpBal: phpVal });
@@ -1696,9 +1696,8 @@ function getMonthTotals(monthKey) {
     // Gain/Loss INCLUDED: real income/expense from FX arbitrage on settlements
     // ── PERSONAL LOGIC SET #47 ── Gain/Loss INCLUDED in monthly income/expense: isReimbSettlementGain/Loss + isLoanSettlementGain/Loss are real FX arbitrage earnings/losses (Mark prices lower exchange rate to profit). isAutoReimb batch settlement parents still excluded (accounts receivable, not income).
     if (t.isAutoReimb && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
-    // isInvestmentFund EXCLUDED: capital movement to investment, not a real expense (asset just changed form)
-    // isInvestmentReturn INCLUDED: proceeds from selling investment = real income
-    if (t.isInvestmentFund) continue;
+    // isInvestmentFund = type:'transfer' — already excluded from monthly totals via transfer type filter
+    // isInvestmentReturn = real income when investment sold — included
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -3350,7 +3349,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // ── PERSONAL LOGIC SET ── generic parent children block: shows isLoanSettlementGain/Loss, isReimbSettlementGain/Loss, isAutoForex children directly nested under parent in tx log
   let genericChildrenHTML = '';
   if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
-    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee));
+    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
     if (directChildren.length > 0) {
       const breakdownId = 'genbreak-' + tx.id;
       const childRows = directChildren.map(c => {
@@ -3361,6 +3360,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         else if (c.isLoanSettlementLoss || c.isReimbSettlementLoss) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`;
         else if (c.isAutoForex) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:600">Forex</span>`;
         else if (c.isAutoFee) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--amber-bg);color:var(--amber);font-weight:600">Fee</span>`;
+        else if (c.isInvestmentReturn) badge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600">Return</span>`;
         return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <div style="font-size:12px;color:var(--text2);min-width:0">${cCat.name.replace(/^[^ ]+ /,'')}</div>
@@ -5350,7 +5350,7 @@ function renderTxLog() {
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
     // Hide investment fund + return txns — managed via Investments tab only (same as loans pattern)
-    if (t.isInvestmentFund || t.isInvestmentReturn) return false;
+    if (t.isInvestmentFund || t.isInvestmentReturn) return true; // show in tx log — capital movement, linked to investment record
     // Type filter (still applies during search)
     if (_txFilter !== 'all') {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
@@ -8415,7 +8415,7 @@ function saveAddInv() {
   const invId = genId();
   db.investments.push({ id:invId, name, type:document.getElementById('ai-type')?.value||'Other', amount, currency, currentValue:parseFloat(document.getElementById('ai-current')?.value)||amount, date, notes:document.getElementById('ai-notes')?.value?.trim()||'', sourceAccountId:srcId||null, status:'active', archived:false });
   if (srcId) {
-    db.transactions.push({ id:'tx-'+genId(), type:'expense', amount, currency, accountId:srcId, date, time, categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'transfer', fromAccountId:srcId, toAccountId:null, amount, currency, accountId:srcId, date, time, categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
 }
@@ -8447,7 +8447,7 @@ function openInvDetail(invId) {
       <button class="btn btn-success" onclick="openSellInv('${invId}')">💰 Sell / Close</button>
     </div>
     <button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="openEditInv('${invId}')">Edit Details</button>
-    `:`<div style="background:var(--green-bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--green);text-align:center">&#10003; Closed &mdash; Realized ${fmt(inv.realizedGL||0,inv.currency)}</div>`}
+    `:`<div style="background:${(inv.realizedGL||0)>=0?'var(--green-bg)':'var(--red-bg)'};border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:${(inv.realizedGL||0)>=0?'var(--green)':'var(--red)'};text-align:center">&#10003; Closed &mdash; Realized ${(inv.realizedGL||0)>=0?'+':''}${fmt(inv.realizedGL||0,inv.currency)}</div>`}
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
@@ -8516,7 +8516,9 @@ function confirmSellInv(invId) {
   const realizedGL = proceeds - inv.amount;
   inv.status='sold'; inv.soldDate=date; inv.soldProceeds=proceeds; inv.realizedGL=realizedGL; inv.currentValue=proceeds;
   if (acctId) {
-    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}${notes?' — '+notes:''}`, isInvestmentReturn:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    // Find the original fund tx to link as parent
+    const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===invId);
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}${notes?' — '+notes:''}`, isInvestmentReturn:true, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAccounts();
   const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
