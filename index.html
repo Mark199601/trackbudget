@@ -1354,6 +1354,12 @@ let db = (() => {
       }
     }
     if (!parsed.investments) parsed.investments = [];
+    // Migration: fix any isInvestmentFund txs that were saved as type:'expense' → should be type:'transfer'
+    if (parsed.transactions) {
+      parsed.transactions.forEach(t => {
+        if (t.isInvestmentFund && t.type !== 'transfer') t.type = 'transfer';
+      });
+    }
     if (!parsed.reimbursements) parsed.reimbursements = [];
     if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
     if (!parsed.settings.contractEndDate) parsed.settings.contractEndDate = '';
@@ -1451,6 +1457,18 @@ function saveDB() {
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch(e) { showToast('⚠ Storage full — export backup!', 4000); }
 }
+function migrateInvestmentTxTypes() {
+  // Migrate any isInvestmentFund txs that still have type:'expense' → type:'transfer'
+  let changed = false;
+  db.transactions.forEach(t => {
+    if (t.isInvestmentFund && t.type !== 'transfer') {
+      t.type = 'transfer';
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 function saveDBWithSync() {
   // Local save + trigger Drive sync (for actual data changes only)
   saveDB();
