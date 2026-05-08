@@ -1857,7 +1857,7 @@ function renderPageHeader(page) {
   } else if (page==='accounts') {
     const archivedCount = db.accounts.filter(a=>a.archived).length;
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
-      + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="window.toggleArchivedAccounts()">📦${archivedCount}</button>` : '');
+      + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="openArchivedAccountsSheet()">📦${archivedCount}</button>` : '');
   } else if (page==='targets') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
@@ -7822,13 +7822,11 @@ function renderAccounts() {
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_acctTab==='active'?'active':''}" onclick="setAcctTab('active')">Accounts</button>
     <button class="tab-btn ${_acctTab==='invest'?'active':''}" onclick="setAcctTab('invest')">Investments</button>
-    <button class="tab-btn ${_acctTab==='archived'?'active':''}" onclick="setAcctTab('archived')">Archived</button>
   </div>`;
   let content = '';
   try {
     if (_acctTab==='active') content = renderActiveAccounts();
     else if (_acctTab==='invest') content = renderInvestments();
-    else if (_acctTab==='archived') content = renderArchivedAccounts();
     else { _acctTab='active'; content = renderActiveAccounts(); }
   } catch(e) {
     console.error('renderAccounts error:', e);
@@ -7954,6 +7952,10 @@ function renderArchivedAccounts() {
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+
+function openArchivedAccountsSheet() {
+  openSheet('gen', '📦 Archived Accounts', renderArchivedAccounts());
 }
 
 function openAcctDetail(acctId) {
@@ -8218,7 +8220,7 @@ function archiveAccount(acctId) {
   saveDBWithSync();
   closeSheet('gen');
   window._acctShowArchived = true; // auto-show archived section after archiving
-  _acctTab = 'archived';
+  _acctTab = 'active';
   setAcctTab('active');
   renderPageHeader('accounts');
   showToast('Account archived');
