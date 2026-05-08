@@ -7822,12 +7822,14 @@ function renderAccounts() {
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_acctTab==='active'?'active':''}" onclick="setAcctTab('active')">Accounts</button>
     <button class="tab-btn ${_acctTab==='invest'?'active':''}" onclick="setAcctTab('invest')">Investments</button>
+    <button class="tab-btn ${_acctTab==='archived'?'active':''}" onclick="setAcctTab('archived')">Archived</button>
   </div>`;
   let content = '';
   try {
     if (_acctTab==='active') content = renderActiveAccounts();
     else if (_acctTab==='invest') content = renderInvestments();
-    else { _acctTab='active'; content = renderActiveAccounts(); } // fallback for stale archived tab state
+    else if (_acctTab==='archived') content = renderArchivedAccounts();
+    else { _acctTab='active'; content = renderActiveAccounts(); }
   } catch(e) {
     console.error('renderAccounts error:', e);
     content = `<div class="page-pad"><div class="card" style="padding:16px;color:var(--red)">
@@ -8216,6 +8218,7 @@ function archiveAccount(acctId) {
   saveDBWithSync();
   closeSheet('gen');
   window._acctShowArchived = true; // auto-show archived section after archiving
+  _acctTab = 'archived';
   setAcctTab('active');
   renderPageHeader('accounts');
   showToast('Account archived');
