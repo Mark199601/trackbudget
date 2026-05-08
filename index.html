@@ -8226,8 +8226,10 @@ function confirmDeleteAccount(acctId) {
 
 
 function renderInvestments() {
+  const _showArchived = window._invShowArchived || false;
   const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
   const sold = db.investments.filter(i=>!i.archived && i.status === 'sold');
+  const archived = db.investments.filter(i=>i.archived);
   const totalInvested = invs.reduce((s,i)=>s+toPhp(i.amount,i.currency),0);
   const totalCurrent  = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
   const totalGL = totalCurrent - totalInvested;
@@ -8303,6 +8305,30 @@ function renderInvestments() {
       </div>`;
     });
     html += `</div>`;
+  }
+  if (archived.length > 0) {
+    html += `<div style="margin:4px 0 8px">
+      <button class="chip${_showArchived?' active':''}" onclick="window._invShowArchived=!window._invShowArchived;renderAccounts()" style="font-size:11px">
+        📦 Archived (${archived.length})
+      </button>
+    </div>`;
+    if (_showArchived) {
+      html += `<div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:10px;opacity:.65">`;
+      archived.forEach((inv,idx)=>{
+        const border = idx < archived.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+        html += `<div style="padding:12px 16px;${border};cursor:pointer" onclick="openInvDetail('${inv.id}')">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">${invTypeIcon(inv.type)}</span>
+              <div><div style="font-size:13px;font-weight:600;color:var(--text2)">${inv.name}</div>
+              <div style="font-size:11px;color:var(--text4)">${inv.type} · Archived</div></div>
+            </div>
+            <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${fmt(inv.amount,inv.currency)}</div>
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
   }
   html += `<button class="pool-add-btn" onclick="openAddInv()">+ Add Investment</button></div>`;
   return html;
@@ -8390,7 +8416,10 @@ function openInvDetail(invId) {
     `:`<div style="background:var(--green-bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--green);text-align:center">&#10003; Closed &mdash; Realized ${fmt(inv.realizedGL||0,inv.currency)}</div>`}
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
-      <button class="btn btn-danger btn-full" style="margin-top:8px" onclick="deleteInv('${invId}')">🗑 Delete Investment</button>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">${inv.archived?'📤 Unarchive':'📦 Archive Investment'}</button>
+        <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">🗑 Delete Investment</button>
+      </div>
     </details>
   </div>`);
 }
@@ -8497,9 +8526,24 @@ function saveEditInv(id) {
 }
 
 function deleteInv(id) {
-  if (!confirm('Delete this investment?')) return;
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv) return;
+  openDlg('Delete Investment?',
+    `<p style="font-size:14px;color:var(--text2);margin:0">Permanently delete <strong>${inv.name}</strong>? This cannot be undone.</p>`,
+    `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger" onclick="confirmDeleteInv('${id}')">Delete</button>`
+  );
+}
+function confirmDeleteInv(id) {
   db.investments=db.investments.filter(i=>i.id!==id);
-  saveDBWithSync(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
+}
+function archiveInv(id) {
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv) return;
+  inv.archived = !inv.archived;
+  saveDBWithSync(); closeSheet('gen'); renderAccounts();
+  showToast(inv.archived ? 'Investment archived' : 'Investment unarchived');
 }
 
 // ════════════════════════════════════════════════════════════
