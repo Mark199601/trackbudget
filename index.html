@@ -1752,6 +1752,8 @@ function txCategoryDisplay(tx) {
   if (tx.isLoanSettlementLoss)   return {icon:'📉', name:'Loan Settlement Loss'};
   if (tx.isReimbSettlementGain)  return {icon:'📈', name:'Reimbursement Gain'};
   if (tx.isReimbSettlementLoss)  return {icon:'📉', name:'Reimbursement Loss'};
+  if (tx.isInvestmentFund)       return {icon:'💼', name:'Investment Fund'};
+  if (tx.isInvestmentReturn)     return {icon:'📈', name:'Investment Return'};
   return getCategoryDisplay(tx.categoryId);
 }
 
@@ -5832,6 +5834,13 @@ function openTxDetail(txId) {
         <span>💡 Auto-generated remittance fee. Archive parent to remove.</span>
         ${parentFeeExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">→ View Parent</span>` : ''}
       </div>`;
+    } else if (tx.isInvestmentFund || tx.isInvestmentReturn) {
+      const inv = tx.investmentId && db.investments.find(i=>i.id===tx.investmentId);
+      const labelTxt = tx.isInvestmentFund ? 'Auto-generated investment entry. Manage via investment record.' : 'Auto-generated investment return. Manage via investment record.';
+      footer = `<div style="font-size:11px;color:var(--amber);padding:7px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
+        <span>💡 ${labelTxt}</span>
+        ${inv ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openInvDetail('${inv.id}'),50)">→ View Investment</span>` : ''}
+      </div>`;
     } else if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) {
       const parentExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
       const labelTxt = tx.isLoanSettlementGain ? 'Auto-generated loan settlement gain.' : 'Auto-generated loan settlement loss.';
@@ -8563,7 +8572,7 @@ function deleteInv(id) {
   );
 }
 function confirmDeleteInv(id) {
-  // Cascade delete all linked transactions (isInvestmentFund + isInvestmentReturn)
+  // ── PERSONAL LOGIC SET #50 ── Investment cascade: delete investment → permanently delete all linked isInvestmentFund + isInvestmentReturn txs
   db.transactions = db.transactions.filter(t => t.investmentId !== id);
   db.investments = db.investments.filter(i => i.id !== id);
   saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
@@ -8572,6 +8581,8 @@ function archiveInv(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
   inv.archived = !inv.archived;
+  // ── PERSONAL LOGIC SET #50 ── Investment cascade: archive/delete investment → cascade to all linked isInvestmentFund + isInvestmentReturn txs (investmentId === id). Children are not independent — they follow parent state.
+  db.transactions.filter(t=>t.investmentId===id).forEach(t=>{ t.archived = inv.archived; });
   saveDBWithSync(); closeSheet('gen'); renderAccounts(); renderPageHeader('accounts');
   showToast(inv.archived ? 'Investment archived' : 'Investment unarchived');
 }
