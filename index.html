@@ -1857,7 +1857,7 @@ function renderPageHeader(page) {
   } else if (page==='accounts') {
     const archivedCount = db.accounts.filter(a=>a.archived).length;
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
-      + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" onclick="toggleArchivedAccounts()" title="Archived accounts" style="padding:6px 8px">📦${archivedCount}</button>` : '');
+      + (archivedCount > 0 ? `<button id="ph-archive-btn" class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px">📦${archivedCount}</button>` : '');
   } else if (page==='targets') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
@@ -1865,6 +1865,9 @@ function renderPageHeader(page) {
   }
   // Build all at once — never use += on innerHTML (breaks onclick handlers)
   r.innerHTML = pageHTML + syncHTML + themeHTML;
+  // Wire archive btn via addEventListener (safer than inline onclick for dynamically built headers)
+  const archBtn = document.getElementById('ph-archive-btn');
+  if (archBtn) archBtn.addEventListener('click', toggleArchivedAccounts);
 }
 
 // ════════════════════════════════════════════════════════════
