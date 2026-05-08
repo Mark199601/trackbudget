@@ -1669,7 +1669,8 @@ function getMonthTotals(monthKey) {
     // Para hindi ma-inflate yung mga numbers mo at maging misleading.
     // ── PERSONAL LOGIC SET ── (do not remove)
     // isSettlement, loanTx, loanPayment, external = not real income/expense
-    if (t.isSettlement) continue;
+    // isSettlement excluded EXCEPT gain/loss — those are real FX arbitrage income/expense
+    if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
     // 📖 USER STORY: Pag nag-log ka ng lend o borrow, hindi kasama sa monthly income/expense
     // totals at pie charts — kasi hindi mo naman talaga kinita o ginastos yun, pautang lang.
     // Pero yung pera na inutang ng iba sayo (receivable) ay nag-aappear pa rin sa Assets mo sa net worth.
@@ -1684,10 +1685,12 @@ function getMonthTotals(monthKey) {
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
     // isAutoFee INCLUDED: real remittance fee expense — UNLESS reimbursable + linked shared tx settled (then offset → neutral)
     // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
-    // isLoanTx/isLoanPayment EXCLUDED: balance movement, not income/expense
     // Gain/Loss INCLUDED: real income/expense from FX arbitrage on settlements
     // ── PERSONAL LOGIC SET #47 ── Gain/Loss INCLUDED in monthly income/expense: isReimbSettlementGain/Loss + isLoanSettlementGain/Loss are real FX arbitrage earnings/losses (Mark prices lower exchange rate to profit). isAutoReimb batch settlement parents still excluded (accounts receivable, not income).
     if (t.isAutoReimb && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
+    // isInvestmentFund EXCLUDED: capital movement to investment, not a real expense (asset just changed form)
+    // isInvestmentReturn INCLUDED: proceeds from selling investment = real income
+    if (t.isInvestmentFund) continue;
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -7713,7 +7716,9 @@ function confirmReimbSettlement(person) {
     if (totalPaid >= totalOwed - 0.01) {
       parent.settled = true;
       parent.settledAt = date;
-      // If this is a fee reimbursable shared tx, create an income tx for the fee reimbursement
+      // ── PERSONAL LOGIC SET #49 ── isFeeReimbursable shared tx settlement creates income tx "Bank transfer fee reimb from [person]"
+      // category: sc-bankcharges. isAutoFee remains as expense always — this income tx offsets it.
+      // Net effect on monthly totals: -fee expense + fee income = 0 (neutral after reimbursement).
       if (parent.isFeeReimbursable) {
         db.transactions.push({
           id: 'tx-'+genId(),
@@ -8208,52 +8213,126 @@ function confirmDeleteAccount(acctId) {
   saveDBWithSync(); closeDlg(); closeSheet('gen'); renderAccounts(); showToast('Account deleted');
 }
 
+
 function renderInvestments() {
-  const invs = db.investments.filter(i=>!i.archived);
-  const total = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
-  let html = `<div class="page-pad">
-    <div class="hero-card" style="margin-bottom:16px">
-      <div class="hero-label">Total Portfolio Value</div>
-      <div style="font-size:28px;font-weight:600;font-family:var(--mono);color:#fff">${fmt(fromPhp(total,db.displayCurrency||'PHP'),db.displayCurrency||'PHP')}</div>
+  const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
+  const sold = db.investments.filter(i=>!i.archived && i.status === 'sold');
+  const totalInvested = invs.reduce((s,i)=>s+toPhp(i.amount,i.currency),0);
+  const totalCurrent  = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
+  const totalGL = totalCurrent - totalInvested;
+  const totalGLPct = totalInvested > 0 ? (totalGL/totalInvested)*100 : 0;
+  const dc = db.settings?.displayCurrency||db.displayCurrency||'PHP';
+  const typeColors = { Stocks:'#6c63ff', Crypto:'#f7931a', Bonds:'#34d399', 'Mutual Fund':'#60a5fa', 'Time Deposit':'#f472b6', 'Real Estate':'#a78bfa', Cooperative:'#fb923c', Corporation:'#e879f9', 'Land Ownership':'#4ade80', Other:'#94a3b8' };
+  const typeMap = {};
+  invs.forEach(i=>{ const k=i.type||'Other'; typeMap[k]=(typeMap[k]||0)+toPhp(i.currentValue||i.amount,i.currency); });
+  const typeEntries = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]);
+  let html = `<div class="page-pad">`;
+  html += `<div class="hero-card" style="margin-bottom:16px;padding:20px">
+    <div class="hero-label">Total Portfolio Value</div>
+    <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:#fff;margin:4px 0">${fmt(fromPhp(totalCurrent,dc),dc)}</div>
+    ${totalGL!==0?`<div style="font-size:13px;color:${totalGL>0?'var(--green)':'var(--red)'};margin-top:2px">${totalGL>0?'▲':'▼'} ${fmt(fromPhp(Math.abs(totalGL),dc),dc)} (${totalGL>0?'+':''}${totalGLPct.toFixed(1)}%) unrealized</div>`:''}
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:6px">Invested: ${fmt(fromPhp(totalInvested,dc),dc)}</div>
+  </div>`;
+  if (typeEntries.length > 0) {
+    html += `<div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin-bottom:10px">PORTFOLIO ALLOCATION</div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px">
+        ${typeEntries.map(([type,val])=>`<div style="flex:${val};background:${typeColors[type]||'#94a3b8'}" title="${type}"></div>`).join('')}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${typeEntries.map(([type,val])=>{const pct=totalCurrent>0?(val/totalCurrent*100).toFixed(1):'0.0';return `<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:${typeColors[type]||'#94a3b8'};flex-shrink:0"></div><span style="font-size:11px;color:var(--text3)">${type} ${pct}%</span></div>`;}).join('')}
+      </div>
     </div>`;
-  const invTypes = ['Stocks','Crypto','Bonds','Real Estate','Mutual Fund','Time Deposit','Other'];
+  }
   if (invs.length === 0) {
     html += `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-text">No investments yet</div><div class="empty-sub">Track stocks, crypto, mutual funds, and more.</div><button class="btn btn-primary btn-sm" onclick="openAddInv()">+ Add Investment</button></div>`;
   } else {
-    for (const inv of invs) {
-      const gl = (inv.currentValue||inv.amount) - inv.amount;
-      const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
-      html += `<div class="card" style="margin-bottom:8px" onclick="openEditInv('${inv.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div><div style="font-size:14px;font-weight:600">${inv.name}</div>
-          <span class="pill pill-gray" style="margin-top:4px">${inv.type||'Other'}</span></div>
-          <div style="text-align:right">
-            <div style="font-family:var(--mono);font-weight:600">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
-            ${gl!==0?`<div style="font-size:11px;color:${gl>0?'var(--green)':'var(--red)'};">${gl>0?'+':''}${fmt(gl,inv.currency)} (${glPct.toFixed(1)}%)</div>`:''}
+    html += `<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin-bottom:8px">ACTIVE (${invs.length})</div>`;
+    const grouped = {};
+    invs.forEach(i=>{ const k=i.type||'Other'; if(!grouped[k])grouped[k]=[]; grouped[k].push(i); });
+    for (const [type, items] of Object.entries(grouped)) {
+      html += `<div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:10px">`;
+      items.forEach((inv, idx) => {
+        const gl = (inv.currentValue||inv.amount) - inv.amount;
+        const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
+        const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
+        const border = idx < items.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+        html += `<div style="padding:14px 16px;${border};cursor:pointer" onclick="openInvDetail('${inv.id}')">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+              <div style="width:36px;height:36px;border-radius:10px;background:${typeColors[type]||'#94a3b8'}22;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${invTypeIcon(type)}</div>
+              <div style="min-width:0">
+                <div style="font-size:14px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${inv.name}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:1px">${type}${srcAcct?' · from '+srcAcct.name:''}</div>
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:12px">
+              <div style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text1)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+              ${gl!==0?`<div style="font-size:11px;color:${gl>0?'var(--green)':'var(--red)'}">${gl>0?'+':''}${fmt(gl,inv.currency)} (${gl>0?'+':''}${glPct.toFixed(1)}%)</div>`:`<div style="font-size:11px;color:var(--text4)">No change</div>`}
+            </div>
+            <div style="color:var(--text4);margin-left:8px;font-size:16px">&#8250;</div>
           </div>
-        </div>
-        ${inv.notes?`<div style="font-size:12px;color:var(--text3);margin-top:6px">${inv.notes}</div>`:''}
-      </div>`;
+        </div>`;
+      });
+      html += `</div>`;
     }
+  }
+  if (sold.length > 0) {
+    html += `<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin:12px 0 8px">CLOSED / SOLD (${sold.length})</div>
+    <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:10px">`;
+    sold.forEach((inv,idx)=>{
+      const realizedGL = inv.realizedGL || 0;
+      const border = idx < sold.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+      html += `<div style="padding:12px 16px;${border};opacity:.7;cursor:pointer" onclick="openInvDetail('${inv.id}')">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div><div style="font-size:13px;font-weight:600;color:var(--text2)">${inv.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${inv.type} · Sold ${inv.soldDate?fmtD(inv.soldDate):''}</div></div>
+          <div style="font-size:12px;color:${realizedGL>=0?'var(--green)':'var(--red)'};font-weight:600">${realizedGL>=0?'+':''}${fmt(realizedGL,inv.currency)} realized</div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
   }
   html += `<button class="pool-add-btn" onclick="openAddInv()">+ Add Investment</button></div>`;
   return html;
 }
 
+function invTypeIcon(type) {
+  const map = { Stocks:'📊', Crypto:'₿', Bonds:'📜', 'Mutual Fund':'🏦', 'Time Deposit':'🔒', 'Real Estate':'🏠', Cooperative:'🤝', Corporation:'🏢', 'Land Ownership':'🌏', Other:'📈' };
+  return map[type]||'📈';
+}
+
 function openAddInv() {
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
+  const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Other'];
   openSheet('gen','Add Investment',`
-    <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="ai-name" placeholder="e.g. VUL Policy, BTC Holdings"></div>
-    <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested *</label><input class="form-input numpad-input" type="number" id="ai-amount"  placeholder="0.00" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ai-currency">${currOpts}</select></div>
+    <div class="ios-form-section">
+      <div class="ios-form-row"><label class="ios-label">Name</label>
+        <input class="ios-input" id="ai-name" placeholder="e.g. BTC Holdings, VUL Policy"></div>
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Type</label>
+        <select class="ios-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input numpad-input" type="number" id="ai-current"  placeholder="Leave blank if same as invested" inputmode="none"></div>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ai-date" value="${today()}"></div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ai-notes" placeholder="Optional"></div>
-    <button class="btn btn-primary btn-full" onclick="saveAddInv()">Add Investment</button>
+    <div class="ios-form-section" style="margin-top:12px">
+      <div class="ios-form-row"><label class="ios-label">Source Account</label>
+        <select class="ios-input" id="ai-src"><option value="">None (manual entry)</option>${acctOpts}</select></div>
+    </div>
+    <div class="ios-form-section" style="margin-top:12px">
+      <div class="ios-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="ios-label">Amount Invested</label>
+          <input class="ios-input numpad-input" type="number" id="ai-amount" placeholder="0.00" inputmode="none"></div>
+        <div><label class="ios-label">Currency</label>
+          <select class="ios-input" id="ai-currency">${currOpts}</select></div>
+      </div>
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Current Value <span style="color:var(--text4);font-weight:400">(leave blank if same)</span></label>
+        <input class="ios-input numpad-input" type="number" id="ai-current" placeholder="0.00" inputmode="none"></div>
+    </div>
+    <div class="ios-form-section" style="margin-top:12px">
+      ${dtField('ai-date','Date',today())}
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
+        <input class="ios-input" id="ai-notes" placeholder="Optional"></div>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveAddInv()">Add Investment</button>
   `);
 }
 
@@ -8261,53 +8340,162 @@ function saveAddInv() {
   const name = document.getElementById('ai-name')?.value?.trim();
   const amount = parseFloat(document.getElementById('ai-amount')?.value);
   if (!name||!amount) { showToast('Enter name and amount'); return; }
-  db.investments.push({
-    id:genId(), name, type:document.getElementById('ai-type')?.value||'Other',
-    amount, currency:document.getElementById('ai-currency')?.value||'PHP',
-    currentValue:parseFloat(document.getElementById('ai-current')?.value)||amount,
-    date:document.getElementById('ai-date')?.value||today(),
-    notes:document.getElementById('ai-notes')?.value?.trim()||'',
-    archived:false,
-  });
+  const currency = document.getElementById('ai-currency')?.value||'PHP';
+  const srcId = document.getElementById('ai-src')?.value||'';
+  const date = document.getElementById('ai-date')?.value||today();
+  const invId = genId();
+  db.investments.push({ id:invId, name, type:document.getElementById('ai-type')?.value||'Other', amount, currency, currentValue:parseFloat(document.getElementById('ai-current')?.value)||amount, date, notes:document.getElementById('ai-notes')?.value?.trim()||'', sourceAccountId:srcId||null, status:'active', archived:false });
+  if (srcId) {
+    db.transactions.push({ id:'tx-'+genId(), type:'expense', amount, currency, accountId:srcId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+  }
   saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
+}
+
+function openInvDetail(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const gl = (inv.currentValue||inv.amount) - inv.amount;
+  const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
+  const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
+  const isSold = inv.status === 'sold';
+  const iRow = (lbl,val) => `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--text3)">${lbl}</span><span style="font-size:13px;color:var(--text1);font-weight:500">${val}</span></div>`;
+  openSheet('gen', inv.name, `<div style="padding:0 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;text-align:center">
+      <div style="font-size:28px;margin-bottom:4px">${invTypeIcon(inv.type)}</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+      ${gl!==0?`<div style="font-size:13px;color:${gl>0?'var(--green)':'var(--red)'};margin-top:4px">${gl>0?'▲':'▼'} ${fmt(Math.abs(gl),inv.currency)} (${gl>0?'+':''}${glPct.toFixed(1)}%) ${isSold?'realized':'unrealized'}</div>`:''}
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">${inv.type} &middot; Invested ${fmt(inv.amount,inv.currency)}</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:12px">
+      ${iRow('Date',fmtD(inv.date))}
+      ${srcAcct?iRow('Source Account',srcAcct.name):''}
+      ${inv.notes?iRow('Notes',inv.notes):''}
+      ${isSold?iRow('Sold Date',fmtD(inv.soldDate||inv.date)):''}
+    </div>
+    ${!isSold?`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <button class="btn btn-primary" onclick="openUpdateInvValue('${invId}')">📊 Update Value</button>
+      <button class="btn btn-success" onclick="openSellInv('${invId}')">💰 Sell / Close</button>
+    </div>
+    <button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="openEditInv('${invId}')">Edit Details</button>
+    `:`<div style="background:var(--green-bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--green);text-align:center">&#10003; Closed &mdash; Realized ${fmt(inv.realizedGL||0,inv.currency)}</div>`}
+    <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">Delete</button>
+  </div>`);
+}
+
+function openUpdateInvValue(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  openSheet('gen2','Update Value',`<div style="padding:8px 4px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--text3)">Current recorded value</div>
+      <div style="font-size:24px;font-weight:700;font-family:var(--mono)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+    </div>
+    <div class="ios-form-section">
+      <div class="ios-form-row"><label class="ios-label">New Current Value (${inv.currency})</label>
+        <input class="ios-input numpad-input" type="number" id="uiv-val" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveUpdateInvValue('${invId}')">Update</button>
+  </div>`);
+}
+
+function saveUpdateInvValue(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const val = parseFloat(document.getElementById('uiv-val')?.value);
+  if (!val||val<=0) { showToast('Enter valid amount'); return; }
+  inv.currentValue = val; inv.lastUpdated = today();
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAccounts(); showToast('Value updated!');
+}
+
+function openSellInv(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const gl = (inv.currentValue||inv.amount) - inv.amount;
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  openSheet('gen2','Sell / Close Investment',`<div style="padding:8px 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;text-align:center">
+      <div style="font-size:13px;color:var(--text3)">Invested</div>
+      <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(inv.amount,inv.currency)}</div>
+      ${gl!==0?`<div style="font-size:12px;color:${gl>0?'var(--green)':'var(--red)'};margin-top:4px">Paper ${gl>0?'gain':'loss'}: ${fmt(gl,inv.currency)}</div>`:''}
+    </div>
+    <div class="ios-form-section">
+      <div class="ios-form-row"><label class="ios-label">Actual Proceeds (${inv.currency})</label>
+        <input class="ios-input numpad-input" type="number" id="si-proceeds" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Receive to Account</label>
+        <select class="ios-input" id="si-acct">${acctOpts}</select></div>
+      ${dtField('si-date','Sale Date',today())}
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
+        <input class="ios-input" id="si-notes" placeholder="Optional"></div>
+    </div>
+    <button class="btn btn-success btn-full" style="margin-top:16px" onclick="confirmSellInv('${invId}')">Confirm Sale</button>
+  </div>`);
+}
+
+function confirmSellInv(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const proceeds = parseFloat(document.getElementById('si-proceeds')?.value)||inv.currentValue||inv.amount;
+  const acctId = document.getElementById('si-acct')?.value;
+  const date = document.getElementById('si-date')?.value||today();
+  const notes = document.getElementById('si-notes')?.value?.trim()||'';
+  const realizedGL = proceeds - inv.amount;
+  inv.status='sold'; inv.soldDate=date; inv.soldProceeds=proceeds; inv.realizedGL=realizedGL; inv.currentValue=proceeds;
+  if (acctId) {
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}${notes?' — '+notes:''}`, isInvestmentReturn:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+  }
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAccounts();
+  const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
+  showToast(`Sold! ${glMsg}`);
 }
 
 function openEditInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
+  const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===inv.currency?'selected':''}>${c}</option>`).join('');
-  const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Other'];
-  openSheet('gen','Edit Investment',`
-    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ei-name" value="${inv.name}"></div>
-    <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount Invested</label><input class="form-input numpad-input" type="number" id="ei-amount"  value="${inv.amount}" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ei-currency">${currOpts}</select></div>
+  const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  openSheet('gen2','Edit Investment',`
+    <div class="ios-form-section">
+      <div class="ios-form-row"><label class="ios-label">Name</label>
+        <input class="ios-input" id="ei-name" value="${inv.name}"></div>
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Type</label>
+        <select class="ios-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
-    <div class="form-group"><label class="form-label">Current Value</label><input class="form-input numpad-input" type="number" id="ei-current"  value="${inv.currentValue||inv.amount}" inputmode="none"></div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save</button>
-      <button class="btn btn-danger" onclick="deleteInv('${invId}')">Delete</button>
+    <div class="ios-form-section" style="margin-top:12px">
+      <div class="ios-form-row"><label class="ios-label">Source Account</label>
+        <select class="ios-input" id="ei-src">${acctOpts}</select></div>
     </div>
+    <div class="ios-form-section" style="margin-top:12px">
+      <div class="ios-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="ios-label">Amount Invested</label>
+          <input class="ios-input numpad-input" type="number" id="ei-amount" value="${inv.amount}" inputmode="none"></div>
+        <div><label class="ios-label">Currency</label>
+          <select class="ios-input" id="ei-currency">${currOpts}</select></div>
+      </div>
+      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
+        <input class="ios-input" id="ei-notes" value="${inv.notes||''}"></div>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveEditInv('${invId}')">Save Changes</button>
   `);
 }
 
 function saveEditInv(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
-  inv.name = document.getElementById('ei-name')?.value?.trim()||inv.name;
-  inv.type = document.getElementById('ei-type')?.value||inv.type;
-  inv.amount = parseFloat(document.getElementById('ei-amount')?.value)||inv.amount;
-  inv.currency = document.getElementById('ei-currency')?.value||inv.currency;
-  inv.currentValue = parseFloat(document.getElementById('ei-current')?.value)||inv.amount;
-  inv.notes = document.getElementById('ei-notes')?.value?.trim()||'';
-  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment updated!');
+  inv.name=document.getElementById('ei-name')?.value?.trim()||inv.name;
+  inv.type=document.getElementById('ei-type')?.value||inv.type;
+  inv.amount=parseFloat(document.getElementById('ei-amount')?.value)||inv.amount;
+  inv.currency=document.getElementById('ei-currency')?.value||inv.currency;
+  inv.sourceAccountId=document.getElementById('ei-src')?.value||null;
+  inv.notes=document.getElementById('ei-notes')?.value?.trim()||'';
+  saveDBWithSync(); closeSheet('gen2'); openInvDetail(id); renderAccounts(); showToast('Updated!');
 }
 
 function deleteInv(id) {
-  db.investments = db.investments.filter(i=>i.id!==id);
-  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment deleted');
+  if (!confirm('Delete this investment?')) return;
+  db.investments=db.investments.filter(i=>i.id!==id);
+  saveDBWithSync(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -13332,7 +13520,7 @@ function aiAllocateBudget(bgtId, results, totalLimit) {
     // Needs alone exceed budget — proportionally scale needs, zero wants
     const scale = usableBudget / needsTotal;
     needs.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
-    warning = `⚠ Your essential spending (${sym(db.budgets.find(b=>b.id===bgtId)?.currency||'PHP')}${needsTotal.toFixed(0)}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
+    warning = `⚠ Your essential spending (${sym(db.budgets.find(b=>b.id===bgtId)?.currency||'PHP')}${needsTotal.toFixed(0) /* display-only, not stored in db */}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
   } else {
     // Needs at full
     needs.forEach(r => { allocations[r.catId] = r.predicted; });
