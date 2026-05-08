@@ -8612,6 +8612,10 @@ function openEditInv(invId) {
       <div class="form-group"><label class="form-label">Currency</label>
         <select class="form-input" id="ei-currency">${currOpts}</select></div>
     </div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Date</label>${dtField('ei-date','date','Today',inv.date||today())}</div>
+      <div class="form-group"><label class="form-label">Time</label>${dtField('ei-time','time','Now',inv.time||nowTime())}</div>
+    </div>
     <div class="form-group"><label class="form-label">Notes</label>
       <input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save Changes</button>
@@ -8627,6 +8631,24 @@ function saveEditInv(id) {
   inv.currency=document.getElementById('ei-currency')?.value||inv.currency;
   inv.sourceAccountId=document.getElementById('ei-src')?.value||null;
   inv.notes=document.getElementById('ei-notes')?.value?.trim()||'';
+  // Handle date + time edits
+  const newDate = document.getElementById('ei-date')?.value;
+  const newTime = document.getElementById('ei-time')?.value;
+  if (newDate) inv.date = newDate;
+  if (newTime) inv.time = newTime;
+  // Propagate date/time changes to the linked Fund tx so tx log stays in sync
+  const fundTx = db.transactions.find(t => t.isInvestmentFund && t.investmentId === id);
+  if (fundTx) {
+    if (newDate) fundTx.date = newDate;
+    if (newTime) fundTx.time = newTime;
+    fundTx.amount = inv.amount;
+    fundTx.currency = inv.currency;
+    fundTx.notes = `Invested in ${inv.name}`;
+    if (inv.sourceAccountId) {
+      fundTx.fromAccountId = inv.sourceAccountId;
+      fundTx.accountId = inv.sourceAccountId;
+    }
+  }
   saveDBWithSync(); closeSheet('gen2'); openInvDetail(id); renderAccounts(); showToast('Updated!');
 }
 
