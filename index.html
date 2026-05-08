@@ -3260,11 +3260,12 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   const cat = txCategoryDisplay(tx);
   const color = txTypeColor(tx.type);
   let detail = '';
-  if (tx.type==='transfer') {
+  if (tx.type==='transfer' && !tx.isInvestmentFund) {
+    // Regular transfer — early return with simple layout
+    // isInvestmentFund transfers fall through to full custom rendering below
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
     detail = `${from.name} → ${to.name}`;
-    // Override name to "Transfer"
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
@@ -3276,6 +3277,10 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
       </div>
     </div>`;
+  } else if (tx.isInvestmentFund) {
+    // Investment fund tx — use source account as detail, fall through to full rendering
+    const from = getAccountDisplay(tx.fromAccountId);
+    detail = `${from.name} → Investment`;
   } else if (tx.type==='lend'||tx.type==='borrow') {
     detail = `${tx.type==='lend'?'To':'From'}: ${tx.personName||'?'} · ${acct.name}`;
   } else if (tx.type==='shared') {
