@@ -8307,32 +8307,26 @@ function openAddInv() {
   const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   openSheet('gen','Add Investment',`
-    <div class="ios-form-section">
-      <div class="ios-form-row"><label class="ios-label">Name</label>
-        <input class="ios-input" id="ai-name" placeholder="e.g. BTC Holdings, VUL Policy"></div>
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Type</label>
-        <select class="ios-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Investment Name *</label>
+      <input class="form-input" id="ai-name" placeholder="e.g. BTC Holdings, VUL Policy, Coop Shares"></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Source Account</label>
+        <select class="form-input" id="ai-src"><option value="">None (manual)</option>${acctOpts}</select></div>
     </div>
-    <div class="ios-form-section" style="margin-top:12px">
-      <div class="ios-form-row"><label class="ios-label">Source Account</label>
-        <select class="ios-input" id="ai-src"><option value="">None (manual entry)</option>${acctOpts}</select></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Amount Invested *</label>
+        <input class="form-input numpad-input" type="number" id="ai-amount" placeholder="0.00" inputmode="none"></div>
+      <div class="form-group"><label class="form-label">Currency</label>
+        <select class="form-input" id="ai-currency">${currOpts}</select></div>
     </div>
-    <div class="ios-form-section" style="margin-top:12px">
-      <div class="ios-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label class="ios-label">Amount Invested</label>
-          <input class="ios-input numpad-input" type="number" id="ai-amount" placeholder="0.00" inputmode="none"></div>
-        <div><label class="ios-label">Currency</label>
-          <select class="ios-input" id="ai-currency">${currOpts}</select></div>
-      </div>
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Current Value <span style="color:var(--text4);font-weight:400">(leave blank if same)</span></label>
-        <input class="ios-input numpad-input" type="number" id="ai-current" placeholder="0.00" inputmode="none"></div>
-    </div>
-    <div class="ios-form-section" style="margin-top:12px">
-      ${dtField('ai-date','Date',today())}
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
-        <input class="ios-input" id="ai-notes" placeholder="Optional"></div>
-    </div>
-    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveAddInv()">Add Investment</button>
+    <div class="form-group"><label class="form-label">Current Value <span style="color:var(--text4);font-weight:400;text-transform:none;letter-spacing:0">(leave blank if same)</span></label>
+      <input class="form-input numpad-input" type="number" id="ai-current" placeholder="0.00" inputmode="none"></div>
+    ${dtField('ai-date','Date',today())}
+    <div class="form-group"><label class="form-label">Notes</label>
+      <input class="form-input" id="ai-notes" placeholder="Optional"></div>
+    <button class="btn btn-primary btn-full" onclick="saveAddInv()">Add Investment</button>
   `);
 }
 
@@ -8391,11 +8385,9 @@ function openUpdateInvValue(invId) {
       <div style="font-size:13px;color:var(--text3)">Current recorded value</div>
       <div style="font-size:24px;font-weight:700;font-family:var(--mono)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
     </div>
-    <div class="ios-form-section">
-      <div class="ios-form-row"><label class="ios-label">New Current Value (${inv.currency})</label>
-        <input class="ios-input numpad-input" type="number" id="uiv-val" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
-    </div>
-    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveUpdateInvValue('${invId}')">Update</button>
+    <div class="form-group"><label class="form-label">New Current Value (${inv.currency})</label>
+      <input class="form-input numpad-input" type="number" id="uiv-val" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+    <button class="btn btn-primary btn-full" onclick="saveUpdateInvValue('${invId}')">Update</button>
   </div>`);
 }
 
@@ -8419,16 +8411,14 @@ function openSellInv(invId) {
       <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(inv.amount,inv.currency)}</div>
       ${gl!==0?`<div style="font-size:12px;color:${gl>0?'var(--green)':'var(--red)'};margin-top:4px">Paper ${gl>0?'gain':'loss'}: ${fmt(gl,inv.currency)}</div>`:''}
     </div>
-    <div class="ios-form-section">
-      <div class="ios-form-row"><label class="ios-label">Actual Proceeds (${inv.currency})</label>
-        <input class="ios-input numpad-input" type="number" id="si-proceeds" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Receive to Account</label>
-        <select class="ios-input" id="si-acct">${acctOpts}</select></div>
-      ${dtField('si-date','Sale Date',today())}
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
-        <input class="ios-input" id="si-notes" placeholder="Optional"></div>
-    </div>
-    <button class="btn btn-success btn-full" style="margin-top:16px" onclick="confirmSellInv('${invId}')">Confirm Sale</button>
+    <div class="form-group"><label class="form-label">Actual Proceeds (${inv.currency})</label>
+      <input class="form-input numpad-input" type="number" id="si-proceeds" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+    <div class="form-group"><label class="form-label">Receive to Account</label>
+      <select class="form-input" id="si-acct">${acctOpts}</select></div>
+    ${dtField('si-date','Sale Date',today())}
+    <div class="form-group"><label class="form-label">Notes</label>
+      <input class="form-input" id="si-notes" placeholder="Optional"></div>
+    <button class="btn btn-success btn-full" onclick="confirmSellInv('${invId}')">Confirm Sale</button>
   </div>`);
 }
 
@@ -8456,27 +8446,23 @@ function openEditInv(invId) {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===inv.currency?'selected':''}>${c}</option>`).join('');
   const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   openSheet('gen2','Edit Investment',`
-    <div class="ios-form-section">
-      <div class="ios-form-row"><label class="ios-label">Name</label>
-        <input class="ios-input" id="ei-name" value="${inv.name}"></div>
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Type</label>
-        <select class="ios-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Investment Name *</label>
+      <input class="form-input" id="ei-name" value="${inv.name}"></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Source Account</label>
+        <select class="form-input" id="ei-src">${acctOpts}</select></div>
     </div>
-    <div class="ios-form-section" style="margin-top:12px">
-      <div class="ios-form-row"><label class="ios-label">Source Account</label>
-        <select class="ios-input" id="ei-src">${acctOpts}</select></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Amount Invested</label>
+        <input class="form-input numpad-input" type="number" id="ei-amount" value="${inv.amount}" inputmode="none"></div>
+      <div class="form-group"><label class="form-label">Currency</label>
+        <select class="form-input" id="ei-currency">${currOpts}</select></div>
     </div>
-    <div class="ios-form-section" style="margin-top:12px">
-      <div class="ios-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label class="ios-label">Amount Invested</label>
-          <input class="ios-input numpad-input" type="number" id="ei-amount" value="${inv.amount}" inputmode="none"></div>
-        <div><label class="ios-label">Currency</label>
-          <select class="ios-input" id="ei-currency">${currOpts}</select></div>
-      </div>
-      <div class="ios-form-row" style="margin-top:10px"><label class="ios-label">Notes</label>
-        <input class="ios-input" id="ei-notes" value="${inv.notes||''}"></div>
-    </div>
-    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="saveEditInv('${invId}')">Save Changes</button>
+    <div class="form-group"><label class="form-label">Notes</label>
+      <input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
+    <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save Changes</button>
   `);
 }
 
