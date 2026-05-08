@@ -748,6 +748,14 @@ option{background:var(--bg3);color:var(--text)}
   <div class="sheet-body" id="gen-body"></div>
 </div>
 
+<!-- GEN2 SHEET -->
+<div class="overlay" id="gen2-overlay"></div>
+<div class="sheet" id="gen2-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><span class="sheet-title" id="gen2-title"></span><button class="sheet-close" id="gen2-close">✕</button></div>
+  <div class="sheet-body" id="gen2-body"></div>
+</div>
+
 <!-- DIALOG -->
 <div class="dlg-overlay" id="dlg-overlay">
   <div class="dlg">
@@ -2143,12 +2151,15 @@ function wireEvents() {
   });
   document.getElementById('add-close').addEventListener('click', () => closeSheet('add'));
   document.getElementById('gen-close').addEventListener('click', () => closeSheet('gen'));
+  document.getElementById('gen2-close').addEventListener('click', () => closeSheet('gen2'));
   document.getElementById('add-overlay').addEventListener('click', () => closeSheet('add'));
   document.getElementById('gen-overlay').addEventListener('click', () => closeSheet('gen'));
+  document.getElementById('gen2-overlay').addEventListener('click', () => closeSheet('gen2'));
   document.getElementById('dlg-overlay').addEventListener('click', (e) => { if(e.target===e.currentTarget)closeDlg(); });
   // Swipe-down dismiss (mobile)
   attachSwipeDismiss('add');
   attachSwipeDismiss('gen');
+  attachSwipeDismiss('gen2');
   // Long-press on bottom-nav add button → quick action menu
   wireQuickAddLongPress();
 }
@@ -8377,7 +8388,10 @@ function openInvDetail(invId) {
     </div>
     <button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="openEditInv('${invId}')">Edit Details</button>
     `:`<div style="background:var(--green-bg);border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:var(--green);text-align:center">&#10003; Closed &mdash; Realized ${fmt(inv.realizedGL||0,inv.currency)}</div>`}
-    <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">Delete</button>
+    <details style="margin-top:4px">
+      <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
+      <button class="btn btn-danger btn-full" style="margin-top:8px" onclick="deleteInv('${invId}')">🗑 Delete Investment</button>
+    </details>
   </div>`);
 }
 
