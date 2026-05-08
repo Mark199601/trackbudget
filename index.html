@@ -8323,7 +8323,10 @@ function openAddInv() {
     </div>
     <div class="form-group"><label class="form-label">Current Value <span style="color:var(--text4);font-weight:400;text-transform:none;letter-spacing:0">(leave blank if same)</span></label>
       <input class="form-input numpad-input" type="number" id="ai-current" placeholder="0.00" inputmode="none"></div>
-    ${dtField('ai-date','Date',today())}
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label">Date</label>${dtField('ai-date','date','Today')}</div>
+      <div class="form-group"><label class="form-label">Time</label>${dtField('ai-time','time','Now')}</div>
+    </div>
     <div class="form-group"><label class="form-label">Notes</label>
       <input class="form-input" id="ai-notes" placeholder="Optional"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddInv()">Add Investment</button>
@@ -8337,10 +8340,11 @@ function saveAddInv() {
   const currency = document.getElementById('ai-currency')?.value||'PHP';
   const srcId = document.getElementById('ai-src')?.value||'';
   const date = document.getElementById('ai-date')?.value||today();
+  const time = document.getElementById('ai-time')?.value||nowTime();
   const invId = genId();
   db.investments.push({ id:invId, name, type:document.getElementById('ai-type')?.value||'Other', amount, currency, currentValue:parseFloat(document.getElementById('ai-current')?.value)||amount, date, notes:document.getElementById('ai-notes')?.value?.trim()||'', sourceAccountId:srcId||null, status:'active', archived:false });
   if (srcId) {
-    db.transactions.push({ id:'tx-'+genId(), type:'expense', amount, currency, accountId:srcId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'expense', amount, currency, accountId:srcId, date, time, categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
 }
