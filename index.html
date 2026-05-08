@@ -5340,6 +5340,29 @@ function setTxQuickFilter(key) {
 }
 
 function renderTxLog() {
+  // ── FORCE FIX: ensure all isInvestmentFund txs have correct fields BEFORE rendering
+  // This handles old txs created with type:'expense' or missing fields
+  let needsSave = false;
+  db.transactions.forEach(t => {
+    if (t.isInvestmentFund) {
+      // Force type to 'transfer'
+      if (t.type !== 'transfer') { t.type = 'transfer'; needsSave = true; }
+      // Ensure not archived
+      if (t.archived) { t.archived = false; needsSave = true; }
+      // Ensure date is set
+      if (!t.date) { t.date = today(); needsSave = true; }
+      // Ensure accountId is set (use fromAccountId if missing)
+      if (!t.accountId && t.fromAccountId) { t.accountId = t.fromAccountId; needsSave = true; }
+      // Ensure fromAccountId is set (use accountId if missing)
+      if (!t.fromAccountId && t.accountId) { t.fromAccountId = t.accountId; needsSave = true; }
+    }
+  });
+  if (needsSave) { saveDB(); console.log('[FIX] Migrated isInvestmentFund txs'); }
+
+  // ── DIAGNOSTIC: log isInvestmentFund txs to console
+  const invFundTxs = db.transactions.filter(t => t.isInvestmentFund);
+  console.log('[TX LOG] isInvestmentFund txs:', invFundTxs.length, invFundTxs);
+
   const months = [...new Set(db.transactions.filter(t=>!t.archived).map(t=>t.date?.slice(0,7)))].filter(Boolean).sort((a,b)=>b.localeCompare(a));
   if (!months.includes(_txMonth) && months.length > 0) _txMonth = months[0];
 
@@ -5376,12 +5399,13 @@ function renderTxLog() {
   const dateRangeActive = !!(dateFrom || dateTo);
 
   const txs = db.transactions.filter(t=> {
-    if (t.archived) return false;
+    const isInvFund = t.isInvestmentFund;
+    if (t.archived) { if(isInvFund) console.log('[FILTER] inv fund REJECTED: archived', t.id); return false; }
     // Date range filter
     if (dateRangeActive) {
-      if (!t.date) return false;
-      if (dateFrom && t.date < dateFrom) return false;
-      if (dateTo && t.date > dateTo) return false;
+      if (!t.date) { if(isInvFund) console.log('[FILTER] inv fund REJECTED: no date', t.id); return false; }
+      if (dateFrom && t.date < dateFrom) { if(isInvFund) console.log('[FILTER] inv fund REJECTED: before dateFrom', t.id, t.date, dateFrom); return false; }
+      if (dateTo && t.date > dateTo) { if(isInvFund) console.log('[FILTER] inv fund REJECTED: after dateTo', t.id, t.date, dateTo); return false; }
     }
     // 📖 USER STORY: Yung batch settlement parent (loan or reimb) ay actual cash movement —
     // dapat lumalabas sa Transactions log. Yung individual loan payments at auto-reimb children
@@ -5397,7 +5421,7 @@ function renderTxLog() {
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
     // Hide investment fund + return txns — managed via Investments tab only (same as loans pattern)
-    if (t.isInvestmentFund || t.isInvestmentReturn) return true; // show in tx log — capital movement, linked to investment record
+    if (t.isInvestmentFund || t.isInvestmentReturn) { console.log('[FILTER] inv fund/return ACCEPTED via early return:', t.id, 'type=', t.type); return true; }
     // Type filter (still applies during search)
     if (_txFilter !== 'all') {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
