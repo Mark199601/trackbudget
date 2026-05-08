@@ -1848,29 +1848,23 @@ function nav(page) {
 
 function renderPageHeader(page) {
   const r = document.getElementById('ph-right');
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const syncHTML = `<div id="sync-indicator" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text4);padding:4px 8px;border-radius:var(--r-full);border:1px solid var(--border2);cursor:default;white-space:nowrap"><span id="sync-icon">☁️</span><span id="sync-label">–</span></div>`;
+  const themeHTML = `<button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme" style="background:none;border:1px solid var(--border2);border-radius:var(--r-full);width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all var(--transition)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">${isLight ? '🌙' : '☀️'}</button>`;
+  let pageHTML = '';
   if (page==='dashboard') {
-    r.innerHTML = renderDeviceIndicator();
+    pageHTML = renderDeviceIndicator();
   } else if (page==='accounts') {
     const archivedCount = db.accounts.filter(a=>a.archived).length;
-    r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
+    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
       + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" onclick="toggleArchivedAccounts()" title="Archived accounts" style="padding:6px 8px">📦${archivedCount}</button>` : '');
   } else if (page==='targets') {
-    r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
+    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
-    r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddLoan()">+ Loan</button>`;
-  } else {
-    r.innerHTML = '';
+    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddLoan()">+ Loan</button>`;
   }
-  // Always append sync indicator + theme toggle
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  r.innerHTML += `<div id="sync-indicator" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text4);padding:4px 8px;border-radius:var(--r-full);border:1px solid var(--border2);cursor:default;white-space:nowrap">
-    <span id="sync-icon">☁️</span><span id="sync-label">–</span>
-  </div>`;
-  r.innerHTML += `<button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme"
-    style="background:none;border:1px solid var(--border2);border-radius:var(--r-full);width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all var(--transition)"
-    onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
-    ${isLight ? '🌙' : '☀️'}
-  </button>`;
+  // Build all at once — never use += on innerHTML (breaks onclick handlers)
+  r.innerHTML = pageHTML + syncHTML + themeHTML;
 }
 
 // ════════════════════════════════════════════════════════════
