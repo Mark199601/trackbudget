@@ -1851,7 +1851,9 @@ function renderPageHeader(page) {
   if (page==='dashboard') {
     r.innerHTML = renderDeviceIndicator();
   } else if (page==='accounts') {
-    r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`;
+    const archivedCount = db.accounts.filter(a=>a.archived).length;
+    r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
+      + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" onclick="toggleArchivedAccounts()" title="Archived accounts" style="padding:6px 8px">📦${archivedCount}</button>` : '');
   } else if (page==='targets') {
     r.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
@@ -5351,6 +5353,8 @@ function renderTxLog() {
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
+    // Hide investment fund + return txns — managed via Investments tab only (same as loans pattern)
+    if (t.isInvestmentFund || t.isInvestmentReturn) return false;
     // Type filter (still applies during search)
     if (_txFilter !== 'all') {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
@@ -7824,13 +7828,12 @@ function renderAccounts() {
   const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_acctTab==='active'?'active':''}" onclick="setAcctTab('active')">Accounts</button>
     <button class="tab-btn ${_acctTab==='invest'?'active':''}" onclick="setAcctTab('invest')">Investments</button>
-    <button class="tab-btn ${_acctTab==='archived'?'active':''}" onclick="setAcctTab('archived')">Archived</button>
   </div>`;
   let content = '';
   try {
     if (_acctTab==='active') content = renderActiveAccounts();
     else if (_acctTab==='invest') content = renderInvestments();
-    else content = renderArchivedAccounts();
+    else { _acctTab='active'; content = renderActiveAccounts(); } // fallback for stale archived tab state
   } catch(e) {
     console.error('renderAccounts error:', e);
     content = `<div class="page-pad"><div class="card" style="padding:16px;color:var(--red)">
@@ -7842,6 +7845,7 @@ function renderAccounts() {
 }
 
 function setAcctTab(t) { _acctTab=t; renderAccounts(); }
+function toggleArchivedAccounts() { window._acctShowArchived = !window._acctShowArchived; renderAccounts(); }
 
 function renderActiveAccounts() {
   const accts = db.accounts.filter(a=>!a.archived);
@@ -7887,6 +7891,26 @@ function renderActiveAccounts() {
         ${grpAccts.map(a=>renderAcctCard(a)).join('')}
       </div>
     </div>`;
+  }
+  // Show archived section if toggled
+  if (window._acctShowArchived) {
+    const archivedAccts = db.accounts.filter(a=>a.archived);
+    if (archivedAccts.length > 0) {
+      html += `<div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin:16px 0 8px">ARCHIVED (${archivedAccts.length})</div>`;
+      html += `<div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:10px;opacity:.65">`;
+      archivedAccts.forEach((a,idx)=>{
+        const border = idx < archivedAccts.length-1 ? 'border-bottom:1px solid var(--border)' : '';
+        const bal = a.lastKnownBalance !== undefined ? a.lastKnownBalance : getAcctBalance(a.id);
+        html += `<div style="padding:12px 16px;${border};cursor:pointer" onclick="openAcctDetail('${a.id}')">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div><div style="font-size:13px;font-weight:600;color:var(--text2)">${a.name}</div>
+            <div style="font-size:11px;color:var(--text4)">${a.type} · ${a.currency} · Archived</div></div>
+            <div style="font-size:13px;font-family:var(--mono);color:var(--text3)">${fmt(bal,a.currency)}</div>
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
   }
   html += `<div style="margin-top:8px"><button class="pool-add-btn" onclick="openAddAccount()">+ Add Account</button></div></div>`;
   return html;
@@ -8196,13 +8220,14 @@ function archiveAccount(acctId) {
   a.archived = true;
   saveDBWithSync();
   closeSheet('gen');
-  setAcctTab('archived');
-  renderAccounts();
+  window._acctShowArchived = true; // auto-show archived section after archiving
+  setAcctTab('active');
+  renderPageHeader('accounts');
   showToast('Account archived');
 }
 function restoreAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
-  if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Account restored'); }
+  if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); renderPageHeader('accounts'); showToast('Account restored'); }
 }
 function deleteAccount(acctId) {
   const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
@@ -8417,8 +8442,11 @@ function openInvDetail(invId) {
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-        <button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">${inv.archived?'📤 Unarchive':'📦 Archive Investment'}</button>
-        <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">🗑 Delete Investment</button>
+        ${inv.archived
+          ? `<button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">📤 Unarchive</button>
+             <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">🗑 Delete Permanently</button>`
+          : `<button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">📦 Archive Investment</button>`
+        }
       </div>
     </details>
   </div>`);
@@ -8535,14 +8563,16 @@ function deleteInv(id) {
   );
 }
 function confirmDeleteInv(id) {
-  db.investments=db.investments.filter(i=>i.id!==id);
+  // Cascade delete all linked transactions (isInvestmentFund + isInvestmentReturn)
+  db.transactions = db.transactions.filter(t => t.investmentId !== id);
+  db.investments = db.investments.filter(i => i.id !== id);
   saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
 }
 function archiveInv(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
   inv.archived = !inv.archived;
-  saveDBWithSync(); closeSheet('gen'); renderAccounts();
+  saveDBWithSync(); closeSheet('gen'); renderAccounts(); renderPageHeader('accounts');
   showToast(inv.archived ? 'Investment archived' : 'Investment unarchived');
 }
 
