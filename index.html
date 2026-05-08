@@ -1857,17 +1857,14 @@ function renderPageHeader(page) {
   } else if (page==='accounts') {
     const archivedCount = db.accounts.filter(a=>a.archived).length;
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
-      + (archivedCount > 0 ? `<button id="ph-archive-btn" class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px">📦${archivedCount}</button>` : '');
+      + (archivedCount > 0 ? `<button class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="window.toggleArchivedAccounts()">📦${archivedCount}</button>` : '');
   } else if (page==='targets') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddLoan()">+ Loan</button>`;
   }
-  // Build all at once — never use += on innerHTML (breaks onclick handlers)
-  r.innerHTML = pageHTML + syncHTML + themeHTML;
-  // Wire archive btn via addEventListener (safer than inline onclick for dynamically built headers)
-  const archBtn = document.getElementById('ph-archive-btn');
-  if (archBtn) archBtn.addEventListener('click', toggleArchivedAccounts);
+  // sync first, then page actions, then theme
+  r.innerHTML = syncHTML + pageHTML + themeHTML;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -7843,6 +7840,7 @@ function renderAccounts() {
 
 function setAcctTab(t) { _acctTab=t; renderAccounts(); }
 function toggleArchivedAccounts() { window._acctShowArchived = !window._acctShowArchived; renderAccounts(); }
+window.toggleArchivedAccounts = toggleArchivedAccounts;
 
 function renderActiveAccounts() {
   const accts = db.accounts.filter(a=>!a.archived);
