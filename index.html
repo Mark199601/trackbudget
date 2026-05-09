@@ -705,13 +705,16 @@ option{background:var(--bg3);color:var(--text)}
     <div class="sb-item active" id="sn-dashboard" onclick="nav('dashboard')"><div class="si-icon">⊞</div>Dashboard</div>
     <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon">📊</div>Analytics<span class="si-badge" id="analytics-badge" style="display:none">!</span></div>
     <div class="sb-item" id="sn-ai" onclick="nav('ai')"><div class="si-icon">🤖</div>AI Insights<span class="si-badge" id="ai-badge" style="display:none">!</span></div>
-    <div class="sb-item" id="sn-installments" onclick="nav('installments')"><div class="si-icon">💳</div>Installments</div>
     <div class="sb-divider"></div>
     <div class="sb-section">Money</div>
     <div class="sb-item" id="sn-transactions" onclick="nav('transactions')"><div class="si-icon">↕</div>Transactions</div>
-  <div class="sb-item" id="sn-reimbursements" onclick="nav('reimbursements')"><div class="si-icon">🔄</div>Reimbursements</div>
+    <div class="sb-item" id="sn-reimbursements" onclick="nav('reimbursements')"><div class="si-icon">🔄</div>Reimbursements</div>
     <div class="sb-item" id="sn-accounts" onclick="nav('accounts')"><div class="si-icon">🏦</div>Accounts</div>
+    <div class="sb-divider"></div>
+    <div class="sb-section">Assets & Debt</div>
+    <div class="sb-item" id="sn-investments" onclick="nav('investments')"><div class="si-icon">📈</div>Investments</div>
     <div class="sb-item" id="sn-loans" onclick="nav('loans')"><div class="si-icon">⚖️</div>Loans<span class="si-badge" id="loans-badge" style="display:none">0</span></div>
+    <div class="sb-item" id="sn-installments" onclick="nav('installments')"><div class="si-icon">💳</div>Installments</div>
     <div class="sb-divider"></div>
     <div class="sb-section">More</div>
     <div class="sb-item" id="sn-planning" onclick="nav('planning')"><div class="si-icon">📅</div>Planning</div>
@@ -1868,7 +1871,7 @@ function nav(page) {
   }
   currentPage = page;
   try { localStorage.setItem('tb_last_page', page); } catch(e) {}
-  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',loans:'Loans',planning:'Planning',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',analytics:'Analytics',ai:'AI Insights',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',investments:'Investments',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
@@ -1884,7 +1887,7 @@ function nav(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '';
   content.scrollTop = 0;
-  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
+  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, ai:renderAIPage, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, investments:renderInvestmentsPage, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   if (fn[page]) fn[page]();
 }
 
@@ -1904,6 +1907,8 @@ function renderPageHeader(page) {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddLoan()">+ Loan</button>`;
+  } else if (page==='investments') {
+    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddInv()">+ Investment</button>`;
   }
   // sync first, then page actions, then theme
   r.innerHTML = syncHTML + pageHTML + themeHTML;
@@ -7917,15 +7922,13 @@ function logReimbIncome() { /* replaced */ }
 let _acctTab = 'active';
 
 function renderAccounts() {
-  const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn ${_acctTab==='active'?'active':''}" onclick="setAcctTab('active')">Accounts</button>
-    <button class="tab-btn ${_acctTab==='invest'?'active':''}" onclick="setAcctTab('invest')">Investments</button>
-  </div>`;
+  // Single tab — Investments is now its own page in sidebar
+  const tabsHTML = '';
   let content = '';
   try {
-    if (_acctTab==='active') content = renderActiveAccounts();
-    else if (_acctTab==='invest') content = renderInvestments();
-    else { _acctTab='active'; content = renderActiveAccounts(); }
+    // Investments moved to its own sidebar page — Accounts only renders active accounts
+    _acctTab = 'active';
+    content = renderActiveAccounts();
   } catch(e) {
     console.error('renderAccounts error:', e);
     content = `<div class="page-pad"><div class="card" style="padding:16px;color:var(--red)">
@@ -8349,6 +8352,17 @@ function confirmDeleteAccount(acctId) {
 }
 
 
+function renderInvestmentsPage() {
+  document.getElementById('page-content').innerHTML = renderInvestments();
+}
+
+// Call after investment add/edit/sell/archive/delete to refresh whichever page user is on
+function renderAfterInvChange() {
+  if (currentPage === 'investments') renderInvestmentsPage();
+  else if (currentPage === 'accounts') renderAccounts();
+  else if (currentPage === 'dashboard') renderDashboard();
+}
+
 function renderInvestments() {
   const _showArchived = window._invShowArchived || false;
   const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
@@ -8431,7 +8445,7 @@ function renderInvestments() {
   }
   if (archived.length > 0) {
     html += `<div style="margin:4px 0 8px">
-      <button class="chip${_showArchived?' active':''}" onclick="window._invShowArchived=!window._invShowArchived;renderAccounts()" style="font-size:11px">
+      <button class="chip${_showArchived?' active':''}" onclick="window._invShowArchived=!window._invShowArchived;renderAfterInvChange()" style="font-size:11px">
         📦 Archived (${archived.length})
       </button>
     </div>`;
@@ -8505,7 +8519,7 @@ function saveAddInv() {
   if (srcId) {
     db.transactions.push({ id:'tx-'+genId(), type:'transfer', fromAccountId:srcId, toAccountId:null, amount, currency, accountId:srcId, date, time, categoryId:'sc-investreturns', notes:`Invested in ${name}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
-  saveDBWithSync(); closeSheet('gen'); renderAccounts(); showToast('Investment added!');
+  saveDBWithSync(); closeSheet('gen'); renderAfterInvChange(); showToast('Investment added!');
 }
 
 function openInvDetail(invId) {
@@ -8569,7 +8583,7 @@ function saveUpdateInvValue(invId) {
   const val = parseFloat(document.getElementById('uiv-val')?.value);
   if (!val||val<=0) { showToast('Enter valid amount'); return; }
   inv.currentValue = val; inv.lastUpdated = today();
-  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAccounts(); showToast('Value updated!');
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast('Value updated!');
 }
 
 function openSellInv(invId) {
@@ -8608,7 +8622,7 @@ function confirmSellInv(invId) {
     const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===invId);
     db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}${notes?' — '+notes:''}`, isInvestmentReturn:true, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
-  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAccounts();
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
   const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
   showToast(`Sold! ${glMsg}`);
 }
@@ -8671,7 +8685,7 @@ function saveEditInv(id) {
       fundTx.accountId = inv.sourceAccountId;
     }
   }
-  saveDBWithSync(); closeSheet('gen2'); openInvDetail(id); renderAccounts(); showToast('Updated!');
+  saveDBWithSync(); closeSheet('gen2'); openInvDetail(id); renderAfterInvChange(); showToast('Updated!');
 }
 
 function deleteInv(id) {
@@ -8687,7 +8701,7 @@ function confirmDeleteInv(id) {
   // ── PERSONAL LOGIC SET #50 ── Investment cascade: delete investment → permanently delete all linked isInvestmentFund + isInvestmentReturn txs
   db.transactions = db.transactions.filter(t => t.investmentId !== id);
   db.investments = db.investments.filter(i => i.id !== id);
-  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAccounts(); showToast('Investment deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAfterInvChange(); showToast('Investment deleted');
 }
 function archiveInv(id) {
   const inv = db.investments.find(i=>i.id===id);
@@ -8695,7 +8709,7 @@ function archiveInv(id) {
   inv.archived = !inv.archived;
   // ── PERSONAL LOGIC SET #50 ── Investment cascade: archive/delete investment → cascade to all linked isInvestmentFund + isInvestmentReturn txs (investmentId === id). Children are not independent — they follow parent state.
   db.transactions.filter(t=>t.investmentId===id).forEach(t=>{ t.archived = inv.archived; });
-  saveDBWithSync(); closeSheet('gen'); renderAccounts(); renderPageHeader('accounts');
+  saveDBWithSync(); closeSheet('gen'); renderAfterInvChange(); renderPageHeader(currentPage);
   showToast(inv.archived ? 'Investment archived' : 'Investment unarchived');
 }
 
