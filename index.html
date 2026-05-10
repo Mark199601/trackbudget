@@ -3524,7 +3524,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         return `<div onclick="event.stopPropagation();openTxDetail('${lx.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <span style="font-size:14px">${cat.icon}</span>
-            <div style="font-size:12px;color:var(--text2);min-width:0">${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(lx.date)}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))} · ${fmtD(lx.date)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(lx.totalBill||lx.amount, lx.currency)}</span>
@@ -3554,7 +3554,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
-      <div class="tx-name">${cat.name.replace(/^[^ ]+ /,'')}</div>
+      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))}</div>
       <div class="tx-detail">${detail}</div>
     </div>
     <div class="tx-right">
@@ -5444,13 +5444,16 @@ function renderTxLog() {
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
-    // Hide investment fund + return txns — managed via Investments tab only (same as loans pattern)
-    if (t.isInvestmentFund || t.isInvestmentReturn) return true; // show in tx log — capital movement, linked to investment record
-    // Type filter (still applies during search)
-    if (_txFilter !== 'all') {
+    // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
+    // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
+    const _isInvCapital = t.isInvestmentFund || t.isInvestmentReturn;
+    // Type filter (still applies during search) — investment fund/return bypass type filter (capital movement ≠ income/expense)
+    if (_txFilter !== 'all' && !_isInvCapital) {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
       else if (t.type !== _txFilter) return false;
     }
+    // Even with _isInvCapital, if user explicitly filters Loans, exclude investment txs
+    if (_txFilter === 'loans' && _isInvCapital) return false;
     // Search match — check notes, amount, account name, category name
     if (searchActive) {
       const notes = (t.notes || '').toLowerCase();
@@ -5547,9 +5550,41 @@ function renderTxLog() {
     ? `<span style="position:absolute;top:-5px;right:-5px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center">${activeFilterCount}</span>`
     : '';
 
-  // ── Filter panel ──
+  // ── Active filter pills (visible always when any filter active) ──
+  const activePills = [];
+  if (_txFilter !== 'all') {
+    const lbl = _txFilter==='loans'?'Loans':_txFilter.charAt(0).toUpperCase()+_txFilter.slice(1);
+    activePills.push({key:'type', label:lbl, action:`setTxFilter('all')`});
+  }
+  if (_txAcctFilter !== 'all') {
+    const acct = db.accounts.find(a=>a.id===_txAcctFilter);
+    if (acct) activePills.push({key:'acct', label:acct.name, action:`setTxAcctFilter('all')`});
+  }
+  if (_txQuickFilter) {
+    const map = {large:'Large',foreign:'Foreign',nonotes:'No Notes'};
+    activePills.push({key:'qf', label:map[_txQuickFilter]||_txQuickFilter, action:`setTxQuickFilter(null)`});
+  }
+  if (_txSort !== 'newest') {
+    const sortMap = {oldest:'Oldest',amount_desc:'Amount ↓',amount_asc:'Amount ↑'};
+    activePills.push({key:'sort', label:sortMap[_txSort]||_txSort, action:`setTxSort('newest')`});
+  }
+  if (window._txDateFrom || window._txDateTo) {
+    const from = window._txDateFrom || '...';
+    const to = window._txDateTo || '...';
+    activePills.push({key:'date', label:`${from} → ${to}`, action:`clearTxDateRange()`});
+  }
+
+  const activePillsBar = activePills.length > 0 ? `
+    <div style="display:flex;align-items:center;gap:6px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap">
+      ${activePills.map(p => `<div onclick="${p.action}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 8px 4px 10px;border-radius:var(--r-full);font-size:11px;font-weight:500;background:var(--accent-bg);color:var(--accent);cursor:pointer;border:1px solid var(--accent)">${p.label}<span style="font-size:13px;line-height:1;opacity:0.7">×</span></div>`).join('')}
+      <button onclick="clearAllTxFilters()" style="margin-left:auto;background:none;border:none;color:var(--red);font-size:11px;font-weight:500;cursor:pointer;padding:4px 6px">Clear all</button>
+    </div>` : '';
+
+  // ── Filter panel ── (cleaner: common filters visible, advanced collapsible)
+  const advancedOpen = window._txAdvancedOpen || false;
   const filterPanel = _txFilterPanelOpen ? `
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;gap:12px">
+      <!-- Common: Type + Account -->
       <div>
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Type</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -5562,30 +5597,39 @@ function renderTxLog() {
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Account</div>
         <select class="form-input" style="width:100%;padding:7px 12px;font-size:13px" onchange="setTxAcctFilter(this.value)">${acctOpts2}</select>
       </div>
-      ${qfPills.length > 0 ? `<div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Quick Filters</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${qfPills.map(p=>`<div class="qf-pill${_txQuickFilter===p.key?' active':''}" onclick="setTxQuickFilter('${p.key}')" title="${p.title}">${p.label}</div>`).join('')}
+
+      <!-- Advanced: collapsible -->
+      <div style="border-top:1px dashed var(--border);padding-top:10px;margin-top:2px">
+        <div onclick="toggleTxAdvanced()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0">
+          <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">More filters</span>
+          <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;transform:rotate(${advancedOpen?'180':'0'}deg);opacity:0.5"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-      </div>` : ''}
-      <div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Sort</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[['newest','Newest'],['oldest','Oldest'],['amount_desc','Amount ↓'],['amount_asc','Amount ↑']].map(([val,label])=>`
-            <div onclick="setTxSort('${val}')" style="padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid ${_txSort===val?'var(--accent)':'var(--border2)'};background:${_txSort===val?'var(--accent-bg)':'var(--bg3)'};color:${_txSort===val?'var(--accent)':'var(--text2)'};white-space:nowrap">${label}</div>
-          `).join('')}
-        </div>
+        ${advancedOpen ? `
+          <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
+            ${qfPills.length > 0 ? `<div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Quick Filters</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                ${qfPills.map(p=>`<div class="qf-pill${_txQuickFilter===p.key?' active':''}" onclick="setTxQuickFilter('${p.key}')" title="${p.title}">${p.label}</div>`).join('')}
+              </div>
+            </div>` : ''}
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Sort</div>
+              <select class="form-input" style="width:100%;padding:7px 12px;font-size:13px" onchange="setTxSort(this.value)">
+                ${[['newest','Newest first'],['oldest','Oldest first'],['amount_desc','Largest amount'],['amount_asc','Smallest amount']].map(([val,label])=>`<option value="${val}" ${_txSort===val?'selected':''}>${label}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Date Range</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+                <span style="font-size:12px;color:var(--text3)">→</span>
+                <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+                ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
+              </div>
+            </div>
+          </div>
+        ` : ''}
       </div>
-      <div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Date Range</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
-          <span style="font-size:12px;color:var(--text3)">→</span>
-          <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
-          ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
-        </div>
-      </div>
-      ${activeFilterCount > 0 ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px;width:100%" onclick="clearAllTxFilters()">✕ Clear all filters</button>` : ''}
     </div>` : '';
 
   // ── Main toolbar row ──
@@ -5612,7 +5656,7 @@ function renderTxLog() {
         </button>
       </div>`;
 
-  return `${bulkToolbar}${mainToolbar}${filterPanel}<div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
+  return `${bulkToolbar}${mainToolbar}${activePillsBar}${filterPanel}<div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
 }
 
 function clearAllTxFilters() {
@@ -5705,6 +5749,11 @@ function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactio
 function setTxMonth(m) { _txMonth = m; _txQuickFilter = null; renderTransactions(); }
 function setTxAcctFilter(a) { _txAcctFilter = a; renderTransactions(); }
 function setTxSort(s) { _txSort = s; renderTransactions(); }
+function toggleTxAdvanced() {
+  window._txAdvancedOpen = !window._txAdvancedOpen;
+  renderTransactions();
+}
+
 function toggleTxFilterPanel() { _txFilterPanelOpen = !_txFilterPanelOpen; renderTransactions(); }
 
 // ── TX DETAIL & EDIT ──
