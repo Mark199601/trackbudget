@@ -258,6 +258,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .form-input{width:100%;padding:10px 13px;background:var(--input-bg,var(--bg3));border:1px solid var(--border2);border-radius:var(--r-md);color:var(--text);font-size:14px;outline:none;transition:border-color var(--transition),box-shadow var(--transition);-webkit-appearance:none;appearance:none}
 
 /* ── FOUNDATION CLASSES (Phase 1) — reusable list/detail/amount primitives ── */
+.last-no-border:last-child{border-bottom:none !important}
 .list-card{background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)}
 .list-card + .list-card{margin-top:10px}
 .list-row{padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s ease;display:flex;align-items:center;gap:12px}
@@ -10629,14 +10630,16 @@ function renderAnalytics() {
     <button class="tab-btn ${_analyticsTab==='spending'?'active':''}" onclick="setAnalyticsTab('spending')">Spending</button>
     <button class="tab-btn ${_analyticsTab==='trends'?'active':''}" onclick="setAnalyticsTab('trends')">Trends</button>
     <button class="tab-btn ${_analyticsTab==='wealth'?'active':''}" onclick="setAnalyticsTab('wealth')">Wealth</button>
+    <button class="tab-btn ${_analyticsTab==='investments'?'active':''}" onclick="setAnalyticsTab('investments')">Investments</button>
     <button class="tab-btn ${_analyticsTab==='forex'?'active':''}" onclick="setAnalyticsTab('forex')">Forex</button>
-  <button class="tab-btn ${_analyticsTab==='external'?'active':''}" onclick="setAnalyticsTab('external')">External</button>
+    <button class="tab-btn ${_analyticsTab==='external'?'active':''}" onclick="setAnalyticsTab('external')">External</button>
   </div>`;
   let content = '';
   if (_analyticsTab==='overview') content = renderAnalyticsOverview();
   else if (_analyticsTab==='spending') content = renderAnalyticsSpending();
   else if (_analyticsTab==='trends') content = renderAnalyticsTrends();
   else if (_analyticsTab==='wealth') content = renderAnalyticsWealth();
+  else if (_analyticsTab==='investments') content = renderAnalyticsInvestments();
   else if (_analyticsTab==='external') content = renderAnalyticsExternal();
   else content = renderAnalyticsForex();
   // Use swipe direction to decide animation class
@@ -10656,7 +10659,7 @@ function renderAnalytics() {
   }
 }
 
-const ANALYTICS_TABS = ['overview','spending','trends','wealth','forex','external'];
+const ANALYTICS_TABS = ['overview','spending','trends','wealth','investments','forex','external'];
 
 function attachAnalyticsSwipe() {
   // Disabled per user request — swipe was conflicting with horizontal scroll inside content
@@ -10843,28 +10846,36 @@ function renderAnalyticsOverview() {
         ${selectorOpts}
       </select>
     </div>
-    <!-- Pie Charts -->
-    <div class="form-row fr2" style="margin-bottom:16px">
-      <div class="card" style="padding:14px">
+    <!-- Pie Charts (smart layout: full-width if one is empty) -->
+    ${(() => {
+      const hasExp = expTotal > 0;
+      const hasInc = incTotal > 0;
+      if (!hasExp && !hasInc) return '';
+      const expCard = `<div class="card" style="padding:14px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Expenses by Category</div>
         ${buildPieChart(expCats, expTotal, 'exp', period)}
-      </div>
-      <div class="card" style="padding:14px">
+      </div>`;
+      const incCard = `<div class="card" style="padding:14px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Income by Category</div>
         ${buildPieChart(incCats, incTotal, 'inc', period)}
-      </div>
-    </div>
+      </div>`;
+      // Both have data — side by side; if only one — full width
+      if (hasExp && hasInc) {
+        return `<div class="form-row fr2" style="margin-bottom:16px">${expCard}${incCard}</div>`;
+      }
+      return `<div style="margin-bottom:16px">${hasExp ? expCard : incCard}</div>`;
+    })()}
 
     <!-- Metric cards -->
     <div class="fr4-resp" style="margin-bottom:16px">
-      <div class="metric-card">
+      <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value" style="color:var(--green)">${fmt(curr.income,disp)}</div>
+        <div class="metric-value tx-pos">${fmt(curr.income,disp)}</div>
         ${chgBadge(incomeChg)}
       </div>
-      <div class="metric-card">
+      <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
         <div class="metric-label">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value" style="color:var(--red)">${fmt(curr.expense,disp)}</div>
+        <div class="metric-value tx-neg">${fmt(curr.expense,disp)}</div>
         ${chgBadge(expChg)}
       </div>
       <div class="metric-card">
@@ -10888,13 +10899,101 @@ function renderAnalyticsOverview() {
                   <div style="font-size:11px;color:var(--text4)">of income saved</div>`;
         })()}
       </div>
-      <div class="metric-card">
-        <div class="metric-label">DAILY AVG SPEND</div>
-        <div class="metric-value">${fmt(curr.expense/daysInMetricMonth,disp)}</div>
-        <div style="font-size:11px;color:var(--text4)">${period==='ytd'?'this month':metricLabel.split(' ')[0]}</div>
+      <div class="metric-card" style="cursor:pointer" onclick="nav('transactions')">
+        <div class="metric-label">VS 6MO AVG</div>
+        ${(() => {
+          // 6-month rolling baseline (excluding current month)
+          let totalExp = 0, count = 0;
+          for (let i = 1; i <= 6; i++) {
+            const d = new Date(mY, mM-1-i, 1);
+            const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const t = getMonthTotals(k);
+            if (t.expense > 0) { totalExp += t.expense; count++; }
+          }
+          if (count === 0) return `<div class="metric-value tx-neu">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
+          const avg = totalExp / count;
+          const diff = curr.expense - avg;
+          const pct = avg > 0 ? (diff / avg * 100) : 0;
+          const cls = diff > 0 ? 'tx-neg' : diff < 0 ? 'tx-pos' : 'tx-neu';
+          const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
+          return `<div class="metric-value ${cls}">${sign}${Math.abs(pct).toFixed(0)}%</div>
+                  <div style="font-size:11px;color:var(--text4)">${diff > 0 ? 'above' : diff < 0 ? 'below' : 'equal to'} ${count}mo avg</div>`;
+        })()}
       </div>
     </div>
 
+    <!-- ── SPRINT 1: Visual companions to AI insights ── -->
+    ${buildVelocityGauge(metricMk, dispCurr)}
+    ${buildForecastBand(metricMk, dispCurr)}
+    ${buildRunwayBar(dispCurr)}
+    ${buildAnomalyHighlights(metricMk, dispCurr)}
+    ${buildSavingsSparkline(metricMk, dispCurr)}
+    ${buildSubscriptionPanel(dispCurr)}
+
+    <!-- ── SPRINT 2-4: Spending behavior analysis ── -->
+    ${buildFixedVsDiscretionary(metricMk, dispCurr)}
+    ${buildParetoAnalysis(metricMk, dispCurr)}
+    ${buildDayOfWeekHeatmap(metricMk, dispCurr)}
+    ${buildMostFrequent(metricMk, dispCurr)}
+    ${buildTimeOfDayPattern(metricMk, dispCurr)}
+    ${buildSpendingDistribution(metricMk, dispCurr)}
+
+    <!-- ── SPRINT 5: Long-term context & risk indicators ── -->
+    ${buildYoYComparison(metricMk, dispCurr)}
+    ${buildIncomeDiversification(metricMk, dispCurr)}
+    ${buildGoalProgress(dispCurr)}
+    ${buildConcentrationRisk(dispCurr)}
+
+    ${(() => {
+      // Top movers: categories where current month spending is significantly higher than 3-month average
+      if (period === 'ytd' || curr.expense === 0) return '';
+      // Build 3-month rolling baseline per category (excluding current)
+      const catBaseline = {}; // {catName: {total, count}}
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(mY, mM-1-i, 1);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(k) && (t.type === 'expense' || t.type === 'shared'));
+        for (const tx of monthTxs) {
+          const cat = getCategoryDisplay(tx.categoryId);
+          const name = cat.name.replace(/^[^ ]+ /,'');
+          const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+          const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
+          if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
+          catBaseline[name].total += amt;
+        }
+      }
+      // Compute movers: current vs avg
+      const movers = [];
+      for (const [name, c] of Object.entries(expCats)) {
+        const baseline = catBaseline[name];
+        if (!baseline || baseline.total === 0) continue; // no baseline = new category, skip
+        const avg = baseline.total / 3;
+        const diff = c.total - avg;
+        const pct = avg > 0 ? (diff / avg * 100) : 0;
+        if (Math.abs(pct) >= 30 && Math.abs(diff) >= 100) {
+          movers.push({name, icon: c.icon || baseline.icon, current: c.total, avg, diff, pct});
+        }
+      }
+      // Sort by absolute % change, top 3
+      movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
+      const top = movers.slice(0, 3);
+      if (top.length === 0) return '';
+      return `<div class="card" style="padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:10px">🚨 Notable Changes vs 3mo Avg</div>
+        ${top.map(m => {
+          const isUp = m.diff > 0;
+          const cls = isUp ? 'tx-neg' : 'tx-pos';
+          const icon = isUp ? '▲' : '▼';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px" class="last-no-border">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+              <div style="font-size:16px;flex-shrink:0">${m.icon || '💸'}</div>
+              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}</div>
+            </div>
+            <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
     ${renderInlineInsights(['saverate','cashflow','recap'])}
 
     <!-- Monthly stat cards -->
@@ -10958,6 +11057,863 @@ function renderAnalyticsOverview() {
         <div class="stat-month-grid">${cards}</div>
       </div>`;
     })()}
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// ANALYTICS OVERVIEW WIDGETS — visual companions to AI insights
+// All read existing tx data. No new fields, no new logic.
+// ════════════════════════════════════════════════════════════
+
+// Helper: filter txs for a given month key + display currency conversion
+// Aligned with getMonthTotals PLS rules (PLS #46, #47):
+// - PLS #46: isFeeReimbursable hidden everywhere (tracking-only shared tx)
+// - PLS #47: Gain/Loss INCLUDED (real FX arbitrage); but most widgets analyze raw expenses, so this filter excludes settlements
+// - external-in/out excluded (not real income/expense)
+function _ovTxsForMonth(mk) {
+  // Aligned with getMonthTotals PLS rules (do not deviate without intent):
+  // - isAutoForex INCLUDED — real FX gain/loss (per getMonthTotals PLS comment)
+  // - isAutoFee INCLUDED — real fee expense (per PLS #46)
+  // - isFeeReimbursable EXCLUDED — tracking-only shared tx (PLS #46)
+  // - isAutoReimb EXCLUDED — full bill already on parent shared tx
+  // - Settlement gain/loss EXCLUDED here — for behavior widgets only; income/total widgets handle separately
+  return db.transactions.filter(t =>
+    !t.archived &&
+    !t.isSettlement &&  // includes batch settlement parents + gain/loss (handled separately by income widgets)
+    !t.isLoanTx && !t.isLoanPayment &&  // balance movement, not income/expense
+    !t.isAutoReimb &&  // full bill already counted on parent shared tx
+    !t.isFeeReimbursable &&  // PLS #46 — tracking-only shared tx, fee already counted on parent
+    !t.isInvestmentFund &&  // capital movement, not expense
+    t.type !== 'external-in' && t.type !== 'external-out' &&
+    t.date && t.date.startsWith(mk));
+}
+function _ovExpAmt(tx, dispCurr) {
+  const raw = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+  return tx.currency === dispCurr ? raw : convert(raw, tx.currency, dispCurr);
+}
+
+// ─── 1. Velocity Gauge ───
+function buildVelocityGauge(metricMk, dispCurr) {
+  const [y, m] = metricMk.split('-').map(Number);
+  const today = new Date();
+  const isCurrentMonth = (y === today.getFullYear() && m-1 === today.getMonth());
+  if (!isCurrentMonth) return ''; // only meaningful for current month
+  const dayOfMonth = today.getDate();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const daysRemaining = daysInMonth - dayOfMonth;
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  const totalExp = txs.reduce((s,t) => s + _ovExpAmt(t, dispCurr), 0);
+  if (totalExp === 0) return '';
+  const dailyAvg = totalExp / dayOfMonth;
+  const projection = dailyAvg * daysInMonth;
+
+  // Compute 6mo baseline avg expense for comparison
+  let baseline = 0, count = 0;
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(y, m-1-i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const t = getMonthTotals(k);
+    if (t.expense > 0) { baseline += t.expense; count++; }
+  }
+  const avgMonthly = count > 0 ? baseline / count : 0;
+  const projVsAvg = avgMonthly > 0 ? (projection / avgMonthly) : 1;
+  const status = projVsAvg <= 0.95 ? {color:'var(--green)', label:'On track', icon:'✓'} :
+                 projVsAvg <= 1.10 ? {color:'var(--amber)', label:'Slightly above', icon:'⚠'} :
+                 {color:'var(--red)', label:'Overspending pace', icon:'⚠'};
+  const fillPct = Math.min(100, (totalExp / Math.max(projection, avgMonthly) * 100));
+
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⏱ Spending Velocity</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Day ${dayOfMonth}/${daysInMonth} · ${daysRemaining} ${daysRemaining===1?'day':'days'} left</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:600;color:${status.color}">${status.icon} ${status.label}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${fmt(dailyAvg, dispCurr)}</div>
+      <div style="font-size:11px;color:var(--text4)">/day avg</div>
+    </div>
+    <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:6px">
+      <div style="width:${fillPct}%;height:100%;background:${status.color};transition:width 0.3s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+      <span>${fmt(totalExp, dispCurr)} spent</span>
+      <span>Projected: ${fmt(projection, dispCurr)}</span>
+    </div>
+  </div>`;
+}
+
+// ─── 2. Runway Bar (account-by-account) ───
+function buildRunwayBar(dispCurr) {
+  // Aggregate accounts by currency, exclude archived, compute days-of-runway based on 30d avg expense
+  const last30 = new Date(); last30.setDate(last30.getDate() - 30);
+  const cutoffStr = last30.toISOString().slice(0,10);
+  const recentExp = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund && t.date >= cutoffStr && (t.type==='expense'||t.type==='shared'));
+  if (recentExp.length === 0) return '';
+  const totalExp30d = recentExp.reduce((s,t) => s + _ovExpAmt(t, dispCurr), 0);
+  const dailyBurn = totalExp30d / 30;
+  if (dailyBurn === 0) return '';
+
+  // Total liquid funds (savings/checking/cash, excluding credit card and investments)
+  let liquid = 0;
+  for (const a of db.accounts.filter(a => !a.archived)) {
+    const t = a.type || '';
+    if (['Credit Card', 'Investment'].includes(t)) continue;
+    const bal = getAcctBalance(a.id);
+    if (bal > 0) liquid += a.currency === dispCurr ? bal : convert(bal, a.currency, dispCurr);
+  }
+  if (liquid === 0) return '';
+  const daysRunway = Math.floor(liquid / dailyBurn);
+  const monthsRunway = (daysRunway / 30).toFixed(1);
+  const color = daysRunway >= 180 ? 'var(--green)' : daysRunway >= 90 ? 'var(--amber)' : 'var(--red)';
+  const label = daysRunway >= 180 ? 'Healthy buffer' : daysRunway >= 90 ? 'Adequate' : daysRunway >= 30 ? 'Tight — build emergency fund' : 'Critical';
+  // Visual segments — 12 cells = 1 year
+  const cells = 12;
+  const filled = Math.min(cells, Math.round(daysRunway / 30));
+  const segments = Array.from({length: cells}, (_, i) =>
+    `<div style="flex:1;height:6px;border-radius:2px;background:${i < filled ? color : 'var(--border2)'};opacity:${i < filled ? '1' : '0.4'}"></div>`
+  ).join('');
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cashflow Runway</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">If income stops at current burn rate</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${color}">${monthsRunway}mo</div>
+        <div style="font-size:11px;color:var(--text4)">${daysRunway} days</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+      <span style="color:${color};font-weight:500">${label}</span>
+      <span>${fmt(dailyBurn, dispCurr)}/day burn</span>
+    </div>
+  </div>`;
+}
+
+// ─── 3. Anomaly Highlights ───
+function buildAnomalyHighlights(metricMk, dispCurr) {
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length < 5) return ''; // need data
+  // Build per-category baseline (3-month rolling)
+  const baseline = {}; // {catId: amounts[]}
+  const [y, m] = metricMk.split('-').map(Number);
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(y, m-1-i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const monthTxs = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
+    for (const tx of monthTxs) {
+      if (!baseline[tx.categoryId]) baseline[tx.categoryId] = [];
+      baseline[tx.categoryId].push(_ovExpAmt(tx, dispCurr));
+    }
+  }
+  // Find outliers: txs >2 stdev above category average
+  const outliers = [];
+  for (const tx of txs) {
+    const arr = baseline[tx.categoryId] || [];
+    if (arr.length < 3) continue;
+    const avg = arr.reduce((s,v) => s+v, 0) / arr.length;
+    const stdev = Math.sqrt(arr.reduce((s,v) => s + (v-avg)**2, 0) / arr.length);
+    if (stdev === 0) continue;
+    const amt = _ovExpAmt(tx, dispCurr);
+    const z = (amt - avg) / stdev;
+    if (z >= 2 && amt >= avg * 1.5) {
+      const cat = getCategoryDisplay(tx.categoryId);
+      outliers.push({tx, amt, avg, z, cat});
+    }
+  }
+  outliers.sort((a,b) => b.z - a.z);
+  const top = outliers.slice(0, 3);
+  if (top.length === 0) return '';
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Unusual Transactions</div>
+    ${top.map(o => {
+      const catName = o.cat.name.replace(/^[^ ]+ /,'');
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <div style="font-size:16px">${o.cat.icon || '💸'}</div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${catName}</div>
+            <div style="font-size:11px;color:var(--text4)">${fmtD(o.tx.date)} · usually ${fmt(o.avg, dispCurr)}</div>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red);flex-shrink:0">${fmt(o.amt, dispCurr)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── 4. Forecast Band Chart ───
+function buildForecastBand(metricMk, dispCurr) {
+  const [y, m] = metricMk.split('-').map(Number);
+  const today = new Date();
+  const isCurrentMonth = (y === today.getFullYear() && m-1 === today.getMonth());
+  if (!isCurrentMonth) return '';
+  const dayOfMonth = today.getDate();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  // Build cumulative actual
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length === 0) return '';
+  const dayTotals = new Array(daysInMonth + 1).fill(0);
+  for (const tx of txs) {
+    const d = parseInt(tx.date.slice(8, 10));
+    dayTotals[d] += _ovExpAmt(tx, dispCurr);
+  }
+  const cumActual = [];
+  let running = 0;
+  for (let d = 1; d <= dayOfMonth; d++) { running += dayTotals[d]; cumActual.push(running); }
+  // 3-month historical avg per-day pattern
+  const histDays = new Array(daysInMonth + 1).fill(0);
+  let histMonths = 0;
+  for (let i = 1; i <= 3; i++) {
+    const dt = new Date(y, m-1-i, 1);
+    const k = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    const mt = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
+    if (mt.length === 0) continue;
+    histMonths++;
+    const dim = new Date(dt.getFullYear(), dt.getMonth()+1, 0).getDate();
+    for (const tx of mt) {
+      const d = parseInt(tx.date.slice(8, 10));
+      if (d <= daysInMonth) histDays[d] += _ovExpAmt(tx, dispCurr) * (daysInMonth / dim);
+    }
+  }
+  if (histMonths === 0) return '';
+  const cumExpected = [];
+  let er = 0;
+  for (let d = 1; d <= daysInMonth; d++) { er += histDays[d] / histMonths; cumExpected.push(er); }
+  // Project end-of-month
+  const projection = cumActual[cumActual.length-1] / dayOfMonth * daysInMonth;
+  const expectedEnd = cumExpected[daysInMonth-1];
+  const variance = expectedEnd > 0 ? ((projection - expectedEnd) / expectedEnd * 100) : 0;
+
+  // Build SVG line chart (160w x 60h)
+  const W = 320, H = 70, padL = 4, padR = 4, padT = 6, padB = 6;
+  const cw = W - padL - padR, ch = H - padT - padB;
+  const maxY = Math.max(projection, expectedEnd, ...cumActual, ...cumExpected) * 1.05 || 1;
+  const xAt = (d) => padL + ((d-1) / (daysInMonth-1)) * cw;
+  const yAt = (v) => padT + ch - (v / maxY) * ch;
+  // Expected line (full month)
+  const expPath = cumExpected.map((v,i) => `${i===0?'M':'L'}${xAt(i+1).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ');
+  // Actual line (current day)
+  const actPath = cumActual.map((v,i) => `${i===0?'M':'L'}${xAt(i+1).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ');
+  // Confidence band ±15%
+  const upperPath = cumExpected.map((v,i) => `${i===0?'M':'L'}${xAt(i+1).toFixed(1)},${yAt(v*1.15).toFixed(1)}`).join(' ');
+  const lowerPath = cumExpected.map((v,i) => `L${xAt(i+1).toFixed(1)},${yAt(v*0.85).toFixed(1)}`).reverse().join(' ');
+  const bandPath = upperPath + ' ' + lowerPath + ' Z';
+  const projColor = variance > 10 ? 'var(--red)' : variance < -10 ? 'var(--green)' : 'var(--accent)';
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔮 Month-End Forecast</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Based on ${histMonths}mo pattern · ±15% confidence</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${projColor}">${fmt(projection, dispCurr)}</div>
+        <div style="font-size:11px;color:var(--text4)">${variance >= 0 ? '+' : ''}${variance.toFixed(0)}% vs avg</div>
+      </div>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      <path d="${bandPath}" fill="${projColor}" opacity="0.12"/>
+      <path d="${expPath}" stroke="var(--text4)" stroke-width="1.5" stroke-dasharray="3,2" fill="none"/>
+      <path d="${actPath}" stroke="${projColor}" stroke-width="2" fill="none"/>
+      <circle cx="${xAt(dayOfMonth).toFixed(1)}" cy="${yAt(cumActual[cumActual.length-1]).toFixed(1)}" r="3" fill="${projColor}"/>
+    </svg>
+    <div style="display:flex;gap:14px;font-size:11px;color:var(--text4);margin-top:6px">
+      <span><span style="color:${projColor}">━</span> Actual</span>
+      <span><span style="color:var(--text4)">┄</span> Expected</span>
+    </div>
+  </div>`;
+}
+
+// ─── 5. Subscription Leak Panel ───
+function buildSubscriptionPanel(dispCurr) {
+  const recurring = (db.recurring || []).filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
+  if (recurring.length === 0) return '';
+  // Total monthly equivalent
+  let totalMonthly = 0;
+  const items = recurring.map(r => {
+    const amt = r.currency === dispCurr ? r.amount : convert(r.amount, r.currency, dispCurr);
+    let monthly = amt;
+    if (r.frequency === 'weekly') monthly = amt * 4.33;
+    else if (r.frequency === 'biweekly') monthly = amt * 2.17;
+    else if (r.frequency === 'quarterly') monthly = amt / 3;
+    else if (r.frequency === 'yearly') monthly = amt / 12;
+    totalMonthly += monthly;
+    return {r, monthly, amt};
+  }).sort((a,b) => b.monthly - a.monthly);
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Recurring Commitments</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${items.length} active · ${fmt(totalMonthly*12, dispCurr)}/year</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700">${fmt(totalMonthly, dispCurr)}</div>
+        <div style="font-size:11px;color:var(--text4)">/month</div>
+      </div>
+    </div>
+    ${items.slice(0, 5).map(({r, monthly}) => {
+      const pct = totalMonthly > 0 ? (monthly / totalMonthly * 100) : 0;
+      return `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${r.name}</span>
+          <span style="font-family:var(--mono);color:var(--text3)">${fmt(monthly, dispCurr)}/mo</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--accent);opacity:0.7"></div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${items.length > 5 ? `<div style="font-size:11px;color:var(--text4);text-align:center;margin-top:6px"><span onclick="nav('planning')" style="color:var(--accent);cursor:pointer">+${items.length-5} more in Planning →</span></div>` : ''}
+  </div>`;
+}
+
+// ─── 6. Savings Trend Sparkline ───
+function buildSavingsSparkline(metricMk, dispCurr) {
+  const [y, m] = metricMk.split('-').map(Number);
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(y, m-1-i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const t = getMonthTotals(k);
+    const rate = t.income > 0 ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
+    months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, income: t.income, expense: t.expense});
+  }
+  const validRates = months.filter(m => m.rate !== null).map(m => m.rate);
+  if (validRates.length < 2) return '';
+  const currentRate = months[months.length-1].rate;
+  const prevRate = months[months.length-2].rate;
+  const avgPriorRates = validRates.slice(0, -1);
+  const avgPrior = avgPriorRates.length > 0 ? avgPriorRates.reduce((s,v)=>s+v,0)/avgPriorRates.length : 0;
+  const trend = currentRate !== null && prevRate !== null ? currentRate - prevRate : 0;
+  const trendColor = trend > 2 ? 'var(--green)' : trend < -2 ? 'var(--red)' : 'var(--text3)';
+  const trendIcon = trend > 2 ? '▲' : trend < -2 ? '▼' : '→';
+  // Sparkline SVG
+  const W = 240, H = 40, padX = 2, padY = 4;
+  const cw = W - padX*2, ch = H - padY*2;
+  const maxRate = Math.max(...validRates, 50);
+  const xAt = (i) => padX + (i / (months.length-1)) * cw;
+  const yAt = (r) => r === null ? null : padY + ch - (r / maxRate) * ch;
+  let path = '';
+  let segs = [];
+  for (let i = 0; i < months.length; i++) {
+    if (months[i].rate !== null) {
+      const x = xAt(i).toFixed(1), yv = yAt(months[i].rate).toFixed(1);
+      segs.push((path === '' ? 'M' : 'L') + x + ',' + yv);
+      if (path === '') path = 'M' + x + ',' + yv;
+      else path += ' L' + x + ',' + yv;
+    }
+  }
+  const dots = months.map((mo, i) => mo.rate !== null ? `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(mo.rate).toFixed(1)}" r="2.5" fill="var(--accent)"/>` : '').join('');
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</div>
+        <div style="font-size:11px;color:${trendColor}">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</div>
+      </div>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:40px;display:block">
+      <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+      ${dots}
+    </svg>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--text4)">
+      ${months.map(mo => `<span>${mo.label}</span>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ─── 7. Fixed vs Discretionary Ratio ───
+function buildFixedVsDiscretionary(metricMk, dispCurr) {
+  // "Fixed" = recurring expenses + utilities/rent/insurance categories (heuristic)
+  const recurring = (db.recurring || []).filter(r => r.active);
+  const recurringNames = new Set(recurring.map(r => (r.name || '').toLowerCase()));
+  // Fixed category keywords (heuristic — adjustable)
+  const FIXED_KW = ['rent', 'utility', 'utilities', 'electric', 'water', 'internet', 'insurance', 'mortgage', 'tuition', 'subscription', 'membership', 'gym'];
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length === 0) return '';
+  let fixed = 0, discretionary = 0;
+  for (const tx of txs) {
+    const cat = getCategoryDisplay(tx.categoryId);
+    const catName = cat.name.toLowerCase();
+    const txNotes = (tx.notes || '').toLowerCase();
+    const isFixed = FIXED_KW.some(kw => catName.includes(kw) || txNotes.includes(kw)) ||
+                    [...recurringNames].some(rn => rn && txNotes.includes(rn));
+    const amt = _ovExpAmt(tx, dispCurr);
+    if (isFixed) fixed += amt;
+    else discretionary += amt;
+  }
+  const total = fixed + discretionary;
+  if (total === 0) return '';
+  const fixedPct = (fixed / total * 100);
+  const discPct = 100 - fixedPct;
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⚖️ Fixed vs Discretionary</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${discPct.toFixed(0)}% controllable this month</div>
+      </div>
+    </div>
+    <div style="display:flex;height:32px;border-radius:6px;overflow:hidden;margin-bottom:8px">
+      <div style="width:${fixedPct}%;background:var(--text3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${fixedPct >= 15 ? fixedPct.toFixed(0)+'%' : ''}</div>
+      <div style="width:${discPct}%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${discPct >= 15 ? discPct.toFixed(0)+'%' : ''}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px">
+      <div><span style="color:var(--text3)">▢</span> Fixed: <span style="font-family:var(--mono);font-weight:600">${fmt(fixed, dispCurr)}</span></div>
+      <div><span style="color:var(--accent)">▢</span> Discretionary: <span style="font-family:var(--mono);font-weight:600">${fmt(discretionary, dispCurr)}</span></div>
+    </div>
+  </div>`;
+}
+
+// ─── 8. Pareto 80/20 Analysis ───
+function buildParetoAnalysis(metricMk, dispCurr) {
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length < 5) return '';
+  const cats = {};
+  for (const tx of txs) {
+    const cat = getCategoryDisplay(tx.categoryId);
+    const name = cat.name.replace(/^[^ ]+ /,'');
+    if (!cats[name]) cats[name] = {total: 0, icon: cat.icon};
+    cats[name].total += _ovExpAmt(tx, dispCurr);
+  }
+  const entries = Object.entries(cats).sort((a,b) => b[1].total - a[1].total);
+  const total = entries.reduce((s, [,v]) => s + v.total, 0);
+  if (total === 0 || entries.length < 3) return '';
+  // Find which categories make up 80%
+  let cum = 0, eightyIdx = -1;
+  for (let i = 0; i < entries.length; i++) {
+    cum += entries[i][1].total;
+    if (eightyIdx === -1 && cum >= total * 0.8) eightyIdx = i;
+  }
+  if (eightyIdx === -1) eightyIdx = entries.length - 1;
+  const topCount = eightyIdx + 1;
+  const topPct = ((topCount / entries.length) * 100).toFixed(0);
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 80/20 Analysis</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px"><strong>${topCount} of ${entries.length}</strong> categories = 80% of spend</div>
+      </div>
+    </div>
+    ${entries.slice(0, Math.min(5, topCount + 1)).map(([name, v], i) => {
+      const pct = (v.total / total * 100);
+      const isInTop = i <= eightyIdx;
+      return `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+          <span><span style="opacity:0.7">${v.icon || '•'}</span> ${name}</span>
+          <span style="font-family:var(--mono);color:${isInTop ? 'var(--text)' : 'var(--text4)'}">${pct.toFixed(0)}%</span>
+        </div>
+        <div style="height:5px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${isInTop ? 'var(--accent)' : 'var(--text4)'};opacity:${isInTop ? '1' : '0.5'}"></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── 9. Day-of-Week Heatmap ───
+function buildDayOfWeekHeatmap(metricMk, dispCurr) {
+  // Aggregate last 90 days of expense by day-of-week
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const txs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund && t.date >= cutoffStr && (t.type === 'expense' || t.type === 'shared'));
+  if (txs.length < 14) return '';
+  const dowTotals = [0,0,0,0,0,0,0]; // Sun-Sat
+  const dowCounts = [0,0,0,0,0,0,0];
+  for (const tx of txs) {
+    const d = new Date(tx.date + 'T12:00:00');
+    const dow = d.getDay();
+    dowTotals[dow] += _ovExpAmt(tx, dispCurr);
+    dowCounts[dow]++;
+  }
+  // Compute avg per day for each DoW
+  const weeksSpan = Math.max(1, Math.round(90 / 7));
+  const dowAvgs = dowTotals.map(t => t / weeksSpan);
+  const maxAvg = Math.max(...dowAvgs, 1);
+  const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const peakIdx = dowAvgs.indexOf(maxAvg);
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📅 Day-of-Week Pattern</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${labels[peakIdx]} is your highest spending day</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;align-items:flex-end;height:64px;margin-bottom:6px">
+      ${dowAvgs.map((avg, i) => {
+        const h = Math.max(8, (avg / maxAvg) * 60);
+        const isPeak = i === peakIdx;
+        const isWeekend = i === 0 || i === 6;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div style="width:100%;height:${h}px;background:${isPeak ? 'var(--red)' : isWeekend ? 'var(--accent)' : 'var(--text3)'};border-radius:3px 3px 0 0;opacity:${isPeak ? '1' : '0.7'};transition:height 0.3s"></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:4px;font-size:10px;color:var(--text4)">
+      ${labels.map((l, i) => `<div style="flex:1;text-align:center;font-weight:${i===peakIdx?'600':'400'};color:${i===peakIdx?'var(--text)':'var(--text4)'}">${l}</div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-top:6px">
+      <span>${fmt(dowAvgs[peakIdx], dispCurr)} avg ${labels[peakIdx]}</span>
+      <span>${fmt(dowAvgs.reduce((s,v)=>s+v,0)/7, dispCurr)} daily avg</span>
+    </div>
+  </div>`;
+}
+
+// ─── 10. Most Frequent Vendor/Category ───
+function buildMostFrequent(metricMk, dispCurr) {
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length < 5) return '';
+  const freq = {};
+  for (const tx of txs) {
+    const cat = getCategoryDisplay(tx.categoryId);
+    const name = cat.name.replace(/^[^ ]+ /,'');
+    if (!freq[name]) freq[name] = {count: 0, total: 0, icon: cat.icon};
+    freq[name].count++;
+    freq[name].total += _ovExpAmt(tx, dispCurr);
+  }
+  const entries = Object.entries(freq).sort((a,b) => b[1].count - a[1].count);
+  const top = entries.slice(0, 5);
+  if (top.length === 0 || top[0][1].count < 3) return '';
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Most Frequent</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">By transaction count this month</div>
+      </div>
+    </div>
+    ${top.map(([name, v]) => {
+      const avg = v.total / v.count;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <div style="font-size:16px">${v.icon || '•'}</div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:500">${name}</div>
+            <div style="font-size:11px;color:var(--text4)">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:600;flex-shrink:0">${fmt(v.total, dispCurr)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── 11. Time-of-Day Pattern ───
+function buildTimeOfDayPattern(metricMk, dispCurr) {
+  const txs = _ovTxsForMonth(metricMk).filter(t => (t.type === 'expense' || t.type === 'shared') && t.time);
+  if (txs.length < 5) return '';
+  // Buckets: Morning 6-12, Afternoon 12-18, Evening 18-22, Night 22-6
+  const buckets = {Morning: 0, Afternoon: 0, Evening: 0, Night: 0};
+  for (const tx of txs) {
+    const h = parseInt((tx.time || '12:00').slice(0, 2));
+    const amt = _ovExpAmt(tx, dispCurr);
+    if (h >= 6 && h < 12) buckets.Morning += amt;
+    else if (h >= 12 && h < 18) buckets.Afternoon += amt;
+    else if (h >= 18 && h < 22) buckets.Evening += amt;
+    else buckets.Night += amt;
+  }
+  const total = Object.values(buckets).reduce((s,v) => s+v, 0);
+  if (total === 0) return '';
+  const colors = {Morning: '#fbbf24', Afternoon: '#60a5fa', Evening: '#f472b6', Night: '#818cf8'};
+  const icons = {Morning: '🌅', Afternoon: '☀️', Evening: '🌆', Night: '🌙'};
+  const peakBucket = Object.entries(buckets).sort((a,b) => b[1] - a[1])[0];
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🕐 Time-of-Day Pattern</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}%)</div>
+      </div>
+    </div>
+    <div style="display:flex;height:24px;border-radius:4px;overflow:hidden;margin-bottom:10px">
+      ${Object.entries(buckets).map(([k,v]) => {
+        const pct = (v/total*100);
+        return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>` : '';
+      }).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
+      ${Object.entries(buckets).map(([k,v]) => `
+        <div style="text-align:center">
+          <div style="font-size:14px">${icons[k]}</div>
+          <div style="color:var(--text3);font-size:10px">${k}</div>
+          <div style="font-family:var(--mono);font-weight:600;font-size:11px">${fmt(v, dispCurr)}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// SPRINT 5 WIDGETS — long-term context & risk indicators
+// ════════════════════════════════════════════════════════════
+
+// ─── 12. YoY Comparison ───
+function buildYoYComparison(metricMk, dispCurr) {
+  const [y, m] = metricMk.split('-').map(Number);
+  const lastYearMk = `${y-1}-${String(m).padStart(2,'0')}`;
+  const curr = getMonthTotals(metricMk);
+  const lastYear = getMonthTotals(lastYearMk);
+  // Need both periods to have data
+  if ((curr.income === 0 && curr.expense === 0) || (lastYear.income === 0 && lastYear.expense === 0)) return '';
+  const incChg = lastYear.income > 0 ? ((curr.income - lastYear.income) / lastYear.income * 100) : null;
+  const expChg = lastYear.expense > 0 ? ((curr.expense - lastYear.expense) / lastYear.expense * 100) : null;
+  const monthLabel = new Date(y, m-1, 1).toLocaleString('en', {month:'long'});
+  const maxVal = Math.max(curr.income, curr.expense, lastYear.income, lastYear.expense, 1);
+  const bar = (val, color, label) => `<div style="flex:1;text-align:center">
+    <div style="height:60px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px">
+      <div style="width:32px;background:${color};border-radius:3px 3px 0 0;height:${(val/maxVal*100).toFixed(1)}%;min-height:3px;opacity:0.85"></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;font-weight:600">${fmt(val, dispCurr)}</div>
+    <div style="font-size:10px;color:var(--text4);margin-top:1px">${label}</div>
+  </div>`;
+  const chgBadge = (chg) => chg === null ? '' : `<span style="font-size:11px;font-weight:600;color:${chg>=0?'var(--green)':'var(--red)'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(0)}%</span>`;
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📆 vs ${monthLabel} ${y-1}</div>
+    <div style="display:flex;gap:6px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-align:center">Income ${chgBadge(incChg)}</div>
+        <div style="display:flex;gap:6px">
+          ${bar(lastYear.income, 'var(--text4)', `${y-1}`)}
+          ${bar(curr.income, 'var(--green)', `${y}`)}
+        </div>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-align:center">Expense ${chgBadge(expChg)}</div>
+        <div style="display:flex;gap:6px">
+          ${bar(lastYear.expense, 'var(--text4)', `${y-1}`)}
+          ${bar(curr.expense, 'var(--red)', `${y}`)}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── 13. Income Diversification ───
+function buildIncomeDiversification(metricMk, dispCurr) {
+  const [y, m] = metricMk.split('-').map(Number);
+  // 6-month rolling income window
+  const incomes = {}; // {category: total}
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(y, m-1-i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    // Include all income txs, plus PLS #47 gain/loss settlements (real FX arbitrage income)
+    // Note: _ovTxsForMonth excludes settlements, so we add them separately
+    const baseTxs = _ovTxsForMonth(k).filter(t => t.type === 'income');
+    const gainTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
+      (t.isLoanSettlementGain || t.isReimbSettlementGain) && t.type === 'income');
+    const lossTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
+      (t.isLoanSettlementLoss || t.isReimbSettlementLoss));
+    // Process regular income
+    for (const tx of baseTxs) {
+      const cat = getCategoryDisplay(tx.categoryId);
+      const name = cat.name.replace(/^[^ ]+ /,'');
+      if (!incomes[name]) incomes[name] = {total: 0, icon: cat.icon};
+      const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
+      incomes[name].total += amt;
+    }
+    // Add FX arbitrage gains as a dedicated source (PLS #47)
+    let fxGains = 0;
+    for (const tx of gainTxs) {
+      fxGains += tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
+    }
+    if (fxGains > 0) {
+      if (!incomes['FX Arbitrage']) incomes['FX Arbitrage'] = {total: 0, icon: '📈'};
+      incomes['FX Arbitrage'].total += fxGains;
+    }
+  }
+  const entries = Object.entries(incomes).sort((a,b) => b[1].total - a[1].total);
+  if (entries.length === 0) return '';
+  const total = entries.reduce((s, [,v]) => s + v.total, 0);
+  if (total === 0) return '';
+  const topPct = (entries[0][1].total / total * 100);
+  // Concentration risk score
+  let risk, riskColor, riskLabel;
+  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; riskLabel = 'Single source dependency'; }
+  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Moderate concentration'; }
+  else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-diversified'; }
+  const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15'];
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🌐 Income Diversification</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:600;color:${riskColor}">${risk} risk</div>
+        <div style="font-size:10px;color:var(--text4)">${riskLabel}</div>
+      </div>
+    </div>
+    <div style="display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:10px">
+      ${entries.map(([name, v], i) => {
+        const pct = (v.total / total * 100);
+        const color = colors[i % colors.length];
+        return `<div style="width:${pct}%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>`;
+      }).join('')}
+    </div>
+    ${entries.slice(0, 4).map(([name, v], i) => {
+      const pct = (v.total / total * 100);
+      const color = colors[i % colors.length];
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:2px;background:${color}"></div>${v.icon||'•'} ${name}</div>
+        <div style="font-family:var(--mono);color:var(--text3)">${pct.toFixed(0)}% · ${fmt(v.total, dispCurr)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── 14. Goal Progress (uses contracts/savings goals if any) ───
+function buildGoalProgress(dispCurr) {
+  // Look for active contract with target amount
+  const activeContract = (db.contracts || []).find(c => c.id === db.activeContractId);
+  if (!activeContract || !activeContract.targetAmount) return '';
+  const target = activeContract.targetAmount;
+  // Sum savings linked to this contract via buckets
+  const linkedBuckets = (db.buckets || []).filter(b => activeContract.bucketIds && activeContract.bucketIds.includes(b.id));
+  if (linkedBuckets.length === 0) return '';
+  let actual = 0;
+  for (const bucket of linkedBuckets) {
+    const acct = db.accounts.find(a => a.id === bucket.accountId);
+    if (!acct || acct.archived) continue;
+    const bal = getAcctBalance(acct.id);
+    actual += acct.currency === dispCurr ? bal : convert(bal, acct.currency, dispCurr);
+  }
+  if (actual <= 0) return '';
+  const pct = Math.min(100, (actual / target * 100));
+  // Contract dates for trajectory
+  const startDate = activeContract.startDate ? new Date(activeContract.startDate) : null;
+  const endDate = activeContract.endDate ? new Date(activeContract.endDate) : null;
+  let timeProgress = null;
+  if (startDate && endDate) {
+    const totalDays = (endDate - startDate) / (1000*60*60*24);
+    const elapsed = (new Date() - startDate) / (1000*60*60*24);
+    timeProgress = Math.max(0, Math.min(100, (elapsed / totalDays * 100)));
+  }
+  const onTrack = timeProgress === null || pct >= timeProgress - 5;
+  const statusColor = onTrack ? 'var(--green)' : 'var(--amber)';
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🎯 Savings Goal</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${activeContract.location || 'Contract'} target</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700">${pct.toFixed(0)}%</div>
+        <div style="font-size:11px;color:${statusColor}">${onTrack ? '✓ on track' : '⚠ behind'}</div>
+      </div>
+    </div>
+    <div style="height:10px;background:var(--bg3);border-radius:5px;overflow:hidden;margin-bottom:8px;position:relative">
+      <div style="width:${pct}%;height:100%;background:var(--accent);transition:width 0.4s"></div>
+      ${timeProgress !== null ? `<div style="position:absolute;left:${timeProgress}%;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:0.4" title="Time elapsed"></div>` : ''}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+      <span style="font-family:var(--mono);font-weight:500">${fmt(actual, dispCurr)} / ${fmt(target, dispCurr)}</span>
+      ${timeProgress !== null ? `<span>${timeProgress.toFixed(0)}% time elapsed</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ─── 15. Account Concentration Risk ───
+function buildConcentrationRisk(dispCurr) {
+  // Group active liquid accounts by type, exclude credit cards & investments
+  const accts = db.accounts.filter(a => !a.archived && !['Credit Card', 'Investment'].includes(a.type));
+  if (accts.length < 2) return '';
+  const balances = accts.map(a => {
+    const bal = getAcctBalance(a.id);
+    const inDisp = a.currency === dispCurr ? bal : convert(bal, a.currency, dispCurr);
+    return {name: a.name, type: a.type, balance: inDisp};
+  }).filter(a => a.balance > 0).sort((b, c) => c.balance - b.balance);
+  if (balances.length < 2) return '';
+  const total = balances.reduce((s, a) => s + a.balance, 0);
+  if (total === 0) return '';
+  const topAcct = balances[0];
+  const topPct = (topAcct.balance / total * 100);
+  let risk, riskColor, riskLabel;
+  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; riskLabel = 'Single point of failure'; }
+  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Consider diversifying'; }
+  else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-distributed'; }
+  const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15', '#e879f9'];
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🏦 Account Concentration</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${topPct.toFixed(0)}% in ${topAcct.name}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:600;color:${riskColor}">${risk}</div>
+        <div style="font-size:10px;color:var(--text4)">${riskLabel}</div>
+      </div>
+    </div>
+    <div style="display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:10px">
+      ${balances.slice(0, 7).map((a, i) => {
+        const pct = (a.balance / total * 100);
+        return `<div style="width:${pct}%;background:${colors[i % colors.length]};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600" title="${a.name}: ${fmt(a.balance, dispCurr)}">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>`;
+      }).join('')}
+    </div>
+    ${balances.slice(0, 4).map((a, i) => {
+      const pct = (a.balance / total * 100);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="width:8px;height:8px;border-radius:2px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span></div>
+        <div style="font-family:var(--mono);color:var(--text3);flex-shrink:0;margin-left:8px">${pct.toFixed(0)}%</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── 16. Spending Distribution Histogram ───
+function buildSpendingDistribution(metricMk, dispCurr) {
+  const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
+  if (txs.length < 10) return '';
+  // Bucket sizes: <100, 100-500, 500-1k, 1k-2k, 2k-5k, 5k+
+  const buckets = [
+    {min: 0, max: 100, label: '<100', count: 0, total: 0},
+    {min: 100, max: 500, label: '100-500', count: 0, total: 0},
+    {min: 500, max: 1000, label: '500-1K', count: 0, total: 0},
+    {min: 1000, max: 2000, label: '1-2K', count: 0, total: 0},
+    {min: 2000, max: 5000, label: '2-5K', count: 0, total: 0},
+    {min: 5000, max: Infinity, label: '5K+', count: 0, total: 0}
+  ];
+  for (const tx of txs) {
+    const amt = _ovExpAmt(tx, dispCurr);
+    for (const b of buckets) {
+      if (amt >= b.min && amt < b.max) { b.count++; b.total += amt; break; }
+    }
+  }
+  const totalCount = buckets.reduce((s, b) => s + b.count, 0);
+  if (totalCount === 0) return '';
+  const totalSpent = buckets.reduce((s, b) => s + b.total, 0);
+  const maxCount = Math.max(...buckets.map(b => b.count), 1);
+  // Find dominant bucket
+  const dominant = buckets.reduce((best, b) => b.count > best.count ? b : best, buckets[0]);
+  return `<div class="card" style="padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 Transaction Sizes</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(dominant.count/totalCount*100).toFixed(0)}% of txns are ${dominant.label}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:14px;font-weight:600">${totalCount}</div>
+        <div style="font-size:10px;color:var(--text4)">transactions</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px">
+      ${buckets.map(b => {
+        const h = b.count > 0 ? Math.max(8, (b.count / maxCount) * 56) : 4;
+        const isDom = b === dominant;
+        const pct = totalCount > 0 ? (b.count / totalCount * 100) : 0;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${b.count} txns · ${fmt(b.total, dispCurr)}">
+          <div style="font-size:10px;color:var(--text4);font-weight:${isDom?'600':'400'}">${pct >= 8 ? pct.toFixed(0)+'%' : ''}</div>
+          <div style="width:100%;height:${h}px;background:${isDom ? 'var(--accent)' : 'var(--text3)'};opacity:${isDom ? '1' : '0.6'};border-radius:3px 3px 0 0"></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:4px;font-size:10px;color:var(--text4)">
+      ${buckets.map(b => `<div style="flex:1;text-align:center">${b.label}</div>`).join('')}
+    </div>
   </div>`;
 }
 
@@ -11720,6 +12676,183 @@ function renderAnalyticsWealth() {
   </div>`;
 }
 
+
+function renderAnalyticsInvestments() {
+  const dispCurr = db.displayCurrency || 'PHP';
+  const all = (db.investments || []).filter(i => !i.archived);
+  const active = all.filter(i => i.status !== 'sold');
+  const sold = all.filter(i => i.status === 'sold');
+
+  if (all.length === 0) {
+    return `<div class="empty-state page-pad"><div class="empty-icon">📈</div><div class="empty-text">No investments yet</div><div class="empty-sub">Track stocks, crypto, mutual funds, and more.</div><button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="nav('investments')">Go to Investments →</button></div>`;
+  }
+
+  // ── Compute totals (display currency) ──
+  let totalInvested = 0, totalCurrent = 0, totalRealizedGL = 0;
+  active.forEach(i => {
+    const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
+    const curVal = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+    totalInvested += inv;
+    totalCurrent += curVal;
+  });
+  sold.forEach(i => {
+    const gl = i.realizedGL || 0;
+    const glConv = i.currency === dispCurr ? gl : convert(gl, i.currency, dispCurr);
+    totalRealizedGL += glConv;
+  });
+  const unrealizedGL = totalCurrent - totalInvested;
+  const unrealizedPct = totalInvested > 0 ? (unrealizedGL / totalInvested * 100) : 0;
+  const totalReturnPct = totalInvested > 0 ? ((unrealizedGL + totalRealizedGL) / totalInvested * 100) : 0;
+
+  // ── By-type allocation ──
+  const byType = {};
+  active.forEach(i => {
+    const curVal = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+    const t = i.type || 'Other';
+    if (!byType[t]) byType[t] = { total: 0, count: 0, invested: 0 };
+    byType[t].total += curVal;
+    byType[t].count++;
+    const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
+    byType[t].invested += inv;
+  });
+  const typeEntries = Object.entries(byType).sort((a,b) => b[1].total - a[1].total);
+  const typeColors = {
+    'Stocks':'#a78bfa','Crypto':'#fb923c','Bonds':'#60a5fa','Mutual Fund':'#34d399',
+    'Time Deposit':'#facc15','Real Estate':'#f472b6','Cooperative':'#e879f9',
+    'Corporation':'#4ade80','Land Ownership':'#94a3b8','Other':'#64748b'
+  };
+
+  // ── Allocation bar ──
+  const allocationBar = totalCurrent > 0 ? typeEntries.map(([t, v]) => {
+    const pct = (v.total / totalCurrent * 100);
+    const color = typeColors[t] || '#94a3b8';
+    return `<div style="background:${color};width:${pct}%;height:100%" title="${t}: ${pct.toFixed(1)}%"></div>`;
+  }).join('') : '';
+
+  // ── Type cards ──
+  const typeCards = typeEntries.map(([t, v]) => {
+    const color = typeColors[t] || '#94a3b8';
+    const gl = v.total - v.invested;
+    const glClass = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
+    const glPct = v.invested > 0 ? (gl / v.invested * 100) : 0;
+    const allocPct = totalCurrent > 0 ? (v.total / totalCurrent * 100) : 0;
+    return `<div class="card" style="padding:12px;border-left:3px solid ${color}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600">${t}</div>
+        <div style="font-size:11px;color:var(--text4)">${v.count} · ${allocPct.toFixed(0)}%</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:15px;font-weight:600">${fmt(v.total, dispCurr)}</div>
+      ${gl !== 0 ? `<div class="${glClass}" style="font-size:11px;font-family:var(--mono);margin-top:2px">${gl > 0 ? '+' : ''}${fmt(gl, dispCurr)} (${gl > 0 ? '+' : ''}${glPct.toFixed(1)}%)</div>` : `<div style="font-size:11px;color:var(--text4);margin-top:2px">No change</div>`}
+    </div>`;
+  }).join('');
+
+  // ── Top performers (by % gain) ──
+  const performers = active
+    .map(i => {
+      const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
+      const cur = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+      const gl = cur - inv;
+      const pct = inv > 0 ? (gl / inv * 100) : 0;
+      return { ...i, _inv: inv, _cur: cur, _gl: gl, _pct: pct };
+    })
+    .filter(i => i._gl !== 0)
+    .sort((a, b) => b._pct - a._pct);
+  const topGainers = performers.filter(p => p._gl > 0).slice(0, 3);
+  const topLosers = performers.filter(p => p._gl < 0).slice(-3).reverse();
+
+  const perfRow = (p) => {
+    const glClass = p._gl > 0 ? 'tx-pos' : 'tx-neg';
+    return `<div class="list-row" onclick="openInvDetail('${p.id}')">
+      <div class="list-row-meta">
+        <div class="list-row-title">${p.name}</div>
+        <div class="list-row-sub">${p.type}</div>
+      </div>
+      <div class="list-row-right">
+        <div class="list-row-amt ${glClass}">${p._gl > 0 ? '+' : ''}${p._pct.toFixed(1)}%</div>
+        <div class="list-row-date">${p._gl > 0 ? '+' : ''}${fmt(p._gl, dispCurr)}</div>
+      </div>
+    </div>`;
+  };
+
+  return `<div class="page-pad">
+    <!-- Hero summary card -->
+    <div class="card" style="padding:16px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Portfolio Value</div>
+      <div style="font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-0.02em">${fmt(totalCurrent, dispCurr)}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">Invested ${fmt(totalInvested, dispCurr)} · ${active.length} active</div>
+      ${totalCurrent > 0 ? `<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:14px;background:var(--bg3)">${allocationBar}</div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+        ${typeEntries.map(([t,v]) => {
+          const color = typeColors[t] || '#94a3b8';
+          const pct = totalCurrent > 0 ? (v.total / totalCurrent * 100) : 0;
+          return `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:2px;background:${color}"></div>${t} ${pct.toFixed(0)}%</div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Metric cards -->
+    <div class="fr4-resp" style="margin-bottom:14px">
+      <div class="metric-card">
+        <div class="metric-label">UNREALIZED G/L</div>
+        <div class="metric-value ${unrealizedGL > 0 ? 'tx-pos' : unrealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${unrealizedGL >= 0 ? '+' : ''}${fmt(unrealizedGL, dispCurr)}</div>
+        <div style="font-size:11px;color:var(--text4)">${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(1)}% paper</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">REALIZED G/L</div>
+        <div class="metric-value ${totalRealizedGL > 0 ? 'tx-pos' : totalRealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${totalRealizedGL >= 0 ? '+' : ''}${fmt(totalRealizedGL, dispCurr)}</div>
+        <div style="font-size:11px;color:var(--text4)">${sold.length} sold</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">TOTAL RETURN</div>
+        <div class="metric-value ${totalReturnPct > 0 ? 'tx-pos' : totalReturnPct < 0 ? 'tx-neg' : 'tx-neu'}">${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(1)}%</div>
+        <div style="font-size:11px;color:var(--text4)">paper + realized</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">DIVERSITY</div>
+        <div class="metric-value">${typeEntries.length}</div>
+        <div style="font-size:11px;color:var(--text4)">asset types</div>
+      </div>
+    </div>
+
+    <!-- Allocation by type -->
+    ${typeEntries.length > 0 ? `<div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Allocation by Type</div>
+    <div class="form-row fr2" style="margin-bottom:14px">${typeCards}</div>` : ''}
+
+    <!-- Top movers -->
+    ${(topGainers.length > 0 || topLosers.length > 0) ? `
+    <div class="form-row fr2">
+      ${topGainers.length > 0 ? `<div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">📈 Top Gainers</div>
+        <div class="list-card">${topGainers.map(perfRow).join('')}</div>
+      </div>` : ''}
+      ${topLosers.length > 0 ? `<div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">📉 Top Losers</div>
+        <div class="list-card">${topLosers.map(perfRow).join('')}</div>
+      </div>` : ''}
+    </div>` : ''}
+
+    <!-- Sold history -->
+    ${sold.length > 0 ? `<div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Realized History (${sold.length})</div>
+      <div class="list-card list-row-archived">
+        ${sold.sort((a,b)=>(b.soldDate||'').localeCompare(a.soldDate||'')).map(s => {
+          const gl = s.realizedGL || 0;
+          const glClass = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
+          return `<div class="list-row" onclick="openInvDetail('${s.id}')">
+            <div class="list-row-meta">
+              <div class="list-row-title">${s.name}</div>
+              <div class="list-row-sub">${s.type} · Sold ${s.soldDate ? fmtD(s.soldDate) : ''}</div>
+            </div>
+            <div class="list-row-right">
+              <div class="list-row-amt ${glClass}">${gl >= 0 ? '+' : ''}${fmt(gl, s.currency)}</div>
+              <div class="list-row-date">realized</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+  </div>`;
+}
 
 function renderAnalyticsForex() {
   const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
