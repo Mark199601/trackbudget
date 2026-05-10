@@ -2749,8 +2749,11 @@ function renderDashboard() {
     metrics: metricsHTML,
     pulse: (()=>{
       const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today());
-      const todayIncA = todayTxsA.filter(t=>t.type==='income'&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
-      const todayExpA = todayTxsA.filter(t=>(t.type==='expense'||t.type==='shared')&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      // Sum in PHP for math accuracy, then convert to display currency for rendering
+      const todayIncPhp = todayTxsA.filter(t=>t.type==='income'&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      const todayExpPhp = todayTxsA.filter(t=>(t.type==='expense'||t.type==='shared')&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      const todayIncA = fromPhp(todayIncPhp, disp);
+      const todayExpA = fromPhp(todayExpPhp, disp);
       const todayNetA = todayIncA - todayExpA;
       if (!todayTxsA.length) return '';
       const netCls = todayNetA>0?'var(--green)':todayNetA<0?'var(--red)':'var(--text3)';
@@ -5329,6 +5332,7 @@ let _txTab = 'log';
 let _txFilter = 'all';
 let _txMonth = currMonthKey();
 let _txAcctFilter = 'all'; // account filter
+let _txBudgetFilter = 'all'; // budget/location filter — matches by currency
 let _txFilterPanelOpen = false; // funnel panel open state
 let _txSort = 'newest'; // newest | oldest | amount_asc | amount_desc
 let _txQuickFilter = null; // C9: null | 'large' | 'foreign' | 'nonotes' | 'recurring'
@@ -5486,6 +5490,14 @@ function renderTxLog() {
       const matchAcct = t.accountId === _txAcctFilter || t.fromAccountId === _txAcctFilter || t.toAccountId === _txAcctFilter;
       if (!matchAcct) return false;
     }
+    // Budget/location filter — match by currency (budgets are tied to a location's currency)
+    if (_txBudgetFilter !== 'all') {
+      const bgt = (db.budgets||[]).find(b => b.id === _txBudgetFilter);
+      if (!bgt) return false;
+      // Match expense+shared txs by currency. Only include actual spending (not transfers between accounts of same currency)
+      if (t.type !== 'expense' && t.type !== 'shared') return false;
+      if (t.currency !== bgt.currency) return false;
+    }
     return true;
   }).sort((a,b) => {
     if (_txSort === 'oldest') return a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||'');
@@ -5543,6 +5555,7 @@ function renderTxLog() {
   const activeFilterCount = [
     _txFilter !== 'all', _txAcctFilter !== 'all',
     !!_txQuickFilter, _txSort !== 'newest',
+    _txBudgetFilter !== 'all',
     !!(window._txDateFrom||window._txDateTo),
   ].filter(Boolean).length;
 
@@ -5563,6 +5576,10 @@ function renderTxLog() {
   if (_txQuickFilter) {
     const map = {large:'Large',foreign:'Foreign',nonotes:'No Notes'};
     activePills.push({key:'qf', label:map[_txQuickFilter]||_txQuickFilter, action:`setTxQuickFilter(null)`});
+  }
+  if (_txBudgetFilter !== 'all') {
+    const bgt = (db.budgets||[]).find(b => b.id === _txBudgetFilter);
+    if (bgt) activePills.push({key:'budget', label:`📍 ${bgt.location}`, action:`setTxBudgetFilter('all')`});
   }
   if (_txSort !== 'newest') {
     const sortMap = {oldest:'Oldest',amount_desc:'Amount ↓',amount_asc:'Amount ↑'};
@@ -5597,6 +5614,16 @@ function renderTxLog() {
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Account</div>
         <select class="form-input" style="width:100%;padding:7px 12px;font-size:13px" onchange="setTxAcctFilter(this.value)">${acctOpts2}</select>
       </div>
+      ${(db.budgets||[]).filter(b=>b.active).length > 0 ? `<div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Budget / Location</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <div onclick="setTxBudgetFilter('all')" style="padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid ${_txBudgetFilter==='all'?'var(--accent)':'var(--border2)'};background:${_txBudgetFilter==='all'?'var(--accent-bg)':'var(--bg3)'};color:${_txBudgetFilter==='all'?'var(--accent)':'var(--text2)'};white-space:nowrap">Any</div>
+          ${(db.budgets||[]).filter(b=>b.active).map(b => {
+            const flag = b.location.toLowerCase().includes('philippin') ? '🇵🇭' : b.location.toLowerCase().includes('papua') ? '🇵🇬' : '📍';
+            return `<div onclick="setTxBudgetFilter('${b.id}')" style="padding:5px 12px;border-radius:var(--r-full);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid ${_txBudgetFilter===b.id?'var(--accent)':'var(--border2)'};background:${_txBudgetFilter===b.id?'var(--accent-bg)':'var(--bg3)'};color:${_txBudgetFilter===b.id?'var(--accent)':'var(--text2)'};white-space:nowrap">${flag} ${b.location} (${b.currency})</div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
 
       <!-- Advanced: collapsible -->
       <div style="border-top:1px dashed var(--border);padding-top:10px;margin-top:2px">
@@ -5662,6 +5689,7 @@ function renderTxLog() {
 function clearAllTxFilters() {
   _txFilter = 'all';
   _txAcctFilter = 'all';
+  _txBudgetFilter = 'all';
   _txQuickFilter = null;
   _txSort = 'newest';
   window._txDateFrom = null;
@@ -5748,6 +5776,7 @@ document.addEventListener('click', function(e) {
 function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactions(); }
 function setTxMonth(m) { _txMonth = m; _txQuickFilter = null; renderTransactions(); }
 function setTxAcctFilter(a) { _txAcctFilter = a; renderTransactions(); }
+function setTxBudgetFilter(v) { _txBudgetFilter = v; renderTransactions(); }
 function setTxSort(s) { _txSort = s; renderTransactions(); }
 function toggleTxAdvanced() {
   window._txAdvancedOpen = !window._txAdvancedOpen;
@@ -12323,17 +12352,21 @@ function renderSpendingHeatmap(disp) {
   };
   const todayDate = new Date();
   const todayKey = localDateKey(todayDate);
-  // 53 weeks × 7 days = 371 cells, we'll align so today is in the rightmost column
-  const NUM_WEEKS = 53;
-  const totalDays = NUM_WEEKS * 7;
-  // Compute end date (today) and start date
-  const endDate = new Date(todayDate);
-  // Align end of grid to next Saturday so today's row is complete
-  const dayOfWeek = endDate.getDay(); // 0 = Sunday
-  const daysToEnd = 6 - dayOfWeek; // pad to next Saturday
-  endDate.setDate(endDate.getDate() + daysToEnd);
-  const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - totalDays + 1);
+  // Calendar-anchored: span = first day of (current month - 11) to last day of current month
+  // Pag June 2026, ang range = June 1, 2025 to June 30, 2026 (full 12 months including current)
+  const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth() - 11, 1);
+  const monthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0); // last day of current month
+  // Pad start back to nearest Sunday so grid begins cleanly on Sunday row
+  const startDate = new Date(monthStart);
+  const startDow = startDate.getDay(); // 0 = Sunday
+  startDate.setDate(startDate.getDate() - startDow);
+  // Pad end forward to nearest Saturday so grid ends cleanly on Saturday row
+  const endDate = new Date(monthEnd);
+  const endDow = endDate.getDay();
+  endDate.setDate(endDate.getDate() + (6 - endDow));
+  // Compute number of weeks needed
+  const totalDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  const NUM_WEEKS = totalDays / 7;
 
   // Aggregate expenses per day (in display currency)
   const dayMap = {};
@@ -12422,8 +12455,8 @@ function renderSpendingHeatmap(disp) {
     } else break;
   }
 
-  const cellSize = 11; // px
-  const cellGap = 2;
+  const cellSize = 14; // px — bigger for mobile readability
+  const cellGap = 3;
   const colWidth = cellSize + cellGap;
   const rowHeight = cellSize + cellGap;
   const gridWidth = NUM_WEEKS * colWidth;
