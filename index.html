@@ -1741,6 +1741,8 @@ function getMonthTotals(monthKey) {
     // Gain/Loss INCLUDED: real income/expense from FX arbitrage on settlements
     // ── PERSONAL LOGIC SET #47 ── Gain/Loss INCLUDED in monthly income/expense: isReimbSettlementGain/Loss + isLoanSettlementGain/Loss are real FX arbitrage earnings/losses (Mark prices lower exchange rate to profit). isAutoReimb batch settlement parents still excluded (accounts receivable, not income).
     if (t.isAutoReimb && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
+    // PLS #46: isFeeReimbursable is tracking-only shared tx, fee already counted via isAutoFee parent
+    if (t.isFeeReimbursable) continue;
     // isInvestmentFund = type:'transfer' — already excluded from monthly totals via transfer type filter
     // isInvestmentReturn = real income when investment sold — included
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
@@ -2085,6 +2087,8 @@ function npRender() {
   const resEl = document.getElementById('np-result');
   if (!exprEl || !resEl) return;
   exprEl.textContent = _npExpr || '0';
+  // Auto-scroll to end so latest character is visible (replaces RTL hack)
+  exprEl.scrollLeft = exprEl.scrollWidth;
   // Live eval preview
   try {
     const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
@@ -2330,7 +2334,7 @@ function generateInsights() {
   // Budget pace
   for (const bgt of db.budgets.filter(b=>b.active)) {
     const spent = db.transactions.filter(t=>
-      !t.archived && !t.isSettlement && !t.isLoanTx && t.date && t.date.startsWith(mk) &&
+      !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && t.date && t.date.startsWith(mk) &&
       (t.type==='expense'||t.type==='shared') &&
       t.currency===bgt.currency
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
@@ -2574,7 +2578,7 @@ function renderDashboard() {
     const rollover = bgt?.rollover ? (bgt?.rolloverAmount||0) : 0;
     const limit = rawLimit + rollover; // effectiveLimit includes rollover
     const spent = db.transactions.filter(t=>
-      !t.archived && !t.isSettlement && !t.isLoanTx && t.date && t.date.startsWith(mk) &&
+      !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && t.date && t.date.startsWith(mk) &&
       (t.type==='expense'||t.type==='shared') &&
       t.currency===curr
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
@@ -2748,10 +2752,12 @@ function renderDashboard() {
     alerts: '',
     metrics: metricsHTML,
     pulse: (()=>{
-      const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today());
+      // Filter to real income/expense only — exclude tracking flags per PLS rules
+      const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today() &&
+        !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund);
       // Sum in PHP for math accuracy, then convert to display currency for rendering
-      const todayIncPhp = todayTxsA.filter(t=>t.type==='income'&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
-      const todayExpPhp = todayTxsA.filter(t=>(t.type==='expense'||t.type==='shared')&&!t.isLoanTx).reduce((s,t)=>s+txToPhp(t),0);
+      const todayIncPhp = todayTxsA.filter(t=>t.type==='income').reduce((s,t)=>s+txToPhp(t),0);
+      const todayExpPhp = todayTxsA.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+txToPhp(t),0);
       const todayIncA = fromPhp(todayIncPhp, disp);
       const todayExpA = fromPhp(todayExpPhp, disp);
       const todayNetA = todayIncA - todayExpA;
@@ -17427,7 +17433,7 @@ function aiBudgetIntelligence() {
         if (limAmt <= 0) continue;
         const cat = db.categories.expense.find(c=>c.id===catId);
         if (!cat) continue;
-        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{
           const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
           if (!txCat || txCat.id !== catId) return s;
           return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
@@ -17851,6 +17857,7 @@ function aiAccountBalanceAlert() {
       !t.archived && t.accountId === acct.id && 
       (t.type === 'expense' || t.type === 'shared') &&
       !t.isSettlement && !t.isLoanSettlementLoss && !t.isReimbSettlementLoss &&
+      !t.isAutoReimb && !t.isFeeReimbursable &&
       new Date(t.date) >= thirtyAgo
     );
     if (recent.length < 3) continue;
