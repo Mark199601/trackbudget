@@ -1981,6 +1981,35 @@ function openDlg(title, html, footer='') {
 }
 function closeDlg() { document.getElementById('dlg-overlay').classList.remove('open'); }
 
+// ── PERSONAL LOGIC SET ── Overview widget info tooltips: tap ⓘ icon shows plain-English definition
+const _WIDGET_INFO = {
+  'velocity': {title:'⏱ Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.'},
+  'runway': {title:'🛟 Cashflow Runway', body:'How many <b>months your cash can last</b> at your current spending rate, broken down per account. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
+  'anomaly': {title:'⚡ Unusual Transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
+  'forecast': {title:'🔮 Month-End Forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
+  'subscription': {title:'🔁 Recurring Commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection — useful for spotting "money leaks."'},
+  'savings': {title:'💰 Savings Rate Trend', body:'Your <b>savings rate</b> = (income − expense) ÷ income, shown over the last 6 months. A rising line means you\'re saving more of what you earn. Compares current month vs the previous one.'},
+  'fixed': {title:'⚖️ Fixed vs Discretionary', body:'Splits your expenses into <b>Fixed</b> (rent, bills, subscriptions — hard to change) and <b>Discretionary</b> (dining, shopping — easier to control). The discretionary % is what you can actually adjust to save more.'},
+  'pareto': {title:'📊 80/20 Analysis', body:'Identifies the few <b>categories that make up 80% of your spending</b>. Based on the Pareto principle — usually 20% of your categories drive 80% of your expense. Focus optimization here for biggest impact.'},
+  'dow': {title:'📅 Day-of-Week Pattern', body:'Shows your <b>average spending per day of the week</b> over the last 90 days. Reveals patterns — e.g. "Friday is your highest spending day." Useful for habit awareness.'},
+  'frequent': {title:'🔁 Most Frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total — shows where small habits add up.'},
+  'timeofday': {title:'🕐 Time-of-Day Pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven — this widget helps you spot if that\'s happening.'},
+  'distribution': {title:'📊 Transaction Sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are ₱100–500." Reveals your spending "zones" and shopping habits.'},
+  'yoy': {title:'📆 Year-on-Year', body:'Compares this month to the <b>same month last year</b>, side by side. Shows whether you\'re spending more, less, or the same vs your past self. Only appears if you have data from that period.'},
+  'income-div': {title:'🌐 Income Diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
+  'goal': {title:'🎯 Savings Goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
+  'concentration': {title:'🏦 Account Concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
+};
+function _widgetInfo(key) {
+  const def = _WIDGET_INFO[key];
+  if (!def) return;
+  openDlg(def.title, `<div style="font-size:14px;line-height:1.55;color:var(--text2);padding:4px 2px">${def.body}</div>`, `<button class="btn btn-primary" onclick="closeDlg()">Got it</button>`);
+}
+// Reusable info button HTML — small ⓘ that taps to show definition
+function _infoBtn(key) {
+  return `<span onclick="_widgetInfo('${key}')" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--bg3);color:var(--text3);font-size:10px;font-weight:600;cursor:pointer;margin-left:6px;user-select:none;font-family:Georgia,serif;font-style:italic" title="What is this?">i</span>`;
+}
+
 // Wire up close buttons — use addEventListener for reliability
 // ════════════════════════════════════════════════════════════
 // CUSTOM NUMPAD ENGINE
@@ -11162,7 +11191,7 @@ function buildVelocityGauge(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⏱ Spending Velocity</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⏱ Spending Velocity${_infoBtn('velocity')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Day ${dayOfMonth}/${daysInMonth} · ${daysRemaining} ${daysRemaining===1?'day':'days'} left</div>
       </div>
       <div style="text-align:right">
@@ -11216,7 +11245,7 @@ function buildRunwayBar(dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cashflow Runway</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cashflow Runway${_infoBtn('runway')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">If income stops at current burn rate</div>
       </div>
       <div style="text-align:right">
@@ -11267,7 +11296,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   const top = outliers.slice(0, 3);
   if (top.length === 0) return '';
   return `<div class="card" style="padding:14px;margin-bottom:14px">
-    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Unusual Transactions</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Unusual Transactions${_infoBtn('anomaly')}</div>
     ${top.map(o => {
       const catName = o.cat.name.replace(/^[^ ]+ /,'');
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
@@ -11345,7 +11374,7 @@ function buildForecastBand(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔮 Month-End Forecast</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔮 Month-End Forecast${_infoBtn('forecast')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Based on ${histMonths}mo pattern · ±15% confidence</div>
       </div>
       <div style="text-align:right">
@@ -11385,7 +11414,7 @@ function buildSubscriptionPanel(dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Recurring Commitments</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Recurring Commitments${_infoBtn('subscription')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${items.length} active · ${fmt(totalMonthly*12, dispCurr)}/year</div>
       </div>
       <div style="text-align:right">
@@ -11449,7 +11478,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months</div>
       </div>
       <div style="text-align:right">
@@ -11494,7 +11523,7 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⚖️ Fixed vs Discretionary</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⚖️ Fixed vs Discretionary${_infoBtn('fixed')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${discPct.toFixed(0)}% controllable this month</div>
       </div>
     </div>
@@ -11535,7 +11564,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 80/20 Analysis</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 80/20 Analysis${_infoBtn('pareto')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px"><strong>${topCount} of ${entries.length}</strong> categories = 80% of spend</div>
       </div>
     </div>
@@ -11579,7 +11608,7 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📅 Day-of-Week Pattern</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📅 Day-of-Week Pattern${_infoBtn('dow')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${labels[peakIdx]} is your highest spending day</div>
       </div>
     </div>
@@ -11621,7 +11650,7 @@ function buildMostFrequent(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Most Frequent</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Most Frequent${_infoBtn('frequent')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">By transaction count this month</div>
       </div>
     </div>
@@ -11663,7 +11692,7 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🕐 Time-of-Day Pattern</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🕐 Time-of-Day Pattern${_infoBtn('timeofday')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}%)</div>
       </div>
     </div>
@@ -11710,7 +11739,7 @@ function buildYoYComparison(metricMk, dispCurr) {
   </div>`;
   const chgBadge = (chg) => chg === null ? '' : `<span style="font-size:11px;font-weight:600;color:${chg>=0?'var(--green)':'var(--red)'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(0)}%</span>`;
   return `<div class="card" style="padding:14px;margin-bottom:14px">
-    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📆 vs ${monthLabel} ${y-1}</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📆 vs ${monthLabel} ${y-1}${_infoBtn('yoy')}</div>
     <div style="display:flex;gap:6px">
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-align:center">Income ${chgBadge(incChg)}</div>
@@ -11777,7 +11806,7 @@ function buildIncomeDiversification(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🌐 Income Diversification</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🌐 Income Diversification${_infoBtn('income-div')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'}</div>
       </div>
       <div style="text-align:right">
@@ -11835,7 +11864,7 @@ function buildGoalProgress(dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🎯 Savings Goal</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🎯 Savings Goal${_infoBtn('goal')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${activeContract.location || 'Contract'} target</div>
       </div>
       <div style="text-align:right">
@@ -11877,7 +11906,7 @@ function buildConcentrationRisk(dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🏦 Account Concentration</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🏦 Account Concentration${_infoBtn('concentration')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${topPct.toFixed(0)}% in ${topAcct.name}</div>
       </div>
       <div style="text-align:right">
@@ -11929,7 +11958,7 @@ function buildSpendingDistribution(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 Transaction Sizes</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 Transaction Sizes${_infoBtn('distribution')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${(dominant.count/totalCount*100).toFixed(0)}% of txns are ${dominant.label}</div>
       </div>
       <div style="text-align:right">
@@ -17483,7 +17512,10 @@ function aiAnomalyDetection() {
 
 function aiPaydayPredictor() {
   const insights = [];
-  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  // ── PERSONAL LOGIC SET #62 ── payday predictor: only regular recurring income.
+  // Excludes settlement income (loan/reimb payments received, gains/losses) and batch reimb parents
+  // — these are one-time events that distort the salary interval calculation.
+  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoReimb&&!t.isLoanTx&&!t.isLoanPayment).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if (incomeTxs.length < 2) return insights;
   const dates = incomeTxs.map(t=>new Date(t.date));
   const intervals = dates.slice(0,-1).map((d,i)=>Math.round((d-dates[i+1])/(1000*60*60*24)));
