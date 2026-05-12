@@ -3147,22 +3147,37 @@ function confirmBulkRecategorize() {
   showToast(`🏷️ Re-categorized ${updated} transactions`);
 }
 
-// ── PERSONAL LOGIC SET #46 ── isAutoFee with feeReimbSharedTxId: shows nested pill under fee row in tx log (person + amount + Pending/Settled). isFeeReimbursable shared tx hidden from tx log — visible in Reimbursements tab only. Fee always expense; offset by income tx when settled.
+// ── PERSONAL LOGIC SET #46 + #65 ── isAutoFee with feeReimbSharedTxId: shows nested pill (person + amount + Pending/Settled) and when settled, also shows linked reimb income tx (→ +₱X · Reimbursed).
+// User-facing: makita mo agad sa fee row na tabla na sila — fee expense + reimb income = net 0.
 function feeReimbNestedHTML(tx) {
   if (!tx.isAutoFee || !tx.feeReimbSharedTxId) return '';
   const s = db.transactions.find(t => t.id === tx.feeReimbSharedTxId);
   if (!s) return '';
   const person = s.feeReimbPerson || s.personName || '?';
   const ini = person.slice(0,2).toUpperCase();
+  // Find linked reimb income tx (created on settle, has parentId = shared tracking parent id)
+  const reimbIncome = s.settled
+    ? db.transactions.find(t => !t.archived && t.isAutoReimb && t.parentId === s.id && t.type === 'income')
+    : null;
   const pill = s.settled
-    ? '<span class="pill pill-green" style="font-size:9px;padding:1px 6px">Settled \u2713</span>'
+    ? '<span class="pill pill-green" style="font-size:9px;padding:1px 6px">Reimbursed \u2713</span>'
     : '<span class="pill" style="font-size:9px;padding:1px 6px;background:var(--amber-bg);color:var(--amber)">Pending</span>';
-  return '<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;display:flex;align-items:center;justify-content:space-between" onclick="event.stopPropagation();openTxDetail(\'' + s.id + '\')">'
+  let html = '<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="event.stopPropagation();openTxDetail(\'' + s.id + '\')">'
     + '<div style="display:flex;align-items:center;gap:8px">'
     + '<div style="width:24px;height:24px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--accent);flex-shrink:0">' + ini + '</div>'
-    + '<div><div style="font-size:11px;font-weight:500;color:var(--text2)">' + person + ' owes ' + fmt(s.amount, s.currency) + '</div>'
+    + '<div><div style="font-size:11px;font-weight:500;color:var(--text2)">' + person + (s.settled ? ' paid ' : ' owes ') + fmt(s.amount, s.currency) + '</div>'
     + '<div style="font-size:10px;color:var(--text4)">Reimbursable fee</div></div>'
     + '</div><div style="display:flex;align-items:center;gap:6px">' + pill + '</div></div>';
+  // PLS #65: When settled, append the linked income tx row so user sees that fee is offset
+  if (reimbIncome) {
+    const incAmt = '+' + fmt(reimbIncome.amount, reimbIncome.currency);
+    html += '<div style="margin:-4px 12px 8px 60px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r-md);padding:6px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="event.stopPropagation();openTxDetail(\'' + reimbIncome.id + '\')">'
+      + '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px">🔗</span>'
+      + '<div><div style="font-size:11px;font-weight:500;color:var(--text2)">Reimbursed via income tx</div>'
+      + '<div style="font-size:10px;color:var(--text4)">Net effect: 0 (fee offset)</div></div>'
+      + '</div><div style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">' + incAmt + '</div></div>';
+  }
+  return html;
 }
 
 // ── PERSONAL LOGIC SET #51 ── isInvestmentFund tx shows nested pill for isInvestmentReturn child:
@@ -3560,10 +3575,20 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     }
   }
 
+  // PLS #65: Fee reimb income tx shows "🔗 Linked to fee" badge so user sees panabla relationship
+  let linkedBadge = '';
+  if (tx.isAutoReimb && tx.type === 'income' && tx.parentId) {
+    const p = db.transactions.find(x => x.id === tx.parentId);
+    if (p && p.isFeeReimbursable) {
+      // Find the linked isAutoFee expense tx via feeReimbSharedTxId === p.id
+      const feeTx = db.transactions.find(t => t.isAutoFee && t.feeReimbSharedTxId === p.id);
+      linkedBadge = `<span style="font-size:9px;padding:1px 6px;border-radius:99px;background:var(--green-bg);color:var(--green);font-weight:600;margin-left:6px" onclick="event.stopPropagation();${feeTx ? `openTxDetail('${feeTx.id}')` : ''}">🔗 Reimburses fee</span>`;
+    }
+  }
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
-      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))}</div>
+      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))}${linkedBadge}</div>
       <div class="tx-detail">${detail}</div>
     </div>
     <div class="tx-right">
@@ -5452,8 +5477,14 @@ function renderTxLog() {
     // BUT show batch settlement parents (even if isLoanPayment) since they are actual cash movement
     if (t.isLoanPayment && !t.isBatchSettlement && _txFilter !== 'loans') return false;
     // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
-    // BUT show batch reimb settlement parents since they are actual cash movement
-    if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
+    // BUT show: (a) batch reimb settlement parents (actual cash movement)
+    //          (b) PLS #65 — fee reimb income txs (so user sees fee + reimb panabla in tx log)
+    // Fee reimb income tx has parentId pointing to isFeeReimbursable shared tx
+    const _isFeeReimbIncome = t.isAutoReimb && t.type === 'income' && (() => {
+      const p = db.transactions.find(x => x.id === t.parentId);
+      return p && p.isFeeReimbursable;
+    })();
+    if (t.isAutoReimb && !t.isBatchReimbSettlement && !_isFeeReimbIncome) return false;
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
@@ -7377,7 +7408,8 @@ function renderReimbursementsPage() {
 function renderReimbTab() {
   // Build per-person view: each shared tx may have multiple persons.
   // Group by person name, where each (person, tx) entry has its own owed amount.
-  const sharedTxs = db.transactions.filter(t => t.type === 'shared' && !t.archived && !t.settled);
+  // PLS#63 — exclude isFeeReimbursable from Reimbursements UI (tracking-only)
+  const sharedTxs = db.transactions.filter(t => t.type === 'shared' && !t.archived && !t.settled && !t.isFeeReimbursable);
   const persons = {}; // person -> [{tx, owedToMe, paid, remaining}]
 
   for (const tx of sharedTxs) {
@@ -7406,7 +7438,7 @@ function renderReimbTab() {
   }
 
   // Count settled and archived shared txs for the buttons (compute once)
-  const settledCount = db.transactions.filter(t => t.type === 'shared' && !t.archived && t.settled).length;
+  const settledCount = db.transactions.filter(t => t.type === 'shared' && !t.archived && t.settled && !t.isFeeReimbursable).length;
   const archivedCount = (db.archivedTransactions||[]).filter(t => t.type === 'shared').length;
   const topButtons = `<div class="page-pad" style="padding-bottom:0">
     <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -7662,7 +7694,7 @@ function partialSettleReim(person) {
 // Helper: get all unsettled reimbursement entries for a person (each = parent tx + remaining owed)
 function getReimbEntriesForPerson(person) {
   const txs = db.transactions.filter(t =>
-    t.type === 'shared' && !t.archived && !t.settled &&
+    t.type === 'shared' && !t.archived && !t.settled && !t.isFeeReimbursable &&
     (t.sharedWith === person ||
      (t.persons && t.persons.some(p => p.name === person)) ||
      t.personName?.split(', ').includes(person))
@@ -15751,10 +15783,32 @@ function exportXLSX() {
     const today_ = today();
 
     // ── Sheet 1: Transactions ──
+    // PLS #64: xlsx export uses txCategoryDisplay for special flag txs (avoids "Uncategorized" on transfers/loans/corrections/investments).
+    // Falls back to type-based label only if categoryId truly missing.
     const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency','PHP Equivalent','Account','To Account','Notes','Tags']];
+    const typeLabel = {
+      transfer: 'Transfer',
+      remittance: 'Remittance',
+      correction: 'Balance Correction',
+      'external-in': 'External Income',
+      'external-out': 'External Outflow',
+    };
     for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
       if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain) continue; // skip auto-children
-      const cat = getCategoryDisplay(tx.categoryId);
+      // Resolve category: prefer txCategoryDisplay (PLS#48 dedicated labels), else getCategoryDisplay, else type-based fallback
+      let catLabel = '', subLabel = '';
+      const tcd = (typeof txCategoryDisplay === 'function') ? txCategoryDisplay(tx) : null;
+      if (tcd && tcd.name && tcd.name !== 'Uncategorized') {
+        catLabel = tcd.name; subLabel = '';
+      } else {
+        const cat = getCategoryDisplay(tx.categoryId);
+        if (cat && cat.name && cat.name !== 'Uncategorized') {
+          catLabel = cat.name; subLabel = cat.subName || '';
+        } else {
+          // Type-based fallback (avoids "Uncategorized" entirely)
+          catLabel = typeLabel[tx.type] || (tx.type ? tx.type.charAt(0).toUpperCase() + tx.type.slice(1) : 'Other');
+        }
+      }
       const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
       const toAcct = tx.toAccountId ? getAccountDisplay(tx.toAccountId) : '';
       const phpEq = txToPhp(tx);
@@ -15763,11 +15817,14 @@ function exportXLSX() {
         tx.isLoanTx ? 'Loan' : '',
         tx.isLoanPayment ? 'Loan Payment' : '',
         tx.isCorrection ? 'Correction' : '',
+        tx.isInvestmentFund ? 'Investment Fund' : '',
+        tx.isInvestmentReturn ? 'Investment Return' : '',
+        tx.isBatchSettlement ? 'Batch Settlement' : '',
         tx.archived ? 'Archived' : '',
       ].filter(Boolean).join(', ');
       txRows.push([
         tx.date, tx.time || '', tx.type,
-        cat.name || '', cat.subName || '',
+        catLabel, subLabel,
         tx.amount, tx.currency,
         Math.round(phpEq * 100) / 100,
         acct.name || '', toAcct.name || '',
@@ -17532,7 +17589,13 @@ function aiAnomalyDetection() {
 
 function aiPaydayPredictor() {
   const insights = [];
-  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  // PLS #62 — Payday predictor only considers regular income (excludes one-time gains/sales/auto-children)
+  const incomeTxs = db.transactions.filter(t =>
+    t.type==='income' && !t.archived && t.date &&
+    !t.isSettlement && !t.isLoanTx && !t.isLoanPayment &&
+    !t.isLoanSettlementGain && !t.isReimbSettlementGain &&
+    !t.isInvestmentReturn && !t.isAutoReimb && !t.isAutoForex
+  ).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if (incomeTxs.length < 2) return insights;
   const dates = incomeTxs.map(t=>new Date(t.date));
   const intervals = dates.slice(0,-1).map((d,i)=>Math.round((d-dates[i+1])/(1000*60*60*24)));
@@ -17853,7 +17916,7 @@ function aiCashFlowForecast() {
 
 function aiReimbursementNudge() {
   const insights = []; const today = new Date();
-  for (const tx of db.transactions.filter(t=>t.type==='shared'&&!t.archived&&!t.settled)) {
+  for (const tx of db.transactions.filter(t=>t.type==='shared'&&!t.archived&&!t.settled&&!t.isFeeReimbursable)) {
     const days = Math.round((today-new Date(tx.date))/(1000*60*60*24));
     if (days >= 7) {
       const persons = tx.persons?.map(p=>p.name).join(', ')||tx.personName||'someone';
@@ -18307,7 +18370,7 @@ function aiSmartSuggestion() {
   
   // Suggestion 1: Many pending reimbursements
   const pendingReimbs = db.transactions.filter(t => 
-    t.type === 'shared' && !t.archived && !t.settled
+    t.type === 'shared' && !t.archived && !t.settled && !t.isFeeReimbursable
   );
   if (pendingReimbs.length >= 3) {
     let total = 0;
