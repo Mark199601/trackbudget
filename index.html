@@ -3965,6 +3965,8 @@ function renderCatPicker(forType) {
   const usageMap = {};
   for (const tx of db.transactions) {
     if (tx.archived || tx.isSettlement || tx.isAutoForex || tx.isAutoReimb) continue;
+    if (tx.isLoanTx || tx.isLoanPayment) continue;
+    if (tx.isFeeReimbursable || tx.isInvestmentFund) continue;
     if (tx.type !== forType) continue;
     if (!tx.subCategoryId) continue;
     if (tx.date) {
@@ -12378,7 +12380,12 @@ function renderSpendingHeatmap(disp) {
   const dayMap = {};
   for (const tx of db.transactions) {
     if (tx.archived) continue;
-    if (tx.isSettlement || tx.isAutoForex || tx.isAutoReimb) continue;
+    // ── PERSONAL LOGIC SET #53 ── heatmap aggregator aligned with getMonthTotals exclusions
+    if (tx.isSettlement && !tx.isLoanSettlementGain && !tx.isLoanSettlementLoss && !tx.isReimbSettlementGain && !tx.isReimbSettlementLoss) continue;
+    if (tx.isLoanTx || tx.isLoanPayment) continue;
+    if (tx.isAutoForex || tx.isAutoReimb) continue;
+    if (tx.isFeeReimbursable) continue; // PLS#46
+    if (tx.isInvestmentFund) continue;
     if (tx.type !== 'expense' && tx.type !== 'shared') continue;
     if (!tx.date) continue;
     const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
@@ -12570,7 +12577,16 @@ function hideHeatmapTooltip() {
 
 function showHeatmapDay(dateKey) {
   hideHeatmapTooltip();
-  const dayTxs = db.transactions.filter(t => !t.archived && t.date === dateKey && !t.isSettlement && !t.isAutoForex && !t.isAutoReimb)
+  // ── PERSONAL LOGIC SET #53 ── heatmap day tooltip aligned with getMonthTotals exclusions
+  const dayTxs = db.transactions.filter(t => {
+    if (t.archived || t.date !== dateKey) return false;
+    if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) return false;
+    if (t.isLoanTx || t.isLoanPayment) return false;
+    if (t.isAutoForex || t.isAutoReimb) return false;
+    if (t.isFeeReimbursable) return false; // PLS#46
+    if (t.isInvestmentFund) return false;
+    return true;
+  })
     .sort((a,b) => (b.time||'').localeCompare(a.time||''));
   if (dayTxs.length === 0) {
     showToast('No transactions on ' + fmtDFull(dateKey));
@@ -17073,6 +17089,13 @@ function detectRecurring() {
   const catGroups = {};
   for (const tx of db.transactions) {
     if (tx.type !== 'expense' && tx.type !== 'income') continue;
+    // ── PERSONAL LOGIC SET ── recurring detection skips auto-children + investment + loan tx
+    if (tx.archived) continue;
+    if (tx.isSettlement) continue;
+    if (tx.isLoanTx || tx.isLoanPayment) continue;
+    if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee) continue;
+    if (tx.isFeeReimbursable) continue;
+    if (tx.isInvestmentFund || tx.isInvestmentReturn) continue;
     const key = tx.categoryId + ':' + tx.accountId;
     if (!catGroups[key]) catGroups[key] = [];
     catGroups[key].push(tx);
@@ -17271,11 +17294,20 @@ function runAIAnalysis() {
 }
 
 function aiGetMonthsTxs(n) {
+  // ── PERSONAL LOGIC SET ── aiGetMonthsTxs filters auto-children + capital-movement txs
+  // Aligned with getMonthTotals exclusions for accurate budget/spending insights
   const now = new Date();
   return Array.from({length:n},(_,i)=>{
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
     const mk = d.toISOString().slice(0,7);
-    return { month:mk, txs:db.transactions.filter(t=>!t.archived&&t.date&&t.date.startsWith(mk)) };
+    return { month:mk, txs:db.transactions.filter(t=>{
+      if (t.archived || !t.date || !t.date.startsWith(mk)) return false;
+      if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) return false;
+      if (t.isLoanTx || t.isLoanPayment) return false;
+      if (t.isAutoReimb || t.isAutoForex) return false;
+      if (t.isFeeReimbursable || t.isInvestmentFund) return false;
+      return true;
+    }) };
   });
 }
 
@@ -17653,7 +17685,7 @@ function aiSavingsPace() {
 function aiRecurringDetector() {
   const insights = []; const groups = {};
   // Skip auto-generated children (settlement gain/loss, fees, forex) — false positives sa recurring detection
-  for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoForex&&!t.isAutoReimb&&!t.isAutoFee&&!t.isLoanSettlementGain&&!t.isLoanSettlementLoss&&!t.isReimbSettlementGain&&!t.isReimbSettlementLoss)) {
+  for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoForex&&!t.isAutoReimb&&!t.isAutoFee&&!t.isLoanSettlementGain&&!t.isLoanSettlementLoss&&!t.isReimbSettlementGain&&!t.isReimbSettlementLoss&&!t.isLoanTx&&!t.isLoanPayment&&!t.isFeeReimbursable&&!t.isInvestmentFund)) {
     const key = Math.round(t.amount/10)*10+'-'+t.categoryId;
     if (!groups[key]) groups[key]=[];
     groups[key].push(t);
@@ -17768,8 +17800,12 @@ function aiCashFlowForecast() {
   // Skip auto-generated children + already-reimbursed fees from cash flow projection
   const monthTxs = db.transactions.filter(t=>{
     if (t.archived || !t.date || !t.date.startsWith(mk)) return false;
-    if (t.isSettlement || t.isAutoReimb) return false;
+    if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) return false;
+    if (t.isLoanTx || t.isLoanPayment) return false;
+    if (t.isAutoReimb || t.isAutoForex) return false;
+    if (t.isFeeReimbursable || t.isInvestmentFund) return false;
     // Gain/Loss included — real income/expense from FX arbitrage
+    return true;
   });
   const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
   const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
@@ -17858,6 +17894,7 @@ function aiAccountBalanceAlert() {
       (t.type === 'expense' || t.type === 'shared') &&
       !t.isSettlement && !t.isLoanSettlementLoss && !t.isReimbSettlementLoss &&
       !t.isAutoReimb && !t.isFeeReimbursable &&
+      !t.isLoanTx && !t.isLoanPayment && !t.isInvestmentFund &&
       new Date(t.date) >= thirtyAgo
     );
     if (recent.length < 3) continue;
