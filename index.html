@@ -15717,7 +15717,15 @@ function importJSON(event) {
 function replaceImport() {
   if (!window._importedDB) return;
   db = window._importedDB;
-  saveDBWithSync(); closeDlg(); nav('dashboard'); showToast('Data replaced!');
+  // ── PERSONAL LOGIC SET ── force onboarded:true after file-based Replace All import
+  // Prevents app from showing onboarding screen if backup was saved before onboarded:true was set,
+  // or if the backup came from a different build that didn't persist the flag.
+  // Mirrors the same fix applied to confirmLoadDriveBackup() (line ~16566).
+  db.onboarded = true;
+  saveDBWithSync();
+  closeDlg();
+  showToast('✅ Backup loaded! Reloading...');
+  setTimeout(() => location.reload(), 1200);
 }
 
 function mergeImport() {
@@ -15733,7 +15741,13 @@ function mergeImport() {
   for (const acct of (imp.accounts||[])) {
     if (!db.accounts.find(a=>a.id===acct.id)) db.accounts.push(acct);
   }
-  saveDBWithSync(); closeDlg(); nav('dashboard'); showToast(`Merged: ${added} new transactions`);
+  // ── PERSONAL LOGIC SET ── ensure onboarded stays true after merge
+  // (merge keeps current db, so flag should already be true, but belt-and-suspenders)
+  db.onboarded = true;
+  saveDBWithSync();
+  closeDlg();
+  nav('dashboard');
+  showToast(`Merged: ${added} new transactions`);
 }
 
 function exportXLSX() {
