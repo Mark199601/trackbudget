@@ -1129,6 +1129,18 @@ let _gdriveBackupsFolderId = null;
 const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',USDT:'₮',AUD:'A$',NZD:'NZ$',EUR:'€',GBP:'£',JPY:'¥',CNY:'¥',INR:'₹',SGD:'S$',CAD:'C$',CHF:'Fr',HKD:'HK$',TWD:'NT$',KRW:'₩',BRL:'R$',MXN:'MX$',ZAR:'R',THB:'฿',IDR:'Rp',MYR:'RM',VND:'₫',AED:'د.إ',SAR:'﷼',TRY:'₺',RUB:'₽',VUV:'Vt',FJD:'FJ$',SBD:'SI$',TOP:'T$'};
 
 function sym(code) { return CURR_SYMBOLS[code] || (code+' '); }
+
+// ── PERSONAL LOGIC SET ── escapes user-input strings for safe use inside HTML attributes (value="..." etc).
+// Prevents broken forms when notes/names contain double quotes, apostrophes, <, >, or &.
+function escapeAttr(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 function fmt(amt, code, sign=false) {
   const s=sym(code), a=Math.abs(amt);
   const f=a>=1000?a.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):a.toFixed(2);
@@ -1264,6 +1276,11 @@ function defaultDB() {
     targets: [],
     recurringTxs: [],
     paydaySchedules: [],
+    installments: [],
+    contracts: [],
+    activeContractId: null,
+    aiCatMemory: [],
+    settings: { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null },
     categories: {
       expense: [
         {id:'c-food',name:'Food & Dining',icon:'🍽️',archived:false,subcats:[
@@ -1391,6 +1408,7 @@ let db = (() => {
     if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
     if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
     if (!parsed.recurringTxs) parsed.recurringTxs = [];
+    if (!parsed.installments) parsed.installments = [];
     if (!parsed.targets) parsed.targets = [];
     // Migration: mark system-only subcategories as autoOnly (hidden from manual picker)
     const AUTO_ONLY_IDS = new Set(['sc-remittance','sc-externalin','sc-externalout','sc-forexloss','sc-forexgain','sc-remittancefee']);
@@ -1485,6 +1503,7 @@ let db = (() => {
       if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
       if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
       if (!parsed.recurringTxs) parsed.recurringTxs = [];
+      if (!parsed.installments) parsed.installments = [];
       if (!parsed.targets) parsed.targets = [];
       if (!parsed.investments) parsed.investments = [];
       if (!parsed.reimbursements) parsed.reimbursements = [];
@@ -4448,7 +4467,7 @@ function renderAmountForm() {
 
     ${isLoan ? `<div class="form-group">
       <label class="form-label">${s.type==='lend'?'Lent To':'Borrowed From'} *</label>
-      <input class="form-input" id="add-person" placeholder="Person's name" value="${s.prefill?.personName||''}">
+      <input class="form-input" id="add-person" placeholder="Person's name" value="${escapeAttr(s.prefill?.personName||'')}">
     </div>` : ''}
 
     <!-- Currency hidden — auto-derived from account -->
@@ -6525,7 +6544,7 @@ function openEditTx(txId) {
   if (isShared && tx.persons && tx.persons.length > 0) {
     personsRowsHTML = tx.persons.map((p, i) => `
       <div class="edit-person-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <input class="form-input" style="flex:2;min-width:0" placeholder="Name" value="${p.name}" data-field="name">
+        <input class="form-input" style="flex:2;min-width:0" placeholder="Name" value="${escapeAttr(p.name)}" data-field="name">
         <input class="form-input numpad-input" style="flex:1;min-width:0" type="number" step="any" placeholder="Share" value="${p.share}" data-field="share" oninput="onEditSharedRecalc('${txId}')" inputmode="none">
         <button type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:2px 8px">×</button>
       </div>`).join('');
@@ -6553,7 +6572,7 @@ function openEditTx(txId) {
     </div>
     ${fxBadgeHTML}
     <div class="form-group"><label class="form-label">Account</label><select class="form-input" id="edit-account">${acctOpts}</select></div>
-    ${tx.personName?`<div class="form-group"><label class="form-label">Person</label><input class="form-input" id="edit-person" value="${tx.personName||''}"></div>`:''}
+    ${tx.personName?`<div class="form-group"><label class="form-label">Person</label><input class="form-input" id="edit-person" value="${escapeAttr(tx.personName||'')}"></div>`:''}
     ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="edit-duedate" value="${tx.dueDate||''}"></div>`:''}
   `;
 
@@ -6918,7 +6937,7 @@ function openEditTransfer(txId) {
         ${dtField('etf-time','time','Time')}
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="etf-notes" value="${tx.notes||''}"></div>
+    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="etf-notes" value="${escapeAttr(tx.notes||'')}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditTransfer('${txId}')">Save Changes</button>
   `);
   setTimeout(updateEditTransferPreview, 50);
@@ -8408,7 +8427,7 @@ function openEditAccount(acctId) {
   const acctTypes = ['Savings','Checking','Cash','E-Wallet','Credit Card','Prepaid','Crypto Wallet','Investment','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===a.currency?'selected':''}>${c}</option>`).join('');
   openSheet('gen','Edit Account',`
-    <div class="form-group"><label class="form-label">Account Name *</label><input class="form-input" id="ea-name" value="${a.name}"></div>
+    <div class="form-group"><label class="form-label">Account Name *</label><input class="form-input" id="ea-name" value="${escapeAttr(a.name)}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Type</label><select class="form-input" id="ea-type" onchange="onAcctTypeChange('ea-type','ea-currency')">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ea-currency" ${a.type==='Crypto Wallet'?'disabled style="opacity:0.6"':''}>${currOpts}</select></div>
@@ -8765,7 +8784,7 @@ function openEditInv(invId) {
   const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   openSheet('gen2','Edit Investment',`
     <div class="form-group"><label class="form-label">Investment Name *</label>
-      <input class="form-input" id="ei-name" value="${inv.name}"></div>
+      <input class="form-input" id="ei-name" value="${escapeAttr(inv.name)}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Type</label>
         <select class="form-input" id="ei-type">${invTypes.map(t=>`<option ${t===inv.type?'selected':''}>${t}</option>`).join('')}</select></div>
@@ -8783,7 +8802,7 @@ function openEditInv(invId) {
       <div class="form-group"><label class="form-label">Time</label>${dtField('ei-time','time','Now',inv.time||nowTime())}</div>
     </div>
     <div class="form-group"><label class="form-label">Notes</label>
-      <input class="form-input" id="ei-notes" value="${inv.notes||''}"></div>
+      <input class="form-input" id="ei-notes" value="${escapeAttr(inv.notes||'')}"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditInv('${invId}')">Save Changes</button>
   `);
 }
@@ -9032,7 +9051,7 @@ function openBatchSettleEdit(txId, direction) {
        </div>
      </div>
      <div class="form-group"><label class="form-label">Notes</label>
-       <input class="form-input" id="bse-notes" value="${tx.notes||''}">
+       <input class="form-input" id="bse-notes" value="${escapeAttr(tx.notes||'')}">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleEdit('${txId}','${direction||tx.batchDirection||'lent'}')">Save</button>`
@@ -9145,7 +9164,7 @@ function openBatchReimbSettleEdit(txId) {
        </div>
      </div>
      <div class="form-group"><label class="form-label">Notes</label>
-       <input class="form-input" id="brse-notes" value="${tx.notes||''}">
+       <input class="form-input" id="brse-notes" value="${escapeAttr(tx.notes||'')}">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchReimbSettleEdit('${txId}')">Save</button>`
@@ -9749,7 +9768,7 @@ function editLoanFull(loanId, direction) {
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===loan.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===loan.currency?'selected':''}>${c}</option>`).join('');
   openDlg('Edit Loan',
-    `<div class="form-group"><label class="form-label">Person *</label><input class="form-input" id="lf-person" value="${loan.personName||''}"></div>
+    `<div class="form-group"><label class="form-label">Person *</label><input class="form-input" id="lf-person" value="${escapeAttr(loan.personName||'')}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="lf-amount"  value="${loan.amount}" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
@@ -9807,7 +9826,7 @@ function editLoanPayment(paymentId, loanId, direction) {
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ep2-date" value="${payment.date}"></div>
       <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="ep2-time" value="${payment.time||''}"></div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ep2-notes" value="${payment.notes||''}"></div>`,
+    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="ep2-notes" value="${escapeAttr(payment.notes||'')}"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="deleteLoanPayment('${paymentId}','${loanId}','${direction}')">Delete</button>
      <button class="btn btn-primary btn-sm" onclick="saveLoanPayment('${paymentId}','${loanId}','${direction}')">Save</button>`
@@ -10656,7 +10675,7 @@ function openEditTarget(id) {
   if (!t) return;
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===t.currency?'selected':''}>${c}</option>`).join('');
   openSheet('gen','Edit Target',`
-    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="et-name" value="${t.name}"></div>
+    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="et-name" value="${escapeAttr(t.name)}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Goal</label><input class="form-input numpad-input" type="number" id="et-goal" value="${t.goal}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="et-currency">${currOpts}</select></div>
@@ -10665,7 +10684,7 @@ function openEditTarget(id) {
       <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input numpad-input" type="number" id="et-current" value="${t.current||0}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" type="date" id="et-deadline" value="${t.deadline||''}"></div>
     </div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="et-notes" value="${t.notes||''}"></div>
+    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="et-notes" value="${escapeAttr(t.notes||'')}"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveEditTarget('${id}')">Save</button>
       <button class="btn btn-danger" onclick="deleteTarget('${id}')">Delete</button>
@@ -13241,7 +13260,7 @@ function editPaydaySchedule(id) {
   if (!ps) return;
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===ps.currency?'selected':''}>${c}</option>`).join('');
   openSheet('gen','Edit Schedule',`
-    <div class="form-group"><label class="form-label">Source Name</label><input class="form-input" id="ep-name" value="${ps.name}"></div>
+    <div class="form-group"><label class="form-label">Source Name</label><input class="form-input" id="ep-name" value="${escapeAttr(ps.name)}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Amount</label><input class="form-input numpad-input" type="number" id="ep-amount" value="${ps.amount||''}" inputmode="none"></div>
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="ep-currency">${currOpts}</select></div>
@@ -14095,7 +14114,7 @@ function openBucketSheet(contractId, bucketId) {
     <input type="hidden" id="bk-bid" value="${bucketId||''}">
     <div class="form-group">
       <label class="form-label">Name *</label>
-      <input class="form-input" id="bk-name" type="text" placeholder="e.g., High-Yield Savings" value="${b?.name?.replace(/"/g,'&quot;')||''}">
+      <input class="form-input" id="bk-name" type="text" placeholder="e.g., High-Yield Savings" value="${escapeAttr(b?.name||'')}">
     </div>
     <div class="form-group">
       <label class="form-label">Rate label</label>
@@ -14367,7 +14386,7 @@ function renderProfileTab() {
 function openEditProfile() {
   const p = db.profile;
   openSheet('gen','Edit Profile',`
-    <div class="form-group"><label class="form-label">Nickname</label><input class="form-input" id="ep2-nick" value="${p.nickname||''}"></div>
+    <div class="form-group"><label class="form-label">Nickname</label><input class="form-input" id="ep2-nick" value="${escapeAttr(p.nickname||'')}"></div>
     <div class="form-group">
       <label class="form-label">Country</label>
       <input class="form-input" id="ep2-country" value="${p.country||''}" placeholder="Search country..." oninput="searchEpList(this.value,'ep2-country-list','ep2-country')" autocomplete="off">
@@ -14403,14 +14422,30 @@ function saveProfile() {
   const nick = document.getElementById('ep2-nick')?.value?.trim();
   const country = document.getElementById('ep2-country')?.value?.trim();
   const nat = document.getElementById('ep2-nat')?.value?.trim();
+  // ── PERSONAL LOGIC SET ── nationality drives home currency
+  // When user changes nationality, auto-update displayCurrency, add to tracked currencies,
+  // and ensure FX history baseline exists. Old nationality's currency is kept in trackedCurrencies.
+  const oldNat = db.profile.nationality;
   if (nick) db.profile.nickname = nick;
   if (country) db.profile.country = country;
-  if (nat) db.profile.nationality = nat;
+  if (nat && nat !== oldNat) {
+    db.profile.nationality = nat;
+    const newHomeCurr = (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[nat] : null) || COUNTRY_TO_CURRENCY[nat] || 'USD';
+    const oldHomeCurr = db.displayCurrency;
+    db.displayCurrency = newHomeCurr;
+    if (!db.trackedCurrencies.includes(newHomeCurr)) db.trackedCurrencies.unshift(newHomeCurr);
+    // Ensure FX rate baseline for new home currency (1:1 since it's the new base)
+    if (!db.fxRates[newHomeCurr]) db.fxRates[newHomeCurr] = 1;
+    if (!db.fxHistory[newHomeCurr]) db.fxHistory[newHomeCurr] = [{date: today(), rate: 1, source: 'baseline'}];
+    showToast(`🏠 Home base changed to ${newHomeCurr}. Update FX rates in Settings.`);
+  } else if (nat) {
+    db.profile.nationality = nat;
+  }
   saveDBWithSync();
   document.getElementById('sb-name').textContent = db.profile.nickname;
   closeSheet('gen');
   renderSettings();
-  showToast('Profile saved!');
+  if (oldNat === db.profile.nationality) showToast('Profile saved!');
 }
 
 function setDisplayCurrency(curr) {
@@ -14477,7 +14512,7 @@ function renderFXTab() {
           <span style="font-size:22px">${info.flag}</span>
           <div>
             <div style="font-size:15px;font-weight:600;letter-spacing:-0.3px">${c}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${current.toFixed(4)}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(db.displayCurrency||'PHP')}${current.toFixed(4)}</span></div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
@@ -14662,6 +14697,9 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
       // If this tx is a remittance, also update its rate + phpAmount
       if (tx.type === 'remittance' && tx.currency === currency) {
         tx.rate = newRate;
+        // ── PERSONAL LOGIC SET ── stored phpAmount is RAW (unrounded) for FX accuracy.
+        // Rounding only applied at display time via fmt(). Do not round here — preserves
+        // precision across multi-step conversions and prevents cumulative drift.
         tx.phpAmount = tx.amount * newRate;
       }
     }
@@ -15526,7 +15564,7 @@ function openEditCat(catId, forType) {
       <div class="emoji-trigger" onclick="toggleInlineEmoji('ec-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="ec-emoji-display">${cat.icon||'📌'}</span><span>Change icon</span></div>
       <div id="ec-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('ec-emoji-display')}</div>
      </div>
-     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${cat.name}"></div>
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${escapeAttr(cat.name)}"></div>
      ${!canDelete ? '<div style="font-size:11px;color:var(--text4);background:var(--bg3);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:8px">💡 This category has linked transactions. You can Archive/Restore but cannot delete.</div>' : ''}`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      ${canDelete
@@ -15634,7 +15672,7 @@ function openEditSubCat(catId, subId, forType) {
       <div class="emoji-trigger" onclick="toggleInlineEmoji('esc-emoji-panel')" style="margin-bottom:8px"><span class="et-icon" id="esc-emoji-display">${sc.icon||cat?.icon||'📌'}</span><span>Change icon</span></div>
       <div id="esc-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('esc-emoji-display')}</div>
      </div>
-     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${sc.name}"></div>
+     <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="esc-name" value="${escapeAttr(sc.name)}"></div>
      ${!canDelete ? '<div style="font-size:11px;color:var(--text4);background:var(--bg3);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:8px">💡 This subcategory has linked transactions. You can Archive/Restore but cannot delete.</div>' : ''}`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      ${canDelete
@@ -17296,34 +17334,66 @@ document.addEventListener('visibilitychange', () => {
 // ════════════════════════════════════════════════════════════
 // PWA SERVICE WORKER REGISTRATION
 // ════════════════════════════════════════════════════════════
-if ('serviceWorker' in navigator) {
-  const swCode = `
-    const CACHE = 'trackbudget-v4';
-    self.addEventListener('install', e => { self.skipWaiting(); });
-    self.addEventListener('activate', e => {
-      e.waitUntil(
-        caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-        ).then(() => clients.claim())
-      );
-    });
-    self.addEventListener('fetch', e => {
-      if (e.request.url.includes('googleapis') || e.request.url.includes('google.com')) return;
-      e.respondWith(
-        caches.open(CACHE).then(cache =>
-          cache.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
-            if (resp && resp.status === 200) cache.put(e.request, resp.clone());
-            return resp;
-          }).catch(() => cached))
-        )
-      );
-    });
-  `;
-  try {
-    const blob = new Blob([swCode], {type: 'application/javascript'});
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).catch(e => console.warn('SW reg failed:', e));
-  } catch(e) { console.warn('SW setup error:', e); }
+// ════════════════════════════════════════════════════════════
+// PWA SERVICE WORKER + OFFLINE DETECTION
+// ════════════════════════════════════════════════════════════
+// ── PERSONAL LOGIC SET ── PWA setup:
+// 1. Service worker (sw.js — separate file, must be in same dir as index.html on server)
+//    caches entire app shell. Falls back to cached version when offline.
+// 2. Offline badge — small indicator at top of screen when offline.
+// 3. Auto-sync on reconnect — fires Drive sync when internet returns.
+// 4. Manual "Sync Now" button in Settings → Backup section.
+if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      console.log('[PWA] SW registered, scope:', reg.scope);
+    }).catch(e => console.warn('[PWA] SW reg failed:', e));
+  });
+}
+
+// Online/offline detection — shows badge + triggers auto-sync
+let _wasOffline = false;
+function _renderOfflineBadge(isOffline) {
+  let badge = document.getElementById('offline-badge');
+  if (isOffline) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'offline-badge';
+      badge.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#f0a832;color:#000;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer';
+      badge.innerHTML = '⚠️ Offline — changes saved locally';
+      badge.title = 'Tap to dismiss';
+      badge.onclick = () => badge.style.display = 'none';
+      document.body.appendChild(badge);
+    } else { badge.style.display = 'flex'; }
+  } else {
+    if (badge) badge.style.display = 'none';
+  }
+}
+function _checkOnline() {
+  const offline = !navigator.onLine;
+  _renderOfflineBadge(offline);
+  if (!offline && _wasOffline) {
+    // Just came back online — auto-sync if Drive connected
+    showToast('🌐 Back online — syncing…');
+    if (db?.settings?.googleDriveConnected && typeof saveToDriveSilent === 'function') {
+      setTimeout(() => { saveToDriveSilent().catch(()=>{}); }, 1500);
+    }
+  }
+  _wasOffline = offline;
+}
+window.addEventListener('online', _checkOnline);
+window.addEventListener('offline', _checkOnline);
+document.addEventListener('DOMContentLoaded', _checkOnline);
+
+// Manual sync trigger — for Settings → Backup
+function manualSyncNow() {
+  if (!navigator.onLine) { showToast('⚠️ No internet — cannot sync now'); return; }
+  if (!db?.settings?.googleDriveConnected) { showToast('⚠️ Connect Google Drive first'); return; }
+  if (typeof saveToDrive === 'function') {
+    saveToDrive();
+  } else {
+    showToast('⚠️ Drive sync function not available');
+  }
 }
 // ═══════════════════════════════════════════════════════════
 // OFFLINE AI ENGINE
@@ -18961,7 +19031,7 @@ function openEditInstallment(instId) {
     </div>
     <div class="form-group">
       <label class="form-label">Name</label>
-      <input class="form-input" id="einst-name" value="${inst.name}">
+      <input class="form-input" id="einst-name" value="${escapeAttr(inst.name)}">
     </div>
     <div class="form-row fr2">
       <div class="form-group">
@@ -18979,7 +19049,7 @@ function openEditInstallment(instId) {
     </div>
     <div class="form-group">
       <label class="form-label">Notes</label>
-      <input class="form-input" id="einst-notes" value="${inst.notes || ''}">
+      <input class="form-input" id="einst-notes" value="${escapeAttr(inst.notes || '')}">
     </div>
     ${linkedHtml}
     <button class="btn btn-primary btn-full" onclick="saveEditInstallment('${instId}')">Save</button>
