@@ -664,18 +664,29 @@ option{background:var(--bg3);color:var(--text)}
     <div class="onboard-step active" id="ob-step-1">
       <div style="font-size:22px;font-weight:700;margin-bottom:6px">Welcome! 👋</div>
       <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Let's set up your profile in under a minute.</div>
-      <div class="form-group"><label class="form-label">Your Nickname</label><input class="form-input" id="ob-nickname" placeholder="e.g. Alex" style="font-size:16px"></div>
-      <div class="form-group">
-        <label class="form-label">Nationality / Country</label>
-        <input class="form-input" id="ob-nat-search" placeholder="Search country..." oninput="searchNat(this.value)" autocomplete="off">
-        <div class="currency-list" id="ob-nat-list" style="max-height:180px;margin-top:6px"></div>
-        <div id="ob-nat-selected" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
+      
+      <div style="position:relative;margin-bottom:16px">
+        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">YOUR NICKNAME</label>
+        <input id="ob-nickname" placeholder="e.g. Alex" style="width:100%;background:#0f0f16;border:1px solid #2a2a35;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;outline:none">
       </div>
-      <button class="btn btn-primary btn-full" onclick="obNext(1)">Continue →</button>
+      
+      <div style="position:relative;margin-bottom:16px">
+        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">NATIONALITY (HOME)</label>
+        <input id="ob-nat-search" placeholder="Search country..." oninput="searchNat(this.value)" onfocus="searchNat(this.value)" autocomplete="off" style="width:100%;background:#0f0f16;border:1px solid #2a2a35;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;outline:none">
+        <div id="ob-nat-list" style="position:absolute;top:100%;left:0;right:0;background:#1a1a23;border:1px solid #2a2a35;border-radius:12px;margin-top:4px;max-height:200px;overflow-y:auto;z-index:99;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
+      </div>
+      
+      <div style="position:relative;margin-bottom:16px">
+        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">CURRENT LOCATION</label>
+        <input id="ob-loc-search" placeholder="Search country..." oninput="searchLoc(this.value)" onfocus="searchLoc(this.value)" autocomplete="off" style="width:100%;background:#0f0f16;border:1px solid #2a2a35;border-radius:12px;padding:12px 14px;color:#fff;font-size:15px;outline:none">
+        <div id="ob-loc-list" style="position:absolute;top:100%;left:0;right:0;background:#1a1a23;border:1px solid #2a2a35;border-radius:12px;margin-top:4px;max-height:200px;overflow-y:auto;z-index:99;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
+      </div>
+      
+      <button onclick="obNext(1)" style="margin-top:8px;width:100%;background:linear-gradient(135deg,#7c6df0,#9d8eff);border:none;border-radius:12px;padding:14px;font-weight:600;color:#fff;cursor:pointer">Continue →</button>
     </div>
     <div class="onboard-step" id="ob-step-2">
       <div style="font-size:22px;font-weight:700;margin-bottom:6px">Currencies 💱</div>
-      <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Choose currencies to track. PHP is your home base.</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Choose currencies to track. <span id="ob-homebase-text">Your home currency is auto-tracked.</span></div>
       <div class="form-group">
         <label class="form-label">Add Currency</label>
         <input class="form-input" id="ob-curr-search" placeholder="Search..." oninput="searchCurr(this.value)" autocomplete="off">
@@ -1135,48 +1146,65 @@ function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return
 
 // FX: PHP is always the base. All rates stored as "1 unit of X = ? PHP"
 // fxRates = { PGK: 13.02, USD: 56.5, AUD: 37.2, ... } meaning 1 PGK = 13.02 PHP, 1 USD = 56.5 PHP
+// ── PERSONAL LOGIC SET ── FX base currency is PHP (hardcoded as home base).
+// toPhp() = "convert to home base", fromPhp() = "convert from home base".
+// For PHP home users: direct. For other home users: routes through PHP as intermediary.
+// This is intentional — all stored FX rates are "1 [currency] = ? PHP".
+// Renaming or changing the base would require migrating all stored fxRates data.
+function _homeBase() { return db?.displayCurrency || 'PHP'; }
+
 function toPhp(amount, fromCurrency, snapshot) {
-  if (fromCurrency === 'PHP') return amount;
-  // If snapshot object provided, use its rate for historical stability
+  const home = _homeBase();
+  if (fromCurrency === home) return amount;
   if (snapshot && typeof snapshot === 'object' && snapshot[fromCurrency]) {
     return amount * snapshot[fromCurrency];
   }
+  // If stored rate is relative to PHP base, and home is not PHP,
+  // convert: amount [fromCurrency] → PHP → home
   const rate = db.fxRates[fromCurrency];
-  return rate ? amount * rate : amount;
+  if (!rate) return amount;
+  if (home === 'PHP') return amount * rate; // PHP home: direct
+  // Non-PHP home: fromCurrency→PHP first, then PHP→home
+  const homeRate = db.fxRates[home]; // 1 home = ? PHP
+  return homeRate ? (amount * rate) / homeRate : amount * rate;
 }
 
-// Convert tx amount to PHP using its own snapshot (historically stable)
-// Resolution order: tx.fxSnapshot → fxHistory at tx.date → current fxRates
+// Convert tx amount to home base using its own snapshot (historically stable)
 function txToPhp(tx) {
   if (!tx) return 0;
-  // For shared, always use myShare regardless of currency
   const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-  if (tx.currency === 'PHP') return amt;
-  // Remittance tx has explicit rate field — always use it
+  const home = _homeBase();
+  if (tx.currency === home) return amt;
   if (tx.type === 'remittance' && tx.rate) return amt * tx.rate;
-  // Prefer stored snapshot for historical stability
   if (tx.fxSnapshot && tx.fxSnapshot[tx.currency]) {
     return amt * tx.fxSnapshot[tx.currency];
   }
-  // Resolve from fxHistory using tx date (period-aware)
   if (tx.date) return amt * getSnapshotRate(tx.currency, tx.date);
   return toPhp(amt, tx.currency);
 }
+
 function fromPhp(phpAmount, toCurrency, snapshot) {
-  if (toCurrency === 'PHP') return phpAmount;
+  const home = _homeBase();
+  if (toCurrency === home) return phpAmount;
   if (snapshot && typeof snapshot === 'object' && snapshot[toCurrency]) {
     return phpAmount / snapshot[toCurrency];
   }
   const rate = db.fxRates[toCurrency];
-  return rate ? phpAmount / rate : phpAmount;
+  if (!rate) return phpAmount;
+  if (home === 'PHP') return phpAmount / rate; // PHP home: direct
+  // Non-PHP home: phpAmount is in home → convert to PHP first, then to target
+  const homeRate = db.fxRates[home];
+  return homeRate ? (phpAmount * homeRate) / rate : phpAmount / rate;
 }
+
 function convert(amount, from, to) {
   if (from === to) return amount;
   return fromPhp(toPhp(amount, from), to);
 }
-// Get FX rate snapshot at a given date (from fxHistory)
+
 function getSnapshotRate(currency, date) {
-  if (currency === 'PHP') return 1;
+  const home = _homeBase();
+  if (currency === home) return 1;
   const info = getSnapshotInfo(currency, date);
   return info.rate;
 }
@@ -1184,7 +1212,8 @@ function getSnapshotRate(currency, date) {
 // Returns {rate, source, sourceDate} for snapshot resolution
 // source: 'remittance' | 'manual' | 'baseline' | 'fallback'
 function getSnapshotInfo(currency, date) {
-  if (currency === 'PHP') return { rate:1, source:'base', sourceDate:null };
+  const home = _homeBase();
+  if (currency === home) return { rate:1, source:'base', sourceDate:null };
   const history = (db.fxHistory[currency] || []).filter(h => h.date <= date).sort((a,b)=>b.date.localeCompare(a.date));
   if (history.length > 0) {
     return { rate: history[0].rate, source: history[0].source || 'manual', sourceDate: history[0].date };
@@ -1207,7 +1236,7 @@ function defaultDB() {
     onboarded: false,
     profile: { nickname:'', nationality:'', country:'' },
     trackedCurrencies: ['PHP','PGK','USD','AUD','NZD'],
-    displayCurrency: 'PHP',
+    displayCurrency: null, // set from nationality on first load
     // fxRates: 1 unit of X = ? PHP (PHP as base)
     fxRates: { PGK:13.02, USD:56.5, USDT:56.5, AUD:37.0, NZD:34.0 },
     // fxHistory: updated on Remittance tx or Settings FX edit
@@ -1332,14 +1361,14 @@ let db = (() => {
     if (!parsed.fxHistory) parsed.fxHistory = {};
         // Ensure baseline entries for all tracked currencies
         for (const c of (parsed.trackedCurrencies || ['PGK','USD','AUD','NZD'])) {
-          if (c === 'PHP') continue;
+          if (c === _homeBase()) continue;
           if (!parsed.fxHistory[c] || parsed.fxHistory[c].length === 0) {
             parsed.fxHistory[c] = [{ date:'2026-01-01', rate: parsed.fxRates?.[c] || 1, source:'baseline' }];
           }
         }
     if (!parsed.archivedLoans) parsed.archivedLoans = [];
     if (!parsed.debugLog) parsed.debugLog = [];
-    if (!parsed.displayCurrency) parsed.displayCurrency = 'PHP';
+    if (!parsed.displayCurrency) { const nat = parsed.profile?.nationality || 'Philippines'; parsed.displayCurrency = (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[nat] : null) || 'PHP'; }
     if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
     if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
     if (!parsed.recurringTxs) parsed.recurringTxs = [];
@@ -1495,9 +1524,10 @@ function getAcctBalance(acctId) {
     // 📖 USER STORY: Yung loan settlement gain/loss children ay para lang sa tracking — hindi sila
     // nag-aaffect ng account balance kasi yung parent settlement tx (or yung original loan tx) ang
     // mismo nag-handle ng cash movement. Skipping prevents double-counting.
-    // ── PERSONAL LOGIC SET ── isLoanSettlementGain/Loss skip in balance — parent settlement already moves cash; children are tracking labels only
-    if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
-    if (tx.isReimbSettlementGain) continue;
+    // ── PERSONAL LOGIC SET ── PLS #47 FIX: Gain/Loss ARE real FX arbitrage — include in balance
+    // (previously skipped to avoid double-count, but per user expectation, gain/loss must affect cash)
+    // if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
+    // if (tx.isReimbSettlementGain) continue;
     // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
     // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
     // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
@@ -1701,7 +1731,7 @@ function getMonthTotals(monthKey) {
 function buildFxSnapshot(date) {
   const snap = {};
   for (const curr of db.trackedCurrencies) {
-    if (curr === 'PHP') continue;
+    if (curr === _homeBase()) continue;
     snap[curr] = getSnapshotRate(curr, date);
   }
   return snap;
@@ -1937,7 +1967,7 @@ const _WIDGET_INFO = {
   'dow': {title:'📅 Day-of-Week Pattern', body:'Shows your <b>average spending per day of the week</b> over the last 90 days. Reveals patterns — e.g. "Friday is your highest spending day." Useful for habit awareness.'},
   'frequent': {title:'🔁 Most Frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total — shows where small habits add up.'},
   'timeofday': {title:'🕐 Time-of-Day Pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven — this widget helps you spot if that\'s happening.'},
-  'distribution': {title:'📊 Transaction Sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are ₱100–500." Reveals your spending "zones" and shopping habits.'},
+  'distribution': {title:'📊 Transaction Sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are 100–500 in your home currency." Reveals your spending "zones" and shopping habits.'},
   'yoy': {title:'📆 Year-on-Year', body:'Compares this month to the <b>same month last year</b>, side by side. Shows whether you\'re spending more, less, or the same vs your past self. Only appears if you have data from that period.'},
   'income-div': {title:'🌐 Income Diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
   'goal': {title:'🎯 Savings Goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
@@ -2196,7 +2226,8 @@ document.addEventListener('click', function(e) {
 // ONBOARDING
 // ════════════════════════════════════════════════════════════
 let obSelectedNat = '';
-let obTracked = ['PHP','USD'];
+let obSelectedLoc = '';
+let obTracked = []; // ── PERSONAL LOGIC SET ── empty by default; populated from nationality on step 1 confirm
 
 function initObProgress(steps=3) {
   const p = document.getElementById('ob-progress');
@@ -2206,18 +2237,39 @@ function initObProgress(steps=3) {
 
 function searchNat(q) {
   const list = document.getElementById('ob-nat-list');
-  const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(q.toLowerCase())).slice(0,8);
-  list.innerHTML = matches.map(c=>`<div class="currency-option ${c===obSelectedNat?'selected':''}" onclick="selectNat('${c}')">${getFlag(c)} ${c}</div>`).join('');
+  if (!list) return;
+  const qq = (q||'').toLowerCase();
+  const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectNat('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:#fff" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.style.display = matches.length ? 'block' : 'none';
 }
 
 function selectNat(country) {
   obSelectedNat = country;
   document.getElementById('ob-nat-search').value = country;
-  document.getElementById('ob-nat-selected').textContent = `Default currency: ${getCurrencyByCountry(country)}`;
-  document.getElementById('ob-nat-list').innerHTML = '';
-  // Auto-add country currency to tracked
-  const curr = getCurrencyByCountry(country);
-  if (!obTracked.includes(curr)) { obTracked.push(curr); renderObTracked(); }
+  document.getElementById('ob-nat-list').style.display = 'none';
+  // ── PERSONAL LOGIC SET ── nationality is home base — drives default display currency + initial tracked currency
+  const homeCurr = COUNTRY_CURRENCIES[country] || COUNTRY_TO_CURRENCY[country] || 'USD';
+  if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
+  // Auto-fill Step 2 home base text if visible
+  const hb = document.getElementById('ob-homebase-text');
+  if (hb) hb.textContent = `${getFlag(country)} ${homeCurr} is your home base.`;
+  renderObTracked();
+}
+
+function searchLoc(q) {
+  const list = document.getElementById('ob-loc-list');
+  if (!list) return;
+  const qq = (q||'').toLowerCase();
+  const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectLoc('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:#fff" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.style.display = matches.length ? 'block' : 'none';
+}
+
+function selectLoc(country) {
+  obSelectedLoc = country;
+  document.getElementById('ob-loc-search').value = country;
+  document.getElementById('ob-loc-list').style.display = 'none';
 }
 
 function searchCurr(q) {
@@ -2231,7 +2283,9 @@ function searchCurr(q) {
 }
 
 function toggleObCurr(code) {
-  if (code==='PHP') { showToast('PHP is always tracked!'); return; }
+  // ── PERSONAL LOGIC SET ── home currency (derived from nationality) is locked as tracked
+  const homeCurr = COUNTRY_CURRENCIES[obSelectedNat] || COUNTRY_TO_CURRENCY[obSelectedNat] || 'USD';
+  if (code === homeCurr) { showToast(`${homeCurr} is your home base — always tracked`); return; }
   if (obTracked.includes(code)) obTracked = obTracked.filter(c=>c!==code);
   else obTracked.push(code);
   renderObTracked();
@@ -2241,9 +2295,11 @@ function toggleObCurr(code) {
 
 function renderObTracked() {
   const chips = document.getElementById('ob-tracked-chips');
+  if (!chips) return;
+  const homeCurr = COUNTRY_CURRENCIES[obSelectedNat] || COUNTRY_TO_CURRENCY[obSelectedNat] || 'USD';
   chips.innerHTML = obTracked.map(c=>{
     const info = CURRENCIES.find(x=>x.code===c) || {flag:'🌐',code:c};
-    return `<div class="tracked-chip">${info.flag} ${c} ${c!=='PHP'?`<span class="tracked-chip-remove" onclick="toggleObCurr('${c}')">×</span>`:''}
+    return `<div class="tracked-chip">${info.flag} ${c} ${c!==homeCurr?`<span class="tracked-chip-remove" onclick="toggleObCurr('${c}')">×</span>`:''}
     </div>`;
   }).join('');
 }
@@ -2252,19 +2308,27 @@ function obNext(currentStep) {
   if (currentStep===1) {
     const nick = document.getElementById('ob-nickname').value.trim();
     if (!nick) { showToast('Enter your nickname first!'); return; }
+    const nat = obSelectedNat || document.getElementById('ob-nat-search').value.trim();
+    if (!nat) { showToast('Pick your nationality (home base)'); return; }
+    const loc = obSelectedLoc || document.getElementById('ob-loc-search').value.trim() || nat;
     db.profile.nickname = nick;
-    db.profile.country = obSelectedNat;
-    db.profile.nationality = obSelectedNat;
-    const nat = obSelectedNat; // save before next step modifies
-    const flag = getFlag(nat);
-    // step 2
+    db.profile.nationality = nat;
+    db.profile.country = loc;
+    // ── PERSONAL LOGIC SET ── home currency derived from nationality
+    const homeCurr = COUNTRY_CURRENCIES[nat] || COUNTRY_TO_CURRENCY[nat] || 'USD';
+    db.displayCurrency = homeCurr;
+    if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
+    // Update step 2 dynamic text
+    const hb = document.getElementById('ob-homebase-text');
+    if (hb) hb.textContent = `${getFlag(nat)} ${homeCurr} is your home base.`;
     document.getElementById('ob-step-1').classList.remove('active');
     document.getElementById('ob-step-2').classList.add('active');
     document.getElementById('ob-dot-1').classList.remove('active');
     document.getElementById('ob-dot-2').classList.add('active');
     renderObTracked();
   } else if (currentStep===2) {
-    db.trackedCurrencies = [...new Set(['PHP', ...obTracked])];
+    const homeCurr = db.displayCurrency || 'USD';
+    db.trackedCurrencies = [...new Set([homeCurr, ...obTracked])];
     document.getElementById('ob-step-2').classList.remove('active');
     document.getElementById('ob-step-3').classList.add('active');
     document.getElementById('ob-dot-2').classList.remove('active');
@@ -2324,8 +2388,9 @@ function generateInsights() {
 
   // Salary FX reminder
   const recentSalary = db.transactions.filter(t=>t.type==='income'&&!t.isSettlement&&t.date&&t.date.startsWith(mk)).slice(-1)[0];
-  if (recentSalary && recentSalary.currency !== 'PHP') {
-    insights.push({icon:'💱',urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your PHP exchange rate for accurate tracking.`});
+  if (recentSalary && recentSalary.currency !== (db.displayCurrency||'PHP')) {
+    const home = db.displayCurrency || 'PHP';
+    insights.push({icon:'💱',urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your ${home} exchange rate for accurate tracking.`});
   }
 
   // Drive sync reminder
@@ -2416,7 +2481,7 @@ function checkAlerts() {
   // ── C11: FX Rate Alerts — flag significant rate movements (>2% vs previous entry) ──
   const FX_ALERT_THRESHOLD = 0.02; // 2%
   for (const curr of (db.trackedCurrencies || [])) {
-    if (curr === 'PHP') continue;
+    if (curr === _homeBase()) continue;
     const hist = (db.fxHistory?.[curr] || []).filter(h => h.rate > 0).sort((a,b) => b.date.localeCompare(a.date));
     if (hist.length < 2) continue;
     const latest = hist[0].rate;
@@ -2429,7 +2494,7 @@ function checkAlerts() {
       _alertCache.push({
         type: 'fx',
         id: curr,
-        msg: `${dir} ${curr}/PHP moved ${sign}${(pctChange*100).toFixed(1)}% (${prev.toFixed(4)} → ${latest.toFixed(4)})`
+        msg: `${dir} ${curr}/${db.displayCurrency||'PHP'} moved ${sign}${(pctChange*100).toFixed(1)}% (${prev.toFixed(4)} → ${latest.toFixed(4)})`
       });
     }
   }
@@ -2597,7 +2662,7 @@ function renderDashboard() {
     const steps = [
       { id:'profile', label:'Set your nickname & country', done: !!(db.profile?.nickname && db.profile?.country), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'profile\'),50)' },
       { id:'accounts', label:'Add your first account', done: db.accounts.filter(a=>!a.archived).length > 0, action: 'nav(\'accounts\')' },
-      { id:'fx', label:'Set FX rates for tracked currencies', done: db.trackedCurrencies.filter(c=>c!=='PHP').every(c=>(db.fxRates[c]||0)>0), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'fx\'),50)' },
+      { id:'fx', label:'Set FX rates for tracked currencies', done: db.trackedCurrencies.filter(c=>c!==(db.displayCurrency||'PHP')).every(c=>(db.fxRates[c]||0)>0), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'fx\'),50)' },
       { id:'firsttx', label:'Log your first transaction', done: db.transactions.filter(t=>!t.archived).length > 0, action: 'openAddSheet()' },
       { id:'budget', label:'Set a monthly budget', done: db.budgets.filter(b=>b.active).length > 0, action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'budgets\'),50)' },
       { id:'drive', label:'Connect Google Drive (optional)', done: !!db.settings?.googleDriveConnected, action: 'openDriveSheet()', optional: true }
@@ -3520,7 +3585,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       batchReimbHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
         <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Batch · ${linkedTxs.length} entries</span>
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Batch · ${linkedTxs.length} ${aiPlural(linkedTxs.length,'entry','entries')}</span>
             ${childBadge}
           </div>
           <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -4116,7 +4181,7 @@ function renderSharedPersons() {
 
 function calcSharedResult() {
   const total = parseFloat(document.getElementById('add-total-bill')?.value) || 0;
-  const curr = document.getElementById('add-currency')?.value || 'PHP';
+  const curr = document.getElementById('add-currency')?.value || db.displayCurrency || 'PHP';
   const resEl = document.getElementById('shared-calc-result');
   const myShareEl = document.getElementById('add-myshare');
   if (!resEl) return;
@@ -4383,7 +4448,7 @@ function renderRemittanceForm() {
   }
   if (phpAccts.length === 0) {
     return `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
-      You need a PHP account to receive the remittance.
+      You need a ${db.displayCurrency||'PHP'} account to receive the remittance.
     </div>`;
   }
 
@@ -4398,7 +4463,7 @@ function renderRemittanceForm() {
     </div>
 
     <div class="form-group">
-      <label class="form-label">To (PHP) *</label>
+      <label class="form-label">To (${db.displayCurrency||'PHP'}) *</label>
       <select class="form-input" id="rem-to-acct">${phpOpts}</select>
     </div>
 
@@ -4419,7 +4484,7 @@ function renderRemittanceForm() {
     </div>
 
     <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:40px;pointer-events:none">
-      PHP received: —
+      ${db.displayCurrency||'PHP'} received: —
     </div>
 
     <!-- More options expander -->
@@ -4484,7 +4549,7 @@ function updateRemittancePhpPreview() {
   const curr = acct?.currency || 'PGK';
   const el = document.getElementById('rem-php-preview');
   if (!el) return;
-  if (!amt || !rate) { el.innerHTML = 'PHP received: —'; return; }
+  if (!amt || !rate) { el.innerHTML = `${db.displayCurrency||'PHP'} received: —`; return; }
   const php = amt * rate;
   el.innerHTML = `${sym(curr)}${amt.toFixed(2)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">₱${php.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
 }
@@ -4510,7 +4575,7 @@ function submitRemittance() {
     const notes = document.getElementById('rem-notes')?.value?.trim() || '';
 
     if (!fromId) { showToast('Select source account'); return; }
-    if (!toId) { showToast('Select PHP account'); return; }
+    if (!toId) { showToast(`Select ${db.displayCurrency||'PHP'} account`); return; }
     if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
     if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
     if (!date) { showToast('Select date'); return; }
@@ -4693,7 +4758,7 @@ function renderTransferForm() {
     <!-- Forex preview card — only visible for cross-currency, display-only -->
     <div id="tf-forex-preview" style="display:none;background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">💱 <span id="tf-fx-pair">PGK → PHP</span></div>
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">💱 <span id="tf-fx-pair">PGK → ${db.displayCurrency||'PHP'}</span></div>
         <div style="font-size:10px;color:var(--text4)">snapshot <span id="tf-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
       </div>
       <div style="font-size:13px;color:var(--text3)">Will receive: <span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600;font-size:15px;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">—</span></div>
@@ -4713,7 +4778,7 @@ function renderTransferForm() {
           <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Override rate or amount</div>
           <div class="form-row fr2" style="margin-bottom:4px">
             <div class="form-group" style="margin-bottom:0">
-              <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">PHP</span></label>
+              <label class="form-label" style="font-size:11px">Actual received <span id="tf-toamount-curr-label" style="color:var(--text4)">${db.displayCurrency||'PHP'}</span></label>
               <input class="form-input numpad-input" type="number" id="tf-toamount" placeholder="0.00" step="any" oninput="onTfToAmountInput()" inputmode="none">
             </div>
             <div class="form-group" style="margin-bottom:0">
@@ -5073,9 +5138,9 @@ function submitAddTx() {
   if (isSalary) {
     setTimeout(()=>{
       openDlg('💱 Update FX Rate?',
-        `<p style="font-size:14px;color:var(--text2);line-height:1.6">You received income in <strong>${currency}</strong>. Would you like to update your ${currency}→PHP exchange rate for accuracy?</p>
+        `<p style="font-size:14px;color:var(--text2);line-height:1.6">You received income in <strong>${currency}</strong>. Would you like to update your ${currency}→${db.displayCurrency||'PHP'} exchange rate for accuracy?</p>
         <div class="form-group" style="margin-top:16px">
-          <label class="form-label">1 ${currency} = ? PHP</label>
+          <label class="form-label">1 ${currency} = ? ${db.displayCurrency||'PHP'}</label>
           <input class="form-input numpad-input" id="payday-fx-rate" type="number" placeholder="${db.fxRates[currency]||'0'}" value="${db.fxRates[currency]||''}" inputmode="none">
         </div>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Skip</button>
@@ -5382,14 +5447,14 @@ function renderTxLog() {
   // ── C9 Quick-filter pills — context-aware smart shortcuts ──
   // Scan current month txs to decide which pills are relevant
   const monthTxsScan = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(_txMonth));
-  const hasForeign = monthTxsScan.some(t => t.currency && t.currency !== 'PHP');
+  const hasForeign = monthTxsScan.some(t => t.currency && t.currency !== (db.displayCurrency||'PHP'));
   const hasNoNotes = monthTxsScan.some(t => !t.notes?.trim() && (t.type==='expense'||t.type==='income'||t.type==='shared'));
   const LARGE_THRESHOLD = 1000; // PHP equivalent
   const hasLarge = monthTxsScan.some(t => txToPhp(t) >= LARGE_THRESHOLD);
 
   const qfPills = [
     hasLarge   ? { key:'large',   label:'💸 Large',      title:`≥ ₱${LARGE_THRESHOLD.toLocaleString()}` } : null,
-    hasForeign ? { key:'foreign', label:'🌏 Foreign',    title:'Non-PHP transactions' } : null,
+    hasForeign ? { key:'foreign', label:'🌏 Foreign',    title:`Non-${db.displayCurrency||'PHP'} transactions` } : null,
     hasNoNotes ? { key:'nonotes', label:'📝 No Notes',   title:'Transactions without notes' } : null,
   ].filter(Boolean);
 
@@ -5463,7 +5528,7 @@ function renderTxLog() {
     }
     // ── C9 Quick-filter ──
     if (_txQuickFilter === 'large' && txToPhp(t) < LARGE_THRESHOLD) return false;
-    if (_txQuickFilter === 'foreign' && (t.currency === 'PHP' || !t.currency)) return false;
+    if (_txQuickFilter === 'foreign' && (t.currency === (db.displayCurrency||'PHP') || !t.currency)) return false;
     if (_txQuickFilter === 'nonotes' && t.notes?.trim()) return false;
     // Account filter
     if (_txAcctFilter !== 'all') {
@@ -5788,7 +5853,7 @@ function openTxDetail(txId) {
       </div>
       <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${tx.loanDirection==='lent'?'amber':'teal'}">${label}</span></div></div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${tx.currency!=='PHP'?`<div class="detail-row"><div class="detail-label">PHP Equiv.</div><div class="detail-value" style="font-family:var(--mono)">₱${toPhp(tx.amount,tx.currency).toFixed(2)}</div></div>`:''}
+      ${(()=>{ const home=db.displayCurrency||'PHP'; if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${rate.toFixed(4)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctLoan.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -5811,7 +5876,7 @@ function openTxDetail(txId) {
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
       </div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${tx.currency!=='PHP'?`<div class="detail-row"><div class="detail-label">PHP Equiv.</div><div class="detail-value" style="font-family:var(--mono)">₱${toPhp(tx.amount,tx.currency).toFixed(2)}</div></div>`:''}
+      ${(()=>{ const home=db.displayCurrency||'PHP'; if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${rate.toFixed(4)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctPay.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -5864,7 +5929,7 @@ function openTxDetail(txId) {
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono);font-size:16px">${fmt(tx.amount,tx.currency)}</div></div>`;
   }
-  if (tx.currency !== 'PHP') rows += `<div class="detail-row"><div class="detail-label">PHP Equiv.</div><div class="detail-value" style="font-family:var(--mono)">₱${toPhp(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount, tx.currency).toFixed(2)}</div></div>`;
+  { const home=db.displayCurrency||'PHP'; if(tx.currency!==home){ const homeAmt=toPhp((tx.type==='shared'?(tx.myShare||tx.amount):tx.amount),tx.currency); const rate=homeAmt>(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount)>0?homeAmt/(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount):0; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${(toPhp(1,tx.currency)).toFixed(4)})</span></div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
@@ -6178,7 +6243,7 @@ function openTxReceipt(txId) {
 
   if (tx.currency !== 'PHP') {
     const phpVal = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
-    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">PHP Equiv.</div><div class="rcpt-row-value" style="font-family:var(--mono)">₱${phpVal.toFixed(2)}</div></div>`;
+    { const home=db.displayCurrency||'PHP'; const homeEquiv = home==='PHP' ? phpVal : toPhp(phpVal,'PHP') / (toPhp(1,home)||1); rowsHTML+=`<div class="rcpt-row"><div class="rcpt-row-label">In ${home}</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(homeEquiv,home)}</div></div>`; }
   }
 
   if (tx.notes) {
@@ -6306,7 +6371,7 @@ function buildTxReceiptText(txId) {
 
   if (tx.currency !== 'PHP') {
     const phpVal = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
-    lines.push(`PHP Equiv: ₱${phpVal.toFixed(2)}`);
+    { const home=db.displayCurrency||'PHP'; lines.push(`${home} Equiv: ${fmt(phpVal,'PHP')}`); }
   }
 
   if (tx.notes) lines.push(`Notes: ${tx.notes}`);
@@ -6784,7 +6849,7 @@ function openEditTransfer(txId) {
           <input class="form-input numpad-input" type="number" id="etf-toamount"  placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()" inputmode="none">
         </div>
         <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? PHP)</label>
+          <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? ${db.displayCurrency||'PHP'})</label>
           <input class="form-input numpad-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()" inputmode="none">
         </div>
       </div>
@@ -7535,7 +7600,7 @@ function openSettledReimbSheet() {
                 ${periodPill}
                 ${gainBadge}
               </div>
-              <div style="font-size:11px;color:var(--text4)">${card.txs.length} entries · ${personName} · ${fmt(bp.amount, bp.currency)}</div>
+              <div style="font-size:11px;color:var(--text4)">${card.txs.length} ${aiPlural(card.txs.length,'entry','entries')} · ${personName} · ${fmt(bp.amount, bp.currency)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
               <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button>
@@ -7990,7 +8055,7 @@ function renderActiveAccounts() {
         <div class="acct-group-title">${currInfo.flag} ${curr} <span style="font-size:11px;color:var(--text4);font-weight:400">(${grpAccts.length} accounts)</span></div>
         <div>
           <div class="acct-group-total" style="color:${grpTotal>=0?'var(--green)':'var(--red)'}">${fmt(grpTotal,curr)}</div>
-          ${curr!=='PHP'?`<div style="font-size:10px;color:var(--text4);text-align:right;font-family:var(--mono)">≈ ₱${grpPhp.toLocaleString('en',{maximumFractionDigits:0})}</div>`:''}
+          ${curr!==(db.displayCurrency||'PHP')?`<div style="font-size:10px;color:var(--text4);text-align:right;font-family:var(--mono)">≈ ${fmt(grpPhp, db.displayCurrency||'PHP')}</div>`:''}
         </div>
       </div>
       <div class="acct-grid">
@@ -8822,7 +8887,7 @@ function renderLoanList(direction) {
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'};font-size:13px">${totalsHtml}</div>
-          ${Object.keys(byCurr).length>1||(Object.keys(byCurr)[0]&&Object.keys(byCurr)[0]!=='PHP')?`<div style="font-size:10px;color:var(--text4);font-family:var(--mono)">≈ ₱${totalPersonPhp.toLocaleString('en',{maximumFractionDigits:0})}</div>`:''}
+          ${Object.keys(byCurr).length>1||(Object.keys(byCurr)[0]&&Object.keys(byCurr)[0]!==(db.displayCurrency||'PHP'))?`<div style="font-size:10px;color:var(--text4);font-family:var(--mono)">≈ ${fmt(Math.round(totalPersonPhp), db.displayCurrency||'PHP')}</div>`:''}
           <div style="font-size:11px;color:var(--text4);margin-top:4px">${_loanPersonExpanded[direction+':'+person]?'▼':'▶'}</div>
         </div>
       </div>
@@ -10199,7 +10264,7 @@ function openAddLoan(direction='lent') {
     </div>
     <div id="nl-custom-rate-row" style="display:none;margin-bottom:8px">
       <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Agreed rate (1 <span id="nl-rate-from">PGK</span> = ? <span id="nl-rate-to">PHP</span>)</label>
+        <label class="form-label">Agreed rate (1 <span id="nl-rate-from">PGK</span> = ? <span id="nl-rate-to">${db.displayCurrency||'PHP'}</span>)</label>
         <input class="form-input numpad-input" type="number" id="nl-custom-rate" placeholder="Enter agreed rate" step="any" oninput="updateAddLoanFx()" inputmode="none">
       </div>
     </div>
@@ -10453,7 +10518,7 @@ function renderInstallments() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-size:15px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${inst.name}</div>
-          <div style="font-size:11px;color:var(--text4)">📂 ${catName} · ${fmt(monthlyAmt,'PHP')}/month</div>
+          <div style="font-size:11px;color:var(--text4)">📂 ${catName} · ${fmt(monthlyAmt, db.displayCurrency||'PHP')}/month</div>
         </div>
         ${isComplete
           ? `<span style="padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
@@ -10461,7 +10526,7 @@ function renderInstallments() {
       </div>
       ${!isComplete ? `
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
-        <span>${fmt(remaining,'PHP')} remaining</span>
+        <span>${fmt(remaining, db.displayCurrency||'PHP')} remaining</span>
         <span>${totalPaidMonths} / ${totalMonths} ${aiPlural(totalMonths,'month')} paid</span>
       </div>
       <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:8px">
@@ -10469,7 +10534,7 @@ function renderInstallments() {
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
         <span>${startD} – ${endD}</span>
-        <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
+        <span>Total: ${fmt(totalMonths * monthlyAmt, db.displayCurrency||'PHP')}</span>
       </div>` : `
       <div style="height:6px;background:var(--bg5);border-radius:3px;overflow:hidden;margin-bottom:6px">
         <div style="height:100%;border-radius:3px;background:var(--green);width:100%"></div>
@@ -12891,7 +12956,7 @@ function renderAnalyticsInvestments() {
 }
 
 function renderAnalyticsForex() {
-  const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
+  const currencies = db.trackedCurrencies.filter(c=>c!==(db.displayCurrency||'PHP'));
   if (currencies.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">💱</div><div class="empty-text">No tracked currencies</div><div class="empty-sub">Add currencies in Settings → FX Rates</div></div>`;
 
   // Build last 12 months
@@ -13469,7 +13534,7 @@ function renderContractTab() {
     const expectedNow = monthsElapsed > 0 ? b.monthly * monthsElapsed : 0;
     const bPct = b.cap ? Math.min(100,(val/b.cap)*100) : (expectedNow>0?Math.min(100,(val/expectedNow)*100):0);
     const diff = val - expectedNow;
-    const statusTxt = expectedNow>0?(diff>=0?`+${fmt(Math.round(diff),'PHP')} ahead`:`${fmt(Math.round(Math.abs(diff)),'PHP')} behind`):'—';
+    const statusTxt = expectedNow>0?(diff>=0?`+${fmt(Math.round(diff),goalCurr)} ahead`:`${fmt(Math.round(Math.abs(diff)),goalCurr)} behind`):'—';
     const statusColor = diff>=0?'var(--green)':'var(--red)';
     // Gauge color: red if behind expected pace, green if on/ahead. If no expectation yet (early), use neutral.
     const gaugeColor = expectedNow>0 ? (diff>=0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)';
@@ -13492,12 +13557,12 @@ function renderContractTab() {
           <div style="width:10px;height:10px;border-radius:50%;background:${b.color};flex-shrink:0;margin-top:5px;box-shadow:0 0 4px ${b.color}66"></div>
           <div style="min-width:0;flex:1">
             <div style="font-size:13px;font-weight:600">${b.name}</div>
-            <div style="font-size:11px;color:var(--text3)">${b.rate||'—'} · ₱${(b.monthly||0).toLocaleString()}/mo${b.cap?' · cap '+fmt(b.cap,'PHP'):''}</div>
+            <div style="font-size:11px;color:var(--text3)">${b.rate||'—'} · ${fmt(b.monthly||0,goalCurr)}/mo${b.cap?` · cap ${fmt(b.cap,goalCurr)}`:''}</div>
           </div>
         </div>
         ${editControls}
         <div style="text-align:right;margin-left:8px">
-          <div style="font-family:var(--mono);font-size:14px;font-weight:600">${isLinked?fmt(Math.round(val),'PHP'):'—'}</div>
+          <div style="font-family:var(--mono);font-size:14px;font-weight:600">${isLinked?fmt(Math.round(val),goalCurr):'—'}</div>
           <div style="font-size:11px;color:${statusColor}">${statusTxt}</div>
         </div>
       </div>
@@ -13522,7 +13587,7 @@ function renderContractTab() {
   const targetPct = Math.min(100,(targetToday/safeGoal)*100);
   const gap = totalActual - targetToday;
   const gapColor = gap>=0?'var(--green)':'var(--red)';
-  const gapLabel = gap>=0?`+${fmt(Math.round(gap),'PHP')} ahead`:`${fmt(Math.round(Math.abs(gap)),'PHP')} behind`;
+  const gapLabel = gap>=0?`+${fmt(Math.round(gap),goalCurr)} ahead`:`${fmt(Math.round(Math.abs(gap)),goalCurr)} behind`;
   const toGoal = Math.max(0, safeGoal - totalActual);
 
   // Milestones
@@ -13726,7 +13791,7 @@ function renderRunwayCalc(contract) {
       <span style="color:var(--text2)">Total savings</span><span style="font-family:var(--mono)">${fmt(Math.round(totalActual),goalCurr)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text2)">Avg monthly expenses (3mo)</span><span style="font-family:var(--mono)">${avgMonthlyExpense>0?fmt(Math.round(avgMonthlyExpense),'PHP'):'—'}</span>
+      <span style="color:var(--text2)">Avg monthly expenses (3mo)</span><span style="font-family:var(--mono)">${avgMonthlyExpense>0?fmt(Math.round(avgMonthlyExpense), db.displayCurrency||'PHP'):'—'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;padding:8px 0">
       <span>Runway</span>
@@ -13983,11 +14048,11 @@ function openBucketSheet(contractId, bucketId) {
     </div>
     <div class="form-row fr2" style="margin-bottom:14px">
       <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Monthly (₱) *</label>
+        <label class="form-label">Monthly (${sym(db.displayCurrency||'PHP')}) *</label>
         <input class="form-input numpad-input" id="bk-monthly" type="number" step="100" min="0" placeholder="0" value="${b?.monthly||''}" inputmode="none">
       </div>
       <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Cap (₱) — optional</label>
+        <label class="form-label">Cap (${sym(db.displayCurrency||'PHP')}) — optional</label>
         <input class="form-input numpad-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap" value="${b?.cap||''}" inputmode="none">
       </div>
     </div>
@@ -14203,7 +14268,7 @@ function renderProfileTab() {
       <div class="tracked-chips" style="margin-bottom:12px">
         ${db.trackedCurrencies.map(c=>{
           const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵',code:c};
-          return `<div class="tracked-chip">${info.flag} ${c} ${c!=='PHP'?`<span class="tracked-chip-remove" onclick="removeTrackedCurr('${c}')">×</span>`:''}
+          return `<div class="tracked-chip">${info.flag} ${c} ${c!==(db.displayCurrency||'PHP')?`<span class="tracked-chip-remove" onclick="removeTrackedCurr('${c}')">×</span>`:''}
           </div>`;
         }).join('')}
       </div>
@@ -14300,7 +14365,8 @@ function setDisplayCurrency(curr) {
 }
 
 function removeTrackedCurr(code) {
-  if (code === 'PHP') { showToast('PHP cannot be removed'); return; }
+  const home = db.displayCurrency || 'PHP';
+  if (code === home) { showToast(`${home} is your home currency — cannot be removed`); return; }
   db.trackedCurrencies = db.trackedCurrencies.filter(c=>c!==code);
   saveDBWithSync(); renderSettings();
 }
@@ -14336,7 +14402,7 @@ function addTrackedCurr(code) {
 }
 
 function renderFXTab() {
-  const currencies = db.trackedCurrencies.filter(c=>c!=='PHP');
+  const currencies = db.trackedCurrencies.filter(c=>c!==(db.displayCurrency||'PHP'));
 
   let html = `<div class="page-pad">
     <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend.</div>`;
@@ -14390,7 +14456,7 @@ function openFxHistoryPage(currency) {
             <span style="font-size:13px;flex-shrink:0">${sourceIcon}</span>
             <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 8px;flex:1;min-width:0;max-width:140px">
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-              <span style="color:var(--text3);font-size:12px">₱</span>
+              <span style="color:var(--text3);font-size:12px">${sym(db.displayCurrency||'PHP')}</span>
               <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${currency}',${i})" style="font-size:11px;padding:4px 8px;flex-shrink:0">Save</button>
@@ -14427,7 +14493,7 @@ function openAddFxHistoryDlg(currency) {
     `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add a manual rate override. This will affect snapshot resolution for any tx on or after this date (until the next rate entry).</div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="addfx-date" value="${today()}"></div>
-      <div class="form-group"><label class="form-label">Rate (1 ${currency} = ? PHP)</label><input class="form-input numpad-input" type="number" step="any" id="addfx-rate" value="${latest}" inputmode="none"></div>
+      <div class="form-group"><label class="form-label">Rate (1 ${currency} = ? ${db.displayCurrency||'PHP'})</label><input class="form-input numpad-input" type="number" step="any" id="addfx-rate" value="${latest}" inputmode="none"></div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmAddFxHistory('${currency}')">Add</button>`
@@ -15680,7 +15746,7 @@ function exportXLSX() {
     const today_ = today();
 
     // ── Sheet 1: Transactions ──
-    const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency','PHP Equivalent','Account','To Account','Notes','Tags']];
+    const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency',((db.displayCurrency||'PHP') + ' Equiv'),'Account','To Account','Notes','Tags']];
     for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
       if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain) continue; // skip auto-children
       const cat = getCategoryDisplay(tx.categoryId);
@@ -15706,7 +15772,7 @@ function exportXLSX() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
 
     // ── Sheet 2: Accounts ──
-    const acctRows = [['Name','Type','Currency','Current Balance','PHP Equivalent','Initial Balance','Note','Archived']];
+    const acctRows = [['Name','Type','Currency','Current Balance',((db.displayCurrency||'PHP') + ' Equiv'),'Initial Balance','Note','Archived']];
     for (const a of db.accounts) {
       const bal = getAcctBalance(a.id);
       acctRows.push([
@@ -15738,7 +15804,7 @@ function exportXLSX() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bgtRows), 'Budgets');
 
     // ── Sheet 4: Loans ──
-    const loanRows = [['Direction','Person/Entity','Amount','Currency','PHP Equivalent','Remaining','Settled','Date','Notes']];
+    const loanRows = [['Direction','Person/Entity','Amount','Currency',((db.displayCurrency||'PHP') + ' Equiv'),'Remaining','Settled','Date','Notes']];
     for (const l of (db.loans?.lent || [])) {
       loanRows.push(['Lent', l.person||l.entity||'', l.amount, l.currency,
         Math.round(toPhp(l.amount, l.currency)*100)/100,
@@ -17284,10 +17350,10 @@ function aiSeverity(ratio) {
 }
 
 // Format with thin space separator for readability of large numbers
-function aiAmt(n, curr = 'PHP') {
+function aiAmt(n, curr) {
+  if (!curr) curr = db.displayCurrency || 'PHP';
   if (typeof n !== 'number' || !isFinite(n)) n = 0;
-  const sym = curr === 'PHP' ? '₱' : curr + ' ';
-  return sym + Math.round(n).toLocaleString('en');
+  return fmt(Math.round(n), curr);
 }
 
 // Pluralize helper
@@ -17299,7 +17365,7 @@ function aiPlural(n, singular, plural) {
 function aiMonthRef(monthsAgo) {
   if (monthsAgo === 0) return 'this month';
   if (monthsAgo === 1) return 'last month';
-  return `${monthsAgo} months ago`;
+  return `${monthsAgo} ${aiPlural(monthsAgo,'month')} ago`;
 }
 
 // Wrap a personalized opener — sometimes uses nickname, sometimes generic.
@@ -17346,7 +17412,8 @@ function aiBudgetIntelligence() {
         .reduce((ss,t)=>ss+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
     },0) / (months.filter(m=>m.txs.length>0).length||1);
     const ratio = avgSpend / bgt.limit;
-    const sym = bgt.currency==='PHP'?'₱':'K';
+    const sym = s => `${s} `; // use fmt() for currency amounts
+    const fmtB = n => fmt(Math.round(n), bgt.currency);
     if (ratio > 1.1) {
       const id = 'budget-over-'+bgt.id;
       const sev = aiSeverity(ratio);
@@ -17359,10 +17426,10 @@ function aiBudgetIntelligence() {
         `Overshooting your ${bgt.location} budget`,
       ];
       const bodies = [
-        `You're ${sev} over — averaging ${sym}${avgSpend.toFixed(0)}/mo against your ${sym}${bgt.limit} limit. Try ${sym}${newLimit} as a more realistic target.`,
-        `${aiName()?aiName()+', y':'Y'}our ${bgt.location} spend is ${sev} above plan: ${sym}${avgSpend.toFixed(0)} vs ${sym}${bgt.limit}. Consider raising to ${sym}${newLimit}.`,
-        `Three-month average says ${sym}${avgSpend.toFixed(0)} — that's ${(ratio*100-100).toFixed(0)}% past your ${sym}${bgt.limit} cap. ${sym}${newLimit} would fit better.`,
-        `Spending ${sym}${overshoot.toFixed(0)} more than budgeted on average. ${sym}${newLimit} feels more honest.`,
+        `You're ${sev} over — averaging ${fmtB(avgSpend)}/mo against your ${fmtB(bgt.limit)} limit. Try ${fmtB(newLimit)} as a more realistic target.`,
+        `${aiName()?aiName()+', y':'Y'}our ${bgt.location} spend is ${sev} above plan: ${fmtB(avgSpend)} vs ${fmtB(bgt.limit)}. Consider raising to ${fmtB(newLimit)}.`,
+        `Three-month average says ${fmtB(avgSpend)} — that's ${(ratio*100-100).toFixed(0)}% past your ${fmtB(bgt.limit)} cap. ${fmtB(newLimit)} would fit better.`,
+        `Spending ${fmtB(overshoot)} more than budgeted on average. ${fmtB(newLimit)} feels more honest.`,
       ];
       insights.push({id,type:'budget',priority:'high',icon:'📈',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review budget limit'});
     }
@@ -17378,10 +17445,10 @@ function aiBudgetIntelligence() {
         `${bgt.location}: more headroom than expected`,
       ];
       const bodies = [
-        `Averaging ${sym}${avgSpend.toFixed(0)}/mo — that's ${pct}% under limit. ${sym}${headroom.toFixed(0)} could go to savings.`,
-        `You've got ${pct}% breathing room (${sym}${headroom.toFixed(0)}/mo unused). Worth redirecting to a goal.`,
-        `Only spending ${sym}${avgSpend.toFixed(0)} of your ${sym}${bgt.limit}. The extra ${sym}${headroom.toFixed(0)} is sitting idle.`,
-        `Consistently ${pct}% below limit — could lower the cap or move ${sym}${headroom.toFixed(0)} to investments.`,
+        `Averaging ${fmtB(avgSpend)}/mo — that's ${pct}% under limit. ${fmtB(headroom)} could go to savings.`,
+        `You've got ${pct}% breathing room (${fmtB(headroom)}/mo unused). Worth redirecting to a goal.`,
+        `Only spending ${fmtB(avgSpend)} of your ${fmtB(bgt.limit)}. The extra ${fmtB(headroom)} is sitting idle.`,
+        `Consistently ${pct}% below limit — could lower the cap or move ${fmtB(headroom)} to investments.`,
       ];
       insights.push({id,type:'budget',priority:'low',icon:'📉',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Consider reallocating'});
     }
@@ -17480,7 +17547,7 @@ function aiPaydayPredictor() {
       bodies = [
         `Based on your ${avgInterval}-day cycle, today should be it.`,
         `Your typical pay rhythm puts the next deposit on ${dateStr}.`,
-        `Pattern suggests today — ${avgInterval} days since the last one.`,
+        `Pattern suggests today — ${avgInterval} ${aiPlural(avgInterval,'day')} since the last one.`,
       ];
     } else if (daysUntil <= 3) {
       titles = [`Next income in ~${daysUntil} days`, `Payday around ${dateStr}`, `Income coming soon`];
@@ -17743,7 +17810,7 @@ function aiCashFlowForecast() {
   const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
   const daily = daysPassed > 0 ? spent/daysPassed : 0;
   const projected = spent + daily*daysLeft;
-  const bgt = db.budgets?.find(b=>b.active&&b.currency==='PHP');
+  const bgt = db.budgets?.find(b=>b.active&&b.currency===(db.displayCurrency||'PHP'));
   // Only fire if budget exists AND there's actual spending data this month
   if (bgt && spent > 0 && daysPassed >= 3) {
     if (projected > bgt.limit*1.1) {
@@ -18653,7 +18720,7 @@ function openInstallmentDetail(instId) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div>
         <div style="font-size:11px;color:var(--text4);margin-bottom:3px">📂 ${catName}</div>
-        <div style="font-size:13px;color:var(--text2)">${fmt(monthlyAmt,'PHP')}/month</div>
+        <div style="font-size:13px;color:var(--text2)">${fmt(monthlyAmt, db.displayCurrency||'PHP')}/month</div>
       </div>
       ${isComplete
         ? `<span style="padding:3px 12px;border-radius:999px;font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
@@ -18661,15 +18728,15 @@ function openInstallmentDetail(instId) {
     </div>
     ${!isComplete ? `
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
-        <span>${fmt(remaining,'PHP')} remaining</span>
-        <span>${totalPaidMonths} / ${totalMonths} paid</span>
+        <span>${fmt(remaining, db.displayCurrency||'PHP')} remaining</span>
+        <span>${totalPaidMonths} / ${totalMonths} ${aiPlural(totalMonths,'month')} paid</span>
       </div>
       <div style="height:8px;background:var(--bg5);border-radius:4px;overflow:hidden;margin-bottom:6px">
         <div style="height:100%;border-radius:4px;background:var(--accent);width:${pct.toFixed(1)}%"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-bottom:14px">
         <span>${startD} – ${endD}</span>
-        <span>Total: ${fmt(totalMonths * monthlyAmt,'PHP')}</span>
+        <span>Total: ${fmt(totalMonths * monthlyAmt, db.displayCurrency||'PHP')}</span>
       </div>` : ''}
     ${inst.notes ? `<div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2)">📝 ${inst.notes}</div>` : ''}
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:8px 0 6px">Months</div>
@@ -19003,5 +19070,16 @@ function openInstArchiveSheet() {
     <button class="np-btn np-ok" style="grid-column:span 4" onclick="npConfirm()">✓ Done</button>
   </div>
 </div>
+
+<script>
+// ── PERSONAL LOGIC SET ── close onboarding dropdowns on outside click
+document.addEventListener('click', e => {
+  const natList = document.getElementById('ob-nat-list');
+  const locList = document.getElementById('ob-loc-list');
+  if (natList && !e.target.closest('#ob-nat-search') && !e.target.closest('#ob-nat-list')) natList.style.display='none';
+  if (locList && !e.target.closest('#ob-loc-search') && !e.target.closest('#ob-loc-list')) locList.style.display='none';
+});
+</script>
+
 </body>
 </html>
