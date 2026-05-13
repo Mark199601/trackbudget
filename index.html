@@ -16560,6 +16560,10 @@ async function confirmLoadDriveBackup(fileId) {
     };
     Object.assign(db, backup);
     Object.assign(db.settings, driveSettings);
+    // ── PERSONAL LOGIC SET ── force onboarded:true after Drive load
+    // Prevents app from showing onboarding screen if backup was saved before onboarding was set,
+    // or if the backup came from a different build that didn't set the flag.
+    db.onboarded = true;
     saveDBWithSync();
     hideLoading();
     showToast('✅ Backup loaded! Reloading...');
