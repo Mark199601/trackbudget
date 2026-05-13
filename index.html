@@ -1353,10 +1353,29 @@ function defaultDB() {
 }
 
 let db = (() => {
+  // ── PERSONAL LOGIC SET ── two-stage loader
+  // Stage 1: parse raw JSON. If this fails, the saved data is genuinely corrupt → return defaultDB.
+  // Stage 2: run migrations. If ANY migration throws, keep the parsed data and patch only the
+  //   minimum fields. This prevents a single bad migration from wiping the user's entire backup
+  //   and bouncing them back to the onboarding screen (the bug Mark hit after Drive load).
+  let parsed;
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (!raw) return defaultDB();
-    const parsed = JSON.parse(raw);
+    parsed = JSON.parse(raw);
+  } catch(e) {
+    console.error('[TB] DB parse failed — raw JSON corrupt, falling back to defaultDB:', e);
+    return defaultDB();
+  }
+  // Self-heal: if data exists but onboarded is missing/false, treat as onboarded.
+  // This protects against backups saved before the onboarded flag existed, or backups
+  // restored from a state where the flag was never set to true.
+  if ((parsed.transactions?.length > 0 || parsed.accounts?.length > 0 || parsed.profile?.nickname)
+      && !parsed.onboarded) {
+    console.warn('[TB] Self-heal: data exists but onboarded:false → forcing onboarded:true');
+    parsed.onboarded = true;
+  }
+  try {
     // Ensure new fields exist
     if (!parsed.fxHistory) parsed.fxHistory = {};
         // Ensure baseline entries for all tracked currencies
@@ -1446,7 +1465,43 @@ let db = (() => {
       }
     }
     return parsed;
-  } catch(e) { return defaultDB(); }
+  } catch(e) {
+    // ── PERSONAL LOGIC SET ── migration-stage failure: keep parsed data, don't nuke to defaultDB.
+    // The user's transactions/accounts are intact; only a migration step failed. Patch the
+    // minimum required fields so the app boots, and log the error so it can be fixed properly.
+    console.error('[TB] Migration step failed — keeping parsed data, applying minimal patches:', e);
+    if (parsed) {
+      // Ensure the bare minimum structure exists so renderDashboard etc. don't crash
+      if (!parsed.transactions) parsed.transactions = [];
+      if (!parsed.accounts) parsed.accounts = [];
+      if (!parsed.profile) parsed.profile = { nickname:'', nationality:'', country:'' };
+      if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
+      if (!parsed.categories) parsed.categories = { expense:[], income:[] };
+      if (!parsed.budgets) parsed.budgets = [];
+      if (!parsed.fxRates) parsed.fxRates = { PGK:13.02, USD:56.5, USDT:56.5, AUD:37.0, NZD:34.0 };
+      if (!parsed.fxHistory) parsed.fxHistory = {};
+      if (!parsed.trackedCurrencies) parsed.trackedCurrencies = ['PHP','PGK','USD','AUD','NZD'];
+      if (!parsed.displayCurrency) parsed.displayCurrency = 'PHP';
+      if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
+      if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
+      if (!parsed.recurringTxs) parsed.recurringTxs = [];
+      if (!parsed.targets) parsed.targets = [];
+      if (!parsed.investments) parsed.investments = [];
+      if (!parsed.reimbursements) parsed.reimbursements = [];
+      if (!parsed.loans) parsed.loans = { lent:[], borrowed:[] };
+      if (!parsed.aiCatMemory) parsed.aiCatMemory = [];
+      if (!parsed.contracts) parsed.contracts = [];
+      if (parsed.activeContractId === undefined) parsed.activeContractId = null;
+      if (!parsed.archivedLoans) parsed.archivedLoans = [];
+      if (!parsed.debugLog) parsed.debugLog = [];
+      // Force onboarded:true if any real data is present
+      if (parsed.transactions.length > 0 || parsed.accounts.length > 0 || parsed.profile.nickname) {
+        parsed.onboarded = true;
+      }
+      return parsed;
+    }
+    return defaultDB();
+  }
 })();
 
 let _isSavingToDrive = false;
@@ -16567,24 +16622,28 @@ async function confirmLoadDriveBackup(fileId) {
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     );
     delete backup._backupMeta;
-    const driveSettings = {
+    // ── PERSONAL LOGIC SET ── full replace instead of Object.assign shallow merge.
+    // Object.assign(db, backup) leaves any keys present in the OLD db that are absent in the
+    // backup — and merging two incompatible shapes was causing the post-reload onboarding bug.
+    // Preserve only the live Drive session settings, then swap in the backup as the new db.
+    const preservedDriveSettings = {
       googleDriveConnected: true,
-      googleDriveEmail: db.settings.googleDriveEmail,
-      lastDriveSync: db.settings.lastDriveSync
+      googleDriveEmail: db.settings?.googleDriveEmail,
+      lastDriveSync: db.settings?.lastDriveSync
     };
-    Object.assign(db, backup);
-    Object.assign(db.settings, driveSettings);
-    // ── PERSONAL LOGIC SET ── force onboarded:true after Drive load
-    // Prevents app from showing onboarding screen if backup was saved before onboarding was set,
-    // or if the backup came from a different build that didn't set the flag.
+    db = backup;
+    if (!db.settings) db.settings = {};
+    Object.assign(db.settings, preservedDriveSettings);
+    // Force onboarded:true after Drive load — covers backups saved before the flag existed.
     db.onboarded = true;
-    saveDBWithSync();
+    saveDB(); // synchronous local save only — skip Drive sync trigger since we're about to reload
     hideLoading();
     showToast('✅ Backup loaded! Reloading...');
     setTimeout(() => location.reload(), 1200);
   } catch(e) {
     hideLoading();
     showToast('Load failed: ' + e.message);
+    console.error('[TB] Drive load failed:', e);
   }
 }
 
