@@ -1158,11 +1158,15 @@ function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return
 
 // FX: PHP is always the base. All rates stored as "1 unit of X = ? PHP"
 // fxRates = { PGK: 13.02, USD: 56.5, AUD: 37.2, ... } meaning 1 PGK = 13.02 PHP, 1 USD = 56.5 PHP
-// ── PERSONAL LOGIC SET ── FX base currency is PHP (hardcoded as home base).
-// toPhp() = "convert to home base", fromPhp() = "convert from home base".
-// For PHP home users: direct. For other home users: routes through PHP as intermediary.
-// This is intentional — all stored FX rates are "1 [currency] = ? PHP".
-// Renaming or changing the base would require migrating all stored fxRates data.
+// ── PERSONAL LOGIC SET ── FX base currency reference.
+// IMPORTANT: Any remaining "PHP" string or "₱" symbol in the codebase is a LOGICAL REFERENCE
+// to the user's HOME CURRENCY and HOME SYMBOL — not literally Philippine Peso.
+// - toPhp(x) means "convert x to home base" (regardless of what home currency is)
+// - fromPhp(x) means "convert from home base"
+// - phpAmount means "amount in home currency"
+// - currency === 'PHP' checks in transfer FX math are "is this the home currency?"
+// All user-facing displays use db.displayCurrency dynamically via fmt() and sym().
+// Renaming these internal references would require migrating all stored data — not worth the risk.
 function _homeBase() { return db?.displayCurrency || 'PHP'; }
 
 function toPhp(amount, fromCurrency, snapshot) {
@@ -1247,24 +1251,20 @@ function defaultDB() {
   return {
     onboarded: false,
     profile: { nickname:'', nationality:'', country:'' },
-    trackedCurrencies: ['PHP','PGK','USD','AUD','NZD'],
+    trackedCurrencies: [], // populated from nationality at onboarding
     displayCurrency: null, // set from nationality on first load
-    // fxRates: 1 unit of X = ? PHP (PHP as base)
-    fxRates: { PGK:13.02, USD:56.5, USDT:56.5, AUD:37.0, NZD:34.0 },
-    // fxHistory: updated on Remittance tx or Settings FX edit
-    fxHistory: {
-      PGK: [{ date:'2026-01-01', rate:13.02, source:'baseline' }],
-      USD: [{ date:'2026-01-01', rate:56.5, source:'baseline' }],
-      AUD: [{ date:'2026-01-01', rate:37.0, source:'baseline' }],
-      NZD: [{ date:'2026-01-01', rate:34.0, source:'baseline' }]
-    },
+    // ── PERSONAL LOGIC SET ── FX rates start empty.
+    // On onboarding, the home currency (derived from nationality) is auto-added with rate 1.
+    // User adds other currencies + their rates manually in Settings → FX Rates.
+    fxRates: {},
+    fxHistory: {},
     accounts: [
-      {id:'acct-sample-cash',name:'Cash',type:'Cash',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-savings',name:'Sample Savings',type:'Savings',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-checking',name:'Sample Checking',type:'Checking',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-ewallet',name:'Sample E-Wallet',type:'E-Wallet',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-cc',name:'Sample Credit Card',type:'Credit Card',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-prepaid',name:'Sample Prepaid',type:'Prepaid',currency:'PHP',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-cash',name:'Cash',type:'Cash',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-savings',name:'Sample Savings',type:'Savings',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-checking',name:'Sample Checking',type:'Checking',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-ewallet',name:'Sample E-Wallet',type:'E-Wallet',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-cc',name:'Sample Credit Card',type:'Credit Card',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
+      {id:'acct-sample-prepaid',name:'Sample Prepaid',type:'Prepaid',currency:null,initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
     ],
     transactions: [],
     archivedTransactions: [],
@@ -1461,7 +1461,7 @@ let db = (() => {
         endDate: '',
         monthlyGoal: plan.monthlyGoal || 0,
         targetAmount: plan.safeTarget || 0,
-        goalCurrency: 'PHP',
+        goalCurrency: parsed.displayCurrency || 'PHP',
         notes: 'Migrated from previous savings plan',
         status: 'active',
         buckets: plan.buckets || {},
@@ -2412,6 +2412,15 @@ function obNext(currentStep) {
 
 function finishOnboard() {
   db.onboarded = true;
+  // ── PERSONAL LOGIC SET ── backfill home currency to anything still null after onboarding
+  const home = db.displayCurrency || 'USD';
+  // Set sample accounts' currency to home
+  (db.accounts || []).forEach(a => { if (!a.currency) a.currency = home; });
+  // Ensure trackedCurrencies has home
+  if (!db.trackedCurrencies.includes(home)) db.trackedCurrencies.unshift(home);
+  // Ensure home FX rate baseline (1:1)
+  if (!db.fxRates[home]) db.fxRates[home] = 1;
+  if (!db.fxHistory[home]) db.fxHistory[home] = [{date: today(), rate: 1, source: 'baseline'}];
   saveDBWithSync();
   document.getElementById('onboard').style.display = 'none';
   document.getElementById('app-shell').style.display = 'flex';
@@ -4506,7 +4515,7 @@ function goBack() { _addState.step=1; _sharedPersons=[]; renderAddSheet(); }
 // After shared form renders, populate the persons list
 function renderRemittanceForm() {
   const accts = db.accounts.filter(a=>!a.archived);
-  const foreignAccts = accts.filter(a => a.currency !== 'PHP');
+  const foreignAccts = accts.filter(a => a.currency !== (db.displayCurrency||'PHP'));
   const phpAccts = accts.filter(a => a.currency === 'PHP');
   const foreignOpts = foreignAccts.map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
   const phpOpts = phpAccts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
@@ -4625,7 +4634,7 @@ function updateRemittancePhpPreview() {
   if (!el) return;
   if (!amt || !rate) { el.innerHTML = `${db.displayCurrency||'PHP'} received: —`; return; }
   const php = amt * rate;
-  el.innerHTML = `${sym(curr)}${amt.toFixed(2)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">₱${php.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
+  el.innerHTML = `${sym(curr)}${amt.toFixed(2)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">${sym(db.displayCurrency||'PHP')}${php.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
 }
 
 function getLatestFxRate(currency) {
@@ -4711,7 +4720,7 @@ function submitRemittance() {
     else if (currentPage==='transactions') renderTransactions();
     else if (currentPage==='reimbursements') renderReimbursementsPage();
     else if (currentPage==='accounts') renderAccounts();
-    showToast(`Remittance saved: ${sym(currency)}${amount} → ₱${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${feeAmt>0?' (fee: '+fmt(feeAmt,feeAcct?.currency||currency)+')':''}`);
+    showToast(`Remittance saved: ${sym(currency)}${amount} → ${sym(db.displayCurrency||'PHP')}${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${feeAmt>0?' (fee: '+fmt(feeAmt,feeAcct?.currency||currency)+')':''}`);
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -4815,7 +4824,7 @@ function renderTransferForm() {
   const accts = db.accounts.filter(a=>!a.archived);
   // Default From = first PGK account, Default To = first PHP account
   const firstFrom = accts.find(a=>a.currency==='PGK') || accts[0];
-  const firstTo = accts.find(a=>a.currency==='PHP') || accts[1] || accts[0];
+  const firstTo = accts.find(a=>a.currency===(db.displayCurrency||'PHP')) || accts[1] || accts[0];
   const acctOpts = (sel)=>accts.map(a=>`<option value="${a.id}" ${a.id===(sel?firstTo:firstFrom)?.id?' selected':''}>${a.name} (${a.currency})</option>`).join('');
   const fromCurr = firstFrom?.currency || 'PGK';
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===fromCurr?'selected':''}>${c}</option>`).join('');
@@ -5071,7 +5080,7 @@ function updateTransferPreview() {
     const foreignCurr = fromCurr !== 'PHP' ? fromCurr : toCurr;
     const snapRate = getLatestFxRate(foreignCurr);
     if (fxPair) fxPair.textContent = fromCurr + ' → ' + toCurr;
-    if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ₱' + (snapRate || 0).toFixed(4);
+    if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ' + sym(db.displayCurrency||'PHP') + (snapRate || 0).toFixed(4);
 
     // Compute "will receive"
     let autoAmt;
@@ -5099,7 +5108,7 @@ function updateTransferPreview() {
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
         const label = isLoss ? 'Forex Loss' : 'Forex Gain';
-        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ₱' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text4)">auto-logged</span>';
+        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + sym(db.displayCurrency||'PHP') + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text4)">auto-logged</span>';
       } else if (!useSnapshot && userToAmount > 0 && snapRate > 0) {
         // User entered actual received only — diff vs snapshot
         const snapAmt = txCurr === 'PHP' ? amount / snapRate : amount * snapRate;
@@ -5194,7 +5203,7 @@ function submitAddTx() {
   }
 
   // Payday reminder for salary income in non-PHP
-  const isSalary = s.type==='income' && currency !== 'PHP';
+  const isSalary = s.type==='income' && currency !== (db.displayCurrency||'PHP');
 
   db.transactions.push(tx);
   // update account lastTxDate
@@ -5231,7 +5240,7 @@ function savePaydayFx(currency) {
   recordFxSnapshot(currency, rate, today());
   saveDBWithSync();
   closeDlg();
-  showToast(`${currency} rate updated to ₱${rate}`);
+  showToast(`${currency} rate updated to ${sym(db.displayCurrency||'PHP')}${rate}`);
 }
 
 function submitTransfer() {
@@ -5318,7 +5327,7 @@ function submitTransfer() {
       const toAcctF = db.accounts.find(a=>a.id===toId);
       const forexAcct = (fromAcctF?.currency==='PHP' ? fromAcctF : null)
         || (toAcctF?.currency==='PHP' ? toAcctF : null)
-        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+        || db.accounts.find(a=>!a.archived && a.currency===(db.displayCurrency||'PHP'))
         || db.accounts.find(a=>!a.archived);
       if (forexAcct) {
         const childAmt = Math.abs(forex.gainLossPhp);
@@ -5348,7 +5357,7 @@ function submitTransfer() {
     const toAcctF2 = db.accounts.find(a=>a.id===toId);
     const forexAcct2 = (toAcctF2?.currency==='PHP' ? toAcctF2 : null)
       || (fromAcctF2?.currency==='PHP' ? fromAcctF2 : null)
-      || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+      || db.accounts.find(a=>!a.archived && a.currency===(db.displayCurrency||'PHP'))
       || db.accounts.find(a=>!a.archived);
     if (forexAcct2) {
       db.transactions.push({
@@ -5439,7 +5448,7 @@ function submitTransfer() {
   else if (currentPage==='reimbursements') renderReimbursementsPage();
   else if (currentPage==='accounts') renderAccounts();
   const msg = forex && forex.direction !== 'none'
-    ? `Transfer + Forex ${forex.direction}: ₱${Math.abs(forex.gainLossPhp).toFixed(2)} logged`
+    ? `Transfer + Forex ${forex.direction}: ${sym(db.displayCurrency||'PHP')}${Math.abs(forex.gainLossPhp).toFixed(2)} logged`
     : 'Transfer saved!';
   showToast(msg);
 }
@@ -5527,7 +5536,7 @@ function renderTxLog() {
   const hasLarge = monthTxsScan.some(t => txToPhp(t) >= LARGE_THRESHOLD);
 
   const qfPills = [
-    hasLarge   ? { key:'large',   label:'💸 Large',      title:`≥ ₱${LARGE_THRESHOLD.toLocaleString()}` } : null,
+    hasLarge   ? { key:'large',   label:'💸 Large',      title:`≥ ${sym(db.displayCurrency||'PHP')}${LARGE_THRESHOLD.toLocaleString()}` } : null,
     hasForeign ? { key:'foreign', label:'🌏 Foreign',    title:`Non-${db.displayCurrency||'PHP'} transactions` } : null,
     hasNoNotes ? { key:'nonotes', label:'📝 No Notes',   title:'Transactions without notes' } : null,
   ].filter(Boolean);
@@ -6086,7 +6095,7 @@ function openTxDetail(txId) {
                        info.source === 'baseline' ? 'baseline' : '';
       fxBadge = `<div style="margin-top:12px"><div class="form-label">FX Snapshot</div>
         <div class="fx-snapshot-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="closeDlg();nav('settings');setTimeout(()=>setSettingsTab('fx'),50)">
-          ${srcIcon} 1 ${tx.currency} = ₱${snapRate} <span style="color:var(--text4);font-size:10px">(${srcLabel})</span> <span style="color:var(--accent);font-size:10px;margin-left:4px">Edit →</span>
+          ${srcIcon} 1 ${tx.currency} = ${sym(db.displayCurrency||'PHP')}${snapRate} <span style="color:var(--text4);font-size:10px">(${srcLabel})</span> <span style="color:var(--accent);font-size:10px;margin-left:4px">Edit →</span>
         </div></div>`;
     }
   }
@@ -6172,7 +6181,7 @@ function openTxDetail(txId) {
       else if (toCurr === 'PHP') actualRate = tx.toAmount / tx.amount; // foreign→PHP
       else actualRate = snapRate;
     }
-    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ₱${actualRate.toFixed(4)} (at time of transfer)</div>` : '';
+    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ${sym(db.displayCurrency||'PHP')}${actualRate.toFixed(4)} (at time of transfer)</div>` : '';
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-transfer" style="width:44px;height:44px;font-size:20px">↔️</div>
       <div>
@@ -6298,7 +6307,7 @@ function openTxReceipt(txId) {
         if (tx.currency === 'PHP') rate = tx.amount / tx.toAmount;
         else if (toCurr === 'PHP') rate = tx.toAmount / tx.amount;
       }
-      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Rate</div><div class="rcpt-row-value" style="font-family:var(--mono);font-size:11px">1 ${foreignCurr} = ₱${rate.toFixed(4)}</div></div>`;
+      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Rate</div><div class="rcpt-row-value" style="font-family:var(--mono);font-size:11px">1 ${foreignCurr} = ${sym(db.displayCurrency||'PHP')}${rate.toFixed(4)}</div></div>`;
     }
   } else {
     const acct = getAccountDisplay(tx.accountId);
@@ -6534,7 +6543,7 @@ function openEditTx(txId) {
 
   const snapRate = tx.fxSnapshot?.[tx.currency];
   const fxBadgeHTML = (tx.currency!=='PHP'&&snapRate)
-    ? `<div style="margin:4px 0 12px"><span class="fx-snapshot-badge">📸 Snapshot: 1 ${tx.currency} = ₱${snapRate} (read-only)</span></div>`
+    ? `<div style="margin:4px 0 12px"><span class="fx-snapshot-badge">📸 Snapshot: 1 ${tx.currency} = ${sym(db.displayCurrency||'PHP')}${snapRate} (read-only)</span></div>`
     : '';
 
   const isShared = tx.type === 'shared';
@@ -6654,7 +6663,7 @@ function onEditDateChange(currency, newDate, targetId) {
   if (currency === 'PHP') return;
   const newRate = getSnapshotRate(currency, newDate);
   const el = document.getElementById(targetId);
-  if (el) el.innerHTML = `<span class="fx-snapshot-badge">📸 Recalculated: 1 ${currency} = ₱${newRate} on ${newDate}</span>`;
+  if (el) el.innerHTML = `<span class="fx-snapshot-badge">📸 Recalculated: 1 ${currency} = ${sym(db.displayCurrency||'PHP')}${newRate} on ${newDate}</span>`;
 }
 
 function saveEditTx(txId) {
@@ -6851,7 +6860,7 @@ function updateEditTransferPreview() {
     toAmt = isCross ? convert(amount, txCurr, toCurr) : amount;
   }
   if (previewVal) previewVal.textContent = fmt(toAmt, toCurr);
-  if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ₱${snapRate.toFixed(4)} snapshot)` : '';
+  if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ${sym(db.displayCurrency||'PHP')}${snapRate.toFixed(4)} snapshot)` : '';
   // In custom mode, the paired input row IS the source of truth — hide read-only preview
   previewDiv.style.display = (amount > 0 && (useSnapshot || !isCrossCurrency)) ? 'block' : 'none';
   // Forex preview
@@ -6868,8 +6877,8 @@ function updateEditTransferPreview() {
       }
       const isLoss = diff < 0;
       fxPrev.style.display = 'block';
-      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ₱${snapRate.toFixed(4)} | Transaction rate: ₱${customRate.toFixed(4)}</div>
-        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ₱${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
+      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(db.displayCurrency||'PHP')}${snapRate.toFixed(4)} | Transaction rate: ${sym(db.displayCurrency||'PHP')}${customRate.toFixed(4)}</div>
+        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(db.displayCurrency||'PHP')}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
     } else { fxPrev.style.display = 'none'; }
   } else if (fxPrev) { fxPrev.style.display = 'none'; }
 }
@@ -6992,7 +7001,7 @@ function saveEditTransfer(txId) {
       const toAcctEdit = db.accounts.find(a=>a.id===tx.toAccountId);
       const forexAcctEdit = (toAcctEdit?.currency==='PHP' ? toAcctEdit : null)
         || (fromAcctEdit?.currency==='PHP' ? fromAcctEdit : null)
-        || db.accounts.find(a=>!a.archived && a.currency==='PHP')
+        || db.accounts.find(a=>!a.archived && a.currency===(db.displayCurrency||'PHP'))
         || db.accounts.find(a=>!a.archived);
       Object.assign(child, {
         type: forexDiff >= 0 ? 'income' : 'expense',
@@ -7639,7 +7648,7 @@ function openSettledReimbSheet() {
 
   const totalPhp = settled.reduce((s,t)=>s+toPhp(t.totalBill||t.amount, t.currency),0);
 
-  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ₱${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
+  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ${sym(db.displayCurrency||'PHP')}${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
 
   for (const key of periodOrder) {
     const period = byPeriod[key];
@@ -8172,7 +8181,7 @@ function renderAcctCard(a) {
     </div>
     ${a.note?`<div style="font-size:11px;color:var(--text4);margin-bottom:4px">${a.note}</div>`:''}
     <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency)}</div>
-    ${a.currency!=='PHP'?`<div style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ₱${toPhp(bal,a.currency).toFixed(0)}</div>`:''}
+    ${a.currency!=='PHP'?`<div style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(db.displayCurrency||'PHP')}${toPhp(bal,a.currency).toFixed(0)}</div>`:''}
     ${alerts.length>0?`<div style="margin-top:6px;font-size:10px;color:var(--amber)">⚠ ${alerts[0].msg}</div>`:''}
   </div>`;
 }
@@ -8219,7 +8228,7 @@ function openAcctDetail(acctId) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:28px;font-weight:600;font-family:var(--mono)">${fmt(bal,a.currency)}</div>
-        ${a.currency!=='PHP'?`<div style="font-size:13px;color:var(--text3);font-family:var(--mono)">≈ ₱${toPhp(bal,a.currency).toFixed(2)}</div>`:''}
+        ${a.currency!=='PHP'?`<div style="font-size:13px;color:var(--text3);font-family:var(--mono)">≈ ${sym(db.displayCurrency||'PHP')}${toPhp(bal,a.currency).toFixed(2)}</div>`:''}
       </div>
       <span class="pill pill-gray">${a.type}</span>
     </div>
@@ -9653,7 +9662,7 @@ function openLoanDetail(loanId, direction) {
       <div style="text-align:center;padding:8px 0 12px">
         <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Remaining</div>
         <div style="font-size:36px;font-family:var(--mono);font-weight:700;color:${accentColor}">${fmt(remaining,loan.currency)}</div>
-        ${loan.currency!=='PHP'?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ₱${toPhp(remaining,loan.currency).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
+        ${loan.currency!=='PHP'?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(db.displayCurrency||'PHP')}${toPhp(remaining,loan.currency).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
       </div>
 
       <!-- Progress bar -->
@@ -10044,7 +10053,7 @@ function openSettledLoansSheet(direction) {
 
   const totalPhp = settled.reduce((s,l)=>s+toPhp(l.amount,l.currency),0);
 
-  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ₱${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
+  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ${sym(db.displayCurrency||'PHP')}${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
 
   for (const key of periodOrder) {
     const period = byPeriod[key];
@@ -10438,7 +10447,7 @@ function updateAddLoanFx() {
     const adjustVerb = isLent ? 'Forex gain → +' : 'Forex loss → −';
     const netVerb = isLent ? 'Actual deduction' : 'Actual deposit';
     previewBox.innerHTML = `<div style="color:var(--text2)">${overallVerb} <strong>${acctName}</strong>: ${amount} ${loanCurr} × ${snapshotRate.toFixed(4)} = <span style="font-family:var(--mono);font-weight:600">${fmt(snapshotAcctAmt, acctCurr)}</span></div>
-      ${absDiff >= 0.01 ? `<div style="margin-top:6px;color:${isGain?'var(--green)':'var(--red)'}">${isGain?'Forex gain':'Forex loss'}: <span style="font-family:var(--mono);font-weight:600">₱${absDiff.toFixed(2)}</span></div>` : ''}
+      ${absDiff >= 0.01 ? `<div style="margin-top:6px;color:${isGain?'var(--green)':'var(--red)'}">${isGain?'Forex gain':'Forex loss'}: <span style="font-family:var(--mono);font-weight:600">${sym(db.displayCurrency||'PHP')}${absDiff.toFixed(2)}</span></div>` : ''}
       ${absDiff >= 0.01 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--text2)">${netVerb}: ${amount} ${loanCurr} × ${customRate} = <span style="font-family:var(--mono);font-weight:600">${fmt(agreedAcctAmt, acctCurr)}</span></div>` : ''}`;
   }
 }
@@ -10550,7 +10559,7 @@ function saveAddLoan(direction) {
   saveDBWithSync();
   closeSheet('gen');
   renderLoans();
-  const fxNote = Math.abs(forexDiffPhp) >= 0.01 ? ` · Forex ${forexDiffPhp>0?'gain':'loss'}: ₱${Math.abs(forexDiffPhp).toFixed(2)}` : '';
+  const fxNote = Math.abs(forexDiffPhp) >= 0.01 ? ` · Forex ${forexDiffPhp>0?'gain':'loss'}: ${sym(db.displayCurrency||'PHP')}${Math.abs(forexDiffPhp).toFixed(2)}` : '';
   showToast(`${isLent?'Loan':'Debt'} added!${fxNote}`);
 }
 
@@ -13117,7 +13126,7 @@ function renderAnalyticsForex() {
           <span style="font-size:18px">${currInfo.flag}</span>
           <div>
             <div style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${curr} <span style="font-size:11px;font-weight:400;color:var(--text3)">${currInfo.name||''}</span></div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(db.displayCurrency||'PHP')}${currentRate.toFixed(4)}</span></div>
           </div>
         </div>
         <div style="text-align:right">
@@ -13146,17 +13155,17 @@ function renderAnalyticsForex() {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">₱${maxRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">${sym(db.displayCurrency||'PHP')}${maxRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[maxIdx]?.label} ${months[maxIdx]?.year}</div>
         </div>
         <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">₱${currentRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">${sym(db.displayCurrency||'PHP')}${currentRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">per 1 ${curr}</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">₱${minRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">${sym(db.displayCurrency||'PHP')}${minRate.toFixed(4)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[minIdx]?.label} ${months[minIdx]?.year}</div>
         </div>
       </div>
@@ -13645,7 +13654,7 @@ function renderContractTab() {
       </div>
       ${isLinked
         ?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Linked: <span style="color:var(--accent)">${linkedNames}</span></div>`
-        :`<div style="margin-bottom:8px"><input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="₱ manual balance" style="font-size:13px;padding:8px 10px"
+        :`<div style="margin-bottom:8px"><input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="${sym(db.displayCurrency||'PHP')} manual balance" style="font-size:13px;padding:8px 10px"
            value="${(active.buckets||{})[b.id]>0?(active.buckets||{})[b.id]:''}"
            onchange="saveContractBucket('${activeId}','${b.id}',this.value)"
            oninput="saveContractBucket('${activeId}','${b.id}',this.value)"></div>`}
@@ -13925,7 +13934,7 @@ function doCheckin(contractId, hit) {
   }
   saveDB();
   renderPlanning();
-  showToast(hit ? `🔥 Streak: ${contract.savingsStreak} months!` : 'Keep going next month! 💪');
+  showToast(hit ? `🔥 Streak: ${contract.savingsStreak} ${aiPlural(contract.savingsStreak,'month')}!` : 'Keep going next month! 💪');
 }
 
 function openContractWizard() {
@@ -14423,21 +14432,65 @@ function saveProfile() {
   const country = document.getElementById('ep2-country')?.value?.trim();
   const nat = document.getElementById('ep2-nat')?.value?.trim();
   // ── PERSONAL LOGIC SET ── nationality drives home currency
-  // When user changes nationality, auto-update displayCurrency, add to tracked currencies,
-  // and ensure FX history baseline exists. Old nationality's currency is kept in trackedCurrencies.
+  // When user changes nationality, auto-update displayCurrency AND recompute all FX rates
+  // relative to the new home currency. Math:
+  //   old: 1 USD = 56.5 (old home, e.g. PHP)
+  //   if 1 newHome = X (old home), then new rate: 1 USD = 56.5 / X (newHome)
+  // FX history entries are also recomputed for consistency.
   const oldNat = db.profile.nationality;
   if (nick) db.profile.nickname = nick;
   if (country) db.profile.country = country;
   if (nat && nat !== oldNat) {
     db.profile.nationality = nat;
     const newHomeCurr = (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[nat] : null) || COUNTRY_TO_CURRENCY[nat] || 'USD';
-    const oldHomeCurr = db.displayCurrency;
-    db.displayCurrency = newHomeCurr;
-    if (!db.trackedCurrencies.includes(newHomeCurr)) db.trackedCurrencies.unshift(newHomeCurr);
-    // Ensure FX rate baseline for new home currency (1:1 since it's the new base)
-    if (!db.fxRates[newHomeCurr]) db.fxRates[newHomeCurr] = 1;
-    if (!db.fxHistory[newHomeCurr]) db.fxHistory[newHomeCurr] = [{date: today(), rate: 1, source: 'baseline'}];
-    showToast(`🏠 Home base changed to ${newHomeCurr}. Update FX rates in Settings.`);
+    const oldHomeCurr = db.displayCurrency || 'PHP';
+    if (newHomeCurr !== oldHomeCurr) {
+      // Find the new home currency's rate in old-home terms (e.g. 1 AFN = 0.786 PHP)
+      const newHomeRateInOldHome = db.fxRates[newHomeCurr];
+      if (newHomeRateInOldHome && newHomeRateInOldHome > 0) {
+        // Recompute every other currency's rate to be in newHome terms
+        const newRates = {};
+        const newHistory = {};
+        Object.keys(db.fxRates).forEach(curr => {
+          if (curr === newHomeCurr) {
+            newRates[curr] = 1; // new base
+          } else if (curr === oldHomeCurr) {
+            // Old home in new home terms = 1 / (1 newHome in oldHome)
+            newRates[curr] = 1 / newHomeRateInOldHome;
+          } else {
+            // Other currency: old_rate (in oldHome) / newHomeRateInOldHome
+            const oldRate = db.fxRates[curr];
+            if (oldRate && oldRate > 0) newRates[curr] = oldRate / newHomeRateInOldHome;
+          }
+        });
+        // Recompute history same way
+        Object.keys(db.fxHistory || {}).forEach(curr => {
+          newHistory[curr] = (db.fxHistory[curr] || []).map(entry => {
+            let newRate;
+            if (curr === newHomeCurr) newRate = 1;
+            else if (curr === oldHomeCurr) newRate = 1 / newHomeRateInOldHome;
+            else newRate = entry.rate / newHomeRateInOldHome;
+            return { ...entry, rate: newRate, source: entry.source || 'recomputed' };
+          });
+        });
+        // Ensure old home currency now has an entry in new rates (so it shows in FX list)
+        if (!newRates[oldHomeCurr]) newRates[oldHomeCurr] = 1 / newHomeRateInOldHome;
+        if (!newHistory[oldHomeCurr] || newHistory[oldHomeCurr].length === 0) {
+          newHistory[oldHomeCurr] = [{date: today(), rate: 1 / newHomeRateInOldHome, source: 'auto-recompute'}];
+        }
+        db.fxRates = newRates;
+        db.fxHistory = newHistory;
+        showToast(`🏠 Home base → ${newHomeCurr}. FX rates auto-recomputed.`);
+      } else {
+        // No existing rate for new home — needs manual setup
+        db.fxRates[newHomeCurr] = 1;
+        if (!db.fxHistory[newHomeCurr]) db.fxHistory[newHomeCurr] = [{date: today(), rate: 1, source: 'baseline'}];
+        showToast(`🏠 Home base → ${newHomeCurr}. Add FX rates manually for other currencies.`);
+      }
+      db.displayCurrency = newHomeCurr;
+      if (!db.trackedCurrencies.includes(newHomeCurr)) db.trackedCurrencies.unshift(newHomeCurr);
+      if (!db.trackedCurrencies.includes(oldHomeCurr)) db.trackedCurrencies.push(oldHomeCurr);
+    }
   } else if (nat) {
     db.profile.nationality = nat;
   }
@@ -14559,7 +14612,7 @@ function openFxHistoryPage(currency) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Current Rate</div>
-            <div style="font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:-0.5px">1 ${currency} = <span style="color:var(--accent)">₱${current}</span></div>
+            <div style="font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:-0.5px">1 ${currency} = <span style="color:var(--accent)">${sym(db.displayCurrency||'PHP')}${current}</span></div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="openAddFxHistoryDlg('${currency}')">+ Add Rate</button>
         </div>
@@ -14634,7 +14687,7 @@ function saveFxHistoryEntry(currency, idx) {
   if (affected > 0) {
     openDlg('Update FX Rate Entry',
       `<div style="font-size:13px;color:var(--text2);line-height:1.6">
-        Changing <strong>${currency}</strong> rate from <strong>₱${oldRate}</strong> (${oldDate}) to <strong>₱${newRate}</strong> (${newDate}).
+        Changing <strong>${currency}</strong> rate from <strong>${sym(db.displayCurrency||'PHP')}${oldRate}</strong> (${oldDate}) to <strong>${sym(db.displayCurrency||'PHP')}${newRate}</strong> (${newDate}).
         <div style="margin:10px 0;padding:10px;background:var(--bg3);border-radius:var(--r-md);font-size:12px">This affects <strong>${affected}</strong> transaction${affected>1?'s':''} in this rate period.</div>
         <div style="font-size:12px;color:var(--text3)">Recompute their stored FX snapshots to use the new rate?</div>
       </div>`,
@@ -14735,7 +14788,7 @@ function deleteFxHistoryEntry(currency, idx) {
   if (entry.source === 'baseline') { showToast('Cannot delete baseline entry'); return; }
 
   openDlg('Delete FX Rate Entry?',
-    `<div style="font-size:13px;color:var(--text2)">Delete rate ₱${entry.rate} on ${entry.date}? Affected transactions will re-resolve to the previous period's rate on next recompute.</div>`,
+    `<div style="font-size:13px;color:var(--text2)">Delete rate ${sym(db.displayCurrency||'PHP')}${entry.rate} on ${entry.date}? Affected transactions will re-resolve to the previous period's rate on next recompute.</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="confirmDeleteFxHistory('${currency}',${idx})">Delete</button>`
   );
@@ -15749,7 +15802,7 @@ function renderDataTab() {
         <div class="sr-right">↓</div>
       </div>
       <div class="settings-row" onclick="exportXLSX()">
-        <div class="sr-left"><div class="sr-icon">📊</div><div><div class="sr-text">Export to Excel (.xlsx)</div><div class="sr-sub">${txCount} transactions · 6 sheets</div></div></div>
+        <div class="sr-left"><div class="sr-icon">📊</div><div><div class="sr-text">Export to Excel (.xlsx)</div><div class="sr-sub">${txCount} ${aiPlural(txCount,'transaction')} · 6 sheets</div></div></div>
         <div class="sr-right">↓</div>
       </div>
     </div>
@@ -17257,8 +17310,8 @@ function initApp() {
     document.getElementById('onboard').style.display = 'flex';
     document.getElementById('app-shell').style.display = 'none';
     initObProgress();
-    obSelectedNat = db.profile.country || 'Papua New Guinea';
-    obTracked = [...(db.trackedCurrencies || ['PHP','PGK','USD','AUD','NZD'])];
+    obSelectedNat = db.profile.nationality || db.profile.country || '';
+    obTracked = [...(db.trackedCurrencies || [])];
     document.getElementById('ob-nickname').value = db.profile.nickname || '';
   } else {
     document.getElementById('onboard').style.display = 'none';
@@ -17662,10 +17715,10 @@ function aiAnomalyDetection() {
         `Spending more on ${catName} than usual`,
       ];
       const bodies = [
-        `${sev} above your norm — ₱${curAmt.toFixed(0)} this month vs ₱${avg.toFixed(0)} average. That's ${pctOver}% higher.`,
-        `${catName} jumped to ₱${curAmt.toFixed(0)} — ${pctOver}% above your typical ₱${avg.toFixed(0)}.`,
-        `Your ${catName} expenses are ${sev} elevated: ₱${curAmt.toFixed(0)} vs the usual ₱${avg.toFixed(0)}.`,
-        `${pctOver}% spike in ${catName} — ₱${(curAmt-avg).toFixed(0)} more than your historical average.`,
+        `${sev} above your norm — ${sym(db.displayCurrency||'PHP')}${curAmt.toFixed(0)} this month vs ${sym(db.displayCurrency||'PHP')}${avg.toFixed(0)} average. That's ${pctOver}% higher.`,
+        `${catName} jumped to ${sym(db.displayCurrency||'PHP')}${curAmt.toFixed(0)} — ${pctOver}% above your typical ${sym(db.displayCurrency||'PHP')}${avg.toFixed(0)}.`,
+        `Your ${catName} expenses are ${sev} elevated: ${sym(db.displayCurrency||'PHP')}${curAmt.toFixed(0)} vs the usual ${sym(db.displayCurrency||'PHP')}${avg.toFixed(0)}.`,
+        `${pctOver}% spike in ${catName} — ${sym(db.displayCurrency||'PHP')}${(curAmt-avg).toFixed(0)} more than your historical average.`,
       ];
       insights.push({id,type:'anomaly',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -17697,18 +17750,18 @@ function aiPaydayPredictor() {
         `Pattern suggests today — ${avgInterval} ${aiPlural(avgInterval,'day')} since the last one.`,
       ];
     } else if (daysUntil <= 3) {
-      titles = [`Next income in ~${daysUntil} days`, `Payday around ${dateStr}`, `Income coming soon`];
+      titles = [`Next income in ~${daysUntil} ${aiPlural(daysUntil,'day')}`, `Payday around ${dateStr}`, `Income coming soon`];
       bodies = [
         `Right around the corner — your ${avgInterval}-day cycle points to ${dateStr}.`,
         `Just ${daysUntil} ${aiPlural(daysUntil,'day')} out, based on your usual rhythm.`,
         `Expected on ${dateStr}, give or take a day.`,
       ];
     } else {
-      titles = [`Next income in ~${daysUntil} days`, `Payday in ${daysUntil} days`, `~${daysUntil} days to next deposit`];
+      titles = [`Next income in ~${daysUntil} ${aiPlural(daysUntil,'day')}`, `Payday in ${daysUntil} ${aiPlural(daysUntil,'day')}`, `~${daysUntil} ${aiPlural(daysUntil,'day')} to next deposit`];
       bodies = [
         `Based on a ${avgInterval}-day cycle. Expected around ${dateStr}.`,
-        `Your pattern says ${dateStr} — ${daysUntil} days from now.`,
-        `${daysUntil} days out at your typical ${avgInterval}-day pace.`,
+        `Your pattern says ${dateStr} — ${daysUntil} ${aiPlural(daysUntil,'day')} from now.`,
+        `${daysUntil} ${aiPlural(daysUntil,'day')} out at your typical ${avgInterval}-day pace.`,
       ];
     }
     insights.push({id,type:'payday',priority:daysUntil<=3?'high':'low',icon:'💰',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
@@ -17779,18 +17832,18 @@ function aiSavingsPace() {
     const id = 'savings-behind';
     const onTrack = projected >= targetAmount;
     const titles = [
-      `₱${fmtPHP(gap)} behind savings target`,
-      `Savings pace lagging by ₱${fmtPHP(gap)}`,
+      `${sym(db.displayCurrency||'PHP')}${fmtPHP(gap)} behind savings target`,
+      `Savings pace lagging by ${sym(db.displayCurrency||'PHP')}${fmtPHP(gap)}`,
       `Falling short on savings`,
-      `Behind schedule by ₱${fmtPHP(gap)}`,
+      `Behind schedule by ${sym(db.displayCurrency||'PHP')}${fmtPHP(gap)}`,
     ];
     const status = onTrack
-      ? `Good news — projected ₱${fmtPHP(projected)} still hits the ₱${fmtPHP(targetAmount)} goal.`
-      : `Heads up — at this pace, projected total is ₱${fmtPHP(projected)}, short of ₱${fmtPHP(targetAmount)}.`;
+      ? `Good news — projected ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)} still hits the ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetAmount)} goal.`
+      : `Heads up — at this pace, projected total is ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}, short of ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetAmount)}.`;
     const bodies = [
-      `${dayCounter}. ${paceLine} Expected: ₱${fmtPHP(targetNow)} · Actual: ₱${fmtPHP(actualTotal)}. ${status}`,
+      `${dayCounter}. ${paceLine} Expected: ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetNow)} · Actual: ${sym(db.displayCurrency||'PHP')}${fmtPHP(actualTotal)}. ${status}`,
       `${dayCounter}. You're at ${actualPct.toFixed(1)}%, target says ${expectedPct.toFixed(1)}% by now. ${status}`,
-      `${dayCounter}. ₱${fmtPHP(actualTotal)} saved vs ₱${fmtPHP(targetNow)} expected. ${status}`,
+      `${dayCounter}. ${sym(db.displayCurrency||'PHP')}${fmtPHP(actualTotal)} saved vs ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetNow)} expected. ${status}`,
     ];
     insights.push({id, type:'savings', priority, icon:'🎯', title:aiPick(titles,id), body:aiPick(bodies,id), action:'Review contract tab'});
   } else if (gap < -5000) {
@@ -17798,15 +17851,15 @@ function aiSavingsPace() {
     const id = 'savings-ahead';
     const ahead = Math.abs(gap);
     const titles = [
-      `₱${fmtPHP(ahead)} ahead of savings pace`,
+      `${sym(db.displayCurrency||'PHP')}${fmtPHP(ahead)} ahead of savings pace`,
       `Savings ahead of plan`,
       `${aiName()?aiName()+', y':'Y'}ou're crushing the savings target`,
-      `Running ahead by ₱${fmtPHP(ahead)}`,
+      `Running ahead by ${sym(db.displayCurrency||'PHP')}${fmtPHP(ahead)}`,
     ];
     const bodies = [
-      `${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}. Keep going!`,
-      `${dayCounter}. At ${actualPct.toFixed(1)}% vs target ${expectedPct.toFixed(1)}% — projected to land at ₱${fmtPHP(projected)}.`,
-      `${dayCounter}. ₱${fmtPHP(actualTotal)} already vs ₱${fmtPHP(targetNow)} expected. Trajectory: ₱${fmtPHP(projected)}.`,
+      `${dayCounter}. ${paceLine} Projected: ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}. Keep going!`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}% vs target ${expectedPct.toFixed(1)}% — projected to land at ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}.`,
+      `${dayCounter}. ${sym(db.displayCurrency||'PHP')}${fmtPHP(actualTotal)} already vs ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetNow)} expected. Trajectory: ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'🚀', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   } else {
@@ -17819,9 +17872,9 @@ function aiSavingsPace() {
       `On schedule — savings on point`,
     ];
     const bodies = [
-      `${dayCounter}. ${paceLine} Projected: ₱${fmtPHP(projected)}.`,
-      `${dayCounter}. At ${actualPct.toFixed(1)}% — exactly where you should be. Projected: ₱${fmtPHP(projected)}.`,
-      `${dayCounter}. ₱${fmtPHP(actualTotal)} saved, target ₱${fmtPHP(targetNow)} — bullseye. Projected: ₱${fmtPHP(projected)}.`,
+      `${dayCounter}. ${paceLine} Projected: ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}.`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}% — exactly where you should be. Projected: ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}.`,
+      `${dayCounter}. ${sym(db.displayCurrency||'PHP')}${fmtPHP(actualTotal)} saved, target ${sym(db.displayCurrency||'PHP')}${fmtPHP(targetNow)} — bullseye. Projected: ${sym(db.displayCurrency||'PHP')}${fmtPHP(projected)}.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'✅', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   }
@@ -17850,9 +17903,9 @@ function aiRecurringDetector() {
           `Subscription detected: ${catName}`,
         ];
         const bodies = [
-          `~${fmt(avg,grp[0].currency)} appears ${grp.length}× across ${months.length} months.`,
-          `${grp.length} similar ${catName} charges over ${months.length} months — averaging ${fmt(avg,grp[0].currency)}.`,
-          `Looks like a ${fmt(avg,grp[0].currency)}/month commitment based on ${grp.length} entries.`,
+          `~${fmt(avg,grp[0].currency)} appears ${grp.length}× across ${months.length} ${aiPlural(months.length,'month')}.`,
+          `${grp.length} similar ${catName} charges over ${months.length} ${aiPlural(months.length,'month')} — averaging ${fmt(avg,grp[0].currency)}.`,
+          `Looks like a ${fmt(avg,grp[0].currency)}/month commitment based on ${grp.length} ${aiPlural(grp.length,'entry','entries')}.`,
         ];
         insights.push({id,type:'recurring',priority:'low',icon:'🔄',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Add to recurring'});
       }
@@ -17879,9 +17932,9 @@ function aiFxAdvisor() {
       `${aiName()?aiName()+', t':'T'}his looks like a smart remit moment`,
     ];
     const bodies = [
-      `Current ₱${current.toFixed(2)}/PGK is above recent avg ₱${last3Avg.toFixed(2)} — +${diffPct}%.`,
+      `Current ${sym(db.displayCurrency||'PHP')}${current.toFixed(2)}/PGK is above recent avg ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)} — +${diffPct}%.`,
       `Rate's ${diffPct}% better than your 3-period average. Worth considering.`,
-      `Above your typical ₱${last3Avg.toFixed(2)} by ${diffPct}% — small win on conversion.`,
+      `Above your typical ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)} by ${diffPct}% — small win on conversion.`,
     ];
     insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
   }
@@ -17894,7 +17947,7 @@ function aiFxAdvisor() {
       'Rate dipped — maybe hold',
     ];
     const bodies = [
-      `Current ₱${current.toFixed(2)}/PGK below recent avg ₱${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,
+      `Current ${sym(db.displayCurrency||'PHP')}${current.toFixed(2)}/PGK below recent avg ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,
       `Rate's ${diffPct}% under your typical conversion. Worth a pause unless you need it now.`,
       `${diffPct}% below your 3-period average. If timing flexible, holding might pay off.`,
     ];
@@ -17930,7 +17983,7 @@ function aiCategoryTrends() {
         `+${Math.round(change)}% over 3 months.`,
         `${catName} grew ${Math.round(change)}% across the last 3 months.`,
         `Trajectory shows +${Math.round(change)}% on ${catName} over 3 months.`,
-        `${catName} is up ₱${(vals[vals.length-1]-vals[0]).toFixed(0)} vs 3 months ago.`,
+        `${catName} is up ${sym(db.displayCurrency||'PHP')}${(vals[vals.length-1]-vals[0]).toFixed(0)} vs 3 months ago.`,
       ];
       insights.push({id,type:'trend',priority:change>50?'medium':'low',icon:'📊',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -17971,10 +18024,10 @@ function aiCashFlowForecast() {
         `Trajectory: ${aiAmt(overshoot)} over budget`,
       ];
       const bodies = [
-        `At ₱${daily.toFixed(0)}/day, projected ₱${projected.toFixed(0)} vs budget ₱${bgt.limit}. ${sev} above plan.`,
-        `Burning ₱${daily.toFixed(0)}/day — at this pace, you'll close at ₱${projected.toFixed(0)} (budget ₱${bgt.limit}).`,
-        `${daysPassed} days in, daily rate of ₱${daily.toFixed(0)} projects ₱${projected.toFixed(0)} — that's ${aiAmt(overshoot)} over.`,
-        `Current trajectory ends ${aiAmt(overshoot)} past your ₱${bgt.limit} cap. ${daysLeft} days left to adjust.`,
+        `At ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)}/day, projected ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)} vs budget ${sym(db.displayCurrency||'PHP')}${bgt.limit}. ${sev} above plan.`,
+        `Burning ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)}/day — at this pace, you'll close at ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)} (budget ${sym(db.displayCurrency||'PHP')}${bgt.limit}).`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, daily rate of ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)} projects ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)} — that's ${aiAmt(overshoot)} over.`,
+        `Current trajectory ends ${aiAmt(overshoot)} past your ${sym(db.displayCurrency||'PHP')}${bgt.limit} cap. ${daysLeft} days left to adjust.`,
       ];
       insights.push({id,type:'cashflow',priority:'high',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review spending'});
     } else {
@@ -17987,9 +18040,9 @@ function aiCashFlowForecast() {
         'Budget pace looking good',
       ];
       const bodies = [
-        `Projected month-end: ₱${projected.toFixed(0)} (budget: ₱${bgt.limit}). Daily rate: ₱${daily.toFixed(0)}.`,
-        `${daysPassed} days in, ₱${daily.toFixed(0)}/day average — projected to finish at ₱${projected.toFixed(0)}, ₱${headroom.toFixed(0)} under budget.`,
-        `Daily burn ₱${daily.toFixed(0)} — month-end estimate ₱${projected.toFixed(0)}. ${headroom.toFixed(0)} room to spare.`,
+        `Projected month-end: ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)} (budget: ${sym(db.displayCurrency||'PHP')}${bgt.limit}). Daily rate: ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)}.`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)}/day average — projected to finish at ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)}, ${sym(db.displayCurrency||'PHP')}${headroom.toFixed(0)} under budget.`,
+        `Daily burn ${sym(db.displayCurrency||'PHP')}${daily.toFixed(0)} — month-end estimate ${sym(db.displayCurrency||'PHP')}${projected.toFixed(0)}. ${headroom.toFixed(0)} room to spare.`,
       ];
       insights.push({id,type:'cashflow',priority:'low',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -18012,9 +18065,9 @@ function aiReimbursementNudge() {
         `Time to nudge ${persons}`,
       ];
       const bodies = [
-        `${days} days pending — owes ${fmt(owed,tx.currency)}.`,
-        `${fmt(owed,tx.currency)} outstanding for ${days} days. A friendly reminder might help.`,
-        `${days} days since the shared expense — ${fmt(owed,tx.currency)} still owed.`,
+        `${days} ${aiPlural(days,'day')} pending — owes ${fmt(owed,tx.currency)}.`,
+        `${fmt(owed,tx.currency)} outstanding for ${days} ${aiPlural(days,'day')}. A friendly reminder might help.`,
+        `${days} ${aiPlural(days,'day')} since the shared expense — ${fmt(owed,tx.currency)} still owed.`,
         days >= 14 ? `Two weeks overdue — ${fmt(owed,tx.currency)} from ${persons}.` : `${days} days, ${fmt(owed,tx.currency)} pending.`,
       ];
       insights.push({id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Go to Reimbursements'});
@@ -18092,9 +18145,9 @@ function aiInstallmentReminder() {
     const daysUntil = Math.round((nextDueDate - today)/(1000*60*60*24));
     
     if (daysUntil >= -2 && daysUntil <= 7) {
-      const dueText = daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue`
+      const dueText = daysUntil < 0 ? `${Math.abs(daysUntil)} ${aiPlural(Math.abs(daysUntil),'day')} overdue`
         : daysUntil === 0 ? 'due today'
-        : `due in ${daysUntil} days`;
+        : `due in ${daysUntil} ${aiPlural(daysUntil,'day')}`;
       const id = 'inst-'+inst.id;
       const titles = [
         `${inst.name} payment ${dueText}`,
@@ -18137,7 +18190,7 @@ function aiLoanOverdueAlert() {
     const isLent = loan._direction === 'lent';
     const titles = [
       `${loan.personName} loan ${overdueDays}d overdue`,
-      `Overdue: ${loan.personName} — ${overdueDays} days past due`,
+      `Overdue: ${loan.personName} — ${overdueDays} ${aiPlural(overdueDays,'day')} past due`,
       `${loan.personName} hasn't ${isLent?'paid':'been paid'} — ${overdueDays}d overdue`,
     ];
     const bodies = [
@@ -18228,7 +18281,7 @@ function aiSpendingVelocity() {
       const bodies = [
         `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed — ${daysInMonth-dayOfMonth} days left.`,
         `Used ${(consumed*100).toFixed(0)}% (${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)}) with ${daysInMonth-dayOfMonth} days remaining.`,
-        `${daysInMonth-dayOfMonth} days left, ${(100-consumed*100).toFixed(0)}% budget remaining (${fmt(bgt.limit-thisMonth.expense, bgt.currency)}).`,
+        `${daysInMonth-dayOfMonth} ${aiPlural(daysInMonth-dayOfMonth,'day')} left, ${(100-consumed*100).toFixed(0)}% budget remaining (${fmt(bgt.limit-thisMonth.expense, bgt.currency)}).`,
       ];
       insights.push({id, type: 'velocity', priority: 'medium', icon: '⏱️', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
     }
@@ -18267,7 +18320,7 @@ function aiSavingRate() {
       streak >= 2 ? `${streak+1}-month savings streak` : `Net positive month`,
       `${aiName()?aiName()+', s':'S'}aving rate looking great`,
     ];
-    const streakMsg = streak >= 2 ? ` ${streak+1} months net positive — on a roll!` : '';
+    const streakMsg = streak >= 2 ? ` ${streak+1} ${aiPlural(streak+1,'month')} net positive — on a roll!` : '';
     const bodies = [
       `Net: ${fmt(net, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streakMsg}`,
       `Held onto ${fmt(net, totals.currency)} of your ${fmt(totals.income, totals.currency)} this month.${streakMsg}`,
@@ -18309,7 +18362,7 @@ function aiContractMilestone() {
       const id = 'milestone-'+ms.date;
       const dateStr = msDate.toLocaleDateString('en',{month:'short',day:'numeric'});
       const titles = [
-        `${ms.label} in ${daysUntil} days`,
+        `${ms.label} in ${daysUntil} ${aiPlural(daysUntil,'day')}`,
         `Upcoming: ${ms.label}`,
         `${ms.label} approaching`,
         `${dateStr}: ${ms.label}`,
@@ -18945,14 +18998,14 @@ function openInstallmentSuggest(instId) {
       <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border3);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0" id="src-${tx.id}"></div>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:500">${tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment'}</div>
-        <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}${!isExact ? ` · <span style="color:var(--amber)">⚠ diff: ${fmt(diff,'PHP')}</span>` : ''}</div>
+        <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)}${!isExact ? ` · <span style="color:var(--amber)">⚠ diff: ${fmt(diff, db.displayCurrency||'PHP')}</span>` : ''}</div>
       </div>
       <div style="font-family:var(--mono);font-size:13px;color:var(--red)">-${fmt(tx.amount,tx.currency)}</div>
     </div>`;
   }).join('');
 
   openDlg('🔍 Find Matching Transactions',
-    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Showing ${inst.categoryId ? getCategoryDisplay(inst.categoryId)?.name : 'matching'} transactions near ${fmt(monthly,'PHP')}</div>
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Showing ${inst.categoryId ? getCategoryDisplay(inst.categoryId)?.name : 'matching'} transactions near ${fmt(monthly, db.displayCurrency||'PHP')}</div>
      <div id="suggest-rows">${rowsHtml}</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmLinkTransactions('${instId}')">Link Selected</button>`
