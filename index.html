@@ -1446,35 +1446,50 @@ let db = (() => {
         if (t.isInvestmentFund && t.type !== 'transfer') t.type = 'transfer';
       });
     }
-    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs with missing OR wrong loanDirection.
-    // Auto-detect correct direction by looking up parent loan (single or batch) in lent/borrowed sets.
-    // Fixes legacy data where tx.loanDirection was 'borrowed' but parent loan is in lent[] (or vice versa).
-    if (parsed.transactions && parsed.loans) {
-      const lentIds = new Set((parsed.loans.lent||[]).map(l=>l.id));
-      const borrowedIds = new Set((parsed.loans.borrowed||[]).map(l=>l.id));
-      parsed.transactions.forEach(t => {
-        if (!t.isLoanPayment) return;
-        // Collect all loanIds this tx touches (single parentId + batch batchLoanIds)
-        const allIds = [t.parentId, ...(t.batchLoanIds||[])].filter(Boolean);
-        let detected = null;
-        for (const id of allIds) {
-          if (lentIds.has(id)) { detected = 'lent'; break; }
-          if (borrowedIds.has(id)) { detected = 'borrowed'; break; }
-        }
-        if (detected && t.loanDirection !== detected) {
-          t.loanDirection = detected;
-          t.type = detected === 'lent' ? 'income' : 'expense';
-        } else if (detected && !t.type) {
-          t.type = detected === 'lent' ? 'income' : 'expense';
-        }
-      });
-    }
     if (!parsed.reimbursements) parsed.reimbursements = [];
     if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
     if (!parsed.settings.contractEndDate) parsed.settings.contractEndDate = '';
     if (!parsed.loans) parsed.loans = { lent:[], borrowed:[] };
     if (!parsed.loans.lent) parsed.loans.lent = [];
     if (!parsed.loans.borrowed) parsed.loans.borrowed = [];
+    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs with missing OR wrong loanDirection.
+    // MUST run AFTER parsed.loans is initialized. Auto-detects correct direction by:
+    //   1. Looking up parent loan (single parentId or batch batchLoanIds) in lent/borrowed sets
+    //   2. Fallback: matching tx.notes/personName to loan.personName if parentId is broken
+    if (parsed.transactions && parsed.loans) {
+      const lentIds = new Set((parsed.loans.lent||[]).map(l=>l.id));
+      const borrowedIds = new Set((parsed.loans.borrowed||[]).map(l=>l.id));
+      const lentPersons = new Map();
+      const borrowedPersons = new Map();
+      (parsed.loans.lent||[]).forEach(l => { if (l.personName) lentPersons.set(l.personName.toLowerCase(), l.id); });
+      (parsed.loans.borrowed||[]).forEach(l => { if (l.personName) borrowedPersons.set(l.personName.toLowerCase(), l.id); });
+      parsed.transactions.forEach(t => {
+        if (!t.isLoanPayment) return;
+        const allIds = [t.parentId, ...(t.batchLoanIds||[])].filter(Boolean);
+        let detected = null;
+        for (const id of allIds) {
+          if (lentIds.has(id)) { detected = 'lent'; break; }
+          if (borrowedIds.has(id)) { detected = 'borrowed'; break; }
+        }
+        // Fallback: detect by person name in notes
+        if (!detected && t.notes) {
+          const notes = t.notes.toLowerCase();
+          for (const [name, lid] of lentPersons) {
+            if (notes.includes(name)) { detected = 'lent'; if (!t.parentId) t.parentId = lid; break; }
+          }
+          if (!detected) {
+            for (const [name, lid] of borrowedPersons) {
+              if (notes.includes(name)) { detected = 'borrowed'; if (!t.parentId) t.parentId = lid; break; }
+            }
+          }
+        }
+        if (detected) {
+          if (t.loanDirection !== detected) t.loanDirection = detected;
+          const correctType = detected === 'lent' ? 'income' : 'expense';
+          if (t.type !== correctType) t.type = correctType;
+        }
+      });
+    }
     if (!parsed.aiCatMemory) parsed.aiCatMemory = [];
     // Migration: ensure default sample accounts exist for new users
     const DEFAULT_ACCOUNTS = [
