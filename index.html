@@ -1446,21 +1446,26 @@ let db = (() => {
         if (t.isInvestmentFund && t.type !== 'transfer') t.type = 'transfer';
       });
     }
-    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs missing loanDirection field.
-    // Old data may have isLoanPayment:true but no loanDirection — caused wrong "Payment to/from" labels
-    // and wrong transaction type. Auto-detect direction by looking up parent loan in db.loans.lent/borrowed.
+    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs with missing OR wrong loanDirection.
+    // Auto-detect correct direction by looking up parent loan (single or batch) in lent/borrowed sets.
+    // Fixes legacy data where tx.loanDirection was 'borrowed' but parent loan is in lent[] (or vice versa).
     if (parsed.transactions && parsed.loans) {
       const lentIds = new Set((parsed.loans.lent||[]).map(l=>l.id));
       const borrowedIds = new Set((parsed.loans.borrowed||[]).map(l=>l.id));
       parsed.transactions.forEach(t => {
-        if (t.isLoanPayment && !t.loanDirection && t.parentId) {
-          if (lentIds.has(t.parentId)) {
-            t.loanDirection = 'lent';
-            t.type = 'income'; // repayment received = income
-          } else if (borrowedIds.has(t.parentId)) {
-            t.loanDirection = 'borrowed';
-            t.type = 'expense'; // payment made = expense
-          }
+        if (!t.isLoanPayment) return;
+        // Collect all loanIds this tx touches (single parentId + batch batchLoanIds)
+        const allIds = [t.parentId, ...(t.batchLoanIds||[])].filter(Boolean);
+        let detected = null;
+        for (const id of allIds) {
+          if (lentIds.has(id)) { detected = 'lent'; break; }
+          if (borrowedIds.has(id)) { detected = 'borrowed'; break; }
+        }
+        if (detected && t.loanDirection !== detected) {
+          t.loanDirection = detected;
+          t.type = detected === 'lent' ? 'income' : 'expense';
+        } else if (detected && !t.type) {
+          t.type = detected === 'lent' ? 'income' : 'expense';
         }
       });
     }
@@ -8947,7 +8952,14 @@ function setLoanTab(t) { _loanTab=t; renderLoans(); }
 
 // Helper: get all payment transactions linked to a loan
 function getLoanPayments(loanId) {
-  return db.transactions.filter(t => t.parentId === loanId && t.isSettlement && !t.archived);
+  // ── PERSONAL LOGIC SET ── batch settlements may have parentId pointing to a different loan
+  // (the "primary" in the batch). Include them if this loan is in their batchLoanIds array.
+  return db.transactions.filter(t =>
+    t.isSettlement && !t.archived && (
+      t.parentId === loanId ||
+      (t.isBatchSettlement && (t.batchLoanIds || []).includes(loanId))
+    )
+  );
 }
 
 function renderLoanList(direction) {
