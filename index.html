@@ -1446,6 +1446,24 @@ let db = (() => {
         if (t.isInvestmentFund && t.type !== 'transfer') t.type = 'transfer';
       });
     }
+    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs missing loanDirection field.
+    // Old data may have isLoanPayment:true but no loanDirection — caused wrong "Payment to/from" labels
+    // and wrong transaction type. Auto-detect direction by looking up parent loan in db.loans.lent/borrowed.
+    if (parsed.transactions && parsed.loans) {
+      const lentIds = new Set((parsed.loans.lent||[]).map(l=>l.id));
+      const borrowedIds = new Set((parsed.loans.borrowed||[]).map(l=>l.id));
+      parsed.transactions.forEach(t => {
+        if (t.isLoanPayment && !t.loanDirection && t.parentId) {
+          if (lentIds.has(t.parentId)) {
+            t.loanDirection = 'lent';
+            t.type = 'income'; // repayment received = income
+          } else if (borrowedIds.has(t.parentId)) {
+            t.loanDirection = 'borrowed';
+            t.type = 'expense'; // payment made = expense
+          }
+        }
+      });
+    }
     if (!parsed.reimbursements) parsed.reimbursements = [];
     if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
     if (!parsed.settings.contractEndDate) parsed.settings.contractEndDate = '';
@@ -9016,7 +9034,7 @@ function renderLoanList(direction) {
           </div>`;
         }).join('')}
         <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">💰 Batch Settle</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">💰 ${personLoans.length>1?'Batch Settle':'Settle'}</button>
         </div>
       </div>` : ''}
     </div>`;
@@ -9505,6 +9523,7 @@ function confirmBatchSettleLoans(direction, person) {
     isSettlement: true,
     isLoanPayment: true,
     isBatchSettlement: true,
+    loanDirection: direction,
     parentId: primaryLoan.id,
     batchLoanIds: settledNow.map(s=>s.loan.id),
     batchPerson: person,
