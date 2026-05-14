@@ -1415,9 +1415,11 @@ let db = (() => {
   try {
     // Ensure new fields exist
     if (!parsed.fxHistory) parsed.fxHistory = {};
-        // Ensure baseline entries for all tracked currencies
+        // ── PERSONAL LOGIC SET ── inside IIFE, db is not yet initialized — cannot call _homeBase().
+        // Use parsed.displayCurrency directly (with fallback chain).
+        const _migHome = parsed.displayCurrency || (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[parsed.profile?.nationality] : null) || 'PHP';
         for (const c of (parsed.trackedCurrencies || ['PGK','USD','AUD','NZD'])) {
-          if (c === _homeBase()) continue;
+          if (c === _migHome) continue;
           if (!parsed.fxHistory[c] || parsed.fxHistory[c].length === 0) {
             parsed.fxHistory[c] = [{ date:'2026-01-01', rate: parsed.fxRates?.[c] || 1, source:'baseline' }];
           }
@@ -18144,7 +18146,7 @@ function aiReimbursementNudge() {
         `${days} ${aiPlural(days,'day')} pending — owes ${fmt(owed,tx.currency)}.`,
         `${fmt(owed,tx.currency)} outstanding for ${days} ${aiPlural(days,'day')}. A friendly reminder might help.`,
         `${days} ${aiPlural(days,'day')} since the shared expense — ${fmt(owed,tx.currency)} still owed.`,
-        days >= 14 ? `Two weeks overdue — ${fmt(owed,tx.currency)} from ${persons}.` : `${days} days, ${fmt(owed,tx.currency)} pending.`,
+        days >= 14 ? `Two weeks overdue — ${fmt(owed,tx.currency)} from ${persons}.` : `${days} ${aiPlural(days,'day')}, ${fmt(owed,tx.currency)} pending.`,
       ];
       insights.push({id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Go to Reimbursements'});
     }
@@ -18186,7 +18188,7 @@ function aiAccountBalanceAlert() {
         `${acct.name} won't last long`,
       ];
       const bodies = [
-        `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} days remaining.`,
+        `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} ${aiPlural(daysLeft,'day')} remaining.`,
         `Burn rate ${fmt(avgDaily,acct.currency)}/day means ${fmt(bal,acct.currency)} runs out in ~${daysLeft} ${aiPlural(daysLeft,'day')}.`,
         `${daysLeft} ${aiPlural(daysLeft,'day')} of runway at current pace (${fmt(avgDaily,acct.currency)}/day, ${fmt(bal,acct.currency)} left).`,
         daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left — ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days at ${fmt(avgDaily,acct.currency)}/day. Top up soon?`,
@@ -18231,7 +18233,7 @@ function aiInstallmentReminder() {
         daysUntil === 0 ? `${inst.name} payment today` : `Heads up: ${inst.name} ${dueText}`,
       ];
       const bodies = [
-        `~${fmt(inst.monthlyAmount, 'PGK')} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} payments left.`,
+        `~${fmt(inst.monthlyAmount, db.displayCurrency||'PHP')} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} ${aiPlural(remaining,'payment')} left.`,
         `Month ${totalPaid+1} of ${inst.totalMonths} — ~${fmt(inst.monthlyAmount, 'PGK')}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
         `${remaining} more ${aiPlural(remaining,'payment')} of ~${fmt(inst.monthlyAmount, 'PGK')} to go.`,
       ];
@@ -19292,7 +19294,7 @@ function openInstArchiveSheet() {
   }
   const rows = archived.map(inst => {
     const totalPaid = (inst.alreadyPaid || 0) + (inst.paidMonths || 0);
-    const status = inst.completed ? '✅ Completed' : `${totalPaid}/${inst.totalMonths} months paid`;
+    const status = inst.completed ? '✅ Completed' : `${totalPaid}/${inst.totalMonths} ${aiPlural(inst.totalMonths,'month')} paid`;
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)">
       <div style="font-size:22px">${inst.icon||'💳'}</div>
       <div style="flex:1;min-width:0">
