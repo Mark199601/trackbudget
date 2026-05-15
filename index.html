@@ -1052,7 +1052,7 @@ const EMOJI_GROUPS = {
 // ════════════════════════════════════════════════════════════
 // DATA LAYER
 // ════════════════════════════════════════════════════════════
-const DB_KEY = 'trackbudget_v2'; // ── PERSONAL LOGIC SET ── unique key — do not change, changing this loses all local data
+const DB_KEY = 'trackbudget_v2'; // ── PERSONAL LOGIC SET #1 ── unique key — do not change, changing this loses all local data
 
 // Country → native currency mapping (for budget display logic)
 const COUNTRY_CURRENCIES = {
@@ -1121,7 +1121,7 @@ function clearDriveToken() {
 }
 // 📖 USER STORY: Pag nag-open ka ng app sa bagong device o nag-refresh, hindi ka na nag-loloop ng login
 // kapag may saved Google Drive token ka pa — auto-restore agad para tuluy-tuloy ang sync.
-// ── PERSONAL LOGIC SET ── loadDriveToken() called at script load level (not inside initApp).
+// ── PERSONAL LOGIC SET #2 ── loadDriveToken() called at script load level (not inside initApp).
 // Token must be available before any GDrive call fires, including auto-save on first render.
 loadDriveToken();
 let _gdriveFolderId = null;
@@ -1130,7 +1130,7 @@ const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',USDT:'₮',AUD:'A$',NZD:'NZ$',EU
 
 function sym(code) { return CURR_SYMBOLS[code] || (code+' '); }
 
-// ── PERSONAL LOGIC SET ── auto-sync currency dropdown to selected account's currency.
+// ── PERSONAL LOGIC SET #3 ── auto-sync currency dropdown to selected account's currency.
 // Used in loan/reimb payment dialogs so payment currency follows the destination account.
 // Prevents bugs like "200 PHP in Cash account interpreted as 200 USD against a USD loan".
 function syncCurrToAcct(acctSelectId, currSelectId) {
@@ -1150,7 +1150,7 @@ function syncCurrToAcct(acctSelectId, currSelectId) {
   }
 }
 
-// ── PERSONAL LOGIC SET ── escapes user-input strings for safe use inside HTML attributes (value="..." etc).
+// ── PERSONAL LOGIC SET #4 ── escapes user-input strings for safe use inside HTML attributes (value="..." etc).
 // Prevents broken forms when notes/names contain double quotes, apostrophes, <, >, or &.
 function escapeAttr(s) {
   if (s === null || s === undefined) return '';
@@ -1178,7 +1178,7 @@ function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return
 
 // FX: PHP is always the base. All rates stored as "1 unit of X = ? PHP"
 // fxRates = { PGK: 13.02, USD: 56.5, AUD: 37.2, ... } meaning 1 PGK = 13.02 PHP, 1 USD = 56.5 PHP
-// ── PERSONAL LOGIC SET ── FX base currency reference.
+// ── PERSONAL LOGIC SET #5 ── FX base currency reference.
 // IMPORTANT: Any remaining "PHP" string or "₱" symbol in the codebase is a LOGICAL REFERENCE
 // to the user's HOME CURRENCY and HOME SYMBOL — not literally Philippine Peso.
 // - toPhp(x) means "convert x to home base" (regardless of what home currency is)
@@ -1273,7 +1273,7 @@ function defaultDB() {
     profile: { nickname:'', nationality:'', country:'' },
     trackedCurrencies: [], // populated from nationality at onboarding
     displayCurrency: null, // set from nationality on first load
-    // ── PERSONAL LOGIC SET ── FX rates start empty.
+    // ── PERSONAL LOGIC SET #6 ── FX rates start empty.
     // On onboarding, the home currency (derived from nationality) is auto-added with rate 1.
     // User adds other currencies + their rates manually in Settings → FX Rates.
     fxRates: {},
@@ -1390,7 +1390,7 @@ function defaultDB() {
 }
 
 let db = (() => {
-  // ── PERSONAL LOGIC SET ── two-stage loader
+  // ── PERSONAL LOGIC SET #7 ── two-stage loader
   // Stage 1: parse raw JSON. If this fails, the saved data is genuinely corrupt → return defaultDB.
   // Stage 2: run migrations. If ANY migration throws, keep the parsed data and patch only the
   //   minimum fields. This prevents a single bad migration from wiping the user's entire backup
@@ -1415,7 +1415,7 @@ let db = (() => {
   try {
     // Ensure new fields exist
     if (!parsed.fxHistory) parsed.fxHistory = {};
-        // ── PERSONAL LOGIC SET ── inside IIFE, db is not yet initialized — cannot call _homeBase().
+        // ── PERSONAL LOGIC SET #8 ── inside IIFE, db is not yet initialized — cannot call _homeBase().
         // Use parsed.displayCurrency directly (with fallback chain).
         const _migHome = parsed.displayCurrency || (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[parsed.profile?.nationality] : null) || 'PHP';
         for (const c of (parsed.trackedCurrencies || ['PGK','USD','AUD','NZD'])) {
@@ -1454,7 +1454,7 @@ let db = (() => {
     if (!parsed.loans) parsed.loans = { lent:[], borrowed:[] };
     if (!parsed.loans.lent) parsed.loans.lent = [];
     if (!parsed.loans.borrowed) parsed.loans.borrowed = [];
-    // ── PERSONAL LOGIC SET ── Migration: fix isLoanPayment txs with missing OR wrong loanDirection.
+    // ── PERSONAL LOGIC SET #9 ── Migration: fix isLoanPayment txs with missing OR wrong loanDirection.
     // MUST run AFTER parsed.loans is initialized. Auto-detects correct direction by:
     //   1. Looking up parent loan (single parentId or batch batchLoanIds) in lent/borrowed sets
     //   2. Fallback: matching tx.notes/personName to loan.personName if parentId is broken
@@ -1544,7 +1544,7 @@ let db = (() => {
     }
     return parsed;
   } catch(e) {
-    // ── PERSONAL LOGIC SET ── migration-stage failure: keep parsed data, don't nuke to defaultDB.
+    // ── PERSONAL LOGIC SET #10 ── migration-stage failure: keep parsed data, don't nuke to defaultDB.
     // The user's transactions/accounts are intact; only a migration step failed. Patch the
     // minimum required fields so the app boots, and log the error so it can be fixed properly.
     console.error('[TB] Migration step failed — keeping parsed data, applying minimal patches:', e);
@@ -1648,7 +1648,7 @@ function getAcctBalance(acctId) {
     // 📖 USER STORY: Pag nag-transfer ka cross-currency (e.g. PGK → PHP) at tinype mo yung actual
     // na natanggap (hindi snapshot rate), hindi na nag-doble-count yung forex difference sa account
     // balance. Yung app mismo ang bahala mag-adjust para tama parin yung running balance.
-    // ── PERSONAL LOGIC SET ── isAutoForex skip on toAmountIsActual transfers
+    // ── PERSONAL LOGIC SET #11 ── isAutoForex skip on toAmountIsActual transfers
     // Custom-rate transfers bake FX diff into toAmount — skip child to avoid double-count.
     // Snapshot-rate transfers still need the child to affect balance.
     if (tx.isAutoForex && tx.parentId) {
@@ -1658,14 +1658,14 @@ function getAcctBalance(acctId) {
     // 📖 USER STORY: Yung loan settlement gain/loss children ay para lang sa tracking — hindi sila
     // nag-aaffect ng account balance kasi yung parent settlement tx (or yung original loan tx) ang
     // mismo nag-handle ng cash movement. Skipping prevents double-counting.
-    // ── PERSONAL LOGIC SET ── PLS #47 FIX: Gain/Loss ARE real FX arbitrage — include in balance
+    // ── PERSONAL LOGIC SET #12 ── PLS #47 FIX: Gain/Loss ARE real FX arbitrage — include in balance
     // (previously skipped to avoid double-count, but per user expectation, gain/loss must affect cash)
     // if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
     // if (tx.isReimbSettlementGain) continue;
     // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
     // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
     // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
-    // ── PERSONAL LOGIC SET ── isLoanTx balance direction
+    // ── PERSONAL LOGIC SET #13 ── isLoanTx balance direction
     // loanDirection drives balance, not tx.type. Lent = money left pocket (bal -=). Borrowed = money received (bal +=).
     if (tx.isLoanTx) {
       const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
@@ -1684,7 +1684,7 @@ function getAcctBalance(acctId) {
     // nagbayad ng buong bill, yung ₱1,000 ay buong mababawas sa account mo agad. Pag nagbayad na
     // sayo ng share niya yung kasama mo (e.g. ₱333), hindi yan mag-aappear as income — binalik
     // lang niya yung pera mo, hindi mo kinita.
-    // ── PERSONAL LOGIC SET ── shared tx: deduct full totalBill from account (you paid upfront); isAutoReimb adds back others' shares
+    // ── PERSONAL LOGIC SET #14 ── shared tx: deduct full totalBill from account (you paid upfront); isAutoReimb adds back others' shares
     // 📖 EXCEPTION: isFeeReimbursable shared txs are tracking-only — the fee expense (isAutoFee)
     // already deducted the cash. Don't double-deduct here.
     else if (tx.type === 'shared' && tx.accountId === acctId && !tx.isFeeReimbursable) bal -= (tx.totalBill || tx.amount);
@@ -1735,7 +1735,7 @@ function getNetWorth() {
     // balance o mas malaki ang gastos), tinatrato siya as liability — hindi asset. Same sa credit
     // card na may utang. Pero kapag positive, asset siya. Net Worth = Assets minus Liabilities,
     // at parehas yung formula sa dashboard at sa Wealth tab — guaranteed na consistent.
-    // ── PERSONAL LOGIC SET ── Net Worth account classification
+    // ── PERSONAL LOGIC SET #15 ── Net Worth account classification
     // Asset-type accounts: positive = asset, negative (overdrawn) = liability.
     // Credit Card: negative balance = liability. Positive CC balance (overpaid) = ignored (not an asset).
     if (assetTypes.includes(acct.type)) {
@@ -1831,20 +1831,20 @@ function getMonthTotals(monthKey) {
     // 📖 USER STORY: Pag nag-open ka ng Analytics, yung income at expense totals mo ay malinis —
     // hindi kasama ang loan transactions, settlement entries, o auto-generated reimbursements.
     // Para hindi ma-inflate yung mga numbers mo at maging misleading.
-    // ── PERSONAL LOGIC SET ── (do not remove)
+    // ── PERSONAL LOGIC SET #16 ── (do not remove)
     // isSettlement, loanTx, loanPayment, external = not real income/expense
     // isSettlement excluded EXCEPT gain/loss — those are real FX arbitrage income/expense
     if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) continue;
     // 📖 USER STORY: Pag nag-log ka ng lend o borrow, hindi kasama sa monthly income/expense
     // totals at pie charts — kasi hindi mo naman talaga kinita o ginastos yun, pautang lang.
     // Pero yung pera na inutang ng iba sayo (receivable) ay nag-aappear pa rin sa Assets mo sa net worth.
-    // ── PERSONAL LOGIC SET ── isLoanTx/isLoanPayment excluded from getMonthTotals + pie charts; lent loans → assets in getNetWorth
+    // ── PERSONAL LOGIC SET #17 ── isLoanTx/isLoanPayment excluded from getMonthTotals + pie charts; lent loans → assets in getNetWorth
     if (t.isLoanTx || t.isLoanPayment) continue;
     if (t.type === 'external-in' || t.type === 'external-out') continue;
     // 📖 USER STORY: Yung remittance fee na binayaran mo (e.g. ₱150 sa WU) ay kasama sa monthly
     // expenses kasi totoong lumabas siya sa account mo. Pero yung auto-generated forex gain/loss
     // entry — hindi kasama, kasi adjustment lang yan, hindi tunay na transaction.
-    // ── PERSONAL LOGIC SET ── inclusion/exclusion rules for getMonthTotals (do not remove)
+    // ── PERSONAL LOGIC SET #18 ── inclusion/exclusion rules for getMonthTotals (do not remove)
     // isAutoReimb EXCLUDED: full totalBill already counted on shared tx — reimb is NOT income
     // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
     // isAutoFee INCLUDED: real remittance fee expense — UNLESS reimbursable + linked shared tx settled (then offset → neutral)
@@ -1899,7 +1899,7 @@ function getCategoryDisplay(catId) {
 // 📖 USER STORY: Auto-generated children (gain/loss) ay may dedicated display labels imbes
 // na ipakita as "Uncategorized" o random category. Para mas malinaw kung anong klase ng
 // transaction sila — Loan Settlement Gain, Reimbursement Loss, etc.
-// ── PERSONAL LOGIC SET ── tx-aware category display: returns dedicated label for auto-children flags; falls back to getCategoryDisplay for normal txs
+// ── PERSONAL LOGIC SET #19 ── tx-aware category display: returns dedicated label for auto-children flags; falls back to getCategoryDisplay for normal txs
 function txCategoryDisplay(tx) {
   if (!tx) return {icon:'📌',name:'Uncategorized'};
   // ── PERSONAL LOGIC SET #48 ── txCategoryDisplay dedicated labels: isBatchReimbSettlement = 💰 Reimbursement Received (accounts receivable, not income); isBatchSettlement = 💰 Loan Settlement Received; Gain/Loss flags get 📈/📉 labels. All hidden from category pickers.
@@ -2092,7 +2092,7 @@ function openDlg(title, html, footer='') {
 }
 function closeDlg() { document.getElementById('dlg-overlay').classList.remove('open'); }
 
-// ── PERSONAL LOGIC SET ── Overview widget info tooltips: tap ⓘ icon shows plain-English definition
+// ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap ⓘ icon shows plain-English definition
 const _WIDGET_INFO = {
   'velocity': {title:'⏱ Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.'},
   'runway': {title:'🛟 Cashflow Runway', body:'How many <b>months your cash can last</b> at your current spending rate, broken down per account. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
@@ -2365,7 +2365,7 @@ document.addEventListener('click', function(e) {
 // ════════════════════════════════════════════════════════════
 let obSelectedNat = '';
 let obSelectedLoc = '';
-let obTracked = []; // ── PERSONAL LOGIC SET ── empty by default; populated from nationality on step 1 confirm
+let obTracked = []; // ── PERSONAL LOGIC SET #21 ── empty by default; populated from nationality on step 1 confirm
 
 function initObProgress(steps=3) {
   const p = document.getElementById('ob-progress');
@@ -2386,7 +2386,7 @@ function selectNat(country) {
   obSelectedNat = country;
   document.getElementById('ob-nat-search').value = country;
   document.getElementById('ob-nat-list').style.display = 'none';
-  // ── PERSONAL LOGIC SET ── nationality is home base — drives default display currency + initial tracked currency
+  // ── PERSONAL LOGIC SET #22 ── nationality is home base — drives default display currency + initial tracked currency
   const homeCurr = COUNTRY_CURRENCIES[country] || COUNTRY_TO_CURRENCY[country] || 'USD';
   if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
   // Auto-fill Step 2 home base text if visible
@@ -2421,7 +2421,7 @@ function searchCurr(q) {
 }
 
 function toggleObCurr(code) {
-  // ── PERSONAL LOGIC SET ── home currency (derived from nationality) is locked as tracked
+  // ── PERSONAL LOGIC SET #23 ── home currency (derived from nationality) is locked as tracked
   const homeCurr = COUNTRY_CURRENCIES[obSelectedNat] || COUNTRY_TO_CURRENCY[obSelectedNat] || 'USD';
   if (code === homeCurr) { showToast(`${homeCurr} is your home base — always tracked`); return; }
   if (obTracked.includes(code)) obTracked = obTracked.filter(c=>c!==code);
@@ -2452,7 +2452,7 @@ function obNext(currentStep) {
     db.profile.nickname = nick;
     db.profile.nationality = nat;
     db.profile.country = loc;
-    // ── PERSONAL LOGIC SET ── home currency derived from nationality
+    // ── PERSONAL LOGIC SET #24 ── home currency derived from nationality
     const homeCurr = COUNTRY_CURRENCIES[nat] || COUNTRY_TO_CURRENCY[nat] || 'USD';
     db.displayCurrency = homeCurr;
     if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
@@ -2476,7 +2476,7 @@ function obNext(currentStep) {
 
 function finishOnboard() {
   db.onboarded = true;
-  // ── PERSONAL LOGIC SET ── backfill home currency to anything still null after onboarding
+  // ── PERSONAL LOGIC SET #25 ── backfill home currency to anything still null after onboarding
   const home = db.displayCurrency || 'USD';
   // Set sample accounts' currency to home
   (db.accounts || []).forEach(a => { if (!a.currency) a.currency = home; });
@@ -2513,7 +2513,7 @@ function generateInsights() {
   // noong nakaraang buwan), yung ₱4,000 na yun ay nadadagdag sa budget mo ngayong buwan.
   // So pag ₱5,000 ang set mo, ang effective na limit ay ₱9,000 — mas malaking puwang ka na.
   // Lahat ng budget checks (alerts, AI insights, dashboard bar) ay gumagamit ng effective limit.
-  // ── PERSONAL LOGIC SET ── effectiveLimit = b.limit + rolloverAmount; all budget checks use effectiveLimit not b.limit
+  // ── PERSONAL LOGIC SET #26 ── effectiveLimit = b.limit + rolloverAmount; all budget checks use effectiveLimit not b.limit
   // Budget pace
   for (const bgt of db.budgets.filter(b=>b.active)) {
     const spent = db.transactions.filter(t=>
@@ -2585,7 +2585,7 @@ function checkAlerts() {
   // 📖 USER STORY: Pag may credit card installment ka (e.g. due every 25th), tatlong araw bago
   // mag-due, lalabas yung alert sa dashboard "Installment due in 3 days" — para hindi mo malimutan
   // bayaran on time at maiwasan ang late fees.
-  // ── PERSONAL LOGIC SET ── installment alert fires 3 days before dueDay each month
+  // ── PERSONAL LOGIC SET #27 ── installment alert fires 3 days before dueDay each month
   if (db.installments) {
     const todayD = new Date();
     const todayDay = todayD.getDate();
@@ -2897,7 +2897,7 @@ function renderDashboard() {
   // 📖 USER STORY: If you have a credit card with a negative balance (debt, e.g. -₱5,000), that debt
   // is subtracted from the Cash & Wallets total on the dashboard — not treated as zero. So if your
   // savings account is ₱65,000 and your CC is -₱5,000, the Cash & Wallets total shows ₱60,000.
-  // ── PERSONAL LOGIC SET ── Credit Card included in Cash & Wallets: negative CC balance subtracts from total
+  // ── PERSONAL LOGIC SET #28 ── Credit Card included in Cash & Wallets: negative CC balance subtracts from total
   const cashWalletTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Credit Card'];
   const cashTotal = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type))
     .reduce((s,a)=>{ const b=toPhp(getAcctBalance(a.id),a.currency); return s+b; },0);
@@ -3379,7 +3379,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // 📖 USER STORY: Yung parent loan tx (Lent Out / Borrowed) ay may breakdown card sa baba —
   // expanded by default, ipinapakita lahat ng linked: payments, batch settlement parents, at
   // gain/loss children. Tap mo yung child → opens its detail (read-only or fully editable).
-  // ── PERSONAL LOGIC SET ── isLoanTx parent renders expandable iOS card with: payments + batch settlement parents + gain/loss children; default expanded; chevron toggles
+  // ── PERSONAL LOGIC SET #29 ── isLoanTx parent renders expandable iOS card with: payments + batch settlement parents + gain/loss children; default expanded; chevron toggles
   if (tx.isLoanTx) {
     const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
     const icon  = tx.loanDirection==='lent' ? '🤲' : '🤏';
@@ -3555,7 +3555,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     // 📖 USER STORY: Yung "paid" amount per person ay galing sa tx.paidSoFar[name] kasi yan ang
     // updated tracker — pwedeng dumating sa per-tx settlement (legacy isAutoReimb children) o
     // sa batch reimb settlement (updates paidSoFar directly without per-tx children).
-    // ── PERSONAL LOGIC SET ── shared tx breakdown reads from tx.paidSoFar (authoritative source) instead of summing children — works for both legacy per-tx and new batch reimb settlement flows
+    // ── PERSONAL LOGIC SET #30 ── shared tx breakdown reads from tx.paidSoFar (authoritative source) instead of summing children — works for both legacy per-tx and new batch reimb settlement flows
     const paidSoFarMap = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? tx.paidSoFar : {};
     for (const p of persons) {
       const totalReimbursed = parseFloat(paidSoFarMap[p.name]) || 0;
@@ -3615,7 +3615,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // 📖 USER STORY: Pag yung tx ay parent ng auto-children (gain/loss, forex, fees) o batch
   // settlement, ipinapakita yung mga linked children sa baba ng row — para makita mo agad
   // anong nadagdag/nawala. Tap mo yung child → opens its detail (read-only).
-  // ── PERSONAL LOGIC SET ── generic parent children block: shows isLoanSettlementGain/Loss, isReimbSettlementGain/Loss, isAutoForex children directly nested under parent in tx log
+  // ── PERSONAL LOGIC SET #31 ── generic parent children block: shows isLoanSettlementGain/Loss, isReimbSettlementGain/Loss, isAutoForex children directly nested under parent in tx log
   let genericChildrenHTML = '';
   if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
     const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
@@ -3653,7 +3653,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // 📖 USER STORY: Yung batch settlement parent (isBatchSettlement) ay ipinapakita din ng
   // expandable card sa baba ng row, listing yung mga loans na nai-settle (kasama yung gain/loss
   // children). Para makita mo agad sa txn log kung anong mga loans ang nasettle.
-  // ── PERSONAL LOGIC SET ── batch settlement parent in tx log: shows nested settled loans + gain/loss as breakdown card; expanded by default
+  // ── PERSONAL LOGIC SET #32 ── batch settlement parent in tx log: shows nested settled loans + gain/loss as breakdown card; expanded by default
   let batchSettleHTML = '';
   if (tx.isBatchSettlement && Array.isArray(tx.batchLoanIds)) {
     const direction = tx.batchDirection || 'lent';
@@ -5319,7 +5319,7 @@ function submitTransfer() {
   // 📖 USER STORY: Pag nag-transfer ka cross-currency, hindi mo na kailangang mag-tap ng "Use
   // snapshot rate" checkbox. Auto-detects ng app: pag may tinype ka sa "Actual received" o
   // "Custom rate" field, custom mode na — kahit blank pareho, snapshot rate ang gagamitin.
-  // ── PERSONAL LOGIC SET ── useSnapshot derived from actual inputs, not a checkbox
+  // ── PERSONAL LOGIC SET #33 ── useSnapshot derived from actual inputs, not a checkbox
   // If user typed a custom rate or toAmount → use actual. Otherwise → use snapshot rate.
   const useSnapshot = !(customRate > 0 || userToAmount > 0);
   const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
@@ -5449,7 +5449,7 @@ function submitTransfer() {
   // Pag may "Reimbursable from [Person]" filled, automatic gumagawa pa ng linked SHARED tx
   // sa Reimbursements page — kung saan si Person ay 100% owes the fee. Pag fully reimbursed
   // na, yung fee ay marked as offsetByReimb (excluded from monthly totals para neutral).
-  // ── PERSONAL LOGIC SET ── transfer fee: isAutoFee + parentId=transfer; if reimbursable, auto-create linked shared tx (type=shared) with picked person; cascade-archives with parent transfer
+  // ── PERSONAL LOGIC SET #34 ── transfer fee: isAutoFee + parentId=transfer; if reimbursable, auto-create linked shared tx (type=shared) with picked person; cascade-archives with parent transfer
   const feeAmount = parseFloat(document.getElementById('tf-fee-amount')?.value) || 0;
   const feeAcctId = document.getElementById('tf-fee-acct')?.value || fromId;
   const feeReimbPerson = (document.getElementById('tf-fee-reimb-person')?.value || '').trim();
@@ -5537,7 +5537,7 @@ let _txLongPressFired = false;
 // 📖 USER STORY: Pag gusto mong i-bulk select ang transactions, pindutin mo lang ng 550ms (over
 // half a second) ang isa, pumapasok ka sa bulk mode. Pero pag nag-scroll ka kahit konti (>10px),
 // nag-cancel — kasi obvious na browse lang yung intent mo, hindi bulk action.
-// ── PERSONAL LOGIC SET ── bulk long-press: 550ms hold, 10px scroll cancels
+// ── PERSONAL LOGIC SET #35 ── bulk long-press: 550ms hold, 10px scroll cancels
 const TX_BULK_LONGPRESS_MS = 550;
 
 function renderTransactions() {
@@ -5631,7 +5631,7 @@ function renderTxLog() {
     // dapat lumalabas sa Transactions log. Yung individual loan payments at auto-reimb children
     // ay hidden (visible sa Loans/Reimbursements tabs lang). Pero exception: pag pinindot mo ang
     // 'loans' filter, makikita mo lahat ng loan-related para visible parent + payments.
-    // ── PERSONAL LOGIC SET ── txn log filter: hide isLoanPayment children EXCEPT batch parents (isBatchSettlement); hide isAutoReimb children EXCEPT batch reimb parents (isBatchReimbSettlement)
+    // ── PERSONAL LOGIC SET #36 ── txn log filter: hide isLoanPayment children EXCEPT batch parents (isBatchSettlement); hide isAutoReimb children EXCEPT batch reimb parents (isBatchReimbSettlement)
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
     // BUT show batch settlement parents (even if isLoanPayment) since they are actual cash movement
     if (t.isLoanPayment && !t.isBatchSettlement && _txFilter !== 'loans') return false;
@@ -6096,7 +6096,7 @@ function openTxDetail(txId) {
   // 📖 USER STORY: Sa shared tx detail, makikita mo yung history ng lahat ng payments received
   // (reimb settlements). Tap row → opens detail. Delete button → archives payment + reverts
   // paidSoFar. Pag nadelete yung parent → lahat ng children cascade-deleted permanently.
-  // ── PERSONAL LOGIC SET ── shared tx payment timeline: reads all isAutoReimb + isBatchReimbSettlement children by parentId; delete archives child + reverts paidSoFar; parent delete = cascade permanent delete all children + grandchildren
+  // ── PERSONAL LOGIC SET #37 ── shared tx payment timeline: reads all isAutoReimb + isBatchReimbSettlement children by parentId; delete archives child + reverts paidSoFar; parent delete = cascade permanent delete all children + grandchildren
   let reimbTimelineHTML = '';
   if (tx.type === 'shared') {
     // Get all settlement children (direct: isAutoReimb/isBatchReimbSettlement; and gain children of batch)
@@ -6266,7 +6266,7 @@ function openTxDetail(txId) {
   // Build children section for parent transactions
   let childrenSection = '';
   // 📖 Two-level: include grandchildren (gain/loss children of batch settlement parents)
-  // ── PERSONAL LOGIC SET ── tx detail children: 2-level lookup so gain/loss grandchildren are shown alongside payment children
+  // ── PERSONAL LOGIC SET #38 ── tx detail children: 2-level lookup so gain/loss grandchildren are shown alongside payment children
   const directActiveChildren = db.transactions.filter(t => t.parentId === txId && !t.archived);
   const directArchivedChildren = db.archivedTransactions.filter(t => t.parentId === txId);
   const directChildren = [...directActiveChildren, ...directArchivedChildren];
@@ -7348,7 +7348,7 @@ function restoreTx(txId) {
     // deleted na ang parent niya), at ni-restore mo siya, awtomatikong nililinis ng app ang lahat
     // ng parent-link flags niya — para hindi siya mag-display ng nakakalitong "auto-generated
     // entry" warning kahit wala na ang parent. Hindi ito mangyayari sa normal usage, guard lang.
-    // ── PERSONAL LOGIC SET ── orphan restore guard: cleans isAutoForex/parentId/cascadedFrom flags when parent confirmed gone
+    // ── PERSONAL LOGIC SET #39 ── orphan restore guard: cleans isAutoForex/parentId/cascadedFrom flags when parent confirmed gone
     // Clean all parent-link metadata so it behaves as a standalone tx
     delete txData.cascadedFrom;
     delete txData.parentId;
@@ -7425,7 +7425,7 @@ function promptArchiveDelete(txId, txName, childCount) {
 // hindi ka mag-iiwan ng orphaned entries na magpapakita ng nakakalitong "auto-generated" warning.
 // For shared txs specifically: pag nadeleted parent → lahat ng reimb payments + gain/loss grandchildren
 // cascade-deleted permanently din. Walang survivor.
-// ── PERSONAL LOGIC SET ── confirmDeleteTx cascades children by cascadedFrom OR parentId, 2 levels deep (children + grandchildren)
+// ── PERSONAL LOGIC SET #40 ── confirmDeleteTx cascades children by cascadedFrom OR parentId, 2 levels deep (children + grandchildren)
 function confirmDeleteTx(txId) {
   // Delete the tx itself + direct children
   const beforeCount = db.archivedTransactions.length;
@@ -7665,7 +7665,7 @@ function toggleReimbPerson(id) {
 // 📖 USER STORY: Pag na-settle na ang isang shared txn (fully paid by all persons), hindi na siya
 // lumalabas sa main reimbursement list. Para makita pa rin yung history ng nai-settle, may
 // dedicated "Settled" sheet (grouped by month-year, iOS style).
-// ── PERSONAL LOGIC SET ── settled shared txs hidden from active list; viewable via openSettledReimbSheet
+// ── PERSONAL LOGIC SET #41 ── settled shared txs hidden from active list; viewable via openSettledReimbSheet
 function openSettledReimbSheet() {
   const settled = db.transactions
     .filter(t => t.type === 'shared' && !t.archived && t.settled);
@@ -7680,7 +7680,7 @@ function openSettledReimbSheet() {
   // 📖 USER STORY: Yung mga shared txs na sabay-sabay nai-settle via batch ay grouped under
   // isang Batch Settlement card. Yung individually-settled txs ay standalone rows. Sort by
   // latest activity (batch settlement date or settledAt), newest on top.
-  // ── PERSONAL LOGIC SET ── settled reimb sheet: groups shared txs by batch reimb settlement parent (db.transactions where isBatchReimbSettlement && batchTxIds includes tx.id); individuals shown standalone; sorted by activity date newest first
+  // ── PERSONAL LOGIC SET #42 ── settled reimb sheet: groups shared txs by batch reimb settlement parent (db.transactions where isBatchReimbSettlement && batchTxIds includes tx.id); individuals shown standalone; sorted by activity date newest first
   const batchParents = db.transactions.filter(t => !t.archived && t.isBatchReimbSettlement)
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const settledIdsInBatch = new Set();
@@ -7991,7 +7991,7 @@ function updateReimbTotal() {
 // shared txs niya ay naise-settle in FIFO order — oldest entry muna. Pag may sobra sa bayad,
 // auto na siyang nilo-log as Reimbursement Gain. Pag kulang naman, partial lang yung last
 // entry na natamaan, untouched yung iba pa.
-// ── PERSONAL LOGIC SET ── batch reimb settle: FIFO with snapshot FX; sobra=isReimbSettlementGain child; kulang=partial last entry
+// ── PERSONAL LOGIC SET #43 ── batch reimb settle: FIFO with snapshot FX; sobra=isReimbSettlementGain child; kulang=partial last entry
 function confirmReimbSettlement(person) {
   const entries = getReimbEntriesForPerson(person);
   if (entries.length === 0) { showToast('No pending reimbursements'); return; }
@@ -8477,7 +8477,7 @@ function saveAddAccount() {
   // 📖 USER STORY: When you add a new account and select "Crypto Wallet" as the type,
   // the currency is automatically set to USDT and cannot be changed. This keeps all crypto
   // accounts consistent and tracked under a single FX rate.
-  // ── PERSONAL LOGIC SET ── Crypto Wallet account type always locked to USDT
+  // ── PERSONAL LOGIC SET #44 ── Crypto Wallet account type always locked to USDT
   const currency = type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('na-currency')?.value||'PHP');
   // Ensure USDT in tracked if used
   if (currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
@@ -8520,7 +8520,7 @@ function saveEditAccount(acctId) {
   // 📖 USER STORY: Pag binago mo ang type ng existing account papuntang "Crypto Wallet", auto
   // converts to USDT ang currency. Pag nilipat mo from Crypto Wallet to ibang type, pwede ka na
   // mag-pick ng currency manually.
-  // ── PERSONAL LOGIC SET ── Crypto Wallet always USDT (enforced on save/edit)
+  // ── PERSONAL LOGIC SET #45 ── Crypto Wallet always USDT (enforced on save/edit)
   a.currency = a.type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency);
   if (a.currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
@@ -8969,7 +8969,7 @@ function setLoanTab(t) { _loanTab=t; renderLoans(); }
 
 // Helper: get all payment transactions linked to a loan
 function getLoanPayments(loanId) {
-  // ── PERSONAL LOGIC SET ── batch settlements may have parentId pointing to a different loan
+  // ── PERSONAL LOGIC SET #52 ── batch settlements may have parentId pointing to a different loan
   // (the "primary" in the batch). Include them if this loan is in their batchLoanIds array.
   return db.transactions.filter(t =>
     t.isSettlement && !t.archived && (
@@ -9049,7 +9049,7 @@ function renderLoanList(direction) {
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
         ${personLoans.map(loan => {
           const pl = getLoanPayments(loan.id);
-          // ── PERSONAL LOGIC SET ── Expanded loan view:
+          // ── PERSONAL LOGIC SET #54 ── Expanded loan view:
           // 1. Loan header row — date + remaining (amber/red), tap to open Loan Detail dialog
           // 2. Payment rows — one per recorded payment, showing date + paid amount (green), tap to edit/delete
           // Payments are listed BELOW the loan they belong to, mirroring a real ledger.
@@ -9490,7 +9490,7 @@ function updateBatchSettlePreview(direction, person) {
 // niya sayo (o sayo sa kanya) ay naise-settle in FIFO order — oldest loan muna. Pag may sobra
 // sa bayad, auto na siyang nilo-log as Loan Settlement Gain. Pag kulang naman, partial lang
 // yung last loan na natamaan, untouched yung iba pa.
-// ── PERSONAL LOGIC SET ── batch settle: FIFO order with snapshot FX conversion; sobra=isLoanSettlementGain child, kulang=partial last loan
+// ── PERSONAL LOGIC SET #55 ── batch settle: FIFO order with snapshot FX conversion; sobra=isLoanSettlementGain child, kulang=partial last loan
 function confirmBatchSettleLoans(direction, person) {
   const loans = db.loans[direction]
     .filter(l => !l.settled && (l.personName||'').trim() === person)
@@ -9622,7 +9622,7 @@ function openLoanDetail(loanId, direction) {
   const remaining = loan.remaining ?? loan.amount;
   const pct = loan.amount > 0 ? Math.min(100, ((loan.amount - remaining) / loan.amount) * 100) : 0;
   const sourceAcct = db.accounts.find(a=>a.id===loan.accountId);
-  // ── PERSONAL LOGIC SET ── default account: source account of loan if still active.
+  // ── PERSONAL LOGIC SET #56 ── default account: source account of loan if still active.
   // Currency dropdown defaults to that account's currency (not loan currency) so payment math
   // assumes the actual money flow currency, not the abstract loan currency.
   const defaultAcct = sourceAcct && !sourceAcct.archived ? sourceAcct : db.accounts.find(a=>!a.archived);
@@ -9698,7 +9698,7 @@ function openLoanDetail(loanId, direction) {
   // 📖 USER STORY: Sa loan detail sheet, makikita mo lahat ng linked transactions — payment
   // entries, batch settlement parents, gain/loss children, write-off entries. Tap any to view
   // its full detail (auto-children read-only with "View Parent" link; payments fully editable).
-  // ── PERSONAL LOGIC SET ── linked tx section: lists batch settlement parents (isBatchSettlement+batchLoanIds), gain/loss children (parentId in [loan,batchParent]), write-off children. Excludes individual payments (covered by payHistHTML).
+  // ── PERSONAL LOGIC SET #57 ── linked tx section: lists batch settlement parents (isBatchSettlement+batchLoanIds), gain/loss children (parentId in [loan,batchParent]), write-off children. Excludes individual payments (covered by payHistHTML).
   // Build linked txns (excluding individual payments — those are in payHistHTML)
   const linkedTxs = (()=>{
     // Find batch settlement parent txs that include this loan
@@ -9975,7 +9975,7 @@ function saveLoanMeta(loanId, direction) { saveLoanFull(loanId, direction); }
 // 📖 USER STORY: Settled at archived ay dalawang magkaibang estado. Settled = fully paid na, sariling
 // sheet niya, nasa db.loans[direction] pa rin. Archived = manually mo inalis sa active list, lumipat
 // na sa db.archivedLoans. Hindi sila magkapalit.
-// ── PERSONAL LOGIC SET ── settled stays in db.loans[direction] with settled:true flag; archived moves to db.archivedLoans
+// ── PERSONAL LOGIC SET #58 ── settled stays in db.loans[direction] with settled:true flag; archived moves to db.archivedLoans
 function archiveLoan(loanId, direction) {
   const loans = direction==='lent' ? db.loans.lent : db.loans.borrowed;
   const idx = loans.findIndex(l=>l.id===loanId);
@@ -10016,7 +10016,7 @@ function archiveLoan(loanId, direction) {
 // 📖 USER STORY: Pag matagal nang overdue ang loan ni isang tao (default 90 days past due) at
 // hindi na talaga magbabayad, pwede mo siyang i-write off as loss. Auto-creates a Loan Settlement
 // Loss expense child tx, ma-mark settled yung loan, at hindi mawawala — visible pa rin sa Settled.
-// ── PERSONAL LOGIC SET ── write-off creates isLoanSettlementLoss expense child; loan.settledAs='writeoff'; reason stored on parent
+// ── PERSONAL LOGIC SET #59 ── write-off creates isLoanSettlementLoss expense child; loan.settledAs='writeoff'; reason stored on parent
 function openWriteOffLoan(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
@@ -10100,7 +10100,7 @@ function confirmWriteOffLoan(loanId, direction) {
 // 📖 USER STORY: Pag na-settle na ang loan ni isang tao, hindi na siya lumalabas sa active list mo —
 // para malinis lang ang tingin. Para makita mo sila, i-tap mo yung "Settled" button sa taas. Nandoon
 // pa rin sila, hindi nawawala — naka-tago lang para hindi mag-clutter.
-// ── PERSONAL LOGIC SET ── settled loans hidden from active list; viewable via openSettledLoansSheet, still in db.loans[direction]
+// ── PERSONAL LOGIC SET #60 ── settled loans hidden from active list; viewable via openSettledLoansSheet, still in db.loans[direction]
 function openSettledLoansSheet(direction) {
   const settled = db.loans[direction].filter(l=>l.settled);
   if (settled.length === 0) {
@@ -10113,7 +10113,7 @@ function openSettledLoansSheet(direction) {
   // 📖 USER STORY: Yung mga loans na sabay-sabay nai-settle via batch ay grouped under isang
   // Batch Settlement card. Yung individually-settled loans ay standalone rows pa rin. Sort
   // by latest activity (batch settlement date or loan settledDate), newest on top.
-  // ── PERSONAL LOGIC SET ── settled loans sheet: groups loans by batch settlement parent (db.transactions where isBatchSettlement && batchLoanIds includes loan.id); individually-settled loans shown standalone; sorted by activity date newest first
+  // ── PERSONAL LOGIC SET #61 ── settled loans sheet: groups loans by batch settlement parent (db.transactions where isBatchSettlement && batchLoanIds includes loan.id); individually-settled loans shown standalone; sorted by activity date newest first
   // Build groups: batch parents (each = one card) + individual settled loans
   const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && t.batchDirection === direction)
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -10378,7 +10378,7 @@ function deleteLoanPerm(loanId) {
 // 📖 USER STORY: Pag na-archive o na-permanently delete ang isang loan, lahat ng linked transactions
 // niya (yung payment records at forex children) ay kasabay na natatanggal o naa-archive — hindi ka
 // mag-iiwan ng orphaned payment entries na walang parent loan na mahahanap.
-// ── PERSONAL LOGIC SET ── loan archive/delete cascades to: parent loan tx (isLoanTx+loanId), payments (isLoanPayment+parentId), forex children (isAutoForex+parentId in parentLoanTxIds)
+// ── PERSONAL LOGIC SET #63 ── loan archive/delete cascades to: parent loan tx (isLoanTx+loanId), payments (isLoanPayment+parentId), forex children (isAutoForex+parentId in parentLoanTxIds)
 function confirmDeleteLoan(loanId) {
   // Find parent loan tx ids (in both active and archived) for cascade cleanup of forex children
   const parentLoanTxIds = [
@@ -11029,7 +11029,7 @@ function renderAnalyticsOverview() {
   // 📖 USER STORY: Sa Analytics → Spending pie chart, hindi mo makikita yung loan transactions,
   // settlements, o auto-generated reimbursements. Yung mga totoong gastos mo lang — para tunay
   // ang representation kung saan napupunta ang pera mo.
-  // ── PERSONAL LOGIC SET ── Pie chart inclusion/exclusion rules (do not remove)
+  // ── PERSONAL LOGIC SET #64 ── Pie chart inclusion/exclusion rules (do not remove)
   // isAutoReimb EXCLUDED: reimb is NOT income — totalBill already counted on parent shared tx
   // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
   // isAutoFee INCLUDED: real remittance fee expense
@@ -12281,7 +12281,7 @@ function buildPieChart(cats, total, prefix, period) {
 
 function renderAnalyticsSpending() {
   const period = window._analyticsOverviewPeriod || 'ytd';
-  // ── PERSONAL LOGIC SET ── dynamic spending segmented control:
+  // ── PERSONAL LOGIC SET #65 ── dynamic spending segmented control:
   // auto-detects user's budget currencies (1-2 most common), falls back to display currency
   const _disp = db.displayCurrency || 'PHP';
   const budgetCurrs = [...new Set((db.budgets||[]).filter(b=>!b.archived).map(b=>b.currency))];
@@ -12304,7 +12304,7 @@ function renderAnalyticsSpending() {
   // Filter by currency view — pure native, no conversion
   // 📖 USER STORY: Sa Spending pie, dapat hindi kasama yung mga settlement adjustments at
   // mga fully-reimbursed fees — para tama yung totals at hindi makaapekto sa category breakdown.
-  // ── PERSONAL LOGIC SET ── spending pie excludes: isSettlement (covers gain/loss + batch parents), isAutoReimb children, fees fully reimbursed (feeReimbSharedTxId + linked shared.settled), isFeeReimbursable shared (tracking-only, fee tx is the real expense)
+  // ── PERSONAL LOGIC SET #66 ── spending pie excludes: isSettlement (covers gain/loss + batch parents), isAutoReimb children, fees fully reimbursed (feeReimbSharedTxId + linked shared.settled), isFeeReimbursable shared (tracking-only, fee tx is the real expense)
   const txs = db.transactions.filter(t => {
     if (t.archived || t.isSettlement || t.isAutoReimb) return false;
     if (t.isFeeReimbursable) return false; // tracking-only, fee tx counted instead
@@ -14525,7 +14525,7 @@ function saveProfile() {
   const nick = document.getElementById('ep2-nick')?.value?.trim();
   const country = document.getElementById('ep2-country')?.value?.trim();
   const nat = document.getElementById('ep2-nat')?.value?.trim();
-  // ── PERSONAL LOGIC SET ── nationality drives home currency
+  // ── PERSONAL LOGIC SET #67 ── nationality drives home currency
   // When user changes nationality, auto-update displayCurrency AND recompute all FX rates
   // relative to the new home currency. Math:
   //   old: 1 USD = 56.5 (old home, e.g. PHP)
@@ -14844,7 +14844,7 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
       // If this tx is a remittance, also update its rate + phpAmount
       if (tx.type === 'remittance' && tx.currency === currency) {
         tx.rate = newRate;
-        // ── PERSONAL LOGIC SET ── stored phpAmount is RAW (unrounded) for FX accuracy.
+        // ── PERSONAL LOGIC SET #68 ── stored phpAmount is RAW (unrounded) for FX accuracy.
         // Rounding only applied at display time via fmt(). Do not round here — preserves
         // precision across multi-step conversions and prevents cumulative drift.
         tx.phpAmount = tx.amount * newRate;
@@ -15698,7 +15698,7 @@ function openEditCat(catId, forType) {
   // 📖 USER STORY: Pag may transaction na naka-link sa isang category at sinubukan mong i-delete,
   // hindi papayagan ng app — Archive lang ang option para hindi mawala ang history. Pag walang
   // naka-link na transaction, freely ma-delete na.
-  // ── PERSONAL LOGIC SET ── category delete blocked if has linked txs; archive/restore only
+  // ── PERSONAL LOGIC SET #69 ── category delete blocked if has linked txs; archive/restore only
   // Check if category (or any subcat) has linked transactions
   const subcatIds = (cat.subcats||[]).map(s=>s.id);
   const allRelatedIds = [catId, ...subcatIds];
@@ -15957,7 +15957,7 @@ function importJSON(event) {
 function replaceImport() {
   if (!window._importedDB) return;
   db = window._importedDB;
-  // ── PERSONAL LOGIC SET ── force onboarded:true after file-based Replace All import
+  // ── PERSONAL LOGIC SET #70 ── force onboarded:true after file-based Replace All import
   // Prevents app from showing onboarding screen if backup was saved before onboarded:true was set,
   // or if the backup came from a different build that didn't persist the flag.
   // Mirrors the same fix applied to confirmLoadDriveBackup() (line ~16566).
@@ -15981,7 +15981,7 @@ function mergeImport() {
   for (const acct of (imp.accounts||[])) {
     if (!db.accounts.find(a=>a.id===acct.id)) db.accounts.push(acct);
   }
-  // ── PERSONAL LOGIC SET ── ensure onboarded stays true after merge
+  // ── PERSONAL LOGIC SET #71 ── ensure onboarded stays true after merge
   // (merge keeps current db, so flag should already be true, but belt-and-suspenders)
   db.onboarded = true;
   saveDBWithSync();
@@ -16807,7 +16807,7 @@ async function confirmLoadDriveBackup(fileId) {
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     );
     delete backup._backupMeta;
-    // ── PERSONAL LOGIC SET ── full replace instead of Object.assign shallow merge.
+    // ── PERSONAL LOGIC SET #72 ── full replace instead of Object.assign shallow merge.
     // Object.assign(db, backup) leaves any keys present in the OLD db that are absent in the
     // backup — and merging two incompatible shapes was causing the post-reload onboarding bug.
     // Preserve only the live Drive session settings, then swap in the backup as the new db.
@@ -17346,7 +17346,7 @@ function detectRecurring() {
   const catGroups = {};
   for (const tx of db.transactions) {
     if (tx.type !== 'expense' && tx.type !== 'income') continue;
-    // ── PERSONAL LOGIC SET ── recurring detection skips auto-children + investment + loan tx
+    // ── PERSONAL LOGIC SET #73 ── recurring detection skips auto-children + investment + loan tx
     if (tx.archived) continue;
     if (tx.isSettlement) continue;
     if (tx.isLoanTx || tx.isLoanPayment) continue;
@@ -17484,7 +17484,7 @@ document.addEventListener('visibilitychange', () => {
 // ════════════════════════════════════════════════════════════
 // PWA SERVICE WORKER + OFFLINE DETECTION
 // ════════════════════════════════════════════════════════════
-// ── PERSONAL LOGIC SET ── PWA setup:
+// ── PERSONAL LOGIC SET #74 ── PWA setup:
 // 1. Service worker (sw.js — separate file, must be in same dir as index.html on server)
 //    caches entire app shell. Falls back to cached version when offline.
 // 2. Offline badge — small indicator at top of screen when offline.
@@ -17583,7 +17583,7 @@ function runAIAnalysis() {
 }
 
 function aiGetMonthsTxs(n) {
-  // ── PERSONAL LOGIC SET ── aiGetMonthsTxs filters auto-children + capital-movement txs
+  // ── PERSONAL LOGIC SET #75 ── aiGetMonthsTxs filters auto-children + capital-movement txs
   // Aligned with getMonthTotals exclusions for accurate budget/spending insights
   const now = new Date();
   return Array.from({length:n},(_,i)=>{
@@ -18269,7 +18269,7 @@ function aiInstallmentReminder() {
 // 📖 USER STORY: Pag may loan na sobrang tagal nang overdue (default 90 days past due) at hindi
 // pa rin nakapag-settle, mag-aappear na siya as alert sa AI Insights — para hindi mo malimutan
 // at para magkaroon ka ng option na i-write off as loss.
-// ── PERSONAL LOGIC SET ── overdue loan alert: only when getLoanOverdueDays(loan) !== null; tap action = open loan detail with write-off pill
+// ── PERSONAL LOGIC SET #76 ── overdue loan alert: only when getLoanOverdueDays(loan) !== null; tap action = open loan detail with write-off pill
 function aiLoanOverdueAlert() {
   const insights = [];
   const allLoans = [
@@ -18648,7 +18648,7 @@ function renderAIPage() {
     // 📖 USER STORY: Pag nag-tap ka ng action button sa AI Insights (e.g. "Review Budget"), dapat
     // gumana lahat — walang dead button. Ito yung map ng action label → kung saan ka pupunta sa app.
     // Lahat verified, naka-defined ang functions na tinatawag.
-    // ── PERSONAL LOGIC SET ── actionNav wiring (do not remove entries — all verified defined)
+    // ── PERSONAL LOGIC SET #77 ── actionNav wiring (do not remove entries — all verified defined)
     // openAddSheet, openDriveSheet, openInstArchiveSheet etc. are all defined functions (verified in debug)
     const actionNav = {
       'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('contract'),100); },
@@ -18720,7 +18720,7 @@ function aiNavigate(insId) {
   if (!ins || !ins.action) return;
   // 📖 USER STORY: Same usage as actionNav above — pero ito yung mga action sa Onboarding
   // checklist (e.g. "Set up first account") at AI Insights na hindi ma-cover ng inline map.
-  // ── PERSONAL LOGIC SET ── second actionNav map (do not remove — complements inline map above)
+  // ── PERSONAL LOGIC SET #78 ── second actionNav map (do not remove — complements inline map above)
   // All action strings here are verified wired to defined functions (confirmed in debug scans)
   const actionNav = {
     'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('contract'); },150); },
@@ -19366,7 +19366,7 @@ function openInstArchiveSheet() {
 </div>
 
 <script>
-// ── PERSONAL LOGIC SET ── close onboarding dropdowns on outside click
+// ── PERSONAL LOGIC SET #79 ── close onboarding dropdowns on outside click
 document.addEventListener('click', e => {
   const natList = document.getElementById('ob-nat-list');
   const locList = document.getElementById('ob-loc-list');
