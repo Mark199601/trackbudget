@@ -3922,7 +3922,11 @@ function renderUnifiedAmountForm() {
   const displayCat = subCat || cat;
   const showCatPlaceholder = !displayCat;
 
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  // ── PERSONAL LOGIC SET ── No pre-selected account in main Add Tx form (Apple Wallet style).
+  // Forces user to explicitly pick. Prevents accidentally submitting to wrong account
+  // (e.g. last-used "Beep Card" when user actually wanted Cash).
+  const placeholderAcctOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
   const currOpts = (db.trackedCurrencies || ['PHP']).map(c=>`<option value="${c}">${c}</option>`).join('');
 
   if (isShared) {
@@ -3954,7 +3958,7 @@ function renderUnifiedAmountForm() {
       <div class="field-row">
         <div class="fr-icon" style="background:var(--bg3)">🏦</div>
         <div class="fr-label">Account</div>
-        <div class="fr-value" id="add-acct-display">${db.accounts.find(a=>a.id===s.prefill?.accountId)?.name || db.accounts.filter(a=>!a.archived)[0]?.name || 'No accounts'}</div>
+        <div class="fr-value" id="add-acct-display" style="color:${s.prefill?.accountId?'var(--text)':'var(--text4)'}">${db.accounts.find(a=>a.id===s.prefill?.accountId)?.name || 'Tap to select'}</div>
         <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <select id="add-account" onchange="syncAddCurrency();updateBigAmtCurr();updateAcctDisplay()">${acctOpts}</select>
@@ -4005,7 +4009,15 @@ function updateAcctDisplay() {
   const acctId = document.getElementById('add-account')?.value;
   const acct = db.accounts.find(a=>a.id===acctId);
   const dispEl = document.getElementById('add-acct-display');
-  if (dispEl && acct) dispEl.textContent = acct.name;
+  if (dispEl) {
+    if (acct) {
+      dispEl.textContent = acct.name;
+      dispEl.style.color = 'var(--text)';
+    } else {
+      dispEl.textContent = 'Tap to select';
+      dispEl.style.color = 'var(--text4)';
+    }
+  }
 }
 
 function onAddDateChange(v) {
