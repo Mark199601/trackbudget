@@ -4429,9 +4429,11 @@ function renderAmountForm() {
   const cat = getCategoryDisplay(s.subCatId || s.catId);
   const accts = db.accounts.filter(a=>!a.archived);
 
-  // ── C12: Smart account suggestion — pre-select most recently used acct for this tx type ──
-  const smartAcctId = getSmartDefaultAcct(s.type);
-  const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===smartAcctId?'selected':''}>${a.name} (${a.currency})</option>`).join('');
+  // ── PERSONAL LOGIC SET ── no pre-selected account.
+  // Forces user to explicitly pick to prevent accidental submission to wrong account.
+  // Previous "smart default" behavior misled users when the last-used account differed from intent.
+  const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===db.displayCurrency?'selected':''}>${c}</option>`).join('');
   const isLoan = s.type==='lend'||s.type==='borrow';
   const isShared = s.type==='shared';
