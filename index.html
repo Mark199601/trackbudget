@@ -1494,19 +1494,9 @@ let db = (() => {
       });
     }
     if (!parsed.aiCatMemory) parsed.aiCatMemory = [];
-    // Migration: ensure default sample accounts exist for new users
-    const DEFAULT_ACCOUNTS = [
-      {id:'acct-sample-cash',name:'Cash',type:'Cash',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-savings',name:'Sample Savings',type:'Savings',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-checking',name:'Sample Checking',type:'Checking',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-ewallet',name:'Sample E-Wallet',type:'E-Wallet',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-cc',name:'Sample Credit Card',type:'Credit Card',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-      {id:'acct-sample-prepaid',name:'Sample Prepaid',type:'Prepaid',currency:'PHP',note:'',initialBalance:0,archived:false,alertThreshold:null,lastTxDate:null},
-    ];
-    const existingAcctIds = new Set((parsed.accounts||[]).map(a=>a.id));
-    for (const acct of DEFAULT_ACCOUNTS) {
-      if (!existingAcctIds.has(acct.id)) parsed.accounts.push(acct);
-    }
+    // ── PERSONAL LOGIC SET ── Sample accounts are seeded ONCE in defaultDB() for first-time users.
+    // We do NOT re-inject them on every load — that would resurrect accounts the user deleted.
+    // If the user removes all sample accounts, they stay removed.
     if (!parsed.contracts) parsed.contracts = [];
     if (parsed.activeContractId === undefined) parsed.activeContractId = null;
     // Migrate old hard-coded contract to new system if no contracts exist
