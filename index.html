@@ -1213,8 +1213,27 @@ function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return
 // - currency === 'PHP' checks in transfer FX math are "is this the home currency?"
 // All user-facing displays use db.displayCurrency dynamically via fmt() and sym().
 // Renaming these internal references would require migrating all stored data — not worth the risk.
+// ── HOME-AGNOSTIC ── Returns the user's home base currency code dynamically.
+// Falls back to 'PHP' ONLY for legacy/seed safety. New users get home from nationality.
+// Use this everywhere instead of hardcoding 'PHP'.
 function _homeBase() { return db?.displayCurrency || 'PHP'; }
 
+// ═══════════════════════════════════════════════════════════
+// FX CONVERSION HELPERS — HOME-AGNOSTIC
+// ═══════════════════════════════════════════════════════════
+// IMPORTANT: The function names `toPhp` and `fromPhp` are LEGACY naming.
+// They do NOT specifically mean "Philippine Peso" — they mean "to/from HOME BASE".
+// The home base is determined by `_homeBase()` which reads `db.displayCurrency`.
+//
+// This app supports users from ANY country (Australia, NZ, USA, UK, etc.):
+//   - AUD user: home base is AUD, all fxRates are relative to AUD
+//   - NZD user: home base is NZD, all fxRates are relative to NZD
+//   - PH user: home base is PHP, all fxRates are relative to PHP
+//
+// Internal references to "PHP" or "₱" in code = LOGICAL home reference, NOT literal peso.
+// The user-facing display always uses sym(db.displayCurrency) for correct symbol rendering.
+// See PLS #5 for full FX home currency reference rules.
+// ═══════════════════════════════════════════════════════════
 function toPhp(amount, fromCurrency, snapshot) {
   const home = _homeBase();
   if (fromCurrency === home) return amount;
@@ -1295,6 +1314,11 @@ function recordFxSnapshot(currency, rate, date, source) {
 }
 
 function defaultDB() {
+  // ── HOME-AGNOSTIC ── This seed runs for first-time users ONLY.
+  // displayCurrency defaults to 'PHP' as fallback string, but actual home is set during
+  // onboarding (finishOnboard) from nationality → COUNTRY_CURRENCIES lookup.
+  // trackedCurrencies and fxRates start empty — populated dynamically per user's country.
+  // DO NOT hardcode currency assumptions here.
   return {
     onboarded: false,
     profile: { nickname:'', nationality:'', country:'' },
@@ -11009,7 +11033,12 @@ function openAnalyticsPicker() {
     { id:'other',    title:'🔧 Other',           keys:['forex','external','aisummary'] },
   ];
   let html = `<div style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">`;
-  sections.forEach(sec => {
+  sections.forEach((sec, secIdx) => {
+    // ── PERSONAL LOGIC SET ── Visual divider before each non-first section
+    // for clear category separation (Money / Spending / People / Wealth / Other).
+    if (sec.title && secIdx > 0) {
+      html += `<div style="height:1px;background:var(--border);margin:8px 16px"></div>`;
+    }
     if (sec.title) {
       html += `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);padding:14px 16px 4px">${sec.title}</div>`;
     }
@@ -14858,9 +14887,39 @@ function saveProfile() {
 }
 
 function setDisplayCurrency(curr) {
+  // ── PERSONAL LOGIC SET ── Display currency change = home base change.
+  // HOME-AGNOSTIC: Works for any user from any country (AU/NZ/US/PH/etc).
+  // FX rates are stored relative to home base. When home changes, rates must be
+  // recomputed so values display correctly. Without this, "convert(200, PHP, PGK)"
+  // would return 200 with PGK symbol instead of ~K15.36.
+  // Logic uses `oldHome → newHome` ratio — NOT tied to any specific currency pair.
+  const oldHome = db.displayCurrency || 'PHP';
+  if (curr === oldHome) {
+    showToast(`Display currency: ${curr}`);
+    return;
+  }
+  // Get rate of new home in old home (e.g. 1 PGK = 13.02 PHP)
+  const newHomeRateInOldHome = db.fxRates[curr];
+  if (newHomeRateInOldHome && newHomeRateInOldHome > 0) {
+    // Recompute all FX rates: new = old / newHomeRateInOldHome
+    const newRates = {};
+    Object.keys(db.fxRates).forEach(c => {
+      if (c === curr) return; // new home doesn't need its own rate
+      newRates[c] = db.fxRates[c] / newHomeRateInOldHome;
+    });
+    // Old home now needs a rate (1 oldHome in newHome = 1/newHomeRateInOldHome)
+    newRates[oldHome] = 1 / newHomeRateInOldHome;
+    db.fxRates = newRates;
+    showToast(`🏠 Display currency → ${curr}. FX rates auto-recomputed.`);
+  } else {
+    db.fxRates[curr] = 1;
+    showToast(`🏠 Display currency → ${curr}. Set FX rates manually for accurate conversions.`);
+  }
   db.displayCurrency = curr;
+  if (!db.trackedCurrencies.includes(curr)) db.trackedCurrencies.unshift(curr);
+  if (!db.trackedCurrencies.includes(oldHome)) db.trackedCurrencies.push(oldHome);
   saveDBWithSync();
-  showToast(`Display currency: ${curr}`);
+  renderSettings();
 }
 
 function removeTrackedCurr(code) {
@@ -15109,6 +15168,8 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
         // ── PERSONAL LOGIC SET #68 ── stored phpAmount is RAW (unrounded) for FX accuracy.
         // Rounding only applied at display time via fmt(). Do not round here — preserves
         // precision across multi-step conversions and prevents cumulative drift.
+        // NOTE: Field name `phpAmount` is LEGACY — value is in HOME BASE currency, not literal PHP.
+        // For an AUD user, `phpAmount` holds the AUD-equivalent of the remittance.
         tx.phpAmount = tx.amount * newRate;
       }
     }
