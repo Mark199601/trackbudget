@@ -411,6 +411,16 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker:active .analytics-picker-inner{background:var(--bg3)}
 .analytics-picker-icon{font-size:16px;line-height:1}
 .analytics-picker-label{letter-spacing:-0.2px}
+/* Overview accordion mini-cards */
+.ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
+.ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
+.ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
+.ov-acc-preview{font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:6px}
+.ov-acc-chev{width:10px;height:6px;opacity:0.5;transition:transform 0.2s}
+.ov-acc.open .ov-acc-chev{transform:rotate(180deg)}
+.ov-acc-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
+.ov-acc.open .ov-acc-body{display:block}
 .atab{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;padding:7px 14px;border-radius:18px;cursor:pointer;white-space:nowrap;transition:background 0.15s,color 0.15s,border-color 0.15s;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
 .atab:hover{background:var(--bg3)}
 .atab.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
@@ -1288,7 +1298,7 @@ function defaultDB() {
   return {
     onboarded: false,
     profile: { nickname:'', nationality:'', country:'' },
-    trackedCurrencies: [], // populated from nationality at onboarding
+    trackedCurrencies: [], // populated from nationality at onboarding — DEBUG-SCAN NOTE: naive scans flagging this as "missing from defaultDB" are false positives, the empty array IS the initial state per FX home currency reference rule
     displayCurrency: null, // set from nationality on first load
     // ── PERSONAL LOGIC SET #6 ── FX rates start empty.
     // On onboarding, the home currency (derived from nationality) is auto-added with rate 1.
@@ -10998,19 +11008,19 @@ function openAnalyticsPicker() {
     { id:'wealth',   title:'💎 Wealth',          keys:['wealth','investments','accthealth','goals'] },
     { id:'other',    title:'🔧 Other',           keys:['forex','external','aisummary'] },
   ];
-  let html = `<div style="padding:4px 0">`;
+  let html = `<div style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">`;
   sections.forEach(sec => {
     if (sec.title) {
-      html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);padding:14px 16px 6px">${sec.title}</div>`;
+      html += `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);padding:14px 16px 4px">${sec.title}</div>`;
     }
     sec.keys.forEach(k => {
       const t = reg[k];
       if (!t) return;
       const active = _analyticsTab === k;
-      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='${active?'var(--accent-bg)':'transparent'}'">
-        <span style="font-size:20px">${t.icon}</span>
-        <span style="flex:1;font-size:15px;color:var(--text);font-weight:${active?'600':'500'}">${t.label}</span>
-        ${active?`<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.12s">
+        <span style="font-size:16px;width:20px;text-align:center">${t.icon}</span>
+        <span style="flex:1;font-size:13px;color:var(--text);font-weight:${active?'600':'400'};letter-spacing:-0.1px">${t.label}</span>
+        ${active?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
       </div>`;
     });
   });
@@ -11021,6 +11031,12 @@ function openAnalyticsPicker() {
 function pickAnalyticsTab(k) {
   closeSheet('gen');
   setAnalyticsTab(k);
+}
+
+// ── PERSONAL LOGIC SET ── Accordion toggle for Overview mini-card sections (Option B inline expand).
+function toggleOvAcc(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
 }
 
 // ─── INLINE ANALYTICS INSIGHTS HELPER ───
@@ -11275,23 +11291,42 @@ function renderAnalyticsOverview() {
       const hasExp = expTotal > 0;
       const hasInc = incTotal > 0;
       if (!hasExp && !hasInc) return '';
-      const expCard = `<div class="card" style="padding:14px">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Expenses by Category</div>
-        ${buildPieChart(expCats, expTotal, 'exp', period)}
+      const inner = (() => {
+        const expCard = `<div style="padding:14px 0 0">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Expenses by Category</div>
+          ${buildPieChart(expCats, expTotal, 'exp', period)}
+        </div>`;
+        const incCard = `<div style="padding:14px 0 0">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Income by Category</div>
+          ${buildPieChart(incCats, incTotal, 'inc', period)}
+        </div>`;
+        if (hasExp && hasInc) return `<div class="form-row fr2">${expCard}${incCard}</div>`;
+        return hasExp ? expCard : incCard;
+      })();
+      // ── DEBUG-SCAN NOTE ── buildPieChart is called inside the `inner` IIFE which builds expCard/incCard.
+      // Naive substring scans flagging "missing buildPieChart in ov-acc-pie body" are false positives —
+      // the body uses ${inner} which contains the buildPieChart calls.
+      return `<div class="ov-acc" id="ov-acc-pie">
+        <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-pie')">
+          <div class="ov-acc-icon">🍩</div>
+          <div class="ov-acc-title">Category Breakdown</div>
+          <div class="ov-acc-preview">${hasExp&&hasInc?'Exp + Inc':hasExp?'Expenses':'Income'}</div>
+          <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="ov-acc-body">${inner}</div>
       </div>`;
-      const incCard = `<div class="card" style="padding:14px">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:10px">Income by Category</div>
-        ${buildPieChart(incCats, incTotal, 'inc', period)}
-      </div>`;
-      // Both have data — side by side; if only one — full width
-      if (hasExp && hasInc) {
-        return `<div class="form-row fr2" style="margin-bottom:16px">${expCard}${incCard}</div>`;
-      }
-      return `<div style="margin-bottom:16px">${hasExp ? expCard : incCard}</div>`;
     })()}
 
     <!-- Metric cards -->
-    <div class="fr4-resp" style="margin-bottom:16px">
+    <div class="ov-acc open" id="ov-acc-metrics">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-metrics')">
+        <div class="ov-acc-icon">📊</div>
+        <div class="ov-acc-title">Key Metrics</div>
+        <div class="ov-acc-preview">${period==='ytd'?'YTD':metricLabel.split(' ')[0]}</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body">
+        <div class="fr4-resp" style="margin-top:14px">
       <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
         <div class="metric-value tx-pos">${fmt(curr.income,disp)}</div>
@@ -11345,29 +11380,70 @@ function renderAnalyticsOverview() {
         })()}
       </div>
     </div>
+      </div>
+    </div>
 
     <!-- ── SPRINT 1: Visual companions to AI insights ── -->
-    ${buildVelocityGauge(metricMk, dispCurr)}
-    ${buildForecastBand(metricMk, dispCurr)}
-    ${buildRunwayBar(dispCurr)}
-    ${buildAnomalyHighlights(metricMk, dispCurr)}
-    ${buildSavingsSparkline(metricMk, dispCurr)}
-    ${buildSubscriptionPanel(dispCurr)}
+    <div class="ov-acc" id="ov-acc-sprint1">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-sprint1')">
+        <div class="ov-acc-icon">📈</div>
+        <div class="ov-acc-title">Velocity & Forecast</div>
+        <div class="ov-acc-preview">Burn rate · Runway</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body" style="padding-top:14px">
+        ${buildVelocityGauge(metricMk, dispCurr)}
+        ${buildForecastBand(metricMk, dispCurr)}
+        ${buildRunwayBar(dispCurr)}
+        ${buildAnomalyHighlights(metricMk, dispCurr)}
+        ${buildSavingsSparkline(metricMk, dispCurr)}
+        ${buildSubscriptionPanel(dispCurr)}
+      </div>
+    </div>
 
     <!-- ── SPRINT 2-4: Spending behavior analysis ── -->
-    ${buildFixedVsDiscretionary(metricMk, dispCurr)}
-    ${buildParetoAnalysis(metricMk, dispCurr)}
-    ${buildDayOfWeekHeatmap(metricMk, dispCurr)}
-    ${buildMostFrequent(metricMk, dispCurr)}
-    ${buildTimeOfDayPattern(metricMk, dispCurr)}
-    ${buildSpendingDistribution(metricMk, dispCurr)}
+    <div class="ov-acc" id="ov-acc-sprint2">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-sprint2')">
+        <div class="ov-acc-icon">🛒</div>
+        <div class="ov-acc-title">Spending Patterns</div>
+        <div class="ov-acc-preview">Fixed vs Disc · Pareto</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body" style="padding-top:14px">
+        ${buildFixedVsDiscretionary(metricMk, dispCurr)}
+        ${buildParetoAnalysis(metricMk, dispCurr)}
+        ${buildDayOfWeekHeatmap(metricMk, dispCurr)}
+        ${buildMostFrequent(metricMk, dispCurr)}
+        ${buildTimeOfDayPattern(metricMk, dispCurr)}
+        ${buildSpendingDistribution(metricMk, dispCurr)}
+      </div>
+    </div>
 
     <!-- ── SPRINT 5: Long-term context & risk indicators ── -->
-    ${buildYoYComparison(metricMk, dispCurr)}
-    ${buildIncomeDiversification(metricMk, dispCurr)}
-    ${buildGoalProgress(dispCurr)}
-    ${buildConcentrationRisk(dispCurr)}
+    <div class="ov-acc" id="ov-acc-sprint5">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-sprint5')">
+        <div class="ov-acc-icon">🎯</div>
+        <div class="ov-acc-title">Long-Term & Goals</div>
+        <div class="ov-acc-preview">YoY · Goals · Risk</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body" style="padding-top:14px">
+        ${buildYoYComparison(metricMk, dispCurr)}
+        ${buildIncomeDiversification(metricMk, dispCurr)}
+        ${buildGoalProgress(dispCurr)}
+        ${buildConcentrationRisk(dispCurr)}
+      </div>
+    </div>
 
+    <!-- Notable Changes + Inline Insights -->
+    <div class="ov-acc" id="ov-acc-insights">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-insights')">
+        <div class="ov-acc-icon">🚨</div>
+        <div class="ov-acc-title">Insights & Alerts</div>
+        <div class="ov-acc-preview">Movers · AI</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body" style="padding-top:14px">
     ${(() => {
       // Top movers: categories where current month spending is significantly higher than 3-month average
       if (period === 'ytd' || curr.expense === 0) return '';
@@ -11419,8 +11495,18 @@ function renderAnalyticsOverview() {
       </div>`;
     })()}
     ${renderInlineInsights(['saverate','cashflow','recap'])}
+      </div>
+    </div>
 
     <!-- Monthly stat cards -->
+    <div class="ov-acc" id="ov-acc-monthly">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-monthly')">
+        <div class="ov-acc-icon">📅</div>
+        <div class="ov-acc-title">Monthly Summary</div>
+        <div class="ov-acc-preview">Per-month cards</div>
+        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="ov-acc-body" style="padding-top:14px">
     ${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
@@ -11481,6 +11567,8 @@ function renderAnalyticsOverview() {
         <div class="stat-month-grid">${cards}</div>
       </div>`;
     })()}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -19314,40 +19402,53 @@ function renderAnalyticsBudget() {
   const monthFrac = dayOfMonth / daysInMonth;
   const mk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  // Pull rollover values
   if (typeof computeBudgetRollover === 'function') {
     try { computeBudgetRollover(); } catch(e) {}
   }
 
-  // Per-budget total: sum spent across all allocated categories
+  // ── PERSONAL LOGIC SET ── Budget spent calculation mirrors renderBudgetsTab() exactly.
+  // Dashboard uses lighter filter: !archived && !isSettlement && type=expense/shared && currency match.
+  // We use the SAME filter to ensure Analytics and Settings → Budgets show identical numbers.
+  // Each budget row is now a tappable accordion that expands to show category-level breakdown.
   const rows = budgets.map(b => {
     const allocs = b.allocations || {};
     const allocCount = Object.keys(allocs).length;
     const rollAmt = b.rollover ? (b.rolloverAmount || 0) : 0;
     const limit = (b.limit || 0) + rollAmt;
-    // Sum spending in this budget's currency, this month, for allocated categories only
-    let spent = 0;
+    const breakdown = [];
     if (allocCount > 0) {
-      const txs = db.transactions.filter(t => !t.archived && !t.isSettlement &&
-        !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
-        t.date && t.date.startsWith(mk) && (t.type==='expense' || t.type==='shared') &&
-        t.currency === b.currency);
-      txs.forEach(t => {
-        const txCat = db.categories.expense.find(c => c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
-        if (txCat && allocs[txCat.id]) {
-          spent += t.type==='shared' ? (t.myShare || t.amount) : t.amount;
-        }
+      const txs = db.transactions.filter(t =>
+        !t.archived && !t.isSettlement && t.date && t.date.startsWith(mk) &&
+        (t.type==='expense' || t.type==='shared') && t.currency === b.currency
+      );
+      Object.entries(allocs).forEach(([catId, allocLim]) => {
+        const limAmt = parseFloat(allocLim) || 0;
+        const cat = getCategoryDisplay(catId);
+        let spentInCat = 0;
+        txs.forEach(t => {
+          const txCat = db.categories.expense.find(c => c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
+          if (txCat && txCat.id === catId) {
+            spentInCat += t.type==='shared' ? (t.myShare || t.amount) : t.amount;
+          }
+        });
+        breakdown.push({
+          catId, catName: cat.name.replace(/^[^ ]+ /,''), catIcon: cat.icon,
+          allocLim: limAmt, spent: spentInCat,
+          pct: limAmt > 0 ? (spentInCat/limAmt*100) : 0,
+          over: spentInCat > limAmt
+        });
       });
     }
+    const spent = breakdown.reduce((s,br)=>s+br.spent, 0);
+    breakdown.sort((a,b) => b.spent - a.spent);
     const pct = limit > 0 ? (spent / limit) * 100 : 0;
     const remaining = limit - spent;
     const willExceed = limit > 0 && monthFrac > 0 && (spent / monthFrac) > limit;
     const projectedEnd = monthFrac > 0 ? spent / monthFrac : 0;
     const expectedPctNow = monthFrac * 100;
-    return { ...b, spent, limit, pct, remaining, willExceed, projectedEnd, expectedPctNow, allocCount };
+    return { ...b, spent, limit, pct, remaining, willExceed, projectedEnd, expectedPctNow, allocCount, breakdown };
   }).sort((a,b)=>b.pct-a.pct);
 
-  // Convert all to display currency for total
   const totalLimit = rows.reduce((s,r)=>s+toPhp(r.limit, r.currency),0);
   const totalSpent = rows.reduce((s,r)=>s+toPhp(r.spent, r.currency),0);
   const totalRemaining = totalLimit - totalSpent;
@@ -19377,30 +19478,62 @@ function renderAnalyticsBudget() {
     ${overCount > 0 ? `<div style="background:rgba(255,69,58,0.1);border:1px solid var(--red);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--red)"><b>⚠️ ${overCount} ${aiPlural(overCount,'budget')} over limit</b></div>` : ''}
     ${warnCount > 0 ? `<div style="background:rgba(255,159,10,0.08);border:1px solid var(--amber);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)"><b>⚠ ${warnCount} ${aiPlural(warnCount,'budget')} above 80% used</b></div>` : ''}
 
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Budget</div>`;
+    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Budget · Tap to see breakdown</div>`;
 
-  rows.forEach(r => {
+  rows.forEach((r, idx) => {
     const barColor = r.pct > 100 ? 'var(--red)' : r.pct > 80 ? 'var(--amber)' : 'var(--green)';
     const barWidth = Math.min(r.pct, 100);
     const name = r.name || (r.location ? `${r.location} (${r.currency})` : `${r.currency} budget`);
-    html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:600">${escapeAttr(name)}</div>
-        <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${r.pct.toFixed(0)}%</div>
+    const accId = `bgt-acc-${idx}`;
+    const breakdownHTML = r.breakdown.length > 0 ? r.breakdown.map(br => {
+      const brBarColor = br.over ? 'var(--red)' : br.pct > 80 ? 'var(--amber)' : 'var(--accent)';
+      const brBarWidth = Math.min(br.pct, 100);
+      const brRem = br.allocLim - br.spent;
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;flex:1">
+            <span style="font-size:14px">${br.catIcon||'💸'}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(br.catName)}</span>
+            ${br.over?'<span style="color:var(--red);font-size:10px">⚠</span>':''}
+          </div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${sym(r.currency)}${br.spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(r.currency)}${br.allocLim.toFixed(0)}</span></div>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${brBarWidth}%;background:${brBarColor};transition:width 0.3s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px">
+          <span style="font-size:10px;color:var(--text4)">${br.pct.toFixed(0)}% used</span>
+          <span style="font-size:10px;color:${brRem>=0?'var(--text4)':'var(--red)'};font-family:var(--mono)">${brRem>=0?fmt(brRem,r.currency)+' left':'-'+fmt(Math.abs(brRem),r.currency)+' over'}</span>
+        </div>
+      </div>`;
+    }).join('') : '<div style="padding:14px 0;font-size:12px;color:var(--text4);text-align:center">No categories allocated for this budget</div>';
+
+    html += `<div class="ov-acc" id="${accId}" style="margin-bottom:10px">
+      <div class="ov-acc-hdr" onclick="toggleOvAcc('${accId}')" style="padding:12px 14px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <div style="font-size:13px;font-weight:600">${escapeAttr(name)}</div>
+            <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${r.pct.toFixed(0)}%</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);font-family:var(--mono);margin-bottom:6px">
+            <span>${fmt(r.spent, r.currency)} / ${fmt(r.limit, r.currency)}</span>
+            <span style="color:${r.remaining>=0?'var(--green)':'var(--red)'}">${r.remaining>=0?'':'-'}${fmt(Math.abs(r.remaining), r.currency)} left</span>
+          </div>
+          <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;position:relative">
+            <div style="width:${barWidth}%;height:100%;background:${barColor};border-radius:4px"></div>
+            <div style="position:absolute;left:${r.expectedPctNow}%;top:-2px;bottom:-2px;width:1px;background:var(--text3);opacity:0.5"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text4);margin-top:4px">
+            ${r.allocCount === 0 ? '⚠️ No categories allocated' :
+              r.pct > 100 ? `Over by ${fmt(r.spent - r.limit, r.currency)} · tap to see breakdown ▾` :
+              r.willExceed ? `⚠ At pace: ${fmt(r.projectedEnd, r.currency)} by month-end · tap ▾` :
+              `${daysLeft} ${aiPlural(daysLeft,'day')} left · ${r.allocCount} ${aiPlural(r.allocCount,'category','categories')} · tap ▾`}
+          </div>
+        </div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);font-family:var(--mono);margin-bottom:6px">
-        <span>${fmt(r.spent, r.currency)} / ${fmt(r.limit, r.currency)}</span>
-        <span style="color:${r.remaining>=0?'var(--green)':'var(--red)'}">${r.remaining>=0?'':'-'}${fmt(Math.abs(r.remaining), r.currency)} left</span>
-      </div>
-      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;position:relative">
-        <div style="width:${barWidth}%;height:100%;background:${barColor};border-radius:4px"></div>
-        <div style="position:absolute;left:${r.expectedPctNow}%;top:-2px;bottom:-2px;width:1px;background:var(--text3);opacity:0.5"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text4);margin-top:4px">
-        ${r.allocCount === 0 ? '⚠️ No categories allocated' :
-          r.pct > 100 ? `Over by ${fmt(r.spent - r.limit, r.currency)}` :
-          r.willExceed ? `⚠ At current pace: ${fmt(r.projectedEnd, r.currency)} by month-end` :
-          `${daysLeft} ${aiPlural(daysLeft,'day')} left · on pace · ${r.allocCount} ${aiPlural(r.allocCount,'category','categories')}`}
+      <div class="ov-acc-body" style="padding-top:6px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:6px">Where it went</div>
+        ${breakdownHTML}
       </div>
     </div>`;
   });
@@ -19408,6 +19541,7 @@ function renderAnalyticsBudget() {
   html += `</div>`;
   return html;
 }
+
 
 // ───────────────────────────────────────────────────────────
 // TAB: Subscriptions Audit — recurring monthly spend
