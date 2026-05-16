@@ -404,9 +404,14 @@ option{background:var(--bg3);color:var(--text)}
 
 .tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;overflow:hidden;flex-shrink:0;touch-action:pan-y;overscroll-behavior:none;-webkit-overflow-scrolling:auto}
 /* iPhone-style scrollable segmented tabs for Analytics */
-.analytics-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid var(--border);scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;background:var(--bg)}
+.analytics-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid var(--border);scrollbar-width:none;-webkit-overflow-scrolling:touch;background:var(--bg);flex-wrap:nowrap}
 .analytics-tabs::-webkit-scrollbar{display:none}
-.atab{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;padding:7px 14px;border-radius:18px;cursor:pointer;white-space:nowrap;transition:all 0.15s;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;scroll-snap-align:start;letter-spacing:-0.1px}
+.analytics-picker{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);cursor:pointer;user-select:none}
+.analytics-picker-inner{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;color:var(--text);font-size:15px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;transition:background 0.15s}
+.analytics-picker:active .analytics-picker-inner{background:var(--bg3)}
+.analytics-picker-icon{font-size:16px;line-height:1}
+.analytics-picker-label{letter-spacing:-0.2px}
+.atab{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;padding:7px 14px;border-radius:18px;cursor:pointer;white-space:nowrap;transition:background 0.15s,color 0.15s,border-color 0.15s;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
 .atab:hover{background:var(--bg3)}
 .atab.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 @media(max-width:480px){
@@ -10901,24 +10906,35 @@ function renderAnalytics() {
   if (typeof runAIAnalysis === 'function') {
     try { runAIAnalysis(); } catch(e) { console.warn('AI analysis failed:', e); }
   }
-  const tabsHTML = `<div class="analytics-tabs">
-    <button class="atab ${_analyticsTab==='overview'?'active':''}" onclick="setAnalyticsTab('overview')">Overview</button>
-    <button class="atab ${_analyticsTab==='cashflow'?'active':''}" onclick="setAnalyticsTab('cashflow')">Cashflow</button>
-    <button class="atab ${_analyticsTab==='spending'?'active':''}" onclick="setAnalyticsTab('spending')">Spending</button>
-    <button class="atab ${_analyticsTab==='budget'?'active':''}" onclick="setAnalyticsTab('budget')">Budget</button>
-    <button class="atab ${_analyticsTab==='trends'?'active':''}" onclick="setAnalyticsTab('trends')">Trends</button>
-    <button class="atab ${_analyticsTab==='dayofweek'?'active':''}" onclick="setAnalyticsTab('dayofweek')">By Day</button>
-    <button class="atab ${_analyticsTab==='wealth'?'active':''}" onclick="setAnalyticsTab('wealth')">Wealth</button>
-    <button class="atab ${_analyticsTab==='goals'?'active':''}" onclick="setAnalyticsTab('goals')">Goals</button>
-    <button class="atab ${_analyticsTab==='people'?'active':''}" onclick="setAnalyticsTab('people')">People</button>
-    <button class="atab ${_analyticsTab==='subs'?'active':''}" onclick="setAnalyticsTab('subs')">Subs</button>
-    <button class="atab ${_analyticsTab==='accthealth'?'active':''}" onclick="setAnalyticsTab('accthealth')">Accounts</button>
-    <button class="atab ${_analyticsTab==='yoy'?'active':''}" onclick="setAnalyticsTab('yoy')">YoY</button>
-    <button class="atab ${_analyticsTab==='investments'?'active':''}" onclick="setAnalyticsTab('investments')">Investments</button>
-    <button class="atab ${_analyticsTab==='forex'?'active':''}" onclick="setAnalyticsTab('forex')">Forex</button>
-    <button class="atab ${_analyticsTab==='crosscurr'?'active':''}" onclick="setAnalyticsTab('crosscurr')">Cross-FX</button>
-    <button class="atab ${_analyticsTab==='external'?'active':''}" onclick="setAnalyticsTab('external')">External</button>
-    <button class="atab ${_analyticsTab==='aisummary'?'active':''}" onclick="setAnalyticsTab('aisummary')">🤖 AI</button>
+  // ── PERSONAL LOGIC SET ── iOS Health-style picker header (replaces 17-tab horizontal scroll).
+  // Tap the title to open a categorized bottom sheet for tab switching.
+  const TAB_REGISTRY = {
+    overview:   {label:'Overview',       icon:'📊', section:'home'},
+    cashflow:   {label:'Cashflow',       icon:'💰', section:'money'},
+    crosscurr:  {label:'Cross-FX',       icon:'💱', section:'money'},
+    budget:     {label:'Budget',         icon:'🎯', section:'money'},
+    spending:   {label:'Spending',       icon:'🛒', section:'spending'},
+    trends:     {label:'Trends',         icon:'📈', section:'spending'},
+    dayofweek:  {label:'By Day',         icon:'📅', section:'spending'},
+    yoy:        {label:'Year-over-Year', icon:'🗓', section:'spending'},
+    people:     {label:'People',         icon:'👥', section:'people'},
+    subs:       {label:'Subscriptions',  icon:'🔁', section:'people'},
+    wealth:     {label:'Wealth',         icon:'💎', section:'wealth'},
+    investments:{label:'Investments',    icon:'📊', section:'wealth'},
+    accthealth: {label:'Account Health', icon:'🏦', section:'wealth'},
+    goals:      {label:'Goals',          icon:'🎯', section:'wealth'},
+    forex:      {label:'Forex Rates',    icon:'💱', section:'other'},
+    external:   {label:'External',       icon:'🔄', section:'other'},
+    aisummary:  {label:'AI Summary',     icon:'🤖', section:'other'},
+  };
+  window._TAB_REGISTRY = TAB_REGISTRY;
+  const currTab = TAB_REGISTRY[_analyticsTab] || TAB_REGISTRY.overview;
+  const tabsHTML = `<div class="analytics-picker" onclick="openAnalyticsPicker()">
+    <div class="analytics-picker-inner">
+      <span class="analytics-picker-icon">${currTab.icon}</span>
+      <span class="analytics-picker-label">${currTab.label}</span>
+      <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="margin-left:6px;opacity:0.6"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
   </div>`;
   let content = '';
   if (_analyticsTab==='overview') content = renderAnalyticsOverview();
@@ -10937,7 +10953,8 @@ function renderAnalytics() {
   else if (_analyticsTab==='crosscurr') content = renderAnalyticsCrossCurrency();
   else if (_analyticsTab==='external') content = renderAnalyticsExternal();
   else if (_analyticsTab==='aisummary') content = renderAnalyticsAISummary();
-  else content = renderAnalyticsForex();
+  else if (_analyticsTab==='forex') content = renderAnalyticsForex();
+  else content = renderAnalyticsOverview(); // safe fallback for unknown tab keys
   // Use swipe direction to decide animation class
   const dir = window._analyticsSwipeDir || 'none';
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
@@ -10963,7 +10980,48 @@ function attachAnalyticsSwipe() {
   return;
 }
 
-function setAnalyticsTab(t) { _analyticsTab=t; renderAnalytics(); }
+function setAnalyticsTab(t) {
+  _analyticsTab = t;
+  renderAnalytics();
+}
+
+// ── PERSONAL LOGIC SET ── iOS Health-style analytics picker sheet.
+// Tap header → opens bottom sheet → categorized list of all 17 tabs.
+// Tap any item → closes sheet, swaps content.
+function openAnalyticsPicker() {
+  const reg = window._TAB_REGISTRY || {};
+  const sections = [
+    { id:'home',     title:'',                   keys:['overview'] },
+    { id:'money',    title:'💰 Money',           keys:['cashflow','crosscurr','budget'] },
+    { id:'spending', title:'🛒 Spending',        keys:['spending','trends','dayofweek','yoy'] },
+    { id:'people',   title:'👥 People & Recurring', keys:['people','subs'] },
+    { id:'wealth',   title:'💎 Wealth',          keys:['wealth','investments','accthealth','goals'] },
+    { id:'other',    title:'🔧 Other',           keys:['forex','external','aisummary'] },
+  ];
+  let html = `<div style="padding:4px 0">`;
+  sections.forEach(sec => {
+    if (sec.title) {
+      html += `<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);padding:14px 16px 6px">${sec.title}</div>`;
+    }
+    sec.keys.forEach(k => {
+      const t = reg[k];
+      if (!t) return;
+      const active = _analyticsTab === k;
+      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='${active?'var(--accent-bg)':'transparent'}'">
+        <span style="font-size:20px">${t.icon}</span>
+        <span style="flex:1;font-size:15px;color:var(--text);font-weight:${active?'600':'500'}">${t.label}</span>
+        ${active?`<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+      </div>`;
+    });
+  });
+  html += `</div>`;
+  openSheet('gen', 'Choose Analytics View', html);
+}
+
+function pickAnalyticsTab(k) {
+  closeSheet('gen');
+  setAnalyticsTab(k);
+}
 
 // ─── INLINE ANALYTICS INSIGHTS HELPER ───
 // Renders compact insight cards for embedding in analytics tabs.
@@ -11135,7 +11193,76 @@ function renderAnalyticsOverview() {
       ${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% vs prev
     </span>`;
 
+  // ── PERSONAL LOGIC SET ── Mini summary cards at top of Overview (iOS Health-style preview).
+  // Each card shows a peek metric + chevron that drills into the dedicated tab.
+  // Cards skip if no data exists for that view (e.g. no budgets, no loans, etc).
+  const miniCards = (() => {
+    let cards = [];
+    const mk = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
+    const ct = getMonthTotals(mk);
+    const cNet = (ct.income||0) - (ct.expense||0);
+    cards.push({
+      tab: 'cashflow', icon: '💰', label: 'Cashflow',
+      value: `${cNet>=0?'+':''}${fmt(cNet, disp)}`,
+      sub: cNet>=0 ? 'Net saved this month' : 'Net deficit this month',
+      color: cNet>=0 ? 'var(--green)' : 'var(--red)'
+    });
+    const activeBgts = (db.budgets||[]).filter(b=>b.active!==false&&!b.archived);
+    if (activeBgts.length > 0) {
+      cards.push({ tab:'budget', icon:'🎯', label:'Budget',
+        value: `${activeBgts.length}`, sub: aiPlural(activeBgts.length,'active budget'),
+        color:'var(--text)' });
+    }
+    const activeLent = (db.loans?.lent||[]).filter(l=>!l.settled).length;
+    const activeBorrowed = (db.loans?.borrowed||[]).filter(l=>!l.settled).length;
+    if (activeLent + activeBorrowed > 0) {
+      const totalLent = (db.loans?.lent||[]).filter(l=>!l.settled).reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+      cards.push({ tab:'people', icon:'👥', label:'People',
+        value: fmt(totalLent, disp), sub: `${aiPlural(activeLent,'loan')} out · ${activeBorrowed} owed`,
+        color:'var(--amber)' });
+    }
+    const subsCount = (db.recurringTxs||[]).filter(r=>r.active!==false&&!r.archived&&r.type==='expense').length;
+    if (subsCount > 0) {
+      cards.push({ tab:'subs', icon:'🔁', label:'Subs',
+        value: `${subsCount}`, sub: aiPlural(subsCount,'active sub'),
+        color:'var(--text)' });
+    }
+    const trackedCurr = (db.trackedCurrencies||[]).length;
+    if (trackedCurr > 1) {
+      cards.push({ tab:'crosscurr', icon:'💱', label:'Cross-FX',
+        value: `${trackedCurr}`, sub: `${aiPlural(trackedCurr,'currency','currencies')} tracked`,
+        color:'var(--text)' });
+    }
+    const activeGoals = (db.contracts||[]).filter(g=>!g.archived&&!g.completed).length;
+    if (activeGoals > 0) {
+      cards.push({ tab:'goals', icon:'🏁', label:'Goals',
+        value: `${activeGoals}`, sub: aiPlural(activeGoals,'active goal'),
+        color:'var(--text)' });
+    }
+    return cards;
+  })();
+
+  const miniCardsHTML = miniCards.length > 0 ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px">Quick Glance</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        ${miniCards.map(c => `
+          <div onclick="setAnalyticsTab('${c.tab}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:background 0.15s">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:18px">${c.icon}</span>
+              <svg width="8" height="12" viewBox="0 0 8 13" fill="none" style="opacity:0.4"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div style="font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${c.label}</div>
+            <div style="font-size:16px;font-weight:700;color:${c.color};font-family:var(--mono);line-height:1.1;letter-spacing:-0.3px">${c.value}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px">${c.sub}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
   return `<div class="page-pad">
+    ${miniCardsHTML}
     <!-- Period selector -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:13px;font-weight:600;color:var(--text2)">${period==='ytd'?'Year to Date — '+currentYear:metricLabel}</div>
