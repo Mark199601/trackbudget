@@ -188,11 +188,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .metric-value{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-0.6px;color:var(--text);font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum","zero"}
 .metric-sub{font-size:11px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:480px){
-  .metric-card{padding:8px 6px;min-width:0}
-  .metric-label{font-size:8px;letter-spacing:0.02em;margin-bottom:3px;min-height:2.2em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .metric-value{font-size:13px;letter-spacing:-0.3px}
+  .metric-card{padding:10px 6px;min-width:0;min-height:96px}
+  .metric-label{font-size:8.5px;letter-spacing:0.02em;margin-bottom:4px;min-height:2.6em;line-height:1.2;white-space:normal;word-break:keep-all;overflow:hidden}
+  .metric-value{font-size:14px;letter-spacing:-0.3px}
   .metric-num{font-size:11px}
-  .metric-sub{font-size:8px;line-height:1.2}
+  .metric-sub{font-size:8px;line-height:1.2;white-space:normal;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 }
 @media(min-width:768px){
   .metric-card{padding:18px 20px}
@@ -314,7 +314,7 @@ option{background:var(--bg3);color:var(--text)}
 .fr3{grid-template-columns:1fr 1fr 1fr}
 .fr4-resp{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
 .stat-month-grid{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
-@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}.fr2-always{grid-template-columns:1fr 1fr!important}.fr4-resp{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}.stat-month-grid{grid-template-columns:1fr 1fr!important}}
+@media(max-width:480px){.fr2,.fr3{grid-template-columns:1fr}.fr2-always{grid-template-columns:1fr 1fr!important}.fr4-resp{grid-template-columns:repeat(4,1fr)!important;gap:5px!important}.stat-month-grid{grid-template-columns:1fr 1fr!important}}
 .form-hint{font-size:11px;color:var(--text3);margin-top:5px}
 
 .type-toggle{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
@@ -11040,15 +11040,15 @@ function openAnalyticsPicker() {
       html += `<div style="height:1px;background:var(--border);margin:8px 16px"></div>`;
     }
     if (sec.title) {
-      html += `<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);padding:14px 16px 4px">${sec.title}</div>`;
+      html += `<div style="font-size:13px;font-weight:700;color:var(--text);padding:14px 16px 6px;letter-spacing:-0.1px">${sec.title}</div>`;
     }
     sec.keys.forEach(k => {
       const t = reg[k];
       if (!t) return;
       const active = _analyticsTab === k;
-      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.12s">
-        <span style="font-size:16px;width:20px;text-align:center">${t.icon}</span>
-        <span style="flex:1;font-size:13px;color:var(--text);font-weight:${active?'600':'400'};letter-spacing:-0.1px">${t.label}</span>
+      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:10px;padding:8px 16px 8px ${sec.title?'32px':'16px'};cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.12s">
+        <span style="font-size:14px;width:18px;text-align:center">${t.icon}</span>
+        <span style="flex:1;font-size:12px;color:var(--text2);font-weight:${active?'600':'400'};letter-spacing:-0.1px">${t.label}</span>
         ${active?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
       </div>`;
     });
@@ -11238,76 +11238,7 @@ function renderAnalyticsOverview() {
       ${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% vs prev
     </span>`;
 
-  // ── PERSONAL LOGIC SET ── Mini summary cards at top of Overview (iOS Health-style preview).
-  // Each card shows a peek metric + chevron that drills into the dedicated tab.
-  // Cards skip if no data exists for that view (e.g. no budgets, no loans, etc).
-  const miniCards = (() => {
-    let cards = [];
-    const mk = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
-    const ct = getMonthTotals(mk);
-    const cNet = (ct.income||0) - (ct.expense||0);
-    cards.push({
-      tab: 'cashflow', icon: '💰', label: 'Cashflow',
-      value: `${cNet>=0?'+':''}${fmt(cNet, disp)}`,
-      sub: cNet>=0 ? 'Net saved this month' : 'Net deficit this month',
-      color: cNet>=0 ? 'var(--green)' : 'var(--red)'
-    });
-    const activeBgts = (db.budgets||[]).filter(b=>b.active!==false&&!b.archived);
-    if (activeBgts.length > 0) {
-      cards.push({ tab:'budget', icon:'🎯', label:'Budget',
-        value: `${activeBgts.length}`, sub: aiPlural(activeBgts.length,'active budget'),
-        color:'var(--text)' });
-    }
-    const activeLent = (db.loans?.lent||[]).filter(l=>!l.settled).length;
-    const activeBorrowed = (db.loans?.borrowed||[]).filter(l=>!l.settled).length;
-    if (activeLent + activeBorrowed > 0) {
-      const totalLent = (db.loans?.lent||[]).filter(l=>!l.settled).reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
-      cards.push({ tab:'people', icon:'👥', label:'People',
-        value: fmt(totalLent, disp), sub: `${aiPlural(activeLent,'loan')} out · ${activeBorrowed} owed`,
-        color:'var(--amber)' });
-    }
-    const subsCount = (db.recurringTxs||[]).filter(r=>r.active!==false&&!r.archived&&r.type==='expense').length;
-    if (subsCount > 0) {
-      cards.push({ tab:'subs', icon:'🔁', label:'Subs',
-        value: `${subsCount}`, sub: aiPlural(subsCount,'active sub'),
-        color:'var(--text)' });
-    }
-    const trackedCurr = (db.trackedCurrencies||[]).length;
-    if (trackedCurr > 1) {
-      cards.push({ tab:'crosscurr', icon:'💱', label:'Cross-FX',
-        value: `${trackedCurr}`, sub: `${aiPlural(trackedCurr,'currency','currencies')} tracked`,
-        color:'var(--text)' });
-    }
-    const activeGoals = (db.contracts||[]).filter(g=>!g.archived&&!g.completed).length;
-    if (activeGoals > 0) {
-      cards.push({ tab:'goals', icon:'🏁', label:'Goals',
-        value: `${activeGoals}`, sub: aiPlural(activeGoals,'active goal'),
-        color:'var(--text)' });
-    }
-    return cards;
-  })();
-
-  const miniCardsHTML = miniCards.length > 0 ? `
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px">Quick Glance</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
-        ${miniCards.map(c => `
-          <div onclick="setAnalyticsTab('${c.tab}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:background 0.15s">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <span style="font-size:18px">${c.icon}</span>
-              <svg width="8" height="12" viewBox="0 0 8 13" fill="none" style="opacity:0.4"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <div style="font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${c.label}</div>
-            <div style="font-size:16px;font-weight:700;color:${c.color};font-family:var(--mono);line-height:1.1;letter-spacing:-0.3px">${c.value}</div>
-            <div style="font-size:10px;color:var(--text4);margin-top:2px">${c.sub}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  ` : '';
-
   return `<div class="page-pad">
-    ${miniCardsHTML}
     <!-- Period selector -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="font-size:13px;font-weight:600;color:var(--text2)">${period==='ytd'?'Year to Date — '+currentYear:metricLabel}</div>
@@ -11335,7 +11266,7 @@ function renderAnalyticsOverview() {
       // ── DEBUG-SCAN NOTE ── buildPieChart is called inside the `inner` IIFE which builds expCard/incCard.
       // Naive substring scans flagging "missing buildPieChart in ov-acc-pie body" are false positives —
       // the body uses ${inner} which contains the buildPieChart calls.
-      return `<div class="ov-acc" id="ov-acc-pie">
+      return `<div class="ov-acc open" id="ov-acc-pie">
         <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-pie')">
           <div class="ov-acc-icon">🍩</div>
           <div class="ov-acc-title">Category Breakdown</div>
@@ -17827,17 +17758,20 @@ if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
 // Online/offline detection — shows badge + triggers auto-sync
 let _wasOffline = false;
 function _renderOfflineBadge(isOffline) {
+  // ── PERSONAL LOGIC SET ── Offline indicator is a SUBTLE dot/icon in page header,
+  // not a floating banner. User wanted it minimal — just visual status, no full prompt.
   let badge = document.getElementById('offline-badge');
   if (isOffline) {
     if (!badge) {
       badge = document.createElement('div');
       badge.id = 'offline-badge';
-      badge.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#f0a832;color:#000;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;gap:6px;cursor:pointer';
-      badge.innerHTML = '⚠️ Offline — changes saved locally';
-      badge.title = 'Tap to dismiss';
-      badge.onclick = () => badge.style.display = 'none';
-      document.body.appendChild(badge);
-    } else { badge.style.display = 'flex'; }
+      badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:4px 9px;background:rgba(240,168,50,0.15);color:#f0a832;border:1px solid rgba(240,168,50,0.4);border-radius:999px;font-size:11px;font-weight:600;cursor:default;user-select:none';
+      badge.innerHTML = '<span style="width:6px;height:6px;background:#f0a832;border-radius:50%;display:inline-block;box-shadow:0 0 4px #f0a832"></span>Offline';
+      badge.title = 'No internet — changes saved locally';
+      // Inject into page header (right side) for desktop / status spot for mobile
+      const target = document.querySelector('#page-header .ph-right') || document.body;
+      target.insertBefore(badge, target.firstChild);
+    } else { badge.style.display = 'inline-flex'; }
   } else {
     if (badge) badge.style.display = 'none';
   }
