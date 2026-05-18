@@ -9494,12 +9494,12 @@ function openBatchSettleLoans(direction, person) {
 
   // Currency selector (only show if multi-currency)
   const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
-  const currSelectorHtml = currList.length > 1
-    ? `<div class="form-group"><label class="form-label">Settlement currency</label>
-         <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
-         <div style="font-size:11px;color:var(--text4);margin-top:4px">Other currency loans will be converted using snapshot FX rate</div>
-       </div>`
-    : `<input type="hidden" id="bsl-curr" value="${defaultCurr}">`;
+  // PLS #97: Settlement currency always visible — allows cross-currency repayment (e.g. lent PHP, receive PGK → auto-detect FX gain/loss)
+  const allCurrOpts = db.trackedCurrencies.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
+  const currSelectorHtml = `<div class="form-group"><label class="form-label">Settlement currency</label>
+       <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\'")}')"> ${allCurrOpts}</select>
+       <div style="font-size:11px;color:var(--text4);margin-top:4px">Cross-currency payments auto-detect FX gain/loss</div>
+     </div>`;
 
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${a.name} (${a.currency})</option>`).join('');
 
