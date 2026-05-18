@@ -239,6 +239,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .btn-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
 .btn-success{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .btn-warning{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent-border)}
+.btn-outline:hover{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
 .btn-full{width:100%;padding:13px}
 .btn-sm{padding:7px 12px;font-size:12px;border-radius:var(--r-sm)}
 .btn-icon{width:34px;height:34px;padding:0;border-radius:var(--r-md);background:var(--bg4);color:var(--text2);border:1px solid var(--border)}
@@ -1048,7 +1050,6 @@ const FLAGS = {
 };
 
 function getFlag(country) { return FLAGS[country] || '🌍'; }
-function getCurrencyByCountry(country) { return COUNTRY_TO_CURRENCY[country] || 'USD'; }
 
 const COUNTRIES = [...new Set([...Object.keys(COUNTRY_TO_CURRENCY), ...Object.keys(FLAGS)])].sort();
 
@@ -3952,6 +3953,12 @@ function renderAddSheet() {
 }
 
 // Unified single-screen form for Expense/Income/Shared
+// ── PERSONAL LOGIC SET #96 ── Form ID duplicates are INTENTIONAL.
+// IDs like add-amount, add-account, add-currency, add-notes, add-myshare, shared-persons-list,
+// add-more-chevron, add-more-row, etc. appear in multiple form variants (renderUnifiedAmountForm,
+// renderSharedFormBody, renderAmountForm, etc.). Only ONE form-sheet is mounted at a time —
+// when a sheet closes its DOM is destroyed before another mounts. getElementById() always
+// resolves to the active form. Refactoring to unique IDs would break the numpad and FX wiring.
 function renderUnifiedAmountForm() {
   const s = _addState;
   const isShared = s.type === 'shared';
@@ -4371,7 +4378,6 @@ function spAddRow(name='', share='') {
 }
 
 function addSharedPerson() { spAddRow(); }
-function removeSharedPerson(i) {}  // legacy no-op
 function renderSharedPersons() {
   const el = document.getElementById('shared-persons-list');
   if (!el) return;
@@ -8195,11 +8201,7 @@ function confirmReimbSettlement(person) {
 }
 
 // Legacy function stubs for any lingering references
-function confirmSettleReim() { /* replaced by confirmReimbSettlement */ }
-function confirmSettleReimMulti() { /* replaced by confirmReimbSettlement */ }
 function submitPartialSettle() { /* replaced */ }
-function confirmPartialSettle() { /* replaced */ }
-function logReimbIncome() { /* replaced */ }
 
 let _acctTab = 'active';
 
@@ -10034,8 +10036,6 @@ function deleteLoanPayment(paymentId, loanId, direction) {
   saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment deleted');
 }
 
-function editLoanMeta(loanId, direction) { editLoanFull(loanId, direction); }
-function saveLoanMeta(loanId, direction) { saveLoanFull(loanId, direction); }
 
 // 📖 USER STORY: Settled at archived ay dalawang magkaibang estado. Settled = fully paid na, sariling
 // sheet niya, nasa db.loans[direction] pa rin. Archived = manually mo inalis sa active list, lumipat
@@ -10946,6 +10946,7 @@ function renderAnalytics() {
   // Tap the title to open a categorized bottom sheet for tab switching.
   const TAB_REGISTRY = {
     overview:   {label:'Overview',       icon:'📊', section:'home'},
+    calendar:   {label:'Calendar',       icon:'📅', section:'home'},
     cashflow:   {label:'Cashflow',       icon:'💰', section:'money'},
     crosscurr:  {label:'Cross-FX',       icon:'💱', section:'money'},
     budget:     {label:'Budget',         icon:'🎯', section:'money'},
@@ -10974,6 +10975,7 @@ function renderAnalytics() {
   </div>`;
   let content = '';
   if (_analyticsTab==='overview') content = renderAnalyticsOverview();
+  else if (_analyticsTab==='calendar') content = renderAnalyticsCalendar();
   else if (_analyticsTab==='cashflow') content = renderAnalyticsCashflow();
   else if (_analyticsTab==='spending') content = renderAnalyticsSpending();
   else if (_analyticsTab==='budget') content = renderAnalyticsBudget();
@@ -11027,7 +11029,7 @@ function setAnalyticsTab(t) {
 function openAnalyticsPicker() {
   const reg = window._TAB_REGISTRY || {};
   const sections = [
-    { id:'home',     title:'',                   keys:['overview'] },
+    { id:'home',     title:'',                   keys:['overview','calendar'] },
     { id:'money',    title:'💰 Money',           keys:['cashflow','crosscurr','budget'] },
     { id:'spending', title:'🛒 Spending',        keys:['spending','trends','dayofweek','yoy'] },
     { id:'people',   title:'👥 People & Recurring', keys:['people','subs'] },
@@ -11098,6 +11100,232 @@ function renderInlineInsights(types, opts = {}) {
     </div>
     ${cards}
   </div>`;
+}
+
+// ── CALENDAR VIEW ──
+let _calMonth = null; // YYYY-MM
+
+function renderAnalyticsCalendar() {
+  const dc = db.displayCurrency || 'PHP';
+  if (!_calMonth) {
+    const now = new Date();
+    _calMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [y, m] = _calMonth.split('-').map(Number);
+  const monthDate = new Date(y, m-1, 1);
+  const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const firstDayWeekday = new Date(y, m-1, 1).getDay(); // 0=Sun
+
+  // Aggregate tx by date (PLS #18 compliant exclusions: same as getMonthTotals)
+  const byDate = {};
+  (db.transactions || []).forEach(t => {
+    if (t.archived || !t.date) return;
+    if (!t.date.startsWith(_calMonth)) return;
+    // PLS #18 exclusions
+    if (t.isLoanTx || t.isLoanPayment) return;
+    if (t.isAutoReimb) return;
+    if (t.isFeeReimbursable) return;
+    if (t.isInvestmentFund) return;
+    // isSettlement excluded EXCEPT gain/loss children (real arbitrage)
+    if (t.isSettlement && !t.isAutoForex && !t.isReimbSettlementGain && !t.isLoanSettlementGain && !t.isLoanSettlementLoss) return;
+    if (!byDate[t.date]) byDate[t.date] = { income: 0, expense: 0, count: 0, txs: [] };
+    const amt = Math.abs(t.phpAmount || 0);
+    if (t.type === 'income') byDate[t.date].income += amt;
+    else if (t.type === 'expense') byDate[t.date].expense += amt;
+    byDate[t.date].count += 1;
+    byDate[t.date].txs.push(t);
+  });
+
+  // Upcoming recurring/installments this month
+  const recurring = (db.recurringTxs || []).filter(r => !r.archived);
+  const installments = (db.installments || []).filter(i => !i.archived);
+  const upcomingByDate = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${_calMonth}-${String(d).padStart(2,'0')}`;
+    const today = new Date().toISOString().slice(0,10);
+    if (dateStr < today) continue;
+
+    installments.forEach(inst => {
+      if (inst.dueDay === d) {
+        if (!upcomingByDate[dateStr]) upcomingByDate[dateStr] = [];
+        upcomingByDate[dateStr].push({ type: 'installment', name: inst.name || 'Installment', amount: inst.monthlyAmount || 0, currency: inst.currency || dc });
+      }
+    });
+  }
+
+  // Find max value for day-cell heatmap intensity
+  const maxAmt = Math.max(...Object.values(byDate).map(d => d.income + d.expense), 1);
+
+  // Build calendar grid
+  let html = `<div class="page-pad">`;
+
+  // Month nav
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(-1)" style="padding:0">←</button>
+    <div style="font-size:16px;font-weight:600">${monthLabel}</div>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(1)" style="padding:0">→</button>
+  </div>`;
+
+  // Month summary
+  const monthIncome = Object.values(byDate).reduce((s, d) => s + d.income, 0);
+  const monthExpense = Object.values(byDate).reduce((s, d) => s + d.expense, 0);
+  const monthCount = Object.values(byDate).reduce((s, d) => s + d.count, 0);
+  html += `<div class="card" style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+    <div>
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Income</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(fromPhp(monthIncome,dc), dc)}</div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Expense</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(fromPhp(monthExpense,dc), dc)}</div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Txs</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:600">${monthCount}</div>
+    </div>
+  </div>`;
+
+  // Day headers
+  html += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+    ${['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:10px;color:var(--text3);font-weight:600">${d}</div>`).join('')}
+  </div>`;
+
+  // Day cells
+  html += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:14px">`;
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDayWeekday; i++) {
+    html += `<div></div>`;
+  }
+
+  const today = new Date().toISOString().slice(0,10);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${_calMonth}-${String(d).padStart(2,'0')}`;
+    const dayData = byDate[dateStr];
+    const upcoming = upcomingByDate[dateStr];
+    const total = dayData ? (dayData.income + dayData.expense) : 0;
+    const intensity = total / maxAmt;
+    const isToday = dateStr === today;
+    const isPast = dateStr < today;
+    const hasNet = dayData && (dayData.income - dayData.expense) !== 0;
+    const isPositive = dayData && dayData.income > dayData.expense;
+    let bg = 'var(--bg3)';
+    if (dayData) {
+      if (isPositive) bg = `rgba(22,163,74,${0.15 + intensity * 0.55})`;
+      else bg = `rgba(220,38,38,${0.15 + intensity * 0.55})`;
+    }
+    html += `<div onclick="openCalDay('${dateStr}')" style="aspect-ratio:1;background:${bg};border-radius:var(--r-sm);padding:4px;cursor:pointer;${isToday?'border:2px solid var(--accent)':''};display:flex;flex-direction:column;justify-content:space-between;min-height:42px">
+      <div style="font-size:11px;font-weight:${isToday?'700':'500'};color:${dayData?'var(--text)':'var(--text3)'}">${d}</div>
+      <div style="font-size:9px;line-height:1.2;text-align:right">
+        ${dayData ? `<div style="color:${isPositive?'var(--green)':'var(--red)'};font-weight:600">${dayData.count}</div>` : ''}
+        ${upcoming ? `<div style="color:var(--amber);font-size:8px">⚠</div>` : ''}
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // Upcoming bills section
+  const upcomingItems = Object.entries(upcomingByDate)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .slice(0, 5);
+  if (upcomingItems.length > 0) {
+    html += `<div class="card" style="margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:10px">📌 Upcoming this month</div>`;
+    upcomingItems.forEach(([date, items]) => {
+      const daysAway = Math.ceil((new Date(date) - new Date(today)) / 86400000);
+      items.forEach(item => {
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <div style="flex:1">
+            <div style="color:var(--text);font-weight:500">${escapeAttr(item.name)}</div>
+            <div style="color:var(--text3);font-size:10px">${date} · ${daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : daysAway + ' days'}</div>
+          </div>
+          <div style="font-family:var(--mono);color:var(--amber);font-weight:600">${fmt(item.amount, item.currency)}</div>
+        </div>`;
+      });
+    });
+    html += `</div>`;
+  }
+
+  html += `<div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:20px">
+    Tap any day to see transactions · 🟢 net positive · 🔴 net negative · ⚠ has upcoming bill
+  </div>`;
+
+  html += `</div>`;
+  return html;
+}
+
+function navCalMonth(delta) {
+  if (!_calMonth) {
+    const now = new Date();
+    _calMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
+  const [y, m] = _calMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  _calMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderAnalytics();
+}
+
+function openCalDay(dateStr) {
+  const dc = db.displayCurrency || 'PHP';
+  const dayTxs = (db.transactions || [])
+    .filter(t => !t.archived && t.date === dateStr)
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  const accts = db.accounts || [];
+  const cats = db.categories || { income: [], expense: [] };
+  const findAcct = id => accts.find(a => a.id === id)?.name || '';
+  const findCat = (id, type) => (cats[type] || []).find(c => c.id === id)?.name || '';
+
+  const labelDate = new Date(dateStr).toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
+
+  let body;
+  if (dayTxs.length === 0) {
+    body = `<div class="page-pad"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">No transactions on this day</div></div></div>`;
+  } else {
+    let dayIncome = 0, dayExpense = 0;
+    dayTxs.forEach(t => {
+      // PLS #18 exclusions for totals (same as monthly aggregator)
+      if (t.isLoanTx || t.isLoanPayment) return;
+      if (t.isAutoReimb) return;
+      if (t.isFeeReimbursable) return;
+      if (t.isInvestmentFund) return;
+      if (t.isSettlement && !t.isAutoForex && !t.isReimbSettlementGain && !t.isLoanSettlementGain && !t.isLoanSettlementLoss) return;
+      const amt = Math.abs(t.phpAmount || 0);
+      if (t.type === 'income') dayIncome += amt;
+      else if (t.type === 'expense') dayExpense += amt;
+    });
+    body = `<div class="page-pad">
+      <div class="card" style="margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+        <div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Income</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(fromPhp(dayIncome,dc), dc)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Expense</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(fromPhp(dayExpense,dc), dc)}</div>
+        </div>
+      </div>
+      ${dayTxs.map(t => {
+        const catName = t.type === 'transfer' ? 'Transfer' :
+                        t.type === 'income' ? findCat(t.catId, 'income') :
+                        findCat(t.catId, 'expense');
+        const color = t.type === 'income' ? 'var(--green)' : t.type === 'transfer' ? 'var(--text2)' : 'var(--red)';
+        const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-';
+        return `<div class="card" style="margin-bottom:8px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(t.notes || catName || '—')}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">${escapeAttr(catName)} · ${escapeAttr(findAcct(t.accountId))}</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${sign}${fmt(t.amount, t.currency || dc)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  openSheet('cal-day', `📅 ${labelDate}`, body);
 }
 
 function renderAnalyticsOverview() {
@@ -13506,15 +13734,221 @@ function renderPlanning() {
     <button class="tab-btn ${_planTab==='payday'?'active':''}" onclick="setPlanTab('payday')">Payday</button>
     <button class="tab-btn ${_planTab==='recurring'?'active':''}" onclick="setPlanTab('recurring')">Recurring</button>
     <button class="tab-btn ${_planTab==='contract'?'active':''}" onclick="setPlanTab('contract')">Contract</button>
+    <button class="tab-btn ${_planTab==='wishlist'?'active':''}" onclick="setPlanTab('wishlist')">Wishlist</button>
   </div>`;
   let content = '';
   if (_planTab==='payday') content = renderPaydayTab();
   else if (_planTab==='recurring') content = renderRecurringTab();
+  else if (_planTab==='wishlist') content = renderWishlistTab();
   else content = renderContractTab();
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
 
 function setPlanTab(t) { _planTab=t; renderPlanning(); }
+
+// ── WISHLIST ──
+function renderWishlistTab() {
+  const wl = db.wishlist || [];
+  const dc = db.displayCurrency || 'PHP';
+  // Sort: not purchased first, by priority desc, then created desc
+  const sorted = wl.slice().sort((a, b) => {
+    if (!!a.purchased !== !!b.purchased) return a.purchased ? 1 : -1;
+    const pa = a.priority === 'high' ? 3 : a.priority === 'medium' ? 2 : 1;
+    const pb = b.priority === 'high' ? 3 : b.priority === 'medium' ? 2 : 1;
+    if (pa !== pb) return pb - pa;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+
+  const totalCost = sorted.filter(w => !w.purchased).reduce((s, w) => s + toPhp(w.price || 0, w.currency || dc), 0);
+
+  let html = '<div class="page-pad">';
+
+  if (sorted.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">🛍️</div><div class="empty-text">Your wishlist is empty</div><div style="font-size:12px;color:var(--text4);margin-bottom:16px">Track things you want to buy</div></div>`;
+  } else {
+    if (totalCost > 0) {
+      html += `<div class="card" style="margin-bottom:14px;text-align:center">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Total wishlist value</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--accent)">${fmt(totalCost, dc)}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:4px">${sorted.filter(w => !w.purchased).length} active item${sorted.filter(w => !w.purchased).length>1?'s':''}</div>
+      </div>`;
+    }
+
+    sorted.forEach(w => {
+      const priorityColor = w.priority === 'high' ? 'var(--red)' : w.priority === 'medium' ? 'var(--amber)' : 'var(--text3)';
+      const priorityIcon = w.priority === 'high' ? '🔥' : w.priority === 'medium' ? '⭐' : '·';
+      html += `<div class="card" style="margin-bottom:10px;${w.purchased?'opacity:0.55':''}">
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:12px;color:${priorityColor}">${priorityIcon}</span>
+              <div style="font-size:14px;font-weight:600;${w.purchased?'text-decoration:line-through':''}">${escapeAttr(w.name)}</div>
+            </div>
+            ${w.price > 0 ? `<div style="font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600">${fmt(w.price, w.currency || dc)}</div>` : ''}
+            ${w.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${escapeAttr(w.notes)}</div>` : ''}
+            ${w.url ? `<a href="${escapeAttr(w.url)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:underline">🔗 Link</a>` : ''}
+            ${w.purchased ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Purchased ${w.purchasedDate ? 'on '+w.purchasedDate : ''}</div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            ${!w.purchased ? `<button class="btn btn-success btn-sm" style="padding:4px 10px;font-size:11px" onclick="markWishlistPurchased('${w.id}')">✓ Bought</button>` : ''}
+            <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="editWishlistItem('${w.id}')">Edit</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  html += `<button class="pool-add-btn" onclick="openAddWishlist()">+ Add to Wishlist</button></div>`;
+  return html;
+}
+
+function openAddWishlist(itemId) {
+  const item = itemId ? (db.wishlist || []).find(w => w.id === itemId) : null;
+  const dc = db.displayCurrency || 'PHP';
+  const currencies = db.trackedCurrencies || [dc];
+  const currOpts = currencies.map(c => `<option value="${c}" ${item && item.currency===c?'selected':(!item && c===dc?'selected':'')}>${c}</option>`).join('');
+
+  openSheet('wishlist-add', item ? '🛍 Edit Wishlist Item' : '🛍 Add to Wishlist',
+    `<div class="page-pad">
+      <div class="form-group">
+        <label class="form-label">Item name *</label>
+        <input class="form-input" id="wl-name" placeholder="e.g. iPhone case, vacation, new shoes" value="${item?escapeAttr(item.name):''}" maxlength="80">
+      </div>
+
+      <div class="form-row fr2">
+        <div class="form-group">
+          <label class="form-label">Price</label>
+          <input class="form-input numpad-input" type="number" step="any" id="wl-price" placeholder="0.00" value="${item?(item.price||''):''}" inputmode="decimal">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Currency</label>
+          <select class="form-input" id="wl-currency">${currOpts}</select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select class="form-input" id="wl-priority">
+          <option value="low" ${item && item.priority==='low'?'selected':''}>· Low</option>
+          <option value="medium" ${(!item || item.priority==='medium')?'selected':''}>⭐ Medium</option>
+          <option value="high" ${item && item.priority==='high'?'selected':''}>🔥 High</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Link (optional)</label>
+        <input class="form-input" type="url" id="wl-url" placeholder="https://..." value="${item?escapeAttr(item.url||''):''}">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" id="wl-notes" rows="2" placeholder="Why you want it..." style="resize:none">${item?escapeAttr(item.notes||''):''}</textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('wishlist-add')">Cancel</button>
+        ${item ? `<button class="btn btn-danger btn-sm" onclick="deleteWishlistItem('${item.id}')">Delete</button>` : ''}
+        <button class="btn btn-primary btn-sm btn-full" onclick="saveWishlistItem('${item?item.id:''}')">${item?'Save':'Add'}</button>
+      </div>
+    </div>`
+  );
+}
+
+function saveWishlistItem(itemId) {
+  const name = document.getElementById('wl-name').value.trim();
+  if (!name) { showToast('⚠ Item name required'); return; }
+  const price = parseFloat(document.getElementById('wl-price').value) || 0;
+  const currency = document.getElementById('wl-currency').value;
+  const priority = document.getElementById('wl-priority').value;
+  const url = document.getElementById('wl-url').value.trim();
+  const notes = document.getElementById('wl-notes').value.trim();
+
+  if (!db.wishlist) db.wishlist = [];
+  if (itemId) {
+    const it = db.wishlist.find(w => w.id === itemId);
+    if (it) {
+      Object.assign(it, { name, price, currency, priority, url, notes });
+    }
+  } else {
+    db.wishlist.push({
+      id: 'wl_' + Date.now(),
+      name, price, currency, priority, url, notes,
+      purchased: false,
+      createdAt: new Date().toISOString()
+    });
+  }
+  saveDBWithSync();
+  closeSheet('wishlist-add');
+  showToast(itemId ? '✓ Updated' : '🛍️ Added to wishlist');
+  if (currentPage === 'planning') renderPlanning();
+}
+
+function editWishlistItem(itemId) {
+  openAddWishlist(itemId);
+}
+
+function deleteWishlistItem(itemId) {
+  openDlg('Delete Item?',
+    `<p style="font-size:13px;color:var(--text2)">Remove this from your wishlist?</p>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="_doDeleteWishlistItem('${itemId}')">Delete</button>`
+  );
+}
+
+function _doDeleteWishlistItem(itemId) {
+  db.wishlist = (db.wishlist || []).filter(w => w.id !== itemId);
+  saveDBWithSync();
+  closeDlg();
+  closeSheet('wishlist-add');
+  showToast('🗑 Deleted');
+  if (currentPage === 'planning') renderPlanning();
+}
+
+function markWishlistPurchased(itemId) {
+  const it = (db.wishlist || []).find(w => w.id === itemId);
+  if (!it) return;
+  openDlg('Mark as Purchased?',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      <strong>${escapeAttr(it.name)}</strong>${it.price > 0 ? ' · ' + fmt(it.price, it.currency || db.displayCurrency || 'PHP') : ''}
+      <div style="margin-top:8px">Mark as purchased? You can also log it as an expense.</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-success btn-sm" onclick="_doMarkPurchased('${itemId}', false)">Mark only</button>
+     <button class="btn btn-primary btn-sm" onclick="_doMarkPurchased('${itemId}', true)">Mark + Log Expense</button>`
+  );
+}
+
+function _doMarkPurchased(itemId, logExpense) {
+  const it = (db.wishlist || []).find(w => w.id === itemId);
+  if (!it) return;
+  it.purchased = true;
+  it.purchasedDate = new Date().toISOString().slice(0,10);
+
+  if (logExpense && it.price > 0) {
+    // Open Add Transaction with prefill
+    closeDlg();
+    saveDBWithSync();
+    const prefill = {
+      type: 'expense',
+      amount: it.price,
+      currency: it.currency || db.displayCurrency || 'PHP',
+      notes: 'Wishlist: ' + it.name
+    };
+    if (currentPage !== 'transactions') {
+      nav('transactions');
+      setTimeout(() => openAddSheet(prefill), 200);
+    } else {
+      openAddSheet(prefill);
+    }
+    showToast('✓ Marked purchased');
+  } else {
+    saveDBWithSync();
+    closeDlg();
+    showToast('✓ Marked purchased');
+    if (currentPage === 'planning') renderPlanning();
+  }
+}
+
 
 function renderPaydayTab() {
   let html = '<div class="page-pad">';
@@ -15179,7 +15613,6 @@ function updateFxRate(code, val) {
     recordFxSnapshot(code, rate, today(), 'manual');
   }
 }
-function saveAllFxRates() { saveDBWithSync(); showToast('FX rates saved!'); }
 
 function renderBudgetsTab() {
   return `<div class="page-pad">
@@ -16168,6 +16601,10 @@ function renderDataTab() {
         <div class="sr-left"><div class="sr-icon">📊</div><div><div class="sr-text">Export to Excel (.xlsx)</div><div class="sr-sub">${txCount} ${aiPlural(txCount,'transaction')} · 6 sheets</div></div></div>
         <div class="sr-right">↓</div>
       </div>
+      <div class="settings-row" onclick="exportCSV()">
+        <div class="sr-left"><div class="sr-icon">📄</div><div><div class="sr-text">Export to CSV</div><div class="sr-sub">Transactions only · for Google Sheets / Excel</div></div></div>
+        <div class="sr-right">↓</div>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="section-title" style="margin-bottom:12px">Import</div>
@@ -16176,6 +16613,23 @@ function renderDataTab() {
         <div class="sr-right">↑</div>
       </div>
       <input type="file" id="import-file" accept=".json,.txt" style="display:none" onchange="importJSON(event);this.value=''">
+      <div class="settings-row" onclick="document.getElementById('import-csv-file').click()">
+        <div class="sr-left"><div class="sr-icon">📄</div><div><div class="sr-text">Import from CSV</div><div class="sr-sub">Bulk import transactions from bank statement</div></div></div>
+        <div class="sr-right">↑</div>
+      </div>
+      <input type="file" id="import-csv-file" accept=".csv" style="display:none" onchange="importCSV(event);this.value=''">
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:12px">Audit</div>
+      <div class="settings-row" onclick="openBankRecon()">
+        <div class="sr-left"><div class="sr-icon">🏦</div><div><div class="sr-text">Bank Reconciliation</div><div class="sr-sub">Compare app balance vs real bank balance</div></div></div>
+        <div class="sr-right">→</div>
+      </div>
+      ${(db.reconciliations || []).length > 0 ? `
+      <div class="settings-row" onclick="openReconHistory()">
+        <div class="sr-left"><div class="sr-icon">📜</div><div><div class="sr-text">Reconciliation History</div><div class="sr-sub">${(db.reconciliations || []).length} past ${aiPlural((db.reconciliations || []).length,'check')}</div></div></div>
+        <div class="sr-right">→</div>
+      </div>` : ''}
     </div>
     <div class="card">
       <div class="section-title" style="margin-bottom:12px">Danger Zone</div>
@@ -16393,6 +16847,666 @@ function exportXLSX() {
     showToast('Export failed: ' + e.message);
   }
 }
+
+// ── CSV EXPORT ──
+function exportCSV() {
+  try {
+    const dc = db.displayCurrency || 'PHP';
+    const accts = db.accounts || [];
+    const cats = db.categories || { income: [], expense: [] };
+    const findAcct = (id) => accts.find(a => a.id === id)?.name || '';
+    const findCat = (id, type) => (cats[type] || []).find(c => c.id === id)?.name || '';
+
+    // Header row
+    const header = ['Date','Type','Category','Account','Amount','Currency','Amount (' + dc + ')','Notes','Person','To Account'];
+    const rows = [header];
+
+    // Sort by date desc
+    const txs = (db.transactions || []).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    txs.forEach(tx => {
+      const catName = tx.type === 'transfer' ? 'Transfer' :
+                      tx.type === 'income' ? findCat(tx.catId, 'income') :
+                      findCat(tx.catId, 'expense');
+      rows.push([
+        tx.date || '',
+        tx.type || '',
+        catName,
+        findAcct(tx.acctId),
+        tx.amount || 0,
+        tx.currency || dc,
+        (tx.phpAmount || 0).toFixed(2),
+        tx.notes || '',
+        tx.personName || '',
+        tx.toAcctId ? findAcct(tx.toAcctId) : ''
+      ]);
+    });
+
+    // CSV encode (quote fields with commas/quotes/newlines)
+    const csvEscape = (v) => {
+      const s = String(v == null ? '' : v);
+      if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+
+    // Add BOM for Excel UTF-8 compatibility
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const today_ = new Date().toISOString().slice(0,10);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TrackBudget-${today_}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('📄 CSV exported! (' + (rows.length - 1) + ' transactions)');
+  } catch(e) {
+    console.error('exportCSV error:', e);
+    showToast('Export failed: ' + e.message);
+  }
+}
+
+// ── CSV IMPORT ──
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      let text = e.target.result;
+      // Strip BOM if present
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const rows = parseCSV(text);
+      if (rows.length < 2) {
+        showToast('CSV is empty or has no data rows');
+        return;
+      }
+      openCSVImportSheet(rows, file.name);
+    } catch(err) {
+      console.error('importCSV parse error:', err);
+      showToast('Could not parse CSV: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Robust CSV parser handling quotes, commas, escaped quotes, newlines in fields
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    } else {
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === ',') { row.push(field); field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      field += c; i++;
+    }
+  }
+  // Final field/row
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  // Drop trailing empty rows
+  while (rows.length && rows[rows.length-1].every(f => f === '')) rows.pop();
+  return rows;
+}
+
+function openCSVImportSheet(rows, filename) {
+  const header = rows[0];
+  const dataRows = rows.slice(1);
+  _csvImportState = { rows: dataRows, header, mapping: autoMapCSVColumns(header), filename };
+
+  openSheet('csv-import', '📄 Import CSV', renderCSVImportBody());
+}
+
+let _csvImportState = null;
+
+// Try to auto-detect common column names
+function autoMapCSVColumns(header) {
+  const map = { date: -1, type: -1, category: -1, account: -1, amount: -1, currency: -1, notes: -1 };
+  header.forEach((col, i) => {
+    const k = col.toLowerCase().trim();
+    if (map.date < 0 && /^(date|transaction date|posting date|tx date)$/.test(k)) map.date = i;
+    if (map.type < 0 && /^(type|tx type|transaction type)$/.test(k)) map.type = i;
+    if (map.category < 0 && /^(category|cat)$/.test(k)) map.category = i;
+    if (map.account < 0 && /^(account|from account|acct)$/.test(k)) map.account = i;
+    if (map.amount < 0 && /^(amount|amt|value)$/.test(k)) map.amount = i;
+    if (map.currency < 0 && /^(currency|curr|ccy)$/.test(k)) map.currency = i;
+    if (map.notes < 0 && /^(notes|description|memo|details|narration)$/.test(k)) map.notes = i;
+  });
+  return map;
+}
+
+function renderCSVImportBody() {
+  const s = _csvImportState;
+  if (!s) return '<div class="page-pad">No CSV loaded</div>';
+  const dc = db.displayCurrency || 'PHP';
+  const colOpts = s.header.map((c, i) => `<option value="${i}">${escapeAttr(c)} (col ${i+1})</option>`).join('');
+  const accts = (db.accounts || []).filter(a => !a.archived);
+  const acctOpts = '<option value="">— Pick account —</option>' + accts.map(a => `<option value="${a.id}">${escapeAttr(a.name)}</option>`).join('');
+
+  // Preview first 5
+  const preview = s.rows.slice(0, 5).map(r => {
+    const date = s.mapping.date >= 0 ? r[s.mapping.date] || '' : '';
+    const amt = s.mapping.amount >= 0 ? r[s.mapping.amount] || '' : '';
+    const notes = s.mapping.notes >= 0 ? r[s.mapping.notes] || '' : '';
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;gap:8px">
+      <span style="color:var(--text3)">${escapeAttr(date)}</span>
+      <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(notes)}</span>
+      <span style="color:var(--text);font-weight:600;font-family:var(--mono)">${escapeAttr(amt)}</span>
+    </div>`;
+  }).join('');
+
+  const sel = (mapVal) => `<select class="form-input" style="font-size:13px;padding:8px">
+    <option value="-1">— Skip —</option>${colOpts.replace(`value="${mapVal}"`, `value="${mapVal}" selected`)}
+  </select>`;
+
+  return `<div class="page-pad">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5">
+      Map CSV columns to transaction fields. <strong>Date</strong> and <strong>Amount</strong> are required.
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:10px">📋 ${s.rows.length} rows detected · ${escapeAttr(s.filename)}</div>
+      ${preview}
+      ${s.rows.length > 5 ? `<div style="padding:6px 10px;font-size:11px;color:var(--text4);text-align:center">... and ${s.rows.length - 5} more</div>` : ''}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:10px">🗂 Column Mapping</div>
+
+      <div class="form-group">
+        <label class="form-label">Date column *</label>
+        <select class="form-input" id="csv-map-date" style="font-size:13px">
+          <option value="-1">— Skip —</option>
+          ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.date===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Amount column *</label>
+        <select class="form-input" id="csv-map-amount" style="font-size:13px">
+          <option value="-1">— Skip —</option>
+          ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.amount===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notes / Description column</label>
+        <select class="form-input" id="csv-map-notes" style="font-size:13px">
+          <option value="-1">— Skip —</option>
+          ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.notes===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Type column (income/expense)</label>
+        <select class="form-input" id="csv-map-type" style="font-size:13px">
+          <option value="-1">— Skip (assume expense) —</option>
+          ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.type===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--text4);margin-top:4px">Negative amounts → expense, positive → income (if no type column)</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="section-title" style="margin-bottom:10px">🎯 Default Values</div>
+
+      <div class="form-group">
+        <label class="form-label">Target account *</label>
+        <select class="form-input" id="csv-acct" style="font-size:13px">${acctOpts}</select>
+        <div style="font-size:11px;color:var(--text4);margin-top:4px">All imported transactions go here</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Default currency</label>
+        <select class="form-input" id="csv-currency" style="font-size:13px">
+          ${(db.trackedCurrencies || [dc]).map(c => `<option value="${c}" ${c===dc?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('csv-import')">Cancel</button>
+      <button class="btn btn-primary btn-sm btn-full" onclick="doImportCSV()">Import</button>
+    </div>
+  </div>`;
+}
+
+function doImportCSV() {
+  const s = _csvImportState;
+  if (!s) return;
+  const dateCol = parseInt(document.getElementById('csv-map-date').value);
+  const amtCol = parseInt(document.getElementById('csv-map-amount').value);
+  const notesCol = parseInt(document.getElementById('csv-map-notes').value);
+  const typeCol = parseInt(document.getElementById('csv-map-type').value);
+  const acctId = document.getElementById('csv-acct').value;
+  const currency = document.getElementById('csv-currency').value;
+
+  if (dateCol < 0 || amtCol < 0) {
+    showToast('⚠ Date and Amount columns are required');
+    return;
+  }
+  if (!acctId) {
+    showToast('⚠ Pick a target account');
+    return;
+  }
+
+  let imported = 0, skipped = 0;
+  const newTxs = [];
+  s.rows.forEach(r => {
+    const rawDate = (r[dateCol] || '').trim();
+    const rawAmt = (r[amtCol] || '').toString().trim();
+    if (!rawDate || !rawAmt) { skipped++; return; }
+
+    // Parse date — try ISO first, then common formats
+    const date = parseImportDate(rawDate);
+    if (!date) { skipped++; return; }
+
+    // Parse amount (strip currency symbols, commas)
+    const cleanAmt = rawAmt.replace(/[^\d.\-]/g, '');
+    const amt = parseFloat(cleanAmt);
+    if (isNaN(amt) || amt === 0) { skipped++; return; }
+
+    // Determine type
+    let type = 'expense';
+    if (typeCol >= 0) {
+      const t = (r[typeCol] || '').toLowerCase().trim();
+      if (t.includes('income') || t.includes('credit') || t.includes('deposit')) type = 'income';
+      else if (t.includes('expense') || t.includes('debit') || t.includes('withdraw')) type = 'expense';
+      else type = amt < 0 ? 'expense' : 'income';
+    } else {
+      type = amt < 0 ? 'expense' : 'income';
+    }
+
+    const finalAmt = Math.abs(amt);
+    const phpAmt = toPhp(finalAmt, currency);
+
+    const notes = notesCol >= 0 ? (r[notesCol] || '').trim() : '';
+
+    newTxs.push({
+      id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2,9),
+      date,
+      type,
+      amount: finalAmt,
+      currency,
+      phpAmount: phpAmt,
+      accountId: acctId,
+      catId: null, // user can categorize later
+      notes,
+      importedAt: new Date().toISOString(),
+      importSource: 'csv'
+    });
+    imported++;
+  });
+
+  if (newTxs.length === 0) {
+    showToast('No valid transactions found');
+    return;
+  }
+
+  db.transactions = (db.transactions || []).concat(newTxs);
+  saveDBWithSync();
+  _csvImportState = null;
+  closeSheet('csv-import');
+  showToast(`📄 Imported ${imported} transaction${imported>1?'s':''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+  if (currentPage === 'transactions') renderTransactions();
+}
+
+// Parse various date formats (ISO, US, UK, dotted)
+function parseImportDate(raw) {
+  if (!raw) return null;
+  const s = raw.trim();
+  // ISO: 2026-05-17
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // US: 05/17/2026 or 5/17/2026
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) {
+    const mo = m[1].padStart(2,'0');
+    const dy = m[2].padStart(2,'0');
+    return `${m[3]}-${mo}-${dy}`;
+  }
+  // UK: 17/05/2026 — ambiguous with US, but if first part > 12 it's day-first
+  // Dotted: 17.05.2026 or 2026.05.17
+  m = s.match(/^(\d{1,4})[.-](\d{1,2})[.-](\d{1,4})/);
+  if (m) {
+    if (m[1].length === 4) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    if (m[3].length === 4) {
+      const a = parseInt(m[1]), b = parseInt(m[2]);
+      // If a > 12, it's day-first
+      const dy = a > 12 ? a : b;
+      const mo = a > 12 ? b : a;
+      return `${m[3]}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+    }
+  }
+  // Fallback: try Date()
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0,10);
+  }
+  return null;
+}
+
+// ── BANK RECONCILIATION ──
+// Computes account balance AS OF a specific date (inclusive)
+// Mirrors getAcctBalance() logic exactly with a date filter (PLS-aware)
+function getAcctBalanceAsOf(acctId, asOfDate) {
+  const acct = db.accounts.find(a => a.id === acctId);
+  if (!acct) return 0;
+  let bal = acct.initialBalance || 0;
+  for (const tx of (db.transactions || [])) {
+    if (tx.archived) continue;
+    if (tx.date && tx.date > asOfDate) continue;
+    // PLS #11: skip isAutoForex on toAmountIsActual parents
+    if (tx.isAutoForex && tx.parentId) {
+      const parent = db.transactions.find(t => t.id === tx.parentId);
+      if (parent?.toAmountIsActual) continue;
+    }
+    // PLS #13: Loan tx direction
+    if (tx.isLoanTx) {
+      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= loanAmtInAcctCurr;
+      else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += loanAmtInAcctCurr;
+    }
+    else if (tx.type === 'expense' && tx.accountId === acctId) {
+      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      bal -= amt;
+    }
+    else if (tx.type === 'income' && tx.accountId === acctId) {
+      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      bal += amt;
+    }
+    // PLS #14: shared deducts totalBill (unless isFeeReimbursable)
+    else if (tx.type === 'shared' && tx.accountId === acctId && !tx.isFeeReimbursable) {
+      bal -= (tx.totalBill || tx.amount);
+    }
+    else if (tx.type === 'transfer') {
+      if (tx.fromAccountId === acctId) {
+        const deductAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        bal -= deductAmt;
+      }
+      if (tx.toAccountId === acctId) {
+        if (tx.toAmount != null) {
+          bal += tx.toAmount;
+        } else {
+          const addAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+          bal += addAmt;
+        }
+      }
+    }
+    else if (tx.type === 'remittance') {
+      if (tx.fromAccountId === acctId) bal -= tx.amount;
+      if (tx.toAccountId === acctId) bal += (tx.phpAmount || tx.amount * tx.rate);
+    }
+    else if (tx.type === 'external-in' && tx.accountId === acctId) bal += tx.amount;
+    else if (tx.type === 'external-out' && tx.accountId === acctId) bal -= tx.amount;
+    else if (tx.type === 'correction' && tx.accountId === acctId) {
+      const corrAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      if (tx.direction === 'up') bal += corrAmt;
+      else if (tx.direction === 'down') bal -= corrAmt;
+    }
+  }
+  return bal;
+}
+
+function openBankRecon() {
+  _reconState = { acctId: null, asOfDate: new Date().toISOString().slice(0,10), realBalance: '' };
+  openSheet('bank-recon', '🏦 Bank Reconciliation', renderBankReconBody());
+}
+
+let _reconState = null;
+
+function renderBankReconBody() {
+  const s = _reconState;
+  const accts = (db.accounts || []).filter(a => !a.archived);
+  if (accts.length === 0) {
+    return '<div class="page-pad"><div class="empty-state"><div class="empty-icon">🏦</div><div class="empty-text">No accounts to reconcile</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Add an account first</div></div></div>';
+  }
+  const acctOpts = '<option value="">— Pick account —</option>' + accts.map(a => `<option value="${a.id}" ${s.acctId===a.id?'selected':''}>${escapeAttr(a.name)} (${a.currency || 'PHP'})</option>`).join('');
+
+  let resultHTML = '';
+  if (s.acctId && s.realBalance !== '') {
+    const acct = accts.find(a => a.id === s.acctId);
+    const appBal = getAcctBalanceAsOf(s.acctId, s.asOfDate);
+    const realBal = parseFloat(s.realBalance);
+    const diff = realBal - appBal;
+    const absDiff = Math.abs(diff);
+    const isMatch = absDiff < 0.01;
+    const tolPct = appBal !== 0 ? Math.abs(diff / appBal) * 100 : 0;
+
+    // Find recent txs around asOfDate (within 7 days) — include transfers in either direction
+    const cutoff = new Date(s.asOfDate);
+    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const recentTxs = (db.transactions || [])
+      .filter(t => !t.archived && (t.accountId === s.acctId || t.fromAccountId === s.acctId || t.toAccountId === s.acctId) && t.date >= cutoffStr && t.date <= s.asOfDate)
+      .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+      .slice(0, 10);
+
+    resultHTML = `
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:10px">📊 Comparison</div>
+
+        <div style="background:var(--bg3);border-radius:var(--r-md);padding:12px;margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">App says</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:600">${fmt(appBal, acct.currency || 'PHP')}</div>
+        </div>
+
+        <div style="background:var(--bg3);border-radius:var(--r-md);padding:12px;margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Bank says</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:600">${fmt(realBal, acct.currency || 'PHP')}</div>
+        </div>
+
+        <div style="background:${isMatch ? 'var(--green-bg)' : (absDiff < 1 ? 'var(--amber-bg)' : 'var(--red-bg)')};border-radius:var(--r-md);padding:12px;border:1px solid ${isMatch ? 'var(--green-border)' : (absDiff < 1 ? 'var(--amber-border)' : 'var(--red-border)')}">
+          <div style="font-size:11px;color:${isMatch ? 'var(--green)' : (absDiff < 1 ? 'var(--amber)' : 'var(--red)')};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;font-weight:600">${isMatch ? '✅ Match!' : (diff > 0 ? '⚠ Bank is higher' : '⚠ App is higher')}</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:${isMatch ? 'var(--green)' : (absDiff < 1 ? 'var(--amber)' : 'var(--red)')}">${diff >= 0 ? '+' : ''}${fmt(diff, acct.currency || 'PHP')}</div>
+          ${!isMatch ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">${tolPct.toFixed(2)}% variance</div>` : ''}
+        </div>
+      </div>
+
+      ${!isMatch ? `
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:8px">🔍 Possible Causes</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">
+          ${diff > 0 ? `
+            • Missing income or deposits in app<br>
+            • Forgotten transactions that put money in<br>
+            • A transfer received but not logged
+          ` : `
+            • Missing expenses or withdrawals in app<br>
+            • Forgotten transactions that took money out<br>
+            • Pending bank fees not yet logged<br>
+            • A transfer sent but not logged
+          `}
+        </div>
+      </div>
+      ` : ''}
+
+      ${recentTxs.length > 0 ? `
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:10px">📋 Recent transactions (last 7 days)</div>
+        ${recentTxs.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(t.notes || '(no notes)')}</div>
+              <div style="font-size:11px;color:var(--text3)">${t.date}</div>
+            </div>
+            <div style="font-family:var(--mono);font-weight:600;color:${t.type==='income'?'var(--green)':'var(--red)'};font-size:13px">
+              ${t.type==='income'?'+':'-'}${fmt(t.amount, t.currency || (acct.currency || 'PHP'))}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ` : ''}
+
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        ${isMatch ? `<button class="btn btn-primary btn-sm btn-full" onclick="saveReconciliation(true)">💾 Save Match Record</button>` : `
+          <button class="btn btn-ghost btn-sm btn-full" onclick="saveReconciliation(false)">💾 Save with Note</button>
+          <button class="btn btn-warning btn-sm btn-full" onclick="logReconAdjustment()">⚖ Log Adjustment Tx</button>
+        `}
+      </div>
+    `;
+  }
+
+  return `<div class="page-pad">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+      Check if your app balance matches your real bank balance. Catches missing transactions and audit issues.
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="form-group">
+        <label class="form-label">Account *</label>
+        <select class="form-input" id="recon-acct" onchange="_reconState.acctId = this.value; openSheet('bank-recon','🏦 Bank Reconciliation', renderBankReconBody())">${acctOpts}</select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">As of date *</label>
+        <input class="form-input" type="date" id="recon-date" value="${s.asOfDate}" max="${new Date().toISOString().slice(0,10)}" onchange="_reconState.asOfDate = this.value; if (_reconState.acctId && _reconState.realBalance !== '') openSheet('bank-recon','🏦 Bank Reconciliation', renderBankReconBody())">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Real bank balance (from your bank app) *</label>
+        <input class="form-input numpad-input" type="number" step="any" id="recon-real" value="${s.realBalance}" placeholder="0.00" inputmode="decimal" oninput="_reconState.realBalance = this.value">
+      </div>
+
+      <button class="btn btn-primary btn-sm btn-full" onclick="runReconciliation()">🔍 Compare</button>
+    </div>
+
+    ${resultHTML}
+  </div>`;
+}
+
+function runReconciliation() {
+  const acctId = document.getElementById('recon-acct').value;
+  const date = document.getElementById('recon-date').value;
+  const real = document.getElementById('recon-real').value;
+  if (!acctId) { showToast('⚠ Pick an account'); return; }
+  if (!date) { showToast('⚠ Pick a date'); return; }
+  if (real === '' || isNaN(parseFloat(real))) { showToast('⚠ Enter real bank balance'); return; }
+  _reconState = { acctId, asOfDate: date, realBalance: real };
+  openSheet('bank-recon', '🏦 Bank Reconciliation', renderBankReconBody());
+}
+
+function saveReconciliation(isMatch) {
+  const s = _reconState;
+  if (!s) return;
+  const acct = db.accounts.find(a => a.id === s.acctId);
+  if (!acct) return;
+  const appBal = getAcctBalanceAsOf(s.acctId, s.asOfDate);
+  const realBal = parseFloat(s.realBalance);
+  if (!db.reconciliations) db.reconciliations = [];
+  db.reconciliations.unshift({
+    id: 'rec_' + Date.now(),
+    acctId: s.acctId,
+    acctName: acct.name,
+    currency: acct.currency || 'PHP',
+    date: s.asOfDate,
+    appBalance: appBal,
+    realBalance: realBal,
+    diff: realBal - appBal,
+    isMatch,
+    createdAt: new Date().toISOString()
+  });
+  // Keep last 50 reconciliations
+  if (db.reconciliations.length > 50) db.reconciliations = db.reconciliations.slice(0, 50);
+  saveDBWithSync();
+  closeSheet('bank-recon');
+  _reconState = null;
+  showToast(isMatch ? '✅ Match saved!' : '💾 Reconciliation saved');
+  if (currentPage === 'settings') renderSettings();
+}
+
+function logReconAdjustment() {
+  const s = _reconState;
+  if (!s) return;
+  const acct = db.accounts.find(a => a.id === s.acctId);
+  if (!acct) return;
+  const appBal = getAcctBalanceAsOf(s.acctId, s.asOfDate);
+  const realBal = parseFloat(s.realBalance);
+  const diff = realBal - appBal;
+  const absDiff = Math.abs(diff);
+  const isIncome = diff > 0;
+
+  openDlg('Log Adjustment?',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      Add a one-time adjustment transaction of <strong>${fmt(absDiff, acct.currency || 'PHP')}</strong> as an <strong>${isIncome ? 'income' : 'expense'}</strong> so your app balance matches the bank.
+      <div style="margin-top:10px;font-size:12px;color:var(--amber)">Only use this if you can't find the missing transactions.</div>
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-warning btn-sm" onclick="_doReconAdjustment(${isIncome})">Add Adjustment</button>`
+  );
+}
+
+function _doReconAdjustment(isIncome) {
+  const s = _reconState;
+  if (!s) return;
+  const acct = db.accounts.find(a => a.id === s.acctId);
+  if (!acct) return;
+  const appBal = getAcctBalanceAsOf(s.acctId, s.asOfDate);
+  const realBal = parseFloat(s.realBalance);
+  const diff = realBal - appBal;
+  const absDiff = Math.abs(diff);
+
+  const newTx = {
+    id: 'tx_' + Date.now() + '_adj',
+    date: s.asOfDate,
+    type: isIncome ? 'income' : 'expense',
+    amount: absDiff,
+    currency: acct.currency || 'PHP',
+    phpAmount: toPhp(absDiff, acct.currency || 'PHP'),
+    accountId: s.acctId,
+    catId: null,
+    notes: `Bank reconciliation adjustment (${isIncome ? '+' : '-'}${fmt(absDiff, acct.currency || 'PHP')})`,
+    isReconAdjustment: true,
+    createdAt: new Date().toISOString()
+  };
+  db.transactions = db.transactions || [];
+  db.transactions.push(newTx);
+  saveReconciliation(true); // also saves recon record as matched
+  closeDlg();
+}
+
+function openReconHistory() {
+  const recs = db.reconciliations || [];
+  const body = recs.length === 0
+    ? '<div class="page-pad"><div class="empty-state"><div class="empty-icon">📜</div><div class="empty-text">No reconciliation history yet</div></div></div>'
+    : `<div class="page-pad">
+        ${recs.map(r => {
+          const dispDate = new Date(r.createdAt || r.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+          const color = r.isMatch ? 'var(--green)' : (Math.abs(r.diff) < 1 ? 'var(--amber)' : 'var(--red)');
+          const bg = r.isMatch ? 'var(--green-bg)' : (Math.abs(r.diff) < 1 ? 'var(--amber-bg)' : 'var(--red-bg)');
+          return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${color}">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+              <div>
+                <div style="font-size:14px;font-weight:600">${escapeAttr(r.acctName)}</div>
+                <div style="font-size:11px;color:var(--text3)">As of ${r.date} · checked ${dispDate}</div>
+              </div>
+              <span class="pill" style="background:${bg};color:${color};font-size:10px;padding:3px 8px">${r.isMatch?'✓ MATCH':'≠ DIFF'}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+              <div><div style="color:var(--text3)">App</div><div style="font-family:var(--mono);font-weight:600">${fmt(r.appBalance, r.currency)}</div></div>
+              <div><div style="color:var(--text3)">Bank</div><div style="font-family:var(--mono);font-weight:600">${fmt(r.realBalance, r.currency)}</div></div>
+              <div><div style="color:var(--text3)">Diff</div><div style="font-family:var(--mono);font-weight:600;color:${color}">${r.diff >= 0?'+':''}${fmt(r.diff, r.currency)}</div></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  openSheet('recon-history', '📜 Reconciliation History', body);
+}
+
 
 function confirmResetApp() {
   openDlg('⚠ Reset App?',
@@ -19146,6 +20260,16 @@ function renderAnalyticsExternal() {
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsCashflow() {
   const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
+  // Empty state: no transactions in last 6 months
+  const hasAnyTx = (db.transactions || []).some(t => {
+    const td = new Date(t.date);
+    const sixMo = new Date();
+    sixMo.setMonth(sixMo.getMonth() - 6);
+    return td >= sixMo;
+  });
+  if (!hasAnyTx) {
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">No cashflow data yet</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Add transactions to see your 6-month income vs expense trend</div></div></div>`;
+  }
   const now = new Date();
   const months = [];
   for (let i = 5; i >= 0; i--) {
@@ -19226,6 +20350,10 @@ function renderAnalyticsCashflow() {
 function renderAnalyticsCrossCurrency() {
   const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
   const accts = db.accounts.filter(a=>!a.archived);
+  // Empty state: no accounts
+  if (accts.length === 0) {
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🌐</div><div class="empty-text">No accounts yet</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Add accounts in multiple currencies to see FX exposure breakdown</div></div></div>`;
+  }
   // Group by currency
   const byCurr = {};
   accts.forEach(a => {
@@ -19303,6 +20431,13 @@ function renderAnalyticsCrossCurrency() {
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsPeople() {
   const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
+  // Empty state: no loans + no shared txs
+  const hasLent = (db.loans?.lent || []).some(l => !l.settled);
+  const hasBorrowed = (db.loans?.borrowed || []).some(l => !l.settled);
+  const hasShared = (db.sharedTransactions || []).some(s => !s.settled);
+  if (!hasLent && !hasBorrowed && !hasShared) {
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">No people activity yet</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Add loans or shared expenses to track who owes who</div></div></div>`;
+  }
   const people = {}; // name -> { lentAmount, borrowedAmount, sharedOwed, lentCount, borrowedCount, sharedCount }
   // Loans
   (db.loans?.lent || []).filter(l => !l.settled).forEach(l => {
@@ -19770,6 +20905,11 @@ function renderAnalyticsYoY() {
   const now = new Date();
   const curYear = now.getFullYear();
   const lastYear = curYear - 1;
+  // Empty state: no transactions from last year
+  const hasLastYearTx = (db.transactions || []).some(t => new Date(t.date).getFullYear() === lastYear);
+  if (!hasLastYearTx) {
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Not enough history yet</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Year-over-year comparison needs transactions from last year</div></div></div>`;
+  }
   const curMonth = now.getMonth();
 
   // Gather YTD (Jan to current month) for both years
@@ -19933,6 +21073,15 @@ function renderAnalyticsAISummary() {
   const mk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const monthLabel = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
   const tot = getMonthTotals(mk);
+  // Empty state: no tx this month AND no tx last month
+  const lastMkCheck = (() => {
+    const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  })();
+  const lastTotCheck = getMonthTotals(lastMkCheck);
+  if ((tot.income || 0) === 0 && (tot.expense || 0) === 0 && (lastTotCheck.income || 0) === 0 && (lastTotCheck.expense || 0) === 0) {
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🤖</div><div class="empty-text">Nothing to summarize yet</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Add at least a few transactions this month for a narrative</div></div></div>`;
+  }
   const lastMk = (() => {
     const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
