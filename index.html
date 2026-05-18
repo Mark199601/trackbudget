@@ -1236,7 +1236,8 @@ function _homeBase() { return db?.displayCurrency || 'PHP'; }
 // See PLS #5 for full FX home currency reference rules.
 // ═══════════════════════════════════════════════════════════
 function toPhp(amount, fromCurrency, snapshot) {
-  // Guard: invalid amount returns 0 to prevent NaN cascade
+  // ── PERSONAL LOGIC SET #102 ── FX NaN guard: invalid amount returns 0 to prevent NaN cascade.
+  // One bad tx (missing amount, etc.) would otherwise corrupt all aggregators downstream.
   if (typeof amount !== 'number' || isNaN(amount)) return 0;
   const home = _homeBase();
   if (fromCurrency === home) return amount;
@@ -1268,7 +1269,7 @@ function txToPhp(tx) {
 }
 
 function fromPhp(phpAmount, toCurrency, snapshot) {
-  // Guard: invalid amount returns 0 to prevent NaN cascade
+  // PLS #102: FX NaN guard
   if (typeof phpAmount !== 'number' || isNaN(phpAmount)) return 0;
   const home = _homeBase();
   if (toCurrency === home) return phpAmount;
@@ -1685,10 +1686,12 @@ function hideLoading() {
   if (el) el.classList.remove('show');
 }
 
-// ── HAPTIC FEEDBACK HELPER ──
+// ── PERSONAL LOGIC SET #100 ── HAPTIC FEEDBACK HELPER
 // Subtle iOS-style haptic for confirmation actions.
 // Patterns: 'tap' (short), 'success' (double-tap), 'warn' (medium), 'error' (long buzz).
 // Silent fallback if browser doesn't support vibration (iOS Safari ignores it but won't throw).
+// Used sparingly — only on key actions (tx save, settlement, validation warning, delete).
+// Wag i-overuse: pag lahat may vibrate, nakakaiyak na to.
 function haptic(pattern = 'tap') {
   if (!navigator.vibrate) return;
   try {
@@ -2721,7 +2724,8 @@ function checkAlerts() {
     if (total / nw > 0.05) _alertCache.push({type:'crypto', msg:`Crypto allocation is ${((total/nw)*100).toFixed(1)}% of net worth (>5%)`});
   }
 
-  // Backup reminder — friendly nudge if Drive connected but no backup in 7+ days
+  // ── PERSONAL LOGIC SET #101 ── Backup reminder — friendly nudge if Drive connected but no backup in 7+ days
+  // Threshold: 7 days. Shows in dashboard alerts. Skipped if Drive not connected (no point reminding).
   if (db.settings?.googleDriveConnected && db.settings?.lastDriveSync) {
     const lastSync = new Date(db.settings.lastDriveSync);
     const daysSince = Math.floor((now - lastSync) / 86400000);
@@ -5480,16 +5484,16 @@ function submitTransfer() {
         actualToAmount = snapshotToAmount;
       }
 
-      toAmount = Math.round(actualToAmount * 100) / 100;
+      toAmount = actualToAmount; // PLS #68: store raw
 
       // forexDiff in PHP = (actual - snapshot) × snapRate(toCurr→PHP) when foreign↔PHP
       if (toAcct2.currency === 'PHP') {
         // Receiving PHP — diff is already in PHP
-        forexDiff = Math.round((toAmount - snapshotToAmount) * 100) / 100;
+        forexDiff = toAmount - snapshotToAmount; // PLS #68: store raw
       } else {
         // Receiving foreign — convert diff to PHP
         const diffInForeign = toAmount - snapshotToAmount;
-        forexDiff = Math.round(diffInForeign * snapshotRate * 100) / 100;
+        forexDiff = diffInForeign * snapshotRate; // PLS #68: store raw
       }
     } else {
       toAmount = convert(amount, currency, toAcct2.currency);
@@ -7183,12 +7187,12 @@ function saveEditTransfer(txId) {
       if (userToAmountEdit > 0) actualToAmount = userToAmountEdit;
       else if (customRate > 0) actualToAmount = tx.currency === 'PHP' ? tx.amount / customRate : tx.amount * customRate;
       else actualToAmount = snapshotToAmount;
-      tx.toAmount = Math.round(actualToAmount * 100) / 100;
+      tx.toAmount = actualToAmount; // PLS #68: store raw
       tx.toAmountIsActual = true; // signals getAcctBalance to skip isAutoForex child
-      // forexDiff in PHP
+      // forexDiff in PHP — PLS #68: store raw
       const forexDiff = toAcct2.currency === 'PHP'
-        ? Math.round((tx.toAmount - snapshotToAmount) * 100) / 100
-        : Math.round((tx.toAmount - snapshotToAmount) * snapRate2 * 100) / 100;
+        ? (tx.toAmount - snapshotToAmount)
+        : (tx.toAmount - snapshotToAmount) * snapRate2;
       let child = db.transactions.find(t => t.parentId === txId && t.isAutoForex);
       if (!child) {
         child = { id: genId(), parentId: txId, isAutoForex: true, createdAt: new Date().toISOString() };
@@ -8032,8 +8036,13 @@ function openReimbDialog(person) {
   }, 50);
 }
 
+// ── PERSONAL LOGIC SET #98 ── HOME-AGNOSTIC cross-currency math
+// All cross-currency conversions MUST route through home base via toPhp/fromPhp helpers.
+// NEVER assume PHP is the intermediary (i.e., never write `amt * snap[from]` directly).
+// Bug example: when display currency is PGK, manual PHP-bridged math returns wrong values
+// because snap[PGK] = undefined (home is skipped in snapshot). The toPhp/fromPhp pair
+// internally handles the home base correctly. Applies to all batch settle / reimb / loan flows.
 // Compute grand total in target currency using snapshot FX
-// HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
 function computeReimbBatchTotal(entries, targetCurr, settlementDate) {
   const snap = buildFxSnapshot(settlementDate);
   let total = 0;
@@ -10559,9 +10568,10 @@ function openAddLoan(direction='lent') {
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${a.name} (${a.currency})</option>`).join('');
   const isLent = direction === 'lent';
   const personLabel = isLent ? 'Lent To' : 'Borrowed From';
-  const amtLabel = isLent ? 'Receivable Amount' : 'Payable Amount';
-  const acctLabel = isLent ? 'Deducted From (your account)' : 'Deposited Into (your account)';
-  const amtHelp = isLent ? 'What they owe you' : 'What you owe them';
+  const amtLabel = isLent ? 'Expected Receivable' : 'Expected Payable';
+  const acctLabel = isLent ? 'Source Account (deducted from)' : 'Destination Account (deposited into)';
+  const amtHelp = isLent ? 'How much they\'ll pay you back' : 'How much you\'ll pay back';
+  const disburseLabel = isLent ? 'Deduct from source' : 'Deposit to destination';
   openSheet('gen', isLent?'Add Loan Out':'Add Debt', `
     <div class="form-group"><label class="form-label">${personLabel} *</label><input class="form-input" id="nl-person" placeholder="Person's name"></div>
     <div class="form-row fr2">
@@ -10576,23 +10586,50 @@ function openAddLoan(direction='lent') {
       <label class="form-label">${acctLabel} *</label>
       <select class="form-input" id="nl-account" onchange="updateAddLoanFx()">${acctOpts}</select>
     </div>
-    <div id="nl-snapshot-row" style="display:none;align-items:center;gap:8px;margin-bottom:8px">
-      <input type="checkbox" id="nl-use-snapshot" checked onchange="updateAddLoanFx()" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
-      <label for="nl-use-snapshot" style="font-size:12px;color:var(--text2);cursor:pointer">Use snapshot rate</label>
+
+    <!-- Cross-currency preview (display only) -->
+    <div id="nl-fx-preview" style="display:none;background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">💱 <span id="nl-fx-pair">PGK → PHP</span></div>
+        <div style="font-size:10px;color:var(--text4)">snapshot <span id="nl-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
+      </div>
+      <div style="font-size:13px;color:var(--text3)"><span id="nl-fx-verb">Will deduct</span>: <span id="nl-fx-amount" style="font-family:var(--mono);color:var(--accent);font-weight:600;font-size:15px;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">—</span></div>
+      <div id="nl-fx-extra" style="font-size:11px;color:var(--text4);margin-top:4px;line-height:1.4"></div>
     </div>
-    <div id="nl-custom-rate-row" style="display:none;margin-bottom:8px">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Agreed rate (1 <span id="nl-rate-from">PGK</span> = ? <span id="nl-rate-to">${db.displayCurrency||'PHP'}</span>)</label>
-        <input class="form-input numpad-input" type="number" id="nl-custom-rate" placeholder="Enter agreed rate" step="any" oninput="updateAddLoanFx()" inputmode="none">
+
+    <!-- More options expander -->
+    <div style="margin-bottom:10px" id="nl-more-wrap">
+      <div onclick="toggleNlMore()" id="nl-more-toggle" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
+        <svg id="nl-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div id="nl-more-row" style="display:none">
+
+        <!-- Cross-currency override (only shown for cross-currency) -->
+        <div id="nl-rate-section" style="display:none;margin-top:8px;padding:12px 14px;background:var(--bg2);border-radius:var(--r-md);border:1px solid var(--border);margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Override rate or amount</div>
+          <div class="form-row fr2" style="margin-bottom:4px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">${disburseLabel} <span id="nl-disburse-curr-label" style="color:var(--text4)">PHP</span></label>
+              <input class="form-input numpad-input" type="number" id="nl-disburse-amt" placeholder="0.00" step="any" oninput="onNlDisburseInput()" inputmode="none">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:11px">Or rate <span id="nl-rate-pair-label" style="color:var(--text4);font-weight:400">(1 PGK)</span></label>
+              <input class="form-input numpad-input" type="number" id="nl-custom-rate" placeholder="0.0000" step="any" oninput="onNlRateInput()" inputmode="none">
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either — auto-syncs. Leave blank to use snapshot.</div>
+        </div>
+
+        <div class="form-row fr2">
+          <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
+          <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
+        <div class="form-group"><label class="form-label">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
       </div>
     </div>
-    <div id="nl-fx-preview" style="display:none;font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:10px;line-height:1.6"></div>
-    <div class="form-row fr3">
-      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
-      <div class="form-group"><label class="form-label">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
-      <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
+
     <button class="btn btn-primary btn-full" onclick="saveAddLoan('${direction}')">Add ${isLent?'Loan':'Debt'}</button>
   `);
   // Stash direction on form so updateAddLoanFx can read it
@@ -10601,6 +10638,47 @@ function openAddLoan(direction='lent') {
     if (personEl) personEl.dataset.direction = direction;
     updateAddLoanFx();
   });
+}
+
+function toggleNlMore() {
+  const row = document.getElementById('nl-more-row');
+  const chev = document.getElementById('nl-more-chevron');
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+// Typing disbursed amount derives the rate
+function onNlDisburseInput() {
+  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const disburse = parseFloat(document.getElementById('nl-disburse-amt')?.value) || 0;
+  const rateEl = document.getElementById('nl-custom-rate');
+  if (!rateEl || amount <= 0 || disburse <= 0) {
+    if (rateEl) rateEl.value = '';
+    updateAddLoanFx();
+    return;
+  }
+  // Rate semantics: "1 loanCurr = X acctCurr"
+  // disburse [acctCurr] = amount [loanCurr] × rate → rate = disburse / amount
+  const rate = disburse / amount;
+  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  updateAddLoanFx();
+}
+
+// Typing rate derives the disbursed amount
+function onNlRateInput() {
+  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const rate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
+  const disburseEl = document.getElementById('nl-disburse-amt');
+  if (!disburseEl || amount <= 0 || rate <= 0) {
+    if (disburseEl) disburseEl.value = '';
+    updateAddLoanFx();
+    return;
+  }
+  const disburse = amount * rate;
+  disburseEl.value = (Math.round(disburse * 100) / 100).toString();
+  updateAddLoanFx();
 }
 
 function updateAddLoanFx() {
@@ -10612,81 +10690,73 @@ function updateAddLoanFx() {
   const acctSel = document.getElementById('nl-account');
   const acctOpt = acctSel?.options[acctSel.selectedIndex];
   const acctCurr = acctOpt?.dataset?.curr || 'PHP';
-  const snapRow = document.getElementById('nl-snapshot-row');
-  const customRow = document.getElementById('nl-custom-rate-row');
+  const rateSection = document.getElementById('nl-rate-section');
   const previewBox = document.getElementById('nl-fx-preview');
-  const useSnapshot = document.getElementById('nl-use-snapshot')?.checked !== false;
   const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
   const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
 
   // Same currency = no FX consideration
   if (loanCurr === acctCurr) {
-    if (snapRow) snapRow.style.display = 'none';
-    if (customRow) customRow.style.display = 'none';
-    if (previewBox) {
-      if (amount > 0) {
-        previewBox.style.display = 'block';
-        const verb = isLent ? 'Deduction from' : 'Deposit into';
-        const acctName = acctOpt?.textContent || 'account';
-        previewBox.innerHTML = `<div style="color:var(--text2)">${verb} <strong>${acctName}</strong>: <span style="font-family:var(--mono);font-weight:600">${fmt(amount, loanCurr)}</span></div>`;
-      } else {
-        previewBox.style.display = 'none';
-      }
-    }
+    if (rateSection) rateSection.style.display = 'none';
+    if (previewBox) previewBox.style.display = 'none';
     return;
   }
 
-  // Cross-currency
-  if (snapRow) snapRow.style.display = 'flex';
-  if (customRow) customRow.style.display = useSnapshot ? 'none' : 'block';
+  // Cross-currency: show rate override section
+  if (rateSection) rateSection.style.display = 'block';
 
-  // Rate label format: "1 [from] = ? [to]"
-  // The agreed rate is always expressed as 1 unit of loan currency = ? unit of account currency
-  // (e.g. 1 PGK = ? PHP, or 1 USD = ? PGK if both are foreign)
-  const fromLbl = document.getElementById('nl-rate-from');
-  const toLbl = document.getElementById('nl-rate-to');
-  if (fromLbl) fromLbl.textContent = loanCurr;
-  if (toLbl) toLbl.textContent = acctCurr;
-
-  if (!previewBox) return;
-  if (amount <= 0) { previewBox.style.display = 'none'; return; }
-
-  // Compute snapshot rate (1 loanCurr = ? acctCurr)
-  // Using PHP as bridge: rate = (loanCurr→PHP) / (acctCurr→PHP) where db.fxRates[X] = 1 X = X PHP
+  // Compute snapshot rate (1 loanCurr = X acctCurr) — home-agnostic via PHP bridge
   const loanToPhp = loanCurr === 'PHP' ? 1 : (db.fxRates[loanCurr] || 1);
   const acctToPhp = acctCurr === 'PHP' ? 1 : (db.fxRates[acctCurr] || 1);
   const snapshotRate = loanToPhp / acctToPhp; // 1 loanCurr = X acctCurr
-  const snapshotAcctAmt = amount * snapshotRate; // amount in account currency at snapshot
-  const acctName = acctOpt?.textContent || 'account';
-  const verb = isLent ? 'Deduction from' : 'Deposit into';
 
-  if (useSnapshot) {
-    previewBox.style.display = 'block';
-    previewBox.innerHTML = `<div style="color:var(--text2)">${verb} <strong>${acctName}</strong>: ${amount} ${loanCurr} × ${snapshotRate.toFixed(4)} = <span style="font-family:var(--mono);font-weight:600">${fmt(snapshotAcctAmt, acctCurr)}</span></div>
-      <div style="font-size:11px;color:var(--text4);margin-top:4px">Using snapshot rate (current market)</div>`;
-  } else {
-    if (customRate <= 0) {
-      previewBox.style.display = 'block';
-      previewBox.innerHTML = `<div style="color:var(--text4)">Enter agreed rate to preview</div>`;
-      return;
+  // Update labels
+  const pairEl = document.getElementById('nl-fx-pair');
+  const verbEl = document.getElementById('nl-fx-verb');
+  const rateLabel = document.getElementById('nl-fx-rate');
+  const disburseCurrLabel = document.getElementById('nl-disburse-curr-label');
+  const ratePairLabel = document.getElementById('nl-rate-pair-label');
+  if (pairEl) pairEl.textContent = `${loanCurr} → ${acctCurr}`;
+  if (verbEl) verbEl.textContent = isLent ? 'Will deduct' : 'Will deposit';
+  if (rateLabel) rateLabel.textContent = `1 ${loanCurr} = ${snapshotRate.toFixed(4)} ${acctCurr}`;
+  if (disburseCurrLabel) disburseCurrLabel.textContent = acctCurr;
+  if (ratePairLabel) ratePairLabel.textContent = `(1 ${loanCurr})`;
+
+  if (amount <= 0) {
+    if (previewBox) previewBox.style.display = 'none';
+    return;
+  }
+
+  // Determine effective rate (custom or snapshot)
+  const effectiveRate = customRate > 0 ? customRate : snapshotRate;
+  const effectiveAcctAmt = amount * effectiveRate;
+  const snapshotAcctAmt = amount * snapshotRate;
+  const using = customRate > 0 ? 'agreed rate' : 'snapshot rate';
+
+  // Show preview
+  if (previewBox) {
+    const amountEl = document.getElementById('nl-fx-amount');
+    const extraEl = document.getElementById('nl-fx-extra');
+    if (amountEl) amountEl.textContent = fmt(effectiveAcctAmt, acctCurr);
+    if (extraEl) {
+      let extra = `${amount} ${loanCurr} × ${effectiveRate.toFixed(4)} (${using})`;
+      if (customRate > 0 && Math.abs(customRate - snapshotRate) > 0.0001) {
+        // Projected FX gain/loss at current market — to be realized on settlement
+        const diff = (snapshotAcctAmt - effectiveAcctAmt); // raw, no round
+        const isGain = isLent ? (diff > 0) : (diff < 0);
+        const absDiff = Math.abs(diff);
+        const verb = isGain ? '📈 Projected gain' : '📉 Projected loss';
+        const color = isGain ? 'var(--green)' : 'var(--red)';
+        extra += `<br>Market value: ${fmt(snapshotAcctAmt, acctCurr)}`;
+        extra += `<br><span style="color:${color};font-weight:600">${verb}: ${fmt(absDiff, acctCurr)}</span> <span style="color:var(--text4)">(realized on payment)</span>`;
+      }
+      extraEl.innerHTML = extra;
     }
-    const agreedAcctAmt = amount * customRate;
-    const snapshotPhp = snapshotAcctAmt * acctToPhp;
-    const agreedPhp = agreedAcctAmt * acctToPhp;
-    const rawDiff = snapshotPhp - agreedPhp;
-    const forexDiffPhp = isLent ? rawDiff : -rawDiff;
-    const isGain = forexDiffPhp > 0;
-    const absDiff = Math.abs(forexDiffPhp);
     previewBox.style.display = 'block';
-    const overallVerb = isLent ? 'Overall deduction from' : 'Overall deposit into';
-    const adjustVerb = isLent ? 'Forex gain → +' : 'Forex loss → −';
-    const netVerb = isLent ? 'Actual deduction' : 'Actual deposit';
-    previewBox.innerHTML = `<div style="color:var(--text2)">${overallVerb} <strong>${acctName}</strong>: ${amount} ${loanCurr} × ${snapshotRate.toFixed(4)} = <span style="font-family:var(--mono);font-weight:600">${fmt(snapshotAcctAmt, acctCurr)}</span></div>
-      ${absDiff >= 0.01 ? `<div style="margin-top:6px;color:${isGain?'var(--green)':'var(--red)'}">${isGain?'Forex gain':'Forex loss'}: <span style="font-family:var(--mono);font-weight:600">${sym(db.displayCurrency||'PHP')}${absDiff.toFixed(2)}</span></div>` : ''}
-      ${absDiff >= 0.01 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--text2)">${netVerb}: ${amount} ${loanCurr} × ${customRate} = <span style="font-family:var(--mono);font-weight:600">${fmt(agreedAcctAmt, acctCurr)}</span></div>` : ''}`;
   }
 }
-
+    const overallVerb = isLent ? 'Overall deduction from' : 'Overall deposit into';
+    const adjustVerb = isLent ? 'Forex gain → +' : 'Forex loss → −';
 function saveAddLoan(direction) {
   const person = document.getElementById('nl-person')?.value?.trim();
   const amount = parseFloat(document.getElementById('nl-amount')?.value);
@@ -10704,39 +10774,32 @@ function saveAddLoan(direction) {
   const acct = db.accounts.find(a=>a.id===accountId);
   const acctCurr = acct?.currency || 'PHP';
   const isCrossCurrency = currency !== acctCurr;
-  const useSnapshot = document.getElementById('nl-use-snapshot')?.checked !== false;
   const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
-  const useCustom = isCrossCurrency && !useSnapshot && customRate > 0;
+  const useCustom = isCrossCurrency && customRate > 0;
 
   // Rate semantics: "1 [loanCurr] = X [acctCurr]"
-  // Snapshot rate via PHP bridge: db.fxRates[X] = 1 X in PHP
+  // Snapshot rate via PHP bridge: db.fxRates[X] = 1 X in PHP (PLS #68: full precision, no rounding)
   const loanToPhp = currency === 'PHP' ? 1 : (db.fxRates[currency] || 1);
   const acctToPhp = acctCurr === 'PHP' ? 1 : (db.fxRates[acctCurr] || 1);
-  const snapshotRate = loanToPhp / acctToPhp; // 1 loanCurr = X acctCurr
+  const snapshotRate = loanToPhp / acctToPhp; // 1 loanCurr = X acctCurr (full precision)
 
-  // Compute amount that posts to the account (in account currency)
-  // Strategy: parent loan tx always posts at SNAPSHOT value (true market deduction)
-  //           forex gain/loss child nets it back to agreed value
-  // This way: net account impact = agreed value, but loan receivable = snapshot value
-  //           and forex gain/loss is explicitly visible in transactions
+  // ── PERSONAL LOGIC SET #97 ── Loan lend-time accounting model
+  // - Loan stored in commitment currency (e.g., K100 PGK) — what the borrower owes
+  // - Account deduction posts at AGREED value (e.g., ₱1,280 at custom rate 12.8), not snapshot
+  // - NO immediate forex gain/loss child tx at lend time (user requirement: realize on settle only)
+  // - Snapshot rate stored on tx for future comparison; agreedRate stored on loan
+  // - On settlement (PLS #55 batch flow), gain/loss is realized based on:
+  //   actual_received_in_PHP − (loan_amount × agreedRate)
+  // - toAmountIsActual=true flag set on parent tx so getAcctBalance skips isAutoForex (PLS #11)
   let txAmount;
-  let forexDiffPhp = 0;
   if (!isCrossCurrency) {
     txAmount = amount;
+  } else if (useCustom) {
+    // Custom rate = agreed value posts to account
+    txAmount = amount * customRate;
   } else {
-    // Always post snapshot value to the account
+    // No custom rate = snapshot value posts (user accepts current market)
     txAmount = amount * snapshotRate;
-    if (useCustom) {
-      // Forex impact = snapshot value − agreed value (in account currency, then PHP)
-      const snapshotAcctAmt = txAmount;
-      const agreedAcctAmt = amount * customRate;
-      const diffInAcctCurr = snapshotAcctAmt - agreedAcctAmt;
-      const diffInPhp = diffInAcctCurr * acctToPhp;
-      // For lent: gain if snapshot > agreed (you "gave less" since gain comes back as income)
-      // For borrowed: loss if snapshot > agreed (you owe back more market value than received)
-      forexDiffPhp = isLent ? diffInPhp : -diffInPhp;
-      forexDiffPhp = Math.round(forexDiffPhp * 100) / 100;
-    }
   }
 
   const list = isLent ? db.loans.lent : db.loans.borrowed;
@@ -10745,7 +10808,7 @@ function saveAddLoan(direction) {
   if (useCustom) loanRecord.agreedRate = customRate;
   list.push(loanRecord);
 
-  // Parent loan tx posts in account currency at agreed/snapshot value
+  // Parent loan tx posts in account currency at agreed value (direct deduction)
   const parentTxId = genId();
   db.transactions.push({
     id: parentTxId,
@@ -10763,39 +10826,14 @@ function saveAddLoan(direction) {
     loanId,
     loanDirection: direction,
     isSettlement: true,
+    toAmountIsActual: useCustom, // PLS #11: skip isAutoForex on this tx (we don't create one)
     createdAt: new Date().toISOString(),
   });
-
-  // Auto forex gain/loss child if custom rate creates a diff
-  if (Math.abs(forexDiffPhp) >= 0.01) {
-    // Prefer PHP-side account for posting forex line
-    const forexAcct = (acctCurr === 'PHP') ? acct
-      : db.accounts.find(a=>!a.archived && a.currency==='PHP')
-      || acct;
-    if (forexAcct) {
-      const isGain = forexDiffPhp > 0;
-      db.transactions.push({
-        id: genId(),
-        type: isGain ? 'income' : 'expense',
-        amount: Math.abs(forexDiffPhp),
-        currency: 'PHP',
-        categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
-        accountId: forexAcct.id,
-        date, time,
-        notes: `Forex ${isGain?'gain':'loss'} from ${isLent?'lending to':'borrowing from'} ${person} (1 ${currency} agreed @ ${customRate} ${acctCurr} vs snapshot ${snapshotRate.toFixed(4)})`,
-        fxSnapshot: buildFxSnapshot(date),
-        parentId: parentTxId,
-        isAutoForex: true,
-        createdAt: new Date().toISOString(),
-      });
-    }
-  }
 
   saveDBWithSync();
   closeSheet('gen');
   renderLoans();
-  const fxNote = Math.abs(forexDiffPhp) >= 0.01 ? ` · Forex ${forexDiffPhp>0?'gain':'loss'}: ${sym(db.displayCurrency||'PHP')}${Math.abs(forexDiffPhp).toFixed(2)}` : '';
-  showToast(`${isLent?'Loan':'Debt'} added!${fxNote}`);
+  showToast(`${isLent?'Loan':'Debt'} added!`);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -18902,9 +18940,12 @@ function detectRecurring() {
 // ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
-// ── DATA INTEGRITY CHECK ──
-// Runs once at app load. Ensures all collections exist and required fields are present.
-// Prevents crashes from old data structures or partial backups.
+// ── PERSONAL LOGIC SET #99 ── DATA INTEGRITY CHECK
+// Runs once at app load (called from initApp). Ensures all collections exist and required fields are present.
+// - Lazy-inits missing collections (wishlist, reconciliations, etc.) so old backups don't crash app.
+// - Initializes nested structures (db.loans.lent/borrowed, db.categories.income/expense).
+// - Patches transactions with missing date/type (fallback from createdAt; default 'expense' for type).
+// - Patches accounts with missing initialBalance (defaults to 0).
 // Silent: only logs to console, doesn't disturb the user.
 function ensureDBIntegrity() {
   try {
