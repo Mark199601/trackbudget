@@ -8033,6 +8033,7 @@ function openReimbDialog(person) {
 }
 
 // Compute grand total in target currency using snapshot FX
+// HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
 function computeReimbBatchTotal(entries, targetCurr, settlementDate) {
   const snap = buildFxSnapshot(settlementDate);
   let total = 0;
@@ -8040,8 +8041,8 @@ function computeReimbBatchTotal(entries, targetCurr, settlementDate) {
     const c = e.tx.currency || 'PHP';
     if (c === targetCurr) total += e.remaining;
     else {
-      const phpVal = (c==='PHP') ? e.remaining : e.remaining * (snap[c] || 1);
-      total += (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+      const inHome = toPhp(e.remaining, c, snap);
+      total += fromPhp(inHome, targetCurr, snap);
     }
   }
   return total;
@@ -8080,8 +8081,8 @@ function updateReimbBatchPreview(person) {
       let rInTarget;
       if (c===targetCurr) rInTarget = e.remaining;
       else {
-        const phpVal = (c==='PHP') ? e.remaining : e.remaining * (snap[c] || 1);
-        rInTarget = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+        const inHome = toPhp(e.remaining, c, snap);
+        rInTarget = fromPhp(inHome, targetCurr, snap);
       }
       if (remainAmt >= rInTarget - 0.01) { remainAmt -= rInTarget; fullyPaid++; }
       else if (remainAmt > 0) { partialAmt = remainAmt; remainAmt = 0; break; }
@@ -8144,10 +8145,11 @@ function confirmReimbSettlement(person) {
   const snap = buildFxSnapshot(date);
 
   // Helper: convert with snapshot
+  // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
   const conv = (amt, from, to) => {
     if (from === to) return amt;
-    const phpVal = (from==='PHP') ? amt : amt * (snap[from] || 1);
-    return (to==='PHP') ? phpVal : phpVal / (snap[to] || 1);
+    const inHome = toPhp(amt, from, snap);
+    return fromPhp(inHome, to, snap);
   };
 
   // FIFO walk: deduct from received, settling entries in order
@@ -9298,13 +9300,14 @@ function confirmBatchSettleEdit(txId, direction) {
   const newNotes = document.getElementById('bse-notes')?.value?.trim() || tx.notes;
 
   // Compute what the correct total owed was (sum of settled loans in tx.currency)
+  // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
   const snap = tx.fxSnapshot || buildFxSnapshot(newDate);
   const loans = (tx.batchLoanIds||[]).map(id => db.loans[direction].find(l=>l.id===id)).filter(Boolean);
   const totalOwed = loans.reduce((s,l) => {
     const c = l.currency || 'PHP';
     if (c === tx.currency) return s + l.amount;
-    const phpVal = (c==='PHP') ? l.amount : l.amount * (snap[c]||1);
-    return s + ((tx.currency==='PHP') ? phpVal : phpVal / (snap[tx.currency]||1));
+    const inHome = toPhp(l.amount, c, snap);
+    return s + fromPhp(inHome, tx.currency, snap);
   }, 0);
 
   const excess = newAmount - totalOwed;
@@ -9494,12 +9497,12 @@ function openBatchSettleLoans(direction, person) {
 
   // Currency selector (only show if multi-currency)
   const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
-  // PLS #97: Settlement currency always visible — allows cross-currency repayment (e.g. lent PHP, receive PGK → auto-detect FX gain/loss)
-  const allCurrOpts = db.trackedCurrencies.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
-  const currSelectorHtml = `<div class="form-group"><label class="form-label">Settlement currency</label>
-       <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\'")}')"> ${allCurrOpts}</select>
-       <div style="font-size:11px;color:var(--text4);margin-top:4px">Cross-currency payments auto-detect FX gain/loss</div>
-     </div>`;
+  const currSelectorHtml = currList.length > 1
+    ? `<div class="form-group"><label class="form-label">Settlement currency</label>
+         <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
+         <div style="font-size:11px;color:var(--text4);margin-top:4px">Other currency loans will be converted using snapshot FX rate</div>
+       </div>`
+    : `<input type="hidden" id="bsl-curr" value="${defaultCurr}">`;
 
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${a.name} (${a.currency})</option>`).join('');
 
@@ -9540,18 +9543,20 @@ function openBatchSettleLoans(direction, person) {
 }
 
 // Convert all loans to target currency using snapshot FX of settlement date
+// HOME-AGNOSTIC: Uses toPhp/fromPhp pattern (where "Php" means home currency)
 function computeBatchSettleTotal(loans, targetCurr, settlementDate) {
   const snap = buildFxSnapshot(settlementDate);
   let total = 0;
   for (const l of loans) {
     const remain = l.remaining || l.amount;
-    if ((l.currency||'PHP') === targetCurr) {
+    const loanCurr = l.currency || 'PHP';
+    if (loanCurr === targetCurr) {
       total += remain;
     } else {
-      // Convert via PHP base: amt_in_target = (amt_in_loan_curr * snap[loan_curr]) / snap[target]
-      const phpVal = (l.currency==='PHP') ? remain : remain * (snap[l.currency] || 1);
-      const targetVal = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
-      total += targetVal;
+      // Convert loan amount → home base → target currency using snapshot rates
+      const inHome = toPhp(remain, loanCurr, snap);
+      const inTarget = fromPhp(inHome, targetCurr, snap);
+      total += inTarget;
     }
   }
   return total;
@@ -9595,13 +9600,14 @@ function updateBatchSettlePreview(direction, person) {
     let partialAmt = 0;
     for (const l of loans) {
       const r = l.remaining || l.amount;
+      const loanCurr = l.currency || 'PHP';
       let rInTarget;
-      if ((l.currency||'PHP')===targetCurr) {
+      if (loanCurr === targetCurr) {
         rInTarget = r;
       } else {
         const snap = buildFxSnapshot(date);
-        const phpVal = (l.currency==='PHP') ? r : r * (snap[l.currency] || 1);
-        rInTarget = (targetCurr==='PHP') ? phpVal : phpVal / (snap[targetCurr] || 1);
+        const inHome = toPhp(r, loanCurr, snap);
+        rInTarget = fromPhp(inHome, targetCurr, snap);
       }
       if (remainAmt >= rInTarget - 0.01) {
         remainAmt -= rInTarget;
@@ -9644,10 +9650,11 @@ function confirmBatchSettleLoans(direction, person) {
   const snap = buildFxSnapshot(date);
 
   // Helper: convert amount from one currency to another using snapshot
+  // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
   const conv = (amt, from, to) => {
     if (from === to) return amt;
-    const phpVal = (from==='PHP') ? amt : amt * (snap[from] || 1);
-    return (to==='PHP') ? phpVal : phpVal / (snap[to] || 1);
+    const inHome = toPhp(amt, from, snap);
+    return fromPhp(inHome, to, snap);
   };
 
   // FIFO walk: deduct from received, settling loans in order
