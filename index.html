@@ -834,6 +834,21 @@ option{background:var(--bg3);color:var(--text)}
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
 // ════════════════════════════════════════════════════════════
+// EARLY GLOBALS — declared first to avoid TDZ errors if mid-file code throws
+// ════════════════════════════════════════════════════════════
+var _settingsTab = 'profile';
+var _planTab = 'budgets';
+var _txFilter = 'all';
+var _analyticsTab = 'overview';
+var _calMonth = null;
+var _csvImportState = null;
+var _reconState = null;
+var _alertCache = [];
+var _syncStatus = 'idle';
+var _isSavingToDrive = false;
+var _hasUnsavedChanges = false;
+
+// ════════════════════════════════════════════════════════════
 // WORLD DATA
 // ════════════════════════════════════════════════════════════
 const CURRENCIES = [
@@ -1636,8 +1651,8 @@ let db = (() => {
   }
 })();
 
-let _isSavingToDrive = false;
-let _hasUnsavedChanges = false;
+// _isSavingToDrive moved to top
+// _hasUnsavedChanges moved to top
 function saveDB() {
   // Local save only — no Drive sync trigger
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
@@ -2517,34 +2532,53 @@ function renderObTracked() {
 }
 
 function obNext(currentStep) {
-  if (currentStep===1) {
-    const nick = document.getElementById('ob-nickname').value.trim();
-    if (!nick) { showToast('Enter your nickname first!'); return; }
-    const nat = obSelectedNat || document.getElementById('ob-nat-search').value.trim();
-    if (!nat) { showToast('Pick your nationality (home base)'); return; }
-    const loc = obSelectedLoc || document.getElementById('ob-loc-search').value.trim() || nat;
-    db.profile.nickname = nick;
-    db.profile.nationality = nat;
-    db.profile.country = loc;
-    // ── PERSONAL LOGIC SET #24 ── home currency derived from nationality
-    const homeCurr = COUNTRY_CURRENCIES[nat] || COUNTRY_TO_CURRENCY[nat] || 'USD';
-    db.displayCurrency = homeCurr;
-    if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
-    // Update step 2 dynamic text
-    const hb = document.getElementById('ob-homebase-text');
-    if (hb) hb.textContent = `${getFlag(nat)} ${homeCurr} is your home base.`;
-    document.getElementById('ob-step-1').classList.remove('active');
-    document.getElementById('ob-step-2').classList.add('active');
-    document.getElementById('ob-dot-1').classList.remove('active');
-    document.getElementById('ob-dot-2').classList.add('active');
-    renderObTracked();
-  } else if (currentStep===2) {
-    const homeCurr = db.displayCurrency || 'USD';
-    db.trackedCurrencies = [...new Set([homeCurr, ...obTracked])];
-    document.getElementById('ob-step-2').classList.remove('active');
-    document.getElementById('ob-step-3').classList.add('active');
-    document.getElementById('ob-dot-2').classList.remove('active');
-    document.getElementById('ob-dot-3').classList.add('active');
+  try {
+    if (currentStep===1) {
+      const nickEl = document.getElementById('ob-nickname');
+      const natEl = document.getElementById('ob-nat-search');
+      const locEl = document.getElementById('ob-loc-search');
+      const nick = nickEl?.value?.trim();
+      if (!nick) { showToast('Enter your nickname first!'); return; }
+      const nat = obSelectedNat || natEl?.value?.trim();
+      if (!nat) { showToast('Pick your nationality (home base)'); return; }
+      const loc = obSelectedLoc || locEl?.value?.trim() || nat;
+      if (!db.profile) db.profile = {};
+      db.profile.nickname = nick;
+      db.profile.nationality = nat;
+      db.profile.country = loc;
+      // ── PERSONAL LOGIC SET #24 ── home currency derived from nationality
+      const homeCurr = (typeof COUNTRY_CURRENCIES !== 'undefined' && COUNTRY_CURRENCIES[nat])
+        || (typeof COUNTRY_TO_CURRENCY !== 'undefined' && COUNTRY_TO_CURRENCY[nat])
+        || 'USD';
+      db.displayCurrency = homeCurr;
+      if (!obTracked.includes(homeCurr)) obTracked.unshift(homeCurr);
+      // Update step 2 dynamic text
+      const hb = document.getElementById('ob-homebase-text');
+      if (hb) hb.textContent = `${typeof getFlag === 'function' ? getFlag(nat) : ''} ${homeCurr} is your home base.`;
+      const step1 = document.getElementById('ob-step-1');
+      const step2 = document.getElementById('ob-step-2');
+      const dot1 = document.getElementById('ob-dot-1');
+      const dot2 = document.getElementById('ob-dot-2');
+      if (step1) step1.classList.remove('active');
+      if (step2) step2.classList.add('active');
+      if (dot1) dot1.classList.remove('active');
+      if (dot2) dot2.classList.add('active');
+      if (typeof renderObTracked === 'function') renderObTracked();
+    } else if (currentStep===2) {
+      const homeCurr = db.displayCurrency || 'USD';
+      db.trackedCurrencies = [...new Set([homeCurr, ...obTracked])];
+      const step2 = document.getElementById('ob-step-2');
+      const step3 = document.getElementById('ob-step-3');
+      const dot2 = document.getElementById('ob-dot-2');
+      const dot3 = document.getElementById('ob-dot-3');
+      if (step2) step2.classList.remove('active');
+      if (step3) step3.classList.add('active');
+      if (dot2) dot2.classList.remove('active');
+      if (dot3) dot3.classList.add('active');
+    }
+  } catch(e) {
+    console.error('[TB] obNext failed:', e);
+    showToast('Onboarding error — try again or reload');
   }
 }
 
@@ -2660,7 +2694,7 @@ function generateInsights() {
 // ════════════════════════════════════════════════════════════
 // ALERT SYSTEM
 // ════════════════════════════════════════════════════════════
-let _alertCache = [];
+// _alertCache moved to top
 
 function checkAlerts() {
   _alertCache = [];
@@ -5685,7 +5719,7 @@ function submitTransfer() {
 // TRANSACTIONS PAGE
 // ════════════════════════════════════════════════════════════
 let _txTab = 'log';
-let _txFilter = 'all';
+// _txFilter moved to top
 let _txMonth = currMonthKey();
 let _txAcctFilter = 'all'; // account filter
 let _txBudgetFilter = 'all'; // budget/location filter — matches by currency
@@ -11075,7 +11109,7 @@ document.addEventListener('click', e => {
 // ════════════════════════════════════════════════════════════
 // ANALYTICS PAGE
 // ════════════════════════════════════════════════════════════
-let _analyticsTab = 'overview';
+// _analyticsTab moved to top
 
 function renderAnalytics() {
   // Refresh AI insights once per tab switch so inline insights stay current
@@ -11243,7 +11277,7 @@ function renderInlineInsights(types, opts = {}) {
 }
 
 // ── CALENDAR VIEW ──
-let _calMonth = null; // YYYY-MM
+// _calMonth moved to top
 
 function renderAnalyticsCalendar() {
   const dc = db.displayCurrency || 'PHP';
@@ -13866,7 +13900,7 @@ function renderAnalyticsForex() {
 // ════════════════════════════════════════════════════════════
 // PLANNING PAGE
 // ════════════════════════════════════════════════════════════
-let _planTab = 'payday';
+_planTab = 'payday';
 
 function renderPlanning() {
   // ── DEBUG-SCAN NOTE ── Targets are part of Contracts tab structure (planTab values: payday/recurring/contract). Naive scans for "renderTargets" are false positives — Targets live under Contracts.
@@ -15196,7 +15230,7 @@ function saveContractMonthly(contractId, val) {
 // ════════════════════════════════════════════════════════════
 // SETTINGS PAGE
 // ════════════════════════════════════════════════════════════
-let _settingsTab = 'profile';
+// _settingsTab moved to top
 
 function renderSettings() {
   try {
@@ -17176,7 +17210,7 @@ function openCSVImportSheet(rows, filename) {
   openSheet('gen', '📄 Import CSV', renderCSVImportBody());
 }
 
-let _csvImportState = null;
+// _csvImportState moved to top
 
 // Try to auto-detect common column names
 function autoMapCSVColumns(header) {
@@ -17476,7 +17510,7 @@ function openBankRecon() {
   openSheet('gen', '🏦 Bank Reconciliation', renderBankReconBody());
 }
 
-let _reconState = null;
+// _reconState moved to top
 
 function renderBankReconBody() {
   const s = _reconState;
@@ -18498,7 +18532,7 @@ async function saveToDriveSilent() {
 }
 
 // ── SYNC STATUS INDICATOR ──
-let _syncStatus = 'idle'; // idle | unsaved | saving | saved
+// _syncStatus moved to top
 let _lastSyncTime = null;
 
 function setSyncStatus(status) {
