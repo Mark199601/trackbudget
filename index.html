@@ -470,7 +470,7 @@ option{background:var(--bg3);color:var(--text)}
 .dlg-overlay.open .dlg{transform:scale(1)}
 .dlg-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .dlg-title{font-size:15px;font-weight:600}
-.dlg-body{padding:20px;overflow-y:auto;flex:1}
+.dlg-body{padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));overflow-y:auto;flex:1}
 .dlg-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
 
 /* ── EMOJI PICKER ── */
@@ -736,7 +736,7 @@ option{background:var(--bg3);color:var(--text)}
 
 <!-- MAIN APP -->
 <div id="app-shell" style="display:none">
-  <nav id="sidebar">
+  <nav id="sidebar" aria-label="Main navigation">
     <div id="sidebar-logo">
       <div class="logo-mark">T</div>
       <div><div class="logo-text">TrackBudget</div><div class="logo-sub" id="sb-name">—</div></div>
@@ -777,7 +777,7 @@ option{background:var(--bg3);color:var(--text)}
     <div id="page-content"></div>
   </div>
 
-  <nav id="bottom-nav">
+  <nav id="bottom-nav" aria-label="Bottom navigation">
     <div class="bn-items">
       <button class="bn-item active" id="bn-dashboard" onclick="nav('dashboard')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Home
@@ -785,7 +785,7 @@ option{background:var(--bg3);color:var(--text)}
       <button class="bn-item" id="bn-transactions" onclick="nav('transactions')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Txns
       </button>
-      <button class="bn-add" id="bn-add-btn" onclick="handleQuickAddTap()" oncontextmenu="event.preventDefault();showQuickAddMenu();return false">
+      <button class="bn-add" id="bn-add-btn" onclick="handleQuickAddTap()" oncontextmenu="event.preventDefault();showQuickAddMenu();return false" aria-label="Add transaction (tap) or open quick menu (long press)">
         <div class="bn-add-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>Add
       </button>
       <button class="bn-item" id="bn-accounts" onclick="nav('accounts')">
@@ -800,38 +800,38 @@ option{background:var(--bg3);color:var(--text)}
 
 <!-- ADD SHEET -->
 <div class="overlay" id="add-overlay"></div>
-<div class="sheet" id="add-sheet">
-  <div class="sheet-handle"></div>
-  <div class="sheet-header"><span class="sheet-title" id="add-title">Add Transaction</span><button class="sheet-close" id="add-close">✕</button></div>
+<div class="sheet" id="add-sheet" role="dialog" aria-modal="true" aria-labelledby="add-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-header"><span class="sheet-title" id="add-title">Add Transaction</span><button class="sheet-close" id="add-close" aria-label="Close">✕</button></div>
   <div class="sheet-body" id="add-body"></div>
 </div>
 
 <!-- GEN SHEET -->
 <div class="overlay" id="gen-overlay"></div>
-<div class="sheet" id="gen-sheet">
-  <div class="sheet-handle"></div>
-  <div class="sheet-header"><span class="sheet-title" id="gen-title"></span><button class="sheet-close" id="gen-close">✕</button></div>
+<div class="sheet" id="gen-sheet" role="dialog" aria-modal="true" aria-labelledby="gen-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-header"><span class="sheet-title" id="gen-title"></span><button class="sheet-close" id="gen-close" aria-label="Close">✕</button></div>
   <div class="sheet-body" id="gen-body"></div>
 </div>
 
 <!-- GEN2 SHEET -->
 <div class="overlay" id="gen2-overlay"></div>
-<div class="sheet" id="gen2-sheet">
-  <div class="sheet-handle"></div>
-  <div class="sheet-header"><span class="sheet-title" id="gen2-title"></span><button class="sheet-close" id="gen2-close">✕</button></div>
+<div class="sheet" id="gen2-sheet" role="dialog" aria-modal="true" aria-labelledby="gen2-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="sheet-header"><span class="sheet-title" id="gen2-title"></span><button class="sheet-close" id="gen2-close" aria-label="Close">✕</button></div>
   <div class="sheet-body" id="gen2-body"></div>
 </div>
 
 <!-- DIALOG -->
-<div class="dlg-overlay" id="dlg-overlay">
+<div class="dlg-overlay" id="dlg-overlay" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
   <div class="dlg">
-    <div class="dlg-header"><span class="dlg-title" id="dlg-title"></span><button class="sheet-close" onclick="closeDlg()">✕</button></div>
+    <div class="dlg-header"><span class="dlg-title" id="dlg-title"></span><button class="sheet-close" onclick="closeDlg()" aria-label="Close dialog">✕</button></div>
     <div class="dlg-body" id="dlg-body"></div>
     <div class="dlg-footer" id="dlg-footer"></div>
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <script>
 // ════════════════════════════════════════════════════════════
 // WORLD DATA
@@ -1236,6 +1236,8 @@ function _homeBase() { return db?.displayCurrency || 'PHP'; }
 // See PLS #5 for full FX home currency reference rules.
 // ═══════════════════════════════════════════════════════════
 function toPhp(amount, fromCurrency, snapshot) {
+  // Guard: invalid amount returns 0 to prevent NaN cascade
+  if (typeof amount !== 'number' || isNaN(amount)) return 0;
   const home = _homeBase();
   if (fromCurrency === home) return amount;
   if (snapshot && typeof snapshot === 'object' && snapshot[fromCurrency]) {
@@ -1266,6 +1268,8 @@ function txToPhp(tx) {
 }
 
 function fromPhp(phpAmount, toCurrency, snapshot) {
+  // Guard: invalid amount returns 0 to prevent NaN cascade
+  if (typeof phpAmount !== 'number' || isNaN(phpAmount)) return 0;
   const home = _homeBase();
   if (toCurrency === home) return phpAmount;
   if (snapshot && typeof snapshot === 'object' && snapshot[toCurrency]) {
@@ -1630,7 +1634,7 @@ let _hasUnsavedChanges = false;
 function saveDB() {
   // Local save only — no Drive sync trigger
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-  catch(e) { showToast('⚠ Storage full — export backup!', 4000); }
+  catch(e) { showToast('⚠ Storage full — export backup!', UX_TOAST_DUR_LONG); }
 }
 function migrateInvestmentTxTypes() {
   // Migrate any isInvestmentFund txs that still have type:'expense' → type:'transfer'
@@ -1679,6 +1683,23 @@ function showLoading(msg='Loading...') {
 function hideLoading() {
   const el = document.getElementById('app-loading');
   if (el) el.classList.remove('show');
+}
+
+// ── HAPTIC FEEDBACK HELPER ──
+// Subtle iOS-style haptic for confirmation actions.
+// Patterns: 'tap' (short), 'success' (double-tap), 'warn' (medium), 'error' (long buzz).
+// Silent fallback if browser doesn't support vibration (iOS Safari ignores it but won't throw).
+function haptic(pattern = 'tap') {
+  if (!navigator.vibrate) return;
+  try {
+    const patterns = {
+      tap: 10,
+      success: [12, 40, 12],
+      warn: 25,
+      error: [40, 60, 40]
+    };
+    navigator.vibrate(patterns[pattern] || 10);
+  } catch(e) {}
 }
 
 function getAcctBalance(acctId) {
@@ -2078,6 +2099,8 @@ function openSheet(sheetId, title, html) {
   document.getElementById(sheetId+'-body').innerHTML = html;
   document.getElementById(sheetId+'-overlay').classList.add('open');
   document.getElementById(sheetId+'-sheet').classList.add('open');
+  // Auto-attach swipe-to-dismiss (idempotent — uses _swipeAttached flag)
+  attachSwipeDismiss(sheetId);
 }
 function closeSheet(sheetId) {
   document.getElementById(sheetId+'-overlay').classList.remove('open');
@@ -2698,6 +2721,15 @@ function checkAlerts() {
     if (total / nw > 0.05) _alertCache.push({type:'crypto', msg:`Crypto allocation is ${((total/nw)*100).toFixed(1)}% of net worth (>5%)`});
   }
 
+  // Backup reminder — friendly nudge if Drive connected but no backup in 7+ days
+  if (db.settings?.googleDriveConnected && db.settings?.lastDriveSync) {
+    const lastSync = new Date(db.settings.lastDriveSync);
+    const daysSince = Math.floor((now - lastSync) / 86400000);
+    if (daysSince >= 7) {
+      _alertCache.push({type:'backup', msg:`☁️ Last backup was ${daysSince} ${aiPlural(daysSince,'day')} ago — sync now to be safe`});
+    }
+  }
+
   // Update loans badge
   const loanAlerts = _alertCache.filter(a=>a.type==='loan').length;
   const loansBadge = document.getElementById('loans-badge');
@@ -3142,6 +3174,43 @@ let _txPressStartY = 0;
 // (under 10px) — okay lang, hindi nag-cancel ang long-press. Pero pag nag-scroll ka talaga
 // (>10px movement), nag-cancel — para hindi accidental ang pag-trigger ng bulk select mode.
 const TX_MOVE_THRESHOLD = 10; // pixels — PERSONAL LOGIC SET #82 (companion of #35): finger jitter under 10px stays as long-press. #35 owns the 550ms hold + 10px cancel rule; #82 is the named constant for the 10px part.
+
+// ── UX TIMING CONSTANTS ──
+// Centralized timing values used across the app for consistent feel.
+const UX_TOAST_DUR_DEFAULT = 2200;      // ms — default toast duration
+const UX_TOAST_DUR_LONG = 4000;         // ms — important warnings (budget exceeded, storage full)
+const UX_SHEET_OPEN_DELAY = 150;        // ms — delay before opening sheet after closing another (animation buffer)
+const UX_NAV_TRANSITION_DELAY = 200;    // ms — delay before opening sheet after page navigation
+const UX_AUTOSAVE_DEBOUNCE = 1500;      // ms — debounce for auto-save to Drive
+const UX_RECENT_TX_DAYS = 7;            // days — window for "recent transactions" in reconciliation
+const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Drive history
+const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
+
+// ── APP VERSION ──
+const APP_VERSION = '17.1';
+const APP_VERSION_DATE = 'May 2026';
+const APP_CHANGELOG = [
+  { ver: '17.1', date: 'May 2026', changes: [
+    '✨ Added Bank Reconciliation — compare app balance vs real bank',
+    '✨ Added CSV import/export for bulk transactions',
+    '✨ Added Wishlist tab in Planning',
+    '✨ Added Calendar view in Analytics',
+    '🔧 Added loading states for exports/imports',
+    '📳 Added haptic feedback on key actions',
+    '🛡️ Added data integrity check on app load',
+    '♿ Improved accessibility (aria labels, dialog roles)',
+    '🐛 Fixed 7 bugs in new features (balance, navigation, field naming)'
+  ]},
+  { ver: '17.0', date: 'May 2026', changes: [
+    '✨ iOS Health-style analytics picker (replaces 17-tab scroll)',
+    '✨ 10 new analytics tabs (Cashflow, Cross-FX, People, Goals, etc.)',
+    '✨ Accordion Overview sections',
+    '🔧 Home-agnostic FX system (currency change recomputes rates)',
+    '🔧 Archive-first account deletion',
+    '🎨 UI consistency cleanup (CSS vars, rounded corners)',
+    '🐛 Net Worth no longer double-counts fee reimbursements'
+  ]},
+];
 
 function exitBulkMode() {
   _txBulkMode = false;
@@ -11162,9 +11231,9 @@ function renderAnalyticsCalendar() {
 
   // Month nav
   html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(-1)" style="padding:0">←</button>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(-1)" style="padding:0" aria-label="Previous month">←</button>
     <div style="font-size:16px;font-weight:600">${monthLabel}</div>
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(1)" style="padding:0">→</button>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(1)" style="padding:0" aria-label="Next month">→</button>
   </div>`;
 
   // Month summary
@@ -11325,7 +11394,7 @@ function openCalDay(dateStr) {
     </div>`;
   }
 
-  openSheet('cal-day', `📅 ${labelDate}`, body);
+  openSheet('gen', `📅 ${labelDate}`, body);
 }
 
 function renderAnalyticsOverview() {
@@ -13808,7 +13877,7 @@ function openAddWishlist(itemId) {
   const currencies = db.trackedCurrencies || [dc];
   const currOpts = currencies.map(c => `<option value="${c}" ${item && item.currency===c?'selected':(!item && c===dc?'selected':'')}>${c}</option>`).join('');
 
-  openSheet('wishlist-add', item ? '🛍 Edit Wishlist Item' : '🛍 Add to Wishlist',
+  openSheet('gen', item ? '🛍 Edit Wishlist Item' : '🛍 Add to Wishlist',
     `<div class="page-pad">
       <div class="form-group">
         <label class="form-label">Item name *</label>
@@ -13846,7 +13915,7 @@ function openAddWishlist(itemId) {
       </div>
 
       <div style="display:flex;gap:8px;margin-bottom:20px">
-        <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('wishlist-add')">Cancel</button>
+        <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('gen')">Cancel</button>
         ${item ? `<button class="btn btn-danger btn-sm" onclick="deleteWishlistItem('${item.id}')">Delete</button>` : ''}
         <button class="btn btn-primary btn-sm btn-full" onclick="saveWishlistItem('${item?item.id:''}')">${item?'Save':'Add'}</button>
       </div>
@@ -13856,7 +13925,7 @@ function openAddWishlist(itemId) {
 
 function saveWishlistItem(itemId) {
   const name = document.getElementById('wl-name').value.trim();
-  if (!name) { showToast('⚠ Item name required'); return; }
+  if (!name) { haptic('warn'); showToast('⚠ Item name required'); return; }
   const price = parseFloat(document.getElementById('wl-price').value) || 0;
   const currency = document.getElementById('wl-currency').value;
   const priority = document.getElementById('wl-priority').value;
@@ -13878,7 +13947,7 @@ function saveWishlistItem(itemId) {
     });
   }
   saveDBWithSync();
-  closeSheet('wishlist-add');
+  closeSheet('gen');
   showToast(itemId ? '✓ Updated' : '🛍️ Added to wishlist');
   if (currentPage === 'planning') renderPlanning();
 }
@@ -13899,8 +13968,8 @@ function _doDeleteWishlistItem(itemId) {
   db.wishlist = (db.wishlist || []).filter(w => w.id !== itemId);
   saveDBWithSync();
   closeDlg();
-  closeSheet('wishlist-add');
-  showToast('🗑 Deleted');
+  closeSheet('gen');
+  haptic('warn'); showToast('🗑 Deleted');
   if (currentPage === 'planning') renderPlanning();
 }
 
@@ -13936,15 +14005,15 @@ function _doMarkPurchased(itemId, logExpense) {
     };
     if (currentPage !== 'transactions') {
       nav('transactions');
-      setTimeout(() => openAddSheet(prefill), 200);
+      setTimeout(() => openAddSheet(prefill), UX_NAV_TRANSITION_DELAY);
     } else {
       openAddSheet(prefill);
     }
-    showToast('✓ Marked purchased');
+    haptic('success'); showToast('✓ Marked purchased');
   } else {
     saveDBWithSync();
     closeDlg();
-    showToast('✓ Marked purchased');
+    haptic('success'); showToast('✓ Marked purchased');
     if (currentPage === 'planning') renderPlanning();
   }
 }
@@ -16631,6 +16700,13 @@ function renderDataTab() {
         <div class="sr-right">→</div>
       </div>` : ''}
     </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:12px">About</div>
+      <div class="settings-row" onclick="openWhatsNew()">
+        <div class="sr-left"><div class="sr-icon">✨</div><div><div class="sr-text">What's New</div><div class="sr-sub">v${APP_VERSION} · ${APP_VERSION_DATE}</div></div></div>
+        <div class="sr-right">→</div>
+      </div>
+    </div>
     <div class="card">
       <div class="section-title" style="margin-bottom:12px">Danger Zone</div>
       <div class="settings-row" onclick="confirmResetApp()" style="cursor:pointer">
@@ -16649,6 +16725,30 @@ function exportJSON() {
   showToast('Backup downloaded!');
 }
 
+// ── WHAT'S NEW (Changelog) ──
+function openWhatsNew() {
+  const body = `<div class="page-pad">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:36px">📒</div>
+      <div style="font-size:18px;font-weight:700;margin-top:6px">TrackBudget v${APP_VERSION}</div>
+      <div style="font-size:11px;color:var(--text3)">${APP_VERSION_DATE}</div>
+    </div>
+    ${APP_CHANGELOG.map((entry, idx) => `
+      <div class="card" style="margin-bottom:12px;${idx === 0 ? 'border-left:3px solid var(--accent)' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:14px;font-weight:700">v${entry.ver}</div>
+          <div style="font-size:11px;color:var(--text3)">${entry.date}</div>
+        </div>
+        ${entry.changes.map(c => `<div style="font-size:12px;color:var(--text2);padding:4px 0;line-height:1.5">${escapeAttr(c)}</div>`).join('')}
+      </div>
+    `).join('')}
+    <div style="text-align:center;font-size:11px;color:var(--text4);margin-top:20px;padding-bottom:20px">
+      Built with care for personal finance tracking 💚
+    </div>
+  </div>`;
+  openSheet('gen', '✨ What\'s New', body);
+}
+
 function exportTXT() {
   const blob = new Blob([JSON.stringify(db,null,2)], {type:'text/plain'});
   const a = document.createElement('a');
@@ -16661,8 +16761,10 @@ function exportTXT() {
 function importJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
+  showLoading('Reading backup...');
   const reader = new FileReader();
   reader.onload = e => {
+    hideLoading();
     try {
       const imported = JSON.parse(e.target.result);
       openDlg('Import Backup',
@@ -16674,6 +16776,7 @@ function importJSON(event) {
       window._importedDB = imported;
     } catch { showToast('Invalid backup file — must be a TrackBudget JSON or TXT backup'); }
   };
+  reader.onerror = () => { hideLoading(); showToast('Could not read file'); };
   reader.readAsText(file);
 }
 
@@ -16718,6 +16821,7 @@ function exportXLSX() {
     showToast('⏳ Excel library loading, try again in a moment');
     return;
   }
+  showLoading('Generating Excel file...');
   try {
     const wb = XLSX.utils.book_new();
     const today_ = today();
@@ -16841,8 +16945,10 @@ function exportXLSX() {
 
     // Write and download
     XLSX.writeFile(wb, `TrackBudget-${today_}.xlsx`);
-    showToast('📊 Excel exported!');
+    hideLoading();
+    haptic('success'); showToast('📊 Excel exported!');
   } catch(e) {
+    hideLoading();
     console.error('exportXLSX error:', e);
     showToast('Export failed: ' + e.message);
   }
@@ -16850,6 +16956,7 @@ function exportXLSX() {
 
 // ── CSV EXPORT ──
 function exportCSV() {
+  showLoading('Generating CSV...');
   try {
     const dc = db.displayCurrency || 'PHP';
     const accts = db.accounts || [];
@@ -16900,8 +17007,10 @@ function exportCSV() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('📄 CSV exported! (' + (rows.length - 1) + ' transactions)');
+    hideLoading();
+    haptic('success'); showToast('📄 CSV exported! (' + (rows.length - 1) + ' transactions)');
   } catch(e) {
+    hideLoading();
     console.error('exportCSV error:', e);
     showToast('Export failed: ' + e.message);
   }
@@ -16911,6 +17020,7 @@ function exportCSV() {
 function importCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
+  showLoading('Reading CSV...');
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
@@ -16918,16 +17028,19 @@ function importCSV(event) {
       // Strip BOM if present
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const rows = parseCSV(text);
+      hideLoading();
       if (rows.length < 2) {
         showToast('CSV is empty or has no data rows');
         return;
       }
       openCSVImportSheet(rows, file.name);
     } catch(err) {
+      hideLoading();
       console.error('importCSV parse error:', err);
       showToast('Could not parse CSV: ' + err.message);
     }
   };
+  reader.onerror = () => { hideLoading(); showToast('Could not read file'); };
   reader.readAsText(file);
 }
 
@@ -16969,7 +17082,7 @@ function openCSVImportSheet(rows, filename) {
   const dataRows = rows.slice(1);
   _csvImportState = { rows: dataRows, header, mapping: autoMapCSVColumns(header), filename };
 
-  openSheet('csv-import', '📄 Import CSV', renderCSVImportBody());
+  openSheet('gen', '📄 Import CSV', renderCSVImportBody());
 }
 
 let _csvImportState = null;
@@ -17080,7 +17193,7 @@ function renderCSVImportBody() {
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:20px">
-      <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('csv-import')">Cancel</button>
+      <button class="btn btn-ghost btn-sm btn-full" onclick="closeSheet('gen')">Cancel</button>
       <button class="btn btn-primary btn-sm btn-full" onclick="doImportCSV()">Import</button>
     </div>
   </div>`;
@@ -17089,6 +17202,7 @@ function renderCSVImportBody() {
 function doImportCSV() {
   const s = _csvImportState;
   if (!s) return;
+  showLoading('Importing transactions...');
   const dateCol = parseInt(document.getElementById('csv-map-date').value);
   const amtCol = parseInt(document.getElementById('csv-map-amount').value);
   const notesCol = parseInt(document.getElementById('csv-map-notes').value);
@@ -17097,11 +17211,13 @@ function doImportCSV() {
   const currency = document.getElementById('csv-currency').value;
 
   if (dateCol < 0 || amtCol < 0) {
-    showToast('⚠ Date and Amount columns are required');
+    hideLoading();
+    haptic('warn'); showToast('⚠ Date and Amount columns are required');
     return;
   }
   if (!acctId) {
-    showToast('⚠ Pick a target account');
+    hideLoading();
+    haptic('warn'); showToast('⚠ Pick a target account');
     return;
   }
 
@@ -17154,6 +17270,7 @@ function doImportCSV() {
   });
 
   if (newTxs.length === 0) {
+    hideLoading();
     showToast('No valid transactions found');
     return;
   }
@@ -17161,8 +17278,9 @@ function doImportCSV() {
   db.transactions = (db.transactions || []).concat(newTxs);
   saveDBWithSync();
   _csvImportState = null;
-  closeSheet('csv-import');
-  showToast(`📄 Imported ${imported} transaction${imported>1?'s':''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+  closeSheet('gen');
+  hideLoading();
+  haptic('success'); showToast(`📄 Imported ${imported} transaction${imported>1?'s':''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
   if (currentPage === 'transactions') renderTransactions();
 }
 
@@ -17264,7 +17382,7 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
 
 function openBankRecon() {
   _reconState = { acctId: null, asOfDate: new Date().toISOString().slice(0,10), realBalance: '' };
-  openSheet('bank-recon', '🏦 Bank Reconciliation', renderBankReconBody());
+  openSheet('gen', '🏦 Bank Reconciliation', renderBankReconBody());
 }
 
 let _reconState = null;
@@ -17287,9 +17405,9 @@ function renderBankReconBody() {
     const isMatch = absDiff < 0.01;
     const tolPct = appBal !== 0 ? Math.abs(diff / appBal) * 100 : 0;
 
-    // Find recent txs around asOfDate (within 7 days) — include transfers in either direction
+    // Find recent txs around asOfDate (within UX_RECENT_TX_DAYS) — include transfers in either direction
     const cutoff = new Date(s.asOfDate);
-    cutoff.setDate(cutoff.getDate() - 7);
+    cutoff.setDate(cutoff.getDate() - UX_RECENT_TX_DAYS);
     const cutoffStr = cutoff.toISOString().slice(0,10);
     const recentTxs = (db.transactions || [])
       .filter(t => !t.archived && (t.accountId === s.acctId || t.fromAccountId === s.acctId || t.toAccountId === s.acctId) && t.date >= cutoffStr && t.date <= s.asOfDate)
@@ -17369,12 +17487,12 @@ function renderBankReconBody() {
     <div class="card" style="margin-bottom:14px">
       <div class="form-group">
         <label class="form-label">Account *</label>
-        <select class="form-input" id="recon-acct" onchange="_reconState.acctId = this.value; openSheet('bank-recon','🏦 Bank Reconciliation', renderBankReconBody())">${acctOpts}</select>
+        <select class="form-input" id="recon-acct" onchange="_reconState.acctId = this.value">${acctOpts}</select>
       </div>
 
       <div class="form-group">
         <label class="form-label">As of date *</label>
-        <input class="form-input" type="date" id="recon-date" value="${s.asOfDate}" max="${new Date().toISOString().slice(0,10)}" onchange="_reconState.asOfDate = this.value; if (_reconState.acctId && _reconState.realBalance !== '') openSheet('bank-recon','🏦 Bank Reconciliation', renderBankReconBody())">
+        <input class="form-input" type="date" id="recon-date" value="${s.asOfDate}" max="${new Date().toISOString().slice(0,10)}" onchange="_reconState.asOfDate = this.value">
       </div>
 
       <div class="form-group">
@@ -17393,11 +17511,11 @@ function runReconciliation() {
   const acctId = document.getElementById('recon-acct').value;
   const date = document.getElementById('recon-date').value;
   const real = document.getElementById('recon-real').value;
-  if (!acctId) { showToast('⚠ Pick an account'); return; }
+  if (!acctId) { haptic('warn'); showToast('⚠ Pick an account'); return; }
   if (!date) { showToast('⚠ Pick a date'); return; }
   if (real === '' || isNaN(parseFloat(real))) { showToast('⚠ Enter real bank balance'); return; }
   _reconState = { acctId, asOfDate: date, realBalance: real };
-  openSheet('bank-recon', '🏦 Bank Reconciliation', renderBankReconBody());
+  openSheet('gen', '🏦 Bank Reconciliation', renderBankReconBody());
 }
 
 function saveReconciliation(isMatch) {
@@ -17420,10 +17538,10 @@ function saveReconciliation(isMatch) {
     isMatch,
     createdAt: new Date().toISOString()
   });
-  // Keep last 50 reconciliations
-  if (db.reconciliations.length > 50) db.reconciliations = db.reconciliations.slice(0, 50);
+  // Keep last UX_RECON_HISTORY_LIMIT reconciliations
+  if (db.reconciliations.length > UX_RECON_HISTORY_LIMIT) db.reconciliations = db.reconciliations.slice(0, UX_RECON_HISTORY_LIMIT);
   saveDBWithSync();
-  closeSheet('bank-recon');
+  closeSheet('gen');
   _reconState = null;
   showToast(isMatch ? '✅ Match saved!' : '💾 Reconciliation saved');
   if (currentPage === 'settings') renderSettings();
@@ -17504,7 +17622,7 @@ function openReconHistory() {
           </div>`;
         }).join('')}
       </div>`;
-  openSheet('recon-history', '📜 Reconciliation History', body);
+  openSheet('gen', '📜 Reconciliation History', body);
 }
 
 
@@ -18777,8 +18895,85 @@ function detectRecurring() {
 // ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
+// ── DATA INTEGRITY CHECK ──
+// Runs once at app load. Ensures all collections exist and required fields are present.
+// Prevents crashes from old data structures or partial backups.
+// Silent: only logs to console, doesn't disturb the user.
+function ensureDBIntegrity() {
+  try {
+    const issues = [];
+
+    // Required top-level collections (lazy init)
+    const collections = [
+      'transactions', 'accounts', 'budgets', 'paydaySchedules',
+      'recurringTxs', 'installments', 'investments', 'archivedLoans',
+      'archivedInvestments', 'wishlist', 'reconciliations', 'contracts',
+      'sharedTransactions'
+    ];
+    collections.forEach(c => {
+      if (!Array.isArray(db[c])) {
+        db[c] = [];
+        issues.push(`init db.${c}`);
+      }
+    });
+
+    // Required nested structures
+    if (!db.loans || typeof db.loans !== 'object') { db.loans = { lent: [], borrowed: [] }; issues.push('init db.loans'); }
+    if (!Array.isArray(db.loans.lent)) { db.loans.lent = []; issues.push('init db.loans.lent'); }
+    if (!Array.isArray(db.loans.borrowed)) { db.loans.borrowed = []; issues.push('init db.loans.borrowed'); }
+
+    if (!db.categories || typeof db.categories !== 'object') {
+      db.categories = { income: [], expense: [] };
+      issues.push('init db.categories');
+    }
+    if (!Array.isArray(db.categories.income)) { db.categories.income = []; issues.push('init db.categories.income'); }
+    if (!Array.isArray(db.categories.expense)) { db.categories.expense = []; issues.push('init db.categories.expense'); }
+
+    if (!db.fxRates || typeof db.fxRates !== 'object') { db.fxRates = {}; issues.push('init db.fxRates'); }
+    if (!db.settings || typeof db.settings !== 'object') { db.settings = {}; issues.push('init db.settings'); }
+    if (!db.profile || typeof db.profile !== 'object') { db.profile = {}; issues.push('init db.profile'); }
+
+    // Tx-level integrity: ensure required fields don't break aggregators
+    let fixedTxs = 0;
+    db.transactions.forEach(t => {
+      // Date is critical
+      if (!t.date && t.createdAt) {
+        t.date = t.createdAt.slice(0, 10);
+        fixedTxs++;
+      }
+      // Type is critical
+      if (!t.type) {
+        t.type = 'expense';
+        fixedTxs++;
+      }
+      // Amount: keep as 0 if missing (still includable, just zero impact)
+      if (typeof t.amount !== 'number' || isNaN(t.amount)) {
+        t.amount = 0;
+      }
+    });
+    if (fixedTxs > 0) issues.push(`patched ${fixedTxs} tx with missing date/type`);
+
+    // Account-level: ensure initialBalance is a number
+    let fixedAccts = 0;
+    db.accounts.forEach(a => {
+      if (typeof a.initialBalance !== 'number' || isNaN(a.initialBalance)) {
+        a.initialBalance = 0;
+        fixedAccts++;
+      }
+    });
+    if (fixedAccts > 0) issues.push(`patched ${fixedAccts} accounts with missing balance`);
+
+    if (issues.length > 0) {
+      console.log('[Integrity] Patched:', issues.join(' · '));
+    }
+  } catch(e) {
+    console.warn('[Integrity] Check failed:', e);
+  }
+}
+
 function initApp() {
   try {
+  ensureDBIntegrity();
   wireEvents();
   autoPurgeArchived();
   detectRecurring();
@@ -18814,7 +19009,7 @@ function initApp() {
       if (exceeded.length > 0 && lastBudgetToast !== today) {
         localStorage.setItem('tb_last_budget_toast', today);
         const names = exceeded.map(b=>b.location).join(', ');
-        showToast(`⚠️ Budget exceeded: ${names}`, 4000);
+        showToast(`⚠️ Budget exceeded: ${names}`, UX_TOAST_DUR_LONG);
       }
     }, 1500);
     // Try silent token refresh on app open (no popup)
@@ -18909,7 +19104,7 @@ function _checkOnline() {
     // Just came back online — auto-sync if Drive connected
     showToast('🌐 Back online — syncing…');
     if (db?.settings?.googleDriveConnected && typeof saveToDriveSilent === 'function') {
-      setTimeout(() => { saveToDriveSilent().catch(()=>{}); }, 1500);
+      setTimeout(() => { saveToDriveSilent().catch(()=>{}); }, UX_AUTOSAVE_DEBOUNCE);
     }
   }
   _wasOffline = offline;
