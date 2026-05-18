@@ -3,7 +3,7 @@
 // Strategy: cache-first for the app HTML, network-first for everything else,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v11';
+const CACHE = 'trackbudget-v12';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {

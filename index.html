@@ -847,6 +847,7 @@ var _alertCache = [];
 var _syncStatus = 'idle';
 var _isSavingToDrive = false;
 var _hasUnsavedChanges = false;
+var _autoSaveTimer = null;
 
 // ════════════════════════════════════════════════════════════
 // WORLD DATA
@@ -1125,9 +1126,9 @@ const GDRIVE_CLIENT_ID = '722832233918-3srovc3q8kt9i7145ga6gtskscqp1l9n.apps.goo
 const GDRIVE_FOLDER_NAME = 'TrackBudget';
 const GDRIVE_BACKUPS_FOLDER_NAME = 'Backups';
 const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
-let _gdriveTokenClient = null;
-let _gdriveAccessToken = null;
-let _gdriveTokenExpiry = 0; // Unix timestamp ms when token expires
+var _gdriveTokenClient = null;
+var _gdriveAccessToken = null;
+var _gdriveTokenExpiry = 0; // Unix timestamp ms when token expires
 
 // ── Token persistence helpers ──
 const GDRIVE_TOKEN_KEY = 'tb_gdrive_token';
@@ -1166,8 +1167,8 @@ function clearDriveToken() {
 // ── PERSONAL LOGIC SET #2 ── loadDriveToken() called at script load level (not inside initApp).
 // Token must be available before any GDrive call fires, including auto-save on first render.
 loadDriveToken();
-let _gdriveFolderId = null;
-let _gdriveBackupsFolderId = null;
+var _gdriveFolderId = null;
+var _gdriveBackupsFolderId = null;
 const CURR_SYMBOLS = {PHP:'₱',PGK:'K',USD:'$',USDT:'₮',AUD:'A$',NZD:'NZ$',EUR:'€',GBP:'£',JPY:'¥',CNY:'¥',INR:'₹',SGD:'S$',CAD:'C$',CHF:'Fr',HKD:'HK$',TWD:'NT$',KRW:'₩',BRL:'R$',MXN:'MX$',ZAR:'R',THB:'฿',IDR:'Rp',MYR:'RM',VND:'₫',AED:'د.إ',SAR:'﷼',TRY:'₺',RUB:'₽',VUV:'Vt',FJD:'FJ$',SBD:'SI$',TOP:'T$'};
 
 function sym(code) { return CURR_SYMBOLS[code] || (code+' '); }
@@ -2048,7 +2049,7 @@ let currentPage = (() => {
     return saved && ['dashboard','transactions','accounts','loans','installments','reimbursements','planning','analytics','ai','settings'].includes(saved) ? saved : 'dashboard';
   } catch(e) { return 'dashboard'; }
 })();
-let _dashReorderMode = false; // C2: dashboard reorder mode
+var _dashReorderMode = false; // C2: dashboard reorder mode
 
 const DASH_SECTIONS_DEFAULT = ['alerts','metrics','pulse','insights','budget','recent'];
 const DASH_SECTION_LABELS = {
@@ -2214,9 +2215,9 @@ function _infoBtn(key) {
 // ════════════════════════════════════════════════════════════
 // CUSTOM NUMPAD ENGINE
 // ════════════════════════════════════════════════════════════
-let _npTarget = null;   // the input element currently being edited
-let _npExpr = '';       // current expression string
-let _npCallback = null; // optional callback after confirm
+var _npTarget = null;   // the input element currently being edited
+var _npExpr = '';       // current expression string
+var _npCallback = null; // optional callback after confirm
 
 const NP_AMOUNT_SELECTOR = 'input.numpad-input[type="number"]';
 
@@ -3232,8 +3233,8 @@ function isBulkEligible(tx) {
 }
 
 // ── BULK PRESS HANDLERS (Batch B #6) ──
-let _txPressStartX = 0;
-let _txPressStartY = 0;
+var _txPressStartX = 0;
+var _txPressStartY = 0;
 // 📖 USER STORY: Pag long-press ka ng transaction sa list, kahit konting jitter ng finger mo
 // (under 10px) — okay lang, hindi nag-cancel ang long-press. Pero pag nag-scroll ka talaga
 // (>10px movement), nag-cancel — para hindi accidental ang pag-trigger ng bulk select mode.
@@ -3936,7 +3937,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
 // ════════════════════════════════════════════════════════════
 // ADD TRANSACTION SHEET — Category-first flow
 // ════════════════════════════════════════════════════════════
-let _addState = { type:'expense', step:1, catId:null, subCatId:null };
+var _addState = { type:'expense', step:1, catId:null, subCatId:null };
 
 function openAddSheet(prefill={}) {
   _addState = { type: prefill.type||'expense', step:1, catId:null, subCatId:null, prefill };
@@ -3946,8 +3947,8 @@ function openAddSheet(prefill={}) {
 }
 
 // ── QUICK-ADD: tap = expense; long-press / right-click = action menu ──
-let _quickAddPressTimer = null;
-let _quickAddLongPressed = false;
+var _quickAddPressTimer = null;
+var _quickAddLongPressed = false;
 
 function handleQuickAddTap() {
   // If long-press triggered, ignore the synthesized click
@@ -4472,7 +4473,7 @@ function _updateCatDisplay() {
 }
 
 // ── SHARED FORM PERSON ROWS ──
-let _spCount = 0; // unique row ID counter
+var _spCount = 0; // unique row ID counter
 
 function spAddRow(name='', share='') {
   const el = document.getElementById('shared-persons-list');
@@ -5718,20 +5719,20 @@ function submitTransfer() {
 // ════════════════════════════════════════════════════════════
 // TRANSACTIONS PAGE
 // ════════════════════════════════════════════════════════════
-let _txTab = 'log';
+var _txTab = 'log';
 // _txFilter moved to top
-let _txMonth = currMonthKey();
-let _txAcctFilter = 'all'; // account filter
-let _txBudgetFilter = 'all'; // budget/location filter — matches by currency
-let _txFilterPanelOpen = false; // funnel panel open state
-let _txSort = 'newest'; // newest | oldest | amount_asc | amount_desc
-let _txQuickFilter = null; // C9: null | 'large' | 'foreign' | 'nonotes' | 'recurring'
+var _txMonth = currMonthKey();
+var _txAcctFilter = 'all'; // account filter
+var _txBudgetFilter = 'all'; // budget/location filter — matches by currency
+var _txFilterPanelOpen = false; // funnel panel open state
+var _txSort = 'newest'; // newest | oldest | amount_asc | amount_desc
+var _txQuickFilter = null; // C9: null | 'large' | 'foreign' | 'nonotes' | 'recurring'
 
 // ── BULK SELECT MODE (Batch B #6) ──
-let _txBulkMode = false;
-let _txBulkSet = new Set();
-let _txLongPressTimer = null;
-let _txLongPressFired = false;
+var _txBulkMode = false;
+var _txBulkSet = new Set();
+var _txLongPressTimer = null;
+var _txLongPressFired = false;
 // 📖 USER STORY: Pag gusto mong i-bulk select ang transactions, pindutin mo lang ng 550ms (over
 // half a second) ang isa, pumapasok ka sa bulk mode. Pero pag nag-scroll ka kahit konti (>10px),
 // nag-cancel — kasi obvious na browse lang yung intent mo, hindi bulk action.
@@ -6088,8 +6089,8 @@ function clearAllTxFilters() {
 }
 
 // ── SMART SEARCH HELPERS ──
-let _txSearchDebounce = null;
-let _txSearchCursorPos = null;
+var _txSearchDebounce = null;
+var _txSearchCursorPos = null;
 function onTxSearchInput(val) {
   // Snappy debounce — 50ms (just enough to coalesce keystrokes)
   window._txSearchQuery = val;
@@ -8343,7 +8344,7 @@ function confirmReimbSettlement(person) {
 // Legacy function stubs for any lingering references
 function submitPartialSettle() { /* replaced */ }
 
-let _acctTab = 'active';
+var _acctTab = 'active';
 
 function renderAccounts() {
   // Single tab — Investments is now its own page in sidebar
@@ -9143,7 +9144,7 @@ function archiveInv(id) {
 // ════════════════════════════════════════════════════════════
 // LOANS PAGE
 // ════════════════════════════════════════════════════════════
-let _loanTab = 'lent';
+var _loanTab = 'lent';
 const LOAN_OVERDUE_DAYS = 90; // After due date, loan flagged as overdue and write-off pill shown
 
 // Helper: returns null if no dueDate or not overdue, else number of days past due
@@ -9295,7 +9296,7 @@ function renderLoanList(direction) {
 }
 
 // Track expanded loan-person groups
-let _loanPersonExpanded = {};
+var _loanPersonExpanded = {};
 function toggleLoanPersonGroup(direction, person) {
   const key = direction + ':' + person;
   _loanPersonExpanded[key] = !_loanPersonExpanded[key];
@@ -16205,7 +16206,7 @@ function saveAddBudget() {
 }
 
 // ── CATEGORIES MANAGER ──
-let _showArchivedCats = false;
+var _showArchivedCats = false;
 
 function renderCatsTab() {
   let html = `<div class="page-pad">
@@ -18532,7 +18533,7 @@ async function saveToDriveSilent() {
 
 // ── SYNC STATUS INDICATOR ──
 // _syncStatus moved to top
-let _lastSyncTime = null;
+var _lastSyncTime = null;
 
 function setSyncStatus(status) {
   _syncStatus = status;
@@ -18578,7 +18579,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 // Auto-save trigger (30s debounce)
-let _autoSaveTimer = null;
+// _autoSaveTimer moved to top
 function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
   clearTimeout(_autoSaveTimer);
@@ -19219,7 +19220,7 @@ if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
 }
 
 // Online/offline detection — shows badge + triggers auto-sync
-let _wasOffline = false;
+var _wasOffline = false;
 function _renderOfflineBadge(isOffline) {
   // ── PERSONAL LOGIC SET #94 ── Offline indicator is a SUBTLE dot/icon in page header,
   // not a floating banner. User wanted it minimal — just visual status, no full prompt.
@@ -19269,8 +19270,8 @@ function manualSyncNow() {
 // OFFLINE AI ENGINE
 // ═══════════════════════════════════════════════════════════
 
-let _aiInsights = [];
-let _aiLastRun = null;
+var _aiInsights = [];
+var _aiLastRun = null;
 
 function runAIAnalysis() {
   _aiInsights = [];
