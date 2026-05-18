@@ -15199,20 +15199,40 @@ function saveContractMonthly(contractId, val) {
 let _settingsTab = 'profile';
 
 function renderSettings() {
-  const tabsHTML = `<div class="tab-bar">
+  try {
+    // Defensive guards
+    if (!db.profile) db.profile = { nickname:'', nationality:'', country:'' };
+    if (!db.trackedCurrencies) db.trackedCurrencies = ['PHP'];
+    if (!db.fxRates) db.fxRates = {};
+    if (!db.settings) db.settings = {};
+    if (!db.categories) db.categories = { expense:[], income:[] };
+    if (!db.budgets) db.budgets = [];
+    if (!db.transactions) db.transactions = [];
+
+    const tabsHTML = `<div class="tab-bar">
     <button class="tab-btn ${_settingsTab==='profile'?'active':''}" onclick="setSettingsTab('profile')">Profile</button>
     <button class="tab-btn ${_settingsTab==='fx'?'active':''}" onclick="setSettingsTab('fx')">FX Rates</button>
     <button class="tab-btn ${_settingsTab==='budgets'?'active':''}" onclick="setSettingsTab('budgets')">Budgets</button>
     <button class="tab-btn ${_settingsTab==='cats'?'active':''}" onclick="setSettingsTab('cats')">Categories</button>
     <button class="tab-btn ${_settingsTab==='data'?'active':''}" onclick="setSettingsTab('data')">Data</button>
   </div>`;
-  let content = '';
-  if (_settingsTab==='profile') content = renderProfileTab();
-  else if (_settingsTab==='fx') content = renderFXTab();
-  else if (_settingsTab==='budgets') content = renderBudgetsTab();
-  else if (_settingsTab==='cats') content = renderCatsTab();
-  else content = renderDataTab();
-  document.getElementById('page-content').innerHTML = tabsHTML + content;
+    let content = '';
+    try {
+      if (_settingsTab==='profile') content = renderProfileTab();
+      else if (_settingsTab==='fx') content = renderFXTab();
+      else if (_settingsTab==='budgets') content = renderBudgetsTab();
+      else if (_settingsTab==='cats') content = renderCatsTab();
+      else content = renderDataTab();
+    } catch(tabErr) {
+      console.error('[TB] Settings tab "' + _settingsTab + '" failed:', tabErr);
+      content = `<div class="page-pad"><div class="card" style="padding:20px"><div style="color:var(--red);font-weight:600;margin-bottom:8px">⚠ Tab error</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">${(tabErr && tabErr.message) || 'Unknown error'}</div><button class="btn btn-sm" onclick="setSettingsTab('data')">Try Data tab</button></div></div>`;
+    }
+    document.getElementById('page-content').innerHTML = tabsHTML + content;
+  } catch(e) {
+    console.error('[TB] renderSettings failed:', e);
+    const pc = document.getElementById('page-content');
+    if (pc) pc.innerHTML = `<div class="page-pad"><div class="card" style="padding:20px;text-align:center"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="color:var(--red);font-weight:600;margin-bottom:8px">Settings error</div><div style="font-size:12px;color:var(--text2);margin-bottom:16px">${(e && e.message) || 'Unknown'}</div><button class="btn btn-primary btn-sm" onclick="location.reload()">Reload</button></div></div>`;
+  }
 }
 
 function setSettingsTab(t) { _settingsTab=t; renderSettings(); }
