@@ -2549,24 +2549,44 @@ function obNext(currentStep) {
 }
 
 function finishOnboard() {
-  db.onboarded = true;
-  // ── PERSONAL LOGIC SET #25 ── backfill home currency to anything still null after onboarding
-  const home = db.displayCurrency || 'USD';
-  // Set sample accounts' currency to home
-  (db.accounts || []).forEach(a => { if (!a.currency) a.currency = home; });
-  // Ensure trackedCurrencies has home
-  if (!db.trackedCurrencies.includes(home)) db.trackedCurrencies.unshift(home);
-  // Ensure home FX rate baseline (1:1)
-  if (!db.fxRates[home]) db.fxRates[home] = 1;
-  if (!db.fxHistory[home]) db.fxHistory[home] = [{date: today(), rate: 1, source: 'baseline'}];
-  saveDBWithSync();
-  document.getElementById('onboard').style.display = 'none';
-  document.getElementById('app-shell').style.display = 'flex';
-  document.getElementById('sb-name').textContent = db.profile.nickname;
-  checkMobileLayout();
-  checkAlerts();
-  nav('dashboard');
-    setTimeout(aiScheduleCheck, 2000);
+  try {
+    db.onboarded = true;
+    // PLS #103: Defensive guards — never assume db sub-collections exist.
+    if (!db.profile) db.profile = { nickname:'', nationality:'', country:'' };
+    if (!db.trackedCurrencies) db.trackedCurrencies = [];
+    if (!db.fxRates) db.fxRates = {};
+    if (!db.fxHistory) db.fxHistory = {};
+    if (!db.accounts) db.accounts = [];
+    if (!db.settings) db.settings = {};
+
+    // ── PERSONAL LOGIC SET #25 ── backfill home currency to anything still null after onboarding
+    const home = db.displayCurrency || 'USD';
+    // Set sample accounts' currency to home
+    db.accounts.forEach(a => { if (!a.currency) a.currency = home; });
+    // Ensure trackedCurrencies has home
+    if (!db.trackedCurrencies.includes(home)) db.trackedCurrencies.unshift(home);
+    // Ensure home FX rate baseline (1:1)
+    if (!db.fxRates[home]) db.fxRates[home] = 1;
+    if (!db.fxHistory[home]) db.fxHistory[home] = [{date: today(), rate: 1, source: 'baseline'}];
+    saveDBWithSync();
+    document.getElementById('onboard').style.display = 'none';
+    document.getElementById('app-shell').style.display = 'flex';
+    const sbName = document.getElementById('sb-name');
+    if (sbName) sbName.textContent = db.profile.nickname || '';
+    try { checkMobileLayout(); } catch(e) { console.warn('[TB] checkMobileLayout failed:', e); }
+    try { checkAlerts(); } catch(e) { console.warn('[TB] checkAlerts failed:', e); }
+    nav('dashboard');
+    setTimeout(() => { try { aiScheduleCheck(); } catch(e){} }, 2000);
+  } catch(e) {
+    console.error('[TB] finishOnboard failed:', e);
+    showToast('Something went wrong — try reloading the app');
+    // Last resort: force navigate anyway so user isn't stuck
+    try {
+      document.getElementById('onboard').style.display = 'none';
+      document.getElementById('app-shell').style.display = 'flex';
+      nav('dashboard');
+    } catch(e2) {}
+  }
 }
 
 // ════════════════════════════════════════════════════════════
