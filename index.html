@@ -10002,7 +10002,7 @@ function openLoanDetail(loanId, direction) {
         <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">
           ${isLent?'Tap below to log how much you received from':'Tap below to log how much you paid'} <strong>${escapeAttr(loan.personName||'')}</strong>. Supports partial or full settlement with FX gain/loss tracking.
         </div>
-        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');setTimeout(()=>openBatchSettleLoans('${direction}',${JSON.stringify(loan.personName||'')}),120)">
+        <button class="btn btn-primary btn-full" onclick="_recordLoanPayment('${loanId}','${direction}')">
           💰 Record Payment →
         </button>
       </div>
@@ -10016,6 +10016,21 @@ function openLoanDetail(loanId, direction) {
         <button class="btn btn-ghost btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
       </div>`}
   `);
+}
+
+// Helper: bridge from Loan Detail "Record Payment" button → batch settle flow
+// Avoids inline-onclick string-escape issues with special chars in person names.
+function _recordLoanPayment(loanId, direction) {
+  try {
+    const loans = direction === 'lent' ? db.loans.lent : db.loans.borrowed;
+    const loan = loans.find(l => l.id === loanId);
+    if (!loan) { showToast('Loan not found'); return; }
+    closeSheet('gen');
+    setTimeout(() => openBatchSettleLoans(direction, loan.personName || ''), 120);
+  } catch(e) {
+    console.error('[TB] _recordLoanPayment failed:', e);
+    showToast('Could not open payment form');
+  }
 }
 
 function settleLoan(loanId, direction, full) {
