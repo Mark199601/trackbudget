@@ -1589,6 +1589,12 @@ let db = (() => {
         tx.isSettlement = true;
       }
     }
+    // Final self-heal: if data exists, force onboarded:true (belt-and-suspenders).
+    // The initial self-heal at top runs BEFORE migrations; this catches any migration
+    // step that accidentally reset the flag, or any code path that bypassed it earlier.
+    if (parsed.transactions?.length > 0 || parsed.accounts?.length > 0 || parsed.profile?.nickname) {
+      parsed.onboarded = true;
+    }
     return parsed;
   } catch(e) {
     // ── PERSONAL LOGIC SET #10 ── migration-stage failure: keep parsed data, don't nuke to defaultDB.
@@ -18182,6 +18188,10 @@ async function restoreSnapshotNow(fileId, label) {
     const restored = {...data};
     delete restored._backupMeta;
     db = restored;
+    // PLS #70: force onboarded:true after restore — covers snapshots saved before flag existed
+    if (db.transactions?.length > 0 || db.accounts?.length > 0 || db.profile?.nickname) {
+      db.onboarded = true;
+    }
     saveDB();
     hideLoading();
     showToast('✅ Snapshot restored');
@@ -19026,6 +19036,17 @@ function initApp() {
   autoPurgeArchived();
   detectRecurring();
 
+  if (!db.onboarded) {
+    // PLS #70 belt-and-suspenders: if data exists at runtime, force-set onboarded
+    // and skip the onboarding screen entirely. Covers any edge case where the
+    // flag was never persisted (e.g., partial migrations, snapshot restores).
+    if ((db.transactions?.length > 0 || db.accounts?.length > 0 || db.profile?.nickname)) {
+      console.warn('[TB] initApp self-heal: data exists but onboarded:false → forcing true');
+      db.onboarded = true;
+      saveDB();
+      // Fall through to onboarded:true branch below
+    }
+  }
   if (!db.onboarded) {
     document.getElementById('onboard').style.display = 'flex';
     document.getElementById('app-shell').style.display = 'none';
