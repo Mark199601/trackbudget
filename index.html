@@ -2097,7 +2097,7 @@ function renderPageHeader(page) {
   } else if (page==='accounts') {
     const archivedCount = db.accounts.filter(a=>a.archived).length;
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
-      + `<button class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="openArchivedAccountsSheet()">📦</button>`;
+      + `<button aria-label="Archive" class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="openArchivedAccountsSheet()">📦</button>`;
   } else if (page==='targets') {
     pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
@@ -2936,7 +2936,7 @@ function renderDashboard() {
           <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:3px">Contract auto-created from your old investment plan</div>
           <div style="font-size:12px;color:var(--text2);line-height:1.5">Your previous savings plan was migrated to a Contract. Please review it in <span onclick="nav('planning')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Planning → Contracts</span> and confirm the dates, target, and bucket links are correct.</div>
         </div>
-        <button onclick="dismissMigrationBanner()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0;line-height:1;flex-shrink:0">×</button>
+        <button aria-label="Close" onclick="dismissMigrationBanner()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0;line-height:1;flex-shrink:0">×</button>
       </div>`;
   }
 
@@ -3127,8 +3127,8 @@ function renderDashboard() {
         <span style="font-size:18px;color:var(--text3);cursor:grab">⠿</span>
         <span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">${DASH_SECTION_LABELS[id]}</span>
         <div style="display:flex;flex-direction:column;gap:2px">
-          <button onclick="moveDashSection('${id}',-1)" ${idx===0?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↑</button>
-          <button onclick="moveDashSection('${id}',1)" ${idx===order.length-1?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↓</button>
+          <button aria-label="Move up" onclick="moveDashSection('${id}',-1)" ${idx===0?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↑</button>
+          <button aria-label="Move down" onclick="moveDashSection('${id}',1)" ${idx===order.length-1?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text2)">↓</button>
         </div>
       </div>`).join('')}` : '';
 
@@ -4847,9 +4847,10 @@ function updateRemittancePhpPreview() {
   const curr = acct?.currency || 'PGK';
   const el = document.getElementById('rem-php-preview');
   if (!el) return;
-  if (!amt || !rate) { el.innerHTML = `${db.displayCurrency||'PHP'} received: —`; return; }
+  const homeCurr = db.displayCurrency || 'PHP';
+  if (!amt || !rate) { el.innerHTML = `${homeCurr} received: —`; return; }
   const php = amt * rate;
-  el.innerHTML = `${sym(curr)}${amt.toFixed(2)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">${sym(db.displayCurrency||'PHP')}${php.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>`;
+  el.innerHTML = `${fmt(amt, curr)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(php, homeCurr)}</strong>`;
 }
 
 function getLatestFxRate(currency) {
@@ -5664,7 +5665,7 @@ function submitTransfer() {
   else if (currentPage==='reimbursements') renderReimbursementsPage();
   else if (currentPage==='accounts') renderAccounts();
   const msg = forex && forex.direction !== 'none'
-    ? `Transfer + Forex ${forex.direction}: ${sym(db.displayCurrency||'PHP')}${Math.abs(forex.gainLossPhp).toFixed(2)} logged`
+    ? `Transfer + Forex ${forex.direction}: ${fmt(Math.abs(forex.gainLossPhp), db.displayCurrency||'PHP')} logged`
     : 'Transfer saved!';
   showToast(msg);
 }
@@ -5872,7 +5873,7 @@ function renderTxLog() {
   // ── BULK TOOLBAR ──
   const bulkToolbar = _txBulkMode ? `
     <div class="bulk-toolbar">
-      <button class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
+      <button aria-label="Close" class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
       <span class="bt-count">${_txBulkSet.size} selected</span>
       <button onclick="bulkSelectAllVisible()" title="Select all visible">All</button>
       <button onclick="bulkRecategorize()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🏷️ Re-cat</button>
@@ -6000,7 +6001,7 @@ function renderTxLog() {
         <div style="flex:1;position:relative">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.5"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <input type="text" id="tx-search-input" class="form-input" value="${searchQuery.replace(/"/g,'&quot;')}" placeholder="Search…" oninput="onTxSearchInput(this.value)" style="padding:8px 32px 8px 32px;font-size:13px">
-          <button onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0">×</button>
+          <button aria-label="Close" onclick="clearTxSearch()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--bg4);border:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;padding:0">×</button>
         </div>
         <span style="font-size:12px;color:var(--accent);white-space:nowrap;font-weight:500">${txs.length} match${txs.length!==1?'es':''}</span>
       </div>`
@@ -6252,7 +6253,7 @@ function openTxDetail(txId) {
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
               <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();closeDlg();setTimeout(()=>openTxDetail('${p.id}'),100)" title="View">→</button>
-              <button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--red)" onclick="event.stopPropagation();deleteChildReimb('${p.id}','${tx.id}')" title="Archive payment">🗑</button>
+              <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;color:var(--red)" onclick="event.stopPropagation();deleteChildReimb('${p.id}','${tx.id}')" title="Archive payment">🗑</button>
             </div>
           </div>
         </div>`;
@@ -6268,7 +6269,7 @@ function openTxDetail(txId) {
       </div>`;
     }
   }
-  if (tx.fxSnapshot && tx.currency !== 'PHP') {
+  if (tx.fxSnapshot && tx.currency !== _homeBase()) {
     const snapRate = tx.fxSnapshot[tx.currency];
     if (snapRate) {
       // Find source info from fxHistory
@@ -6279,7 +6280,7 @@ function openTxDetail(txId) {
                        info.source === 'baseline' ? 'baseline' : '';
       fxBadge = `<div style="margin-top:12px"><div class="form-label">FX Snapshot</div>
         <div class="fx-snapshot-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="closeDlg();nav('settings');setTimeout(()=>setSettingsTab('fx'),50)">
-          ${srcIcon} 1 ${tx.currency} = ${sym(db.displayCurrency||'PHP')}${snapRate} <span style="color:var(--text4);font-size:10px">(${srcLabel})</span> <span style="color:var(--accent);font-size:10px;margin-left:4px">Edit →</span>
+          ${srcIcon} 1 ${tx.currency} = ${fmt(snapRate, db.displayCurrency||'PHP')} <span style="color:var(--text4);font-size:10px">(${srcLabel})</span> <span style="color:var(--accent);font-size:10px;margin-left:4px">Edit →</span>
         </div></div>`;
     }
   }
@@ -6485,7 +6486,7 @@ function openTxReceipt(txId) {
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">From</div><div class="rcpt-row-value">${fromAcct.name}<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">−${fmt(tx.amount, tx.currency)}</span></div></div>`;
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">To</div><div class="rcpt-row-value">${toAcct.name}<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">+${fmt(toAmt, toCurr)}</span></div></div>`;
     if (tx.currency !== toCurr) {
-      const foreignCurr = tx.currency !== 'PHP' ? tx.currency : toCurr;
+      const foreignCurr = tx.currency !== _homeBase() ? tx.currency : toCurr;
       let rate = db.fxRates[foreignCurr] || 1;
       if (tx.toAmount != null) {
         if (tx.currency === 'PHP') rate = tx.amount / tx.toAmount;
@@ -6508,7 +6509,7 @@ function openTxReceipt(txId) {
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">My Share</div><div class="rcpt-row-value" style="font-family:var(--mono);color:var(--red)">${fmt(tx.myShare || tx.amount, tx.currency)}</div></div>`;
   }
 
-  if (tx.currency !== 'PHP') {
+  if (tx.currency !== _homeBase()) {
     const phpVal = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
     { const home=db.displayCurrency||'PHP'; const homeEquiv = home==='PHP' ? phpVal : toPhp(phpVal,'PHP') / (toPhp(1,home)||1); rowsHTML+=`<div class="rcpt-row"><div class="rcpt-row-label">In ${home}</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(homeEquiv,home)}</div></div>`; }
   }
@@ -6636,9 +6637,10 @@ function buildTxReceiptText(txId) {
     lines.push(`My Share: ${fmt(tx.myShare || tx.amount, tx.currency)}`);
   }
 
-  if (tx.currency !== 'PHP') {
+  const _home = db.displayCurrency || 'PHP';
+  if (tx.currency !== _home) {
     const phpVal = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
-    { const home=db.displayCurrency||'PHP'; lines.push(`${home} Equiv: ${fmt(phpVal,'PHP')}`); }
+    lines.push(`${_home} Equiv: ${fmt(phpVal, _home)}`);
   }
 
   if (tx.notes) lines.push(`Notes: ${tx.notes}`);
@@ -6726,8 +6728,8 @@ function openEditTx(txId) {
   ]).join('');
 
   const snapRate = tx.fxSnapshot?.[tx.currency];
-  const fxBadgeHTML = (tx.currency!=='PHP'&&snapRate)
-    ? `<div style="margin:4px 0 12px"><span class="fx-snapshot-badge">📸 Snapshot: 1 ${tx.currency} = ${sym(db.displayCurrency||'PHP')}${snapRate} (read-only)</span></div>`
+  const fxBadgeHTML = (tx.currency!==_homeBase()&&snapRate)
+    ? `<div style="margin:4px 0 12px"><span class="fx-snapshot-badge">📸 Snapshot: 1 ${tx.currency} = ${fmt(snapRate, db.displayCurrency||'PHP')} (read-only)</span></div>`
     : '';
 
   const isShared = tx.type === 'shared';
@@ -6739,7 +6741,7 @@ function openEditTx(txId) {
       <div class="edit-person-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input class="form-input" style="flex:2;min-width:0" placeholder="Name" value="${escapeAttr(p.name)}" data-field="name">
         <input class="form-input numpad-input" style="flex:1;min-width:0" type="number" step="any" placeholder="Share" value="${p.share}" data-field="share" oninput="onEditSharedRecalc('${txId}')" inputmode="none">
-        <button type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:2px 8px">×</button>
+        <button aria-label="Close" type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:2px 8px">×</button>
       </div>`).join('');
   }
 
@@ -7079,7 +7081,7 @@ function openEditTransfer(txId) {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
   // Detect if existing tx used custom rate (toAmount differs from snapshot conversion)
   const toAcct = accts.find(a=>a.id===tx.toAccountId);
-  const foreignCurr = tx.currency !== 'PHP' ? tx.currency : toAcct?.currency;
+  const foreignCurr = tx.currency !== _homeBase() ? tx.currency : toAcct?.currency;
   const snapRate = getLatestFxRate(foreignCurr || 'PGK');
   let existingCustomRate = '';
   if (tx.toAmount != null && toAcct && tx.currency !== toAcct.currency) {
@@ -7600,8 +7602,8 @@ function openTxArchiveSheet() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <div class="tx-amount ${cls}" style="font-size:13px">${str}</div>
-          <button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();restoreTx('${tx.id}')">↩</button>
-          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();promptArchiveDelete('${tx.id}','${(cat?.name||tx.type).replace(/'/g,'')}',${children.length})">🗑</button>
+          <button aria-label="Restore" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();restoreTx('${tx.id}')">↩</button>
+          <button aria-label="Delete" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();promptArchiveDelete('${tx.id}','${(cat?.name||tx.type).replace(/'/g,'')}',${children.length})">🗑</button>
         </div>
       </div>
       ${children.length > 0 ? `<div id="arch-children-${tx.id}" style="display:none">${childRows}</div>` : ''}
@@ -8332,7 +8334,7 @@ function openAcctDetail(acctId) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div>
         <div style="font-size:28px;font-weight:600;font-family:var(--mono)">${fmt(bal,a.currency)}</div>
-        ${a.currency!=='PHP'?`<div style="font-size:13px;color:var(--text3);font-family:var(--mono)">≈ ${sym(db.displayCurrency||'PHP')}${toPhp(bal,a.currency).toFixed(2)}</div>`:''}
+        ${a.currency!==(db.displayCurrency||'PHP')?`<div style="font-size:13px;color:var(--text3);font-family:var(--mono)">≈ ${fmt(toPhp(bal,a.currency), db.displayCurrency||'PHP')}</div>`:''}
       </div>
       <span class="pill pill-gray">${a.type}</span>
     </div>
@@ -10317,8 +10319,8 @@ function openLoanArchiveSheet() {
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <div style="font-family:var(--mono);font-size:13px;color:var(--text3)">${fmt(loan.amount, loan.currency)}</div>
-          <button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="restoreLoan('${loan.id}')" title="Restore">↩</button>
-          <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="promptArchiveDeleteLoan('${loan.id}','${safeName}',${linkedCount})" title="Delete permanently">🗑</button>
+          <button aria-label="Restore" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="restoreLoan('${loan.id}')" title="Restore">↩</button>
+          <button aria-label="Delete" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="promptArchiveDeleteLoan('${loan.id}','${safeName}',${linkedCount})" title="Delete permanently">🗑</button>
         </div>
       </div>`;
     }
@@ -14309,8 +14311,8 @@ function renderContractTab() {
     </label>`).join('');
     const editControls = editMode ? `
       <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0">
-        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">✎</button>
-        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">🗑</button>
+        <button aria-label="Edit" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">✎</button>
+        <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">🗑</button>
       </div>` : '';
     const dragHandle = editMode ? `<div draggable="true" ondragstart="bucketDragStart(event,'${b.id}')" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')" style="cursor:grab;color:var(--text4);font-size:14px;padding:0 6px 0 0;user-select:none" title="Drag to reorder">⋮⋮</div>` : '';
     return `<div class="card" style="margin-bottom:8px${editMode?';border:1px dashed var(--border2)':''}" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
@@ -14831,7 +14833,7 @@ function openBucketSheet(contractId, bucketId) {
             oninput="onBucketHexInput(this.value)">
         </div>
         <div id="bk-preview" style="width:36px;height:36px;border-radius:var(--r-md);background:${initColor};border:1px solid var(--border);flex-shrink:0;box-shadow:0 1px 4px ${initColor}55"></div>
-        ${eyedropperSupported?`<button type="button" class="btn btn-ghost btn-sm" onclick="bucketEyedropper()" title="Pick color from screen" style="padding:8px 10px;font-size:14px">💧</button>`:''}
+        ${eyedropperSupported?`<button aria-label="Color picker" type="button" class="btn btn-ghost btn-sm" onclick="bucketEyedropper()" title="Pick color from screen" style="padding:8px 10px;font-size:14px">💧</button>`:''}
       </div>
       <input type="hidden" id="bk-color" value="${initColor}">
     </div>
@@ -15344,7 +15346,7 @@ function openFxHistoryPage(currency) {
               <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${currency}',${i})" style="font-size:11px;padding:4px 8px;flex-shrink:0">Save</button>
-            ${entry.source!=='baseline'?`<button class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${currency}',${i})" style="color:var(--red);font-size:14px;padding:4px 6px;flex-shrink:0">×</button>`:''}
+            ${entry.source!=='baseline'?`<button aria-label="Close" class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${currency}',${i})" style="color:var(--red);font-size:14px;padding:4px 6px;flex-shrink:0">×</button>`:''}
           </div>`;
         }).join('');
 
@@ -15605,7 +15607,7 @@ function renderBudgetsTab() {
           </div>
           <label class="toggle"><input type="checkbox" ${b.rollover?'checked':''} onchange="toggleBudgetRollover('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
         </div>
-        ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin-top:6px;font-family:var(--mono)">+ ${sym(b.currency)}${(b.rolloverAmount||0).toFixed(2)} carried over from last month</div>` : ''}
+        ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin-top:6px;font-family:var(--mono)">+ ${fmt(b.rolloverAmount||0, b.currency)} carried over from last month</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:${allocCount?'14':'0'}px">
         <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
@@ -17967,7 +17969,7 @@ async function showSnapshotPicker() {
           <div style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📸 ${labelGuess}</div>
           <div style="font-size:11px;color:var(--text4);margin-top:2px" id="snap-meta-${f.id}">${dateLabel} · ${sizeKb}</div>
         </div>
-        <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteSnapshot('${f.id}','${labelGuess.replace(/'/g,'&apos;')}')" title="Delete">🗑</button>
+        <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteSnapshot('${f.id}','${labelGuess.replace(/'/g,'&apos;')}')" title="Delete">🗑</button>
       </div>`;
     }).join('');
     openDlg('📸 Snapshots',
@@ -19428,9 +19430,9 @@ function aiFxAdvisor() {
       `${aiName()?aiName()+', t':'T'}his looks like a smart remit moment`,
     ];
     const bodies = [
-      `Current ${sym(db.displayCurrency||'PHP')}${current.toFixed(2)}/PGK is above recent avg ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)} — +${diffPct}%.`,
+      `Current ${fmt(current, db.displayCurrency||'PHP')}/PGK is above recent avg ${fmt(last3Avg, db.displayCurrency||'PHP')} — +${diffPct}%.`,
       `Rate's ${diffPct}% better than your 3-period average. Worth considering.`,
-      `Above your typical ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)} by ${diffPct}% — small win on conversion.`,
+      `Above your typical ${fmt(last3Avg, db.displayCurrency||'PHP')} by ${diffPct}% — small win on conversion.`,
     ];
     insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
   }
@@ -19443,7 +19445,7 @@ function aiFxAdvisor() {
       'Rate dipped — maybe hold',
     ];
     const bodies = [
-      `Current ${sym(db.displayCurrency||'PHP')}${current.toFixed(2)}/PGK below recent avg ${sym(db.displayCurrency||'PHP')}${last3Avg.toFixed(2)}. Consider waiting if not urgent.`,
+      `Current ${fmt(current, db.displayCurrency||'PHP')}/PGK below recent avg ${fmt(last3Avg, db.displayCurrency||'PHP')}. Consider waiting if not urgent.`,
       `Rate's ${diffPct}% under your typical conversion. Worth a pause unless you need it now.`,
       `${diffPct}% below your 3-period average. If timing flexible, holding might pay off.`,
     ];
@@ -21587,17 +21589,17 @@ function openInstArchiveSheet() {
     <button class="np-btn" onclick="npKey('7')">7</button>
     <button class="np-btn" onclick="npKey('8')">8</button>
     <button class="np-btn" onclick="npKey('9')">9</button>
-    <button class="np-btn np-op" onclick="npKey('×')">×</button>
+    <button aria-label="Close" class="np-btn np-op" onclick="npKey('×')">×</button>
     <!-- Row 3: 4, 5, 6, − -->
     <button class="np-btn" onclick="npKey('4')">4</button>
     <button class="np-btn" onclick="npKey('5')">5</button>
     <button class="np-btn" onclick="npKey('6')">6</button>
-    <button class="np-btn np-op" onclick="npKey('-')">−</button>
+    <button aria-label="Remove" class="np-btn np-op" onclick="npKey('-')">−</button>
     <!-- Row 4: 1, 2, 3, + -->
     <button class="np-btn" onclick="npKey('1')">1</button>
     <button class="np-btn" onclick="npKey('2')">2</button>
     <button class="np-btn" onclick="npKey('3')">3</button>
-    <button class="np-btn np-op" onclick="npKey('+')">+</button>
+    <button aria-label="Add" class="np-btn np-op" onclick="npKey('+')">+</button>
     <!-- Row 5: 0 (span 2), ., = -->
     <button class="np-btn np-zero" onclick="npKey('0')">0</button>
     <button class="np-btn" onclick="npKey('.')">.</button>
