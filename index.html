@@ -2209,6 +2209,7 @@ const _WIDGET_INFO = {
   'income-div': {title:'🌐 Income Diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
   'goal': {title:'🎯 Savings Goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
   'concentration': {title:'🏦 Account Concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
+  'accthealth': {title:'🏦 Account Health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg txn</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
 };
 function _widgetInfo(key) {
   const def = _WIDGET_INFO[key];
@@ -12338,22 +12339,23 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   }
   const dots = months.map((mo, i) => mo.rate !== null ? `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(mo.rate).toFixed(1)}" r="2.5" fill="var(--accent)"/>` : '').join('');
   return `<div class="card" style="padding:14px;margin-bottom:14px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-family:var(--mono);font-size:16px;font-weight:700">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</div>
-        <div style="font-size:11px;color:${trendColor}">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</div>
-      </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
+      <div style="font-size:11px;color:var(--text3)">Last 6 months</div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:40px;display:block">
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:44px;display:block;margin-bottom:6px">
       <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
       ${dots}
     </svg>
-    <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--text4)">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px;color:var(--text4)">
       ${months.map(mo => `<span>${mo.label}</span>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3)">Current month</div>
+      <div style="text-align:right">
+        <span style="font-family:var(--mono);font-size:16px;font-weight:700">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</span>
+        <span style="font-size:11px;color:${trendColor};margin-left:6px">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</span>
+      </div>
     </div>
   </div>`;
 }
@@ -21410,23 +21412,6 @@ function renderAnalyticsYoY() {
 // ───────────────────────────────────────────────────────────
 // TAB: Account Health — per-account activity, dormancy
 // ───────────────────────────────────────────────────────────
-function showAccountHealthInfo() {
-  openDlg('🏦 Account Health',
-    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
-      <p style="margin:0 0 10px"><b>What is this?</b><br>Tracks activity, flow, and dormancy of your accounts.</p>
-      <p style="margin:0 0 8px"><b>What to look for:</b></p>
-      <ul style="margin:0 0 10px;padding-left:18px;color:var(--text2)">
-        <li><b>↓ Inflow vs ↑ Outflow</b> — kung saan napupunta o pumapasok ang pera</li>
-        <li><b>Avg txn</b> — average per transaction (small = daily use, large = big purchases)</li>
-        <li><b>Tx count</b> — busy accounts vs barely-used</li>
-        <li><b>Dormant 60+ days</b> — candidate for archive</li>
-      </ul>
-      <p style="margin:0;font-size:12px;color:var(--text3)">💡 Use this to declutter, spot leaks, or prioritize reconciliation.</p>
-    </div>`,
-    `<button class="btn btn-primary btn-sm" onclick="closeDlg()">Got it</button>`
-  );
-}
-
 function renderAnalyticsAccountHealth() {
   const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
   const accts = db.accounts.filter(a => !a.archived);
@@ -21454,10 +21439,7 @@ function renderAnalyticsAccountHealth() {
       <b>💤 ${dormantList.length} dormant ${aiPlural(dormantList.length,'account')}</b> — no activity in 60+ days
     </div>`;
   }
-  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)">Per Account</div>
-    <span onclick="showAccountHealthInfo()" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;background:var(--bg2);border-radius:var(--r-full);user-select:none">ℹ️ What's this?</span>
-  </div>`;
+  html += `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center">Per Account${_infoBtn('accthealth')}</div>`;
   enriched.forEach(a => {
     const dormantBadge = a.dormantDays === null ? '<span class="pill pill-gray">No activity</span>' :
                         a.dormantDays > 60 ? `<span class="pill pill-amber">💤 ${a.dormantDays}d idle</span>` :
