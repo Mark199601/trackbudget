@@ -1367,10 +1367,16 @@ function defaultDB() {
     archivedLoans: [],
     budgets: [],
     targets: [],
+    // DEBUG-SCAN NOTE: collection is recurringTxs (not "recurring"). Naive scans flagging
+    // "recurring" as missing are false positives — canonical name is recurringTxs.
     recurringTxs: [],
     paydaySchedules: [],
     installments: [],
     contracts: [],
+    // DEBUG-SCAN NOTE: wishlist + reconciliations init at empty []
+    // ensureDBIntegrity also lazy-inits these, but defaultDB now seeds them for new users
+    wishlist: [],
+    reconciliations: [],
     activeContractId: null,
     aiCatMemory: [],
     settings: { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null },
@@ -1658,17 +1664,6 @@ function saveDB() {
   // Local save only — no Drive sync trigger
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch(e) { showToast('⚠ Storage full — export backup!', UX_TOAST_DUR_LONG); }
-}
-function migrateInvestmentTxTypes() {
-  // Migrate any isInvestmentFund txs that still have type:'expense' → type:'transfer'
-  let changed = false;
-  db.transactions.forEach(t => {
-    if (t.isInvestmentFund && t.type !== 'transfer') {
-      t.type = 'transfer';
-      changed = true;
-    }
-  });
-  return changed;
 }
 
 function saveDBWithSync() {
@@ -1963,13 +1958,6 @@ function buildFxSnapshot(date) {
   return snap;
 }
 
-function getCategoryById(id) {
-  for (const cat of [...db.categories.expense, ...db.categories.income]) {
-    if (cat.id === id) return cat;
-    if (cat.subcats) for (const sc of cat.subcats) if (sc.id===id) return sc;
-  }
-  return null;
-}
 
 function getCategoryDisplay(catId) {
   if (!catId) return {icon:'📌',name:'Uncategorized'};
@@ -2019,10 +2007,6 @@ function getAccountDisplay(acctId) {
 function txTypeColor(type) {
   const map = {expense:'red',income:'green',shared:'accent',transfer:'purple',lend:'amber',borrow:'teal'};
   return map[type] || 'gray';
-}
-function txTypeIcon(tx) {
-  const cat = txCategoryDisplay(tx);
-  return cat.icon || (tx.type==='income'?'💰':tx.type==='transfer'?'↔️':tx.type==='lend'?'🤲':tx.type==='borrow'?'🤏':'💸');
 }
 function txAmountDisplay(tx) {
   if (tx.isLoanSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
@@ -2596,7 +2580,11 @@ function obNext(currentStep) {
 function finishOnboard() {
   try {
     db.onboarded = true;
-    // PLS #103: Defensive guards — never assume db sub-collections exist.
+    // ── PERSONAL LOGIC SET #103 ── Defensive null guards before mutation
+    // Critical functions like finishOnboard, renderSettings, and obNext must never assume
+    // db sub-collections exist. Pag may corrupt backup o partial restore, missing collections
+    // would silently throw. Always init missing collections to safe defaults before any
+    // .push(), .find(), .includes(), or property access.
     if (!db.profile) db.profile = { nickname:'', nationality:'', country:'' };
     if (!db.trackedCurrencies) db.trackedCurrencies = [];
     if (!db.fxRates) db.fxRates = {};
@@ -3287,11 +3275,6 @@ const APP_CHANGELOG = [
   ]},
 ];
 
-function exitBulkMode() {
-  _txBulkMode = false;
-  _txBulkSet.clear();
-  renderTransactions();
-}
 function txRowPressStart(ev, txId) {
   // Don't fire on right-click
   if (ev.type === 'mousedown' && ev.button !== 0) return;
@@ -4033,9 +4016,6 @@ function wireQuickAddLongPress() {
   btn.addEventListener('mouseleave', cancel);
 }
 
-function syncAddCurrencyDelayed() {
-  setTimeout(syncAddCurrency, 50);
-}
 
 function renderAddSheet() {
   const s = _addState;
@@ -4323,14 +4303,6 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
   </div>`;
 }
 
-function toggleTypeDd() {
-  const menu = document.getElementById('type-dd-menu');
-  const arrow = document.getElementById('type-dd-arrow');
-  if (!menu) return;
-  const isOpen = menu.style.display !== 'none';
-  menu.style.display = isOpen ? 'none' : 'block';
-  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
-}
 
 function setAddType(type) {
   const menu = document.getElementById('type-dd-menu');
@@ -4440,17 +4412,6 @@ function toggleCatGroup(catId) {
   });
 }
 
-function pickCat(catId) {
-  _addState.catId = catId;
-  _addState.subCatId = null;
-  _addState.step = 2;
-  closeCatPickerSheet();
-  if (_addState.type === 'shared') {
-    renderAddSheet();
-  } else {
-    _updateCatDisplay();
-  }
-}
 function pickSubCat(catId, subCatId) {
   _addState.catId = catId;
   _addState.subCatId = subCatId;
@@ -4607,25 +4568,7 @@ function afterRenderShared() {
   renderSharedPersons();
 }
 
-function updateSharedSplit() { calcSharedResult(); }
-function updateSharedOwed() { calcSharedResult(); }
 
-// ── C12: Smart account suggestion — returns most recently used account for tx type ──
-function getSmartDefaultAcct(txType) {
-  const relevantTypes = (txType === 'lend' || txType === 'borrow') ? ['lend','borrow']
-    : txType === 'transfer' ? ['transfer']
-    : ['expense','income','shared'];
-  // Find most recent tx of this type group
-  const recent = db.transactions
-    .filter(t => !t.archived && relevantTypes.includes(t.type) && (t.accountId || t.fromAccountId))
-    .sort((a,b) => b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''))
-    .slice(0, 1)[0];
-  const acctId = recent?.accountId || recent?.fromAccountId;
-  // Verify account still exists and is not archived
-  if (acctId && db.accounts.find(a => a.id === acctId && !a.archived)) return acctId;
-  // Fallback: first active account
-  return db.accounts.find(a => !a.archived)?.id || null;
-}
 
 function renderAmountForm() {
   const s = _addState;
@@ -5758,15 +5701,6 @@ function renderTransactions() {
   document.getElementById('page-content').innerHTML = tabsHTML + content;
 }
 
-function setTxTab(tab) {
-  if (tab === 'archive') {
-    openTxArchiveSheet();
-    return;
-  }
-  _txTab = tab;
-  saveDB();
-  renderTransactions();
-}
 
 function setTxQuickFilter(key) {
   _txQuickFilter = _txQuickFilter === key ? null : key; // toggle
@@ -6127,10 +6061,6 @@ function clearTxSearch() {
   renderTransactions();
 }
 
-function toggleTxDateRange() {
-  window._txDateRangeOpen = !window._txDateRangeOpen;
-  renderTransactions();
-}
 function setTxDateRange(which, val) {
   if (which === 'from') window._txDateFrom = val || null;
   else if (which === 'to') window._txDateTo = val || null;
@@ -6143,25 +6073,7 @@ function clearTxDateRange() {
   renderTransactions();
 }
 
-function toggleTxFilterDd() {
-  const menu = document.getElementById('txfilter-menu');
-  const arrow = document.getElementById('txfilter-arrow');
-  if (!menu) return;
-  const isOpen = menu.style.display !== 'none';
-  menu.style.display = isOpen ? 'none' : 'block';
-  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
-}
 
-function setTxFilterDd(val, icon, label) {
-  _txFilter = val;
-  document.getElementById('txfilter-menu').style.display = 'none';
-  document.getElementById('txfilter-arrow').style.transform = '';
-  const iconEl = document.getElementById('txfilter-icon');
-  const labelEl = document.getElementById('txfilter-label');
-  if (iconEl) iconEl.textContent = icon;
-  if (labelEl) labelEl.textContent = label;
-  renderTransactions();
-}
 
 // Click outside to close filter dropdown
 document.addEventListener('click', function(e) {
@@ -6175,7 +6087,6 @@ document.addEventListener('click', function(e) {
 });
 
 function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactions(); }
-function setTxMonth(m) { _txMonth = m; _txQuickFilter = null; renderTransactions(); }
 function setTxAcctFilter(a) { _txAcctFilter = a; renderTransactions(); }
 function setTxBudgetFilter(v) { _txBudgetFilter = v; renderTransactions(); }
 function setTxSort(s) { _txSort = s; renderTransactions(); }
@@ -6932,12 +6843,6 @@ function onEditSharedRecalc(txId) {
     (parts.length ? ' &nbsp;·&nbsp; ' + parts.join(' &nbsp;·&nbsp; ') : '');
 }
 
-function onEditDateChange(currency, newDate, targetId) {
-  if (currency === 'PHP') return;
-  const newRate = getSnapshotRate(currency, newDate);
-  const el = document.getElementById(targetId);
-  if (el) el.innerHTML = `<span class="fx-snapshot-badge">📸 Recalculated: 1 ${currency} = ${sym(db.displayCurrency||'PHP')}${newRate} on ${newDate}</span>`;
-}
 
 function saveEditTx(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
@@ -7714,51 +7619,6 @@ function toggleArchivedExpand(txId) {
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-// openArchivedTxDetail removed — handled inline in archive sheet
-
-
-function renderTxArchive() {
-  const txs = db.archivedTransactions.slice().sort((a,b)=>b.date.localeCompare(a.date));
-  if (txs.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">🗃️</div><div class="empty-text">No archived transactions</div></div>`;
-
-  // Build a set of IDs that are cascaded children — they'll be grouped under their parent
-  const childIds = new Set(txs.filter(t => t.cascadedFrom).map(t => t.id));
-
-  // Render parents first (with child count badge), then orphaned children
-  let html = `<div style="padding:12px 20px;font-size:12px;color:var(--text3)">Transactions archived 30+ days ago are auto-purged. Restoring or deleting a parent also affects its linked children.</div>
-    <div style="background:var(--bg2);border-top:1px solid var(--border)">`;
-
-  for (const tx of txs) {
-    if (childIds.has(tx.id)) continue; // skip children — rendered under parent
-
-    // Check how many children this tx has in the archive
-    const linkedChildren = txs.filter(t => t.cascadedFrom === tx.id);
-
-    const rowHTML = renderTxRow(tx, true);
-    // Inject a child-count badge into the row if there are cascaded children
-    if (linkedChildren.length > 0) {
-      const badgeHTML = `<div style="padding:4px 20px 6px;background:var(--bg3);border-bottom:1px solid var(--border)">
-        ${linkedChildren.map(c => {
-          const cat = getCategoryDisplay(c.categoryId);
-          const label = c.isAutoForex
-            ? `Forex ${c.type === 'income' ? 'Gain' : 'Loss'}`
-            : c.isAutoReimb
-            ? `Reimb. from ${c.reimbPerson || '?'}`
-            : cat.name;
-          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);background:var(--bg4);padding:2px 8px;border-radius:var(--r-full);margin-right:4px">
-            ↳ ${label}: ${fmt(c.amount, c.currency)}
-          </span>`;
-        }).join('')}
-      </div>`;
-      html += rowHTML + badgeHTML;
-    } else {
-      html += rowHTML;
-    }
-  }
-
-  html += '</div>';
-  return html;
-}
 
 // ════════════════════════════════════════════════════════════
 // REIMBURSEMENTS TAB
@@ -7999,10 +7859,6 @@ function settleReim(person) {
   openReimbDialog(person);
 }
 
-function partialSettleReim(person) {
-  // Same unified dialog as settleReim — user can choose to pay any amount per tx
-  openReimbDialog(person);
-}
 
 // Helper: get all unsettled reimbursement entries for a person (each = parent tx + remaining owed)
 function getReimbEntriesForPerson(person) {
@@ -8176,33 +8032,6 @@ function updateReimbBatchPreview(person) {
   }
 }
 
-function buildReimbAcctOptions(preferredCurrency) {
-  const accts = db.accounts.filter(a => !a.archived);
-  const pref = accts.filter(a => a.currency === preferredCurrency);
-  const rest = accts.filter(a => a.currency !== preferredCurrency);
-  const opts = [...pref, ...rest];
-  return opts.map(a => `<option value="${a.id}">${a.name} (${a.currency})</option>`).join('');
-}
-
-function updateReimbTotal() {
-  const rows = document.querySelectorAll('.reimb-tx-row');
-  const totals = {}; // per currency
-  let checkedCount = 0;
-  rows.forEach(row => {
-    const cb = row.querySelector('.reimb-tx-check');
-    if (!cb?.checked) return;
-    checkedCount++;
-    const amt = parseFloat(row.querySelector('.reimb-tx-amt')?.value) || 0;
-    const curr = row.dataset.currency;
-    totals[curr] = (totals[curr] || 0) + amt;
-  });
-  const el = document.getElementById('reimb-total-display');
-  if (!el) return;
-  if (checkedCount === 0) { el.textContent = 'No transactions selected'; return; }
-  const parts = Object.entries(totals).map(([c, v]) => fmt(v, c));
-  el.innerHTML = `Total: <strong style="color:var(--green);font-family:var(--mono)">${parts.join(' + ')}</strong>`;
-}
-
 // 📖 USER STORY: Pag pinindot mo ang "Settle" sa reimbursement ng isang tao, lahat ng pending
 // shared txs niya ay naise-settle in FIFO order — oldest entry muna. Pag may sobra sa bayad,
 // auto na siyang nilo-log as Reimbursement Gain. Pag kulang naman, partial lang yung last
@@ -8351,8 +8180,6 @@ function confirmReimbSettlement(person) {
   showToast(summary);
 }
 
-// Legacy function stubs for any lingering references
-function submitPartialSettle() { /* replaced */ }
 
 var _acctTab = 'active';
 
@@ -10043,51 +9870,6 @@ function _recordLoanPayment(loanId, direction) {
   }
 }
 
-function settleLoan(loanId, direction, full) {
-  try {
-    const loans = direction==='lent' ? db.loans.lent : db.loans.borrowed;
-    const loan = loans.find(l=>l.id===loanId);
-    if (!loan) { showToast('Loan not found'); return; }
-    const remaining = loan.remaining || loan.amount;
-    const payAmt = full ? remaining : (parseFloat(document.getElementById('loan-pay-amt')?.value) || 0);
-    const payCurr = document.getElementById('loan-pay-curr')?.value || loan.currency;
-    const payAcctId = document.getElementById('loan-pay-acct')?.value;
-    const payNotes = document.getElementById('loan-pay-notes')?.value?.trim() || '';
-    if (!payAmt || payAmt <= 0) { showToast('Enter payment amount'); return; }
-    if (!payAcctId) { showToast('Select an account'); return; }
-
-    const payAmtInLoanCurr = convert(payAmt, payCurr, loan.currency);
-    const payDate = parseInputDate(document.getElementById('loan-pay-date')?.value) || today();
-    const payTime = document.getElementById('loan-pay-time')?.value || nowTime();
-    loan.remaining = Math.max(0, remaining - payAmtInLoanCurr);
-    if (full || loan.remaining <= 0.001) { loan.settled=true; loan.settledDate=payDate; loan.remaining=0; }
-
-    // Create child settlement transaction linked to this loan
-    db.transactions.push({
-      id: genId(),
-      type: direction==='lent' ? 'income' : 'expense',
-      amount: payAmt,
-      currency: payCurr,
-      categoryId: direction==='lent' ? 'sc-investreturns' : 'sc-misc',
-      accountId: payAcctId,
-      date: payDate,
-      time: payTime,
-      notes: payNotes || `${full?'Full':'Partial'} repayment — ${loan.personName}`,
-      fxSnapshot: buildFxSnapshot(payDate),
-      parentId: loanId,
-      isSettlement: true,
-      isLoanPayment: true,
-      loanDirection: direction,
-      createdAt: new Date().toISOString(),
-    });
-
-    saveDBWithSync();
-    closeSheet('gen');
-    renderLoans();
-    checkAlerts();
-    showToast(full?'Loan fully settled!':'Payment recorded!');
-  } catch(e) { showToast('Error: '+e.message); }
-}
 
 function editLoanFull(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
@@ -10593,53 +10375,7 @@ function restoreLoan(loanId) {
   }
 }
 
-function renderLoanArchive() {
-  if (db.archivedLoans.length === 0) return `<div class="empty-state page-pad"><div class="empty-icon">🗃️</div><div class="empty-text">No archived loans</div></div>`;
 
-  let html = `<div class="page-pad">`;
-  for (const l of db.archivedLoans) {
-    // Get archived payments + any forex children associated with this loan's parent tx
-    const archivedTx = db.archivedTransactions || [];
-    const parentTxIds = archivedTx.filter(t => t.isLoanTx && t.loanId === l.id).map(t => t.id);
-    const payments = archivedTx.filter(t => t.parentId === l.id && t.isLoanPayment);
-    const forexChildren = archivedTx.filter(t => t.isAutoForex && parentTxIds.includes(t.parentId));
-    const linkedCount = payments.length + forexChildren.length;
-    html += `<div class="loan-card" style="opacity:0.8;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-size:14px;font-weight:600">${l.personName}</div>
-          <div style="font-size:11px;color:var(--text3)">${l.direction==='lent'?'Lent Out':'Borrowed'} · ${fmtDFull(l.date)}</div>
-          ${linkedCount>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${payments.length} payment${payments.length===1?'':'s'}${forexChildren.length>0?' · '+forexChildren.length+' forex':''}</div>`:''}
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono)">${fmt(l.amount,l.currency)}</div>
-          <span class="pill pill-gray">Archived</span>
-        </div>
-      </div>
-      ${payments.length>0?`
-        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-          ${payments.map(p=>`<div style="font-size:11px;color:var(--text3);display:flex;justify-content:space-between;padding:2px 0">
-            <span>${fmtD(p.date)} · ${p.notes||'Payment'}</span>
-            <span style="font-family:var(--mono);color:var(--green)">${fmt(p.amount,p.currency)}</span>
-          </div>`).join('')}
-        </div>`:''}
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" onclick="restoreLoan('${l.id}')">↩ Restore</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteLoanPerm('${l.id}')">Delete All</button>
-      </div>
-    </div>`;
-  }
-  html += `</div>`;
-  return html;
-}
-
-function deleteLoanPerm(loanId) {
-  openDlg('Delete Loan Permanently?',
-    `<p style="font-size:14px;color:var(--text2);line-height:1.6">This will delete the loan record <strong>and all linked payment transactions</strong>. This cannot be undone.</p>`,
-    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="confirmDeleteLoan('${loanId}')">Delete All</button>`
-  );
-}
 
 // 📖 USER STORY: Pag na-archive o na-permanently delete ang isang loan, lahat ng linked transactions
 // niya (yung payment records at forex children) ay kasabay na natatanggal o naa-archive — hindi ka
@@ -11018,8 +10754,13 @@ function renderInstallments() {
   const html = `<div class="page-pad">
     ${active.map(installCard).join('')}
     ${completed.length > 0 ? `
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin:16px 0 10px">Completed</div>
-      ${completed.map(installCard).join('')}` : ''}
+      <div onclick="document.getElementById('inst-completed-body').style.display=document.getElementById('inst-completed-body').style.display==='none'?'block':'none';this.querySelector('.inst-completed-chev').style.transform=document.getElementById('inst-completed-body').style.display==='none'?'rotate(0deg)':'rotate(90deg)'" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:16px 0 6px;user-select:none">
+        <span class="inst-completed-chev" style="font-size:10px;color:var(--text3);transition:transform 0.2s;display:inline-block">▶</span>
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Completed (${completed.length})</span>
+      </div>
+      <div id="inst-completed-body" style="display:none">
+        ${completed.map(installCard).join('')}
+      </div>` : ''}
     <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="openAddInstallment()">+ Add Installment</button>
     ${archived.length > 0 ? `
       <div style="margin-top:24px">
@@ -11068,43 +10809,7 @@ function saveAddTarget() {
   saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target added!');
 }
 
-function openEditTarget(id) {
-  const t = db.targets.find(x=>x.id===id);
-  if (!t) return;
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===t.currency?'selected':''}>${c}</option>`).join('');
-  openSheet('gen','Edit Target',`
-    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="et-name" value="${escapeAttr(t.name)}"></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Goal</label><input class="form-input numpad-input" type="number" id="et-goal" value="${t.goal}" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="et-currency">${currOpts}</select></div>
-    </div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Current Saved</label><input class="form-input numpad-input" type="number" id="et-current" value="${t.current||0}" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Deadline</label><input class="form-input" type="date" id="et-deadline" value="${t.deadline||''}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="et-notes" value="${escapeAttr(t.notes||'')}"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-full" onclick="saveEditTarget('${id}')">Save</button>
-      <button class="btn btn-danger" onclick="deleteTarget('${id}')">Delete</button>
-    </div>
-  `);
-}
 
-function saveEditTarget(id) {
-  const t = db.targets.find(x=>x.id===id);
-  if (!t) return;
-  t.name = document.getElementById('et-name')?.value?.trim()||t.name;
-  t.goal = parseFloat(document.getElementById('et-goal')?.value)||t.goal;
-  t.currency = document.getElementById('et-currency')?.value||t.currency;
-  t.current = parseFloat(document.getElementById('et-current')?.value)||0;
-  t.deadline = parseInputDate(document.getElementById('et-deadline')?.value)||null;
-  t.notes = document.getElementById('et-notes')?.value?.trim()||'';
-  saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target updated!');
-}
-function deleteTarget(id) {
-  db.targets = db.targets.filter(t=>t.id!==id);
-  saveDBWithSync(); closeSheet('gen'); renderTargets(); showToast('Target deleted');
-}
 
 // ════════════════════════════════════════════════════════════
 // EMOJI PICKER
@@ -12260,7 +11965,7 @@ function buildForecastBand(metricMk, dispCurr) {
 
 // ─── 5. Subscription Leak Panel ───
 function buildSubscriptionPanel(dispCurr) {
-  const recurring = (db.recurring || []).filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
+  const recurring = (db.recurringTxs || []).filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
   if (recurring.length === 0) return '';
   // Total monthly equivalent
   let totalMonthly = 0;
@@ -12363,7 +12068,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
 // ─── 7. Fixed vs Discretionary Ratio ───
 function buildFixedVsDiscretionary(metricMk, dispCurr) {
   // "Fixed" = recurring expenses + utilities/rent/insurance categories (heuristic)
-  const recurring = (db.recurring || []).filter(r => r.active);
+  const recurring = (db.recurringTxs || []).filter(r => r.active);
   const recurringNames = new Set(recurring.map(r => (r.name || '').toLowerCase()));
   // Fixed category keywords (heuristic — adjustable)
   const FIXED_KW = ['rent', 'utility', 'utilities', 'electric', 'water', 'internet', 'insurance', 'mortgage', 'tuition', 'subscription', 'membership', 'gym'];
@@ -13139,14 +12844,6 @@ function toggleSpendingDrill(id) {
   }
 }
 
-function toggleDashInsights() {
-  const body = document.getElementById('dash-insights-body');
-  const arrow = document.getElementById('dash-insights-arrow');
-  if (!body) return;
-  const isOpen = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : 'block';
-  if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
-}
 
 function dismissMigrationBanner() {
   localStorage.setItem('tb_migration_banner_dismissed', '1');
@@ -15508,7 +15205,8 @@ function saveProfile() {
     db.profile.nationality = nat;
   }
   saveDBWithSync();
-  document.getElementById('sb-name').textContent = db.profile.nickname;
+  const sbName = document.getElementById('sb-name');
+  if (sbName) sbName.textContent = db.profile?.nickname || '';
   closeSheet('gen');
   renderSettings();
   if (oldNat === db.profile.nationality) showToast('Profile saved!');
@@ -15856,14 +15554,6 @@ function confirmDeleteFxHistory(currency, idx) {
   showToast('Rate entry deleted');
 }
 
-// Legacy stubs
-function updateFxRate(code, val) {
-  const rate = parseFloat(val);
-  if (rate > 0) {
-    db.fxRates[code] = rate;
-    recordFxSnapshot(code, rate, today(), 'manual');
-  }
-}
 
 function renderBudgetsTab() {
   return `<div class="page-pad">
@@ -17860,10 +17550,6 @@ function openDriveSheet() {
   `);
 }
 
-function openDriveLoad() {
-  if (!db.settings.googleDriveConnected) { openDriveSheet(); return; }
-  loadFromDrive();
-}
 
 function disconnectDrive() {
   openDlg('Disconnect Drive?',
@@ -18972,20 +18658,6 @@ if (typeof window !== 'undefined') {
   window.addEventListener('load', () => setTimeout(initGoogleDrive, 1000));
 }
 
-function autoFix(type, id) {
-  if (type === 'fixFxSnapshot' || type === 'no-fx-snap') {
-    const tx = db.transactions.find(t=>t.id===id);
-    if (tx) { tx.fxSnapshot = buildFxSnapshot(tx.date); }
-  } else if (type === 'fixNegLoan' || type === 'neg-loan') {
-    const loan = [...db.loans.lent, ...db.loans.borrowed].find(l=>l.id===id);
-    if (loan) { loan.remaining = 0; loan.settled = true; }
-  } else if (type === 'fixTxDate' || type === 'no-date') {
-    const tx = db.transactions.find(t=>t.id===id);
-    if (tx) { tx.date = today(); }
-  }
-  saveDB();
-  showToast('Fixed!');
-}
 
 // ════════════════════════════════════════════════════════════
 // MOBILE LAYOUT
@@ -19182,9 +18854,10 @@ function initApp() {
     document.getElementById('onboard').style.display = 'flex';
     document.getElementById('app-shell').style.display = 'none';
     initObProgress();
-    obSelectedNat = db.profile.nationality || db.profile.country || '';
+    obSelectedNat = db.profile?.nationality || db.profile?.country || '';
     obTracked = [...(db.trackedCurrencies || [])];
-    document.getElementById('ob-nickname').value = db.profile.nickname || '';
+    const obNick = document.getElementById('ob-nickname');
+    if (obNick) obNick.value = db.profile?.nickname || '';
   } else {
     document.getElementById('onboard').style.display = 'none';
     document.getElementById('app-shell').style.display = 'flex';
@@ -19313,16 +18986,6 @@ window.addEventListener('online', _checkOnline);
 window.addEventListener('offline', _checkOnline);
 document.addEventListener('DOMContentLoaded', _checkOnline);
 
-// Manual sync trigger — for Settings → Backup
-function manualSyncNow() {
-  if (!navigator.onLine) { showToast('⚠️ No internet — cannot sync now'); return; }
-  if (!db?.settings?.googleDriveConnected) { showToast('⚠️ Connect Google Drive first'); return; }
-  if (typeof saveToDrive === 'function') {
-    saveToDrive();
-  } else {
-    showToast('⚠️ Drive sync function not available');
-  }
-}
 // ═══════════════════════════════════════════════════════════
 // OFFLINE AI ENGINE
 // ═══════════════════════════════════════════════════════════
@@ -19406,11 +19069,6 @@ function aiName() {
   return nick || '';
 }
 
-// Time-of-month context: returns 'early' (1-10), 'mid' (11-20), 'late' (21+)
-function aiTimeOfMonth() {
-  const d = new Date().getDate();
-  return d <= 10 ? 'early' : d <= 20 ? 'mid' : 'late';
-}
 
 // Severity intensifier — based on ratio (how much over/under threshold)
 // Returns adjective string. ratio > 1 = over, < 1 = under.
@@ -19434,43 +19092,6 @@ function aiAmt(n, curr) {
 // Pluralize helper
 function aiPlural(n, singular, plural) {
   return n === 1 ? singular : (plural || singular + 's');
-}
-
-// Build a "this/last month" phrase based on month index
-function aiMonthRef(monthsAgo) {
-  if (monthsAgo === 0) return 'this month';
-  if (monthsAgo === 1) return 'last month';
-  return `${monthsAgo} ${aiPlural(monthsAgo,'month')} ago`;
-}
-
-// Wrap a personalized opener — sometimes uses nickname, sometimes generic.
-function aiOpener(seedId, withName, withoutName) {
-  const name = aiName();
-  if (!name) return aiPick(withoutName, seedId);
-  // 60% chance of personalized opener (deterministic via hash)
-  const seed = aiHash((seedId || 'x') + 'op' + today()) % 10;
-  return seed < 6 ? aiPick(withName, seedId).replace('{name}', name) : aiPick(withoutName, seedId);
-}
-
-// Generate a forward-looking projection phrase
-// daysIn = days elapsed in month, totalDays = days in current month, currentAmt = spent so far
-function aiProjection(daysIn, totalDays, currentAmt) {
-  if (daysIn < 5 || daysIn >= totalDays - 2) return '';
-  const projected = (currentAmt / daysIn) * totalDays;
-  return ` At this pace, you'll reach ${aiAmt(projected)} by month-end.`;
-}
-
-// Pick a recovery suggestion when relevant (returns '' or sentence)
-function aiRecovery(category, overshoot) {
-  if (!overshoot || overshoot < 100) return '';
-  const pool = [
-    ` Consider trimming ${aiAmt(overshoot)} from non-essentials this week.`,
-    ` Cutting back on ${category||'discretionary spending'} could rebalance things.`,
-    ` A ${aiAmt(overshoot)} pause on extras would help.`,
-    ` Worth reviewing where the extra went.`,
-    '',
-  ];
-  return aiPick(pool, 'rec-' + (category || 'gen'));
 }
 
 function aiBudgetIntelligence() {
@@ -21233,69 +20854,6 @@ function renderAnalyticsDayOfWeek() {
 // ───────────────────────────────────────────────────────────
 // TAB: Goal Progress (Targets/Contracts) — ETA + monthly contribution
 // ───────────────────────────────────────────────────────────
-function renderAnalyticsGoals() {
-  const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
-  const goals = (db.contracts || []).filter(g => !g.archived && !g.completed);
-  if (goals.length === 0) {
-    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No active savings goals</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Set savings contracts in Planning tab</div></div></div>`;
-  }
-  const enriched = goals.map(g => {
-    const saved = g.currentAmount || g.savedAmount || 0;
-    const target = g.targetAmount || g.amount || 0;
-    const pct = target > 0 ? (saved / target) * 100 : 0;
-    const remaining = target - saved;
-    // ETA calc — based on contributions per month (lookback 6 months)
-    const now = new Date();
-    const lookback = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-    const lookbackStr = lookback.toISOString().slice(0,10);
-    const contribTxs = db.transactions.filter(t => !t.archived && t.contractId === g.id && t.date >= lookbackStr);
-    const totalContrib = contribTxs.reduce((s,t)=>s+toPhp(t.amount||0, t.currency||dc), 0);
-    const monthsSpan = Math.max(1, contribTxs.length > 0 ? 6 : 1);
-    const avgMonthly = totalContrib / monthsSpan;
-    const etaMonths = avgMonthly > 0 ? Math.ceil(remaining / avgMonthly) : null;
-    const etaDate = etaMonths != null ? new Date(now.getFullYear(), now.getMonth() + etaMonths, 1) : null;
-    return { ...g, saved, target, pct, remaining, avgMonthly, etaMonths, etaDate };
-  }).sort((a,b)=>b.pct-a.pct);
-
-  let html = `<div class="page-pad">
-    <div class="metric-grid fr2-always" style="margin-bottom:14px">
-      <div class="metric-card">
-        <div class="metric-label">Active Goals</div>
-        <div class="metric-value mfit">${goals.length}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Total Saved</div>
-        <div class="metric-value mfit" style="color:var(--green)">${fmt(enriched.reduce((s,g)=>s+g.saved,0), dc)}</div>
-      </div>
-    </div>
-
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Goals</div>`;
-
-  enriched.forEach(g => {
-    const barColor = g.pct >= 100 ? 'var(--green)' : g.pct >= 50 ? 'var(--accent)' : 'var(--amber)';
-    const barWidth = Math.min(g.pct, 100);
-    const etaStr = g.etaDate ? g.etaDate.toLocaleDateString('en-US',{month:'short',year:'numeric'}) : 'no data';
-    html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div style="font-size:14px;font-weight:600">${escapeAttr(g.name || g.label || 'Goal')}</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">${g.pct.toFixed(0)}%</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);font-family:var(--mono);margin-bottom:6px">
-        <span>${fmt(g.saved, dc)} / ${fmt(g.target, dc)}</span>
-        <span>${fmt(g.remaining, dc)} to go</span>
-      </div>
-      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:6px">
-        <div style="width:${barWidth}%;height:100%;background:${barColor};border-radius:4px"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text4)">
-        <span>Avg ${fmt(g.avgMonthly, dc)}/mo</span>
-        <span>ETA: ${etaStr}${g.etaMonths!=null?` · ${g.etaMonths} ${aiPlural(g.etaMonths,'month')}`:''}</span>
-      </div>
-    </div>`;
-  });
-  html += `</div>`;
-  return html;
-}
 
 // ───────────────────────────────────────────────────────────
 // TAB: Year over Year — current YTD vs same period last year
@@ -21655,20 +21213,6 @@ function saveNewInstallment() {
   showToast('Installment added ✓');
 }
 
-function markInstallmentPaid(instId) {
-  const inst = db.installments.find(i => i.id === instId);
-  if (!inst) return;
-  inst.paidMonths = (inst.paidMonths || 0) + 1;
-  const totalPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
-  if (totalPaid >= inst.totalMonths) {
-    inst.completed = true;
-    showToast('🎉 Installment fully paid off!');
-  } else {
-    showToast('Month marked as paid ✓');
-  }
-  saveDBWithSync();
-  renderInstallments();
-}
 
 function openInstallmentDetail(instId) {
   const inst = db.installments.find(i => i.id === instId);
