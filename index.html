@@ -1973,7 +1973,7 @@ function getCategoryById(id) {
 
 function getCategoryDisplay(catId) {
   if (!catId) return {icon:'📌',name:'Uncategorized'};
-  // Check if it's a subcat
+  // Check if it's a subcat in expense or income
   for (const cat of [...db.categories.expense, ...db.categories.income]) {
     if (cat.id === catId) return cat;
     if (cat.subcats) {
@@ -1981,7 +1981,16 @@ function getCategoryDisplay(catId) {
       if (sc) return {icon:sc.icon, name:`${cat.icon} ${sc.name}`};
     }
   }
-  return {icon:'📌',name:'Category'};
+  // Also check archived categories so orphaned txs still show their original name
+  for (const cat of [...(db.categories.expense||[]), ...(db.categories.income||[])]) {
+    if (cat.archived && cat.id === catId) return {icon: cat.icon || '📌', name: `${cat.name} (archived)`};
+    if (cat.subcats) {
+      const sc = cat.subcats.find(s=>s.id===catId);
+      if (sc && sc.archived) return {icon: sc.icon || '📌', name: `${cat.icon||''} ${sc.name} (archived)`};
+    }
+  }
+  // Truly orphaned (catId exists but no category found anywhere)
+  return {icon:'❓',name:'Deleted Category'};
 }
 
 // 📖 USER STORY: Auto-generated children (gain/loss) ay may dedicated display labels imbes
@@ -11178,7 +11187,6 @@ function renderAnalytics() {
     wealth:     {label:'Wealth',         icon:'💎', section:'wealth'},
     investments:{label:'Investments',    icon:'📊', section:'wealth'},
     accthealth: {label:'Account Health', icon:'🏦', section:'wealth'},
-    goals:      {label:'Goals',          icon:'🎯', section:'wealth'},
     forex:      {label:'Forex Rates',    icon:'💱', section:'other'},
     external:   {label:'External',       icon:'🔄', section:'other'},
     aisummary:  {label:'AI Summary',     icon:'🤖', section:'other'},
@@ -11201,7 +11209,6 @@ function renderAnalytics() {
   else if (_analyticsTab==='trends') content = renderAnalyticsTrends();
   else if (_analyticsTab==='dayofweek') content = renderAnalyticsDayOfWeek();
   else if (_analyticsTab==='wealth') content = renderAnalyticsWealth();
-  else if (_analyticsTab==='goals') content = renderAnalyticsGoals();
   else if (_analyticsTab==='people') content = renderAnalyticsPeople();
   else if (_analyticsTab==='subs') content = renderAnalyticsSubs();
   else if (_analyticsTab==='accthealth') content = renderAnalyticsAccountHealth();
@@ -11252,7 +11259,7 @@ function openAnalyticsPicker() {
     { id:'money',    title:'💰 Money',           keys:['cashflow','crosscurr','budget'] },
     { id:'spending', title:'🛒 Spending',        keys:['spending','trends','dayofweek','yoy'] },
     { id:'people',   title:'👥 People & Recurring', keys:['people','subs'] },
-    { id:'wealth',   title:'💎 Wealth',          keys:['wealth','investments','accthealth','goals'] },
+    { id:'wealth',   title:'💎 Wealth',          keys:['wealth','investments','accthealth'] },
     { id:'other',    title:'🔧 Other',           keys:['forex','external','aisummary'] },
   ];
   let html = `<div style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">`;
@@ -13421,7 +13428,8 @@ function hideHeatmapTooltip() {
 
 function showHeatmapDay(dateKey) {
   hideHeatmapTooltip();
-  // ── PERSONAL LOGIC SET #53 ── heatmap day tooltip aligned with getMonthTotals exclusions
+  // ── PERSONAL LOGIC SET #53 ── heatmap day tooltip aligned with heatmap aggregator
+  // Heatmap tracks SPENDING only (expense + shared). Day modal must mirror that.
   const dayTxs = db.transactions.filter(t => {
     if (t.archived || t.date !== dateKey) return false;
     if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) return false;
@@ -13429,6 +13437,8 @@ function showHeatmapDay(dateKey) {
     if (t.isAutoForex || t.isAutoReimb) return false;
     if (t.isFeeReimbursable) return false; // PLS#46
     if (t.isInvestmentFund) return false;
+    // Spending only: expense + shared (mirrors heatmap aggregator at line 13233)
+    if (t.type !== 'expense' && t.type !== 'shared') return false;
     return true;
   })
     .sort((a,b) => (b.time||'').localeCompare(a.time||''));
@@ -20761,9 +20771,9 @@ function renderAnalyticsCrossCurrency() {
 
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Total Net Worth</div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Total Cash on Hand</div>
       <div style="font-size:26px;font-weight:700;font-family:var(--mono)">${fmt(total, dc)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">Across ${sortedCurr.length} ${aiPlural(sortedCurr.length,'currency','currencies')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">Across ${sortedCurr.length} ${aiPlural(sortedCurr.length,'currency','currencies')} · liquid holdings only</div>
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
@@ -20941,16 +20951,20 @@ function renderAnalyticsBudget() {
     const rollAmt = b.rollover ? (b.rolloverAmount || 0) : 0;
     const limit = (b.limit || 0) + rollAmt;
     const breakdown = [];
+    // Always compute total spent for this currency (same filter as Dashboard line 2904)
+    const allCurrTxs = db.transactions.filter(t =>
+      !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
+      t.date && t.date.startsWith(mk) &&
+      (t.type==='expense' || t.type==='shared') && t.currency === b.currency
+    );
+    const totalSpent = allCurrTxs.reduce((s,t)=>s+(t.type==='shared' ? (t.myShare || t.amount) : t.amount), 0);
+
     if (allocCount > 0) {
-      const txs = db.transactions.filter(t =>
-        !t.archived && !t.isSettlement && t.date && t.date.startsWith(mk) &&
-        (t.type==='expense' || t.type==='shared') && t.currency === b.currency
-      );
       Object.entries(allocs).forEach(([catId, allocLim]) => {
         const limAmt = parseFloat(allocLim) || 0;
         const cat = getCategoryDisplay(catId);
         let spentInCat = 0;
-        txs.forEach(t => {
+        allCurrTxs.forEach(t => {
           const txCat = db.categories.expense.find(c => c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
           if (txCat && txCat.id === catId) {
             spentInCat += t.type==='shared' ? (t.myShare || t.amount) : t.amount;
@@ -20964,7 +20978,8 @@ function renderAnalyticsBudget() {
         });
       });
     }
-    const spent = breakdown.reduce((s,br)=>s+br.spent, 0);
+    // Use total spent (matches Dashboard); breakdown is informational only
+    const spent = totalSpent;
     breakdown.sort((a,b) => b.spent - a.spent);
     const pct = limit > 0 ? (spent / limit) * 100 : 0;
     const remaining = limit - spent;
@@ -21309,7 +21324,8 @@ function renderAnalyticsYoY() {
     const yrEndMonth = `${yr}-${String(curMonth+1).padStart(2,'0')}-31`;
     db.transactions.filter(t => !t.archived && t.type === 'expense' && t.date >= yrStart && t.date <= yrEndMonth &&
       !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
-      const cat = t.categoryName || (db.categories.expense||[]).find(c=>c.id===t.categoryId)?.name || 'Uncategorized';
+      const disp = getCategoryDisplay(t.categoryId);
+      const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : disp.name.replace(/^[^ ]+ /, '');
       const amt = toPhp(t.amount||0, t.currency||dc);
       totals.byCat[cat] = (totals.byCat[cat] || 0) + amt;
     });
@@ -21394,6 +21410,23 @@ function renderAnalyticsYoY() {
 // ───────────────────────────────────────────────────────────
 // TAB: Account Health — per-account activity, dormancy
 // ───────────────────────────────────────────────────────────
+function showAccountHealthInfo() {
+  openDlg('🏦 Account Health',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      <p style="margin:0 0 10px"><b>What is this?</b><br>Tracks activity, flow, and dormancy of your accounts.</p>
+      <p style="margin:0 0 8px"><b>What to look for:</b></p>
+      <ul style="margin:0 0 10px;padding-left:18px;color:var(--text2)">
+        <li><b>↓ Inflow vs ↑ Outflow</b> — kung saan napupunta o pumapasok ang pera</li>
+        <li><b>Avg txn</b> — average per transaction (small = daily use, large = big purchases)</li>
+        <li><b>Tx count</b> — busy accounts vs barely-used</li>
+        <li><b>Dormant 60+ days</b> — candidate for archive</li>
+      </ul>
+      <p style="margin:0;font-size:12px;color:var(--text3)">💡 Use this to declutter, spot leaks, or prioritize reconciliation.</p>
+    </div>`,
+    `<button class="btn btn-primary btn-sm" onclick="closeDlg()">Got it</button>`
+  );
+}
+
 function renderAnalyticsAccountHealth() {
   const dc = db.settings?.displayCurrency || db.displayCurrency || 'PHP';
   const accts = db.accounts.filter(a => !a.archived);
@@ -21421,7 +21454,10 @@ function renderAnalyticsAccountHealth() {
       <b>💤 ${dormantList.length} dormant ${aiPlural(dormantList.length,'account')}</b> — no activity in 60+ days
     </div>`;
   }
-  html += `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Account</div>`;
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)">Per Account</div>
+    <span onclick="showAccountHealthInfo()" style="font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;background:var(--bg2);border-radius:var(--r-full);user-select:none">ℹ️ What's this?</span>
+  </div>`;
   enriched.forEach(a => {
     const dormantBadge = a.dormantDays === null ? '<span class="pill pill-gray">No activity</span>' :
                         a.dormantDays > 60 ? `<span class="pill pill-amber">💤 ${a.dormantDays}d idle</span>` :
@@ -21486,10 +21522,13 @@ function renderAnalyticsAISummary() {
   const expByCat = {};
   db.transactions.filter(t => !t.archived && t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd &&
     !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
-    const cat = t.categoryName || (db.categories.expense||[]).find(c=>c.id===t.categoryId)?.name || 'Uncategorized';
+    // Use getCategoryDisplay which properly resolves subcat IDs to readable names (PLS #5)
+    const disp = getCategoryDisplay(t.categoryId);
+    const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : disp.name.replace(/^[^ ]+ /, '');
     expByCat[cat] = (expByCat[cat] || 0) + toPhp(t.amount||0, t.currency||dc);
   });
-  const topCat = Object.entries(expByCat).sort((a,b)=>b[1]-a[1])[0];
+  // Skip "Uncategorized" from "Biggest spend" — show next ranked instead
+  const topCat = Object.entries(expByCat).filter(([n,_])=>n!=='Uncategorized').sort((a,b)=>b[1]-a[1])[0];
 
   // Predicted next month savings — based on 3-month rolling average
   let predNet = 0;
