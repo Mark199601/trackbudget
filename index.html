@@ -2408,24 +2408,38 @@ function npDel() {
 }
 
 function npEval() {
+  // PLS #110: rate fields keep full precision; amount fields round to cents.
   try {
     const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
     const val = Function('"use strict";return (' + safe + ')')();
     if (typeof val === 'number' && isFinite(val)) {
-      _npExpr = String(Math.round(val * 100) / 100);
+      const targetId = _npTarget?.id || '';
+      const isRateField = /rate/i.test(targetId);
+      _npExpr = isRateField ? String(val) : String(Math.round(val * 100) / 100);
       npRender();
     }
   } catch(e) {}
 }
 
 function npConfirm() {
-  // Evaluate first if expression
+  // ── PERSONAL LOGIC SET #110 ── Numpad respects field precision intent.
+  // Rate fields (IDs ending in -rate, -custom-rate, fx-rate, etc.) get FULL precision.
+  // Amount fields get 2-decimal rounding (currency standard).
+  // Detection: target ID contains "rate" → preserve precision. Otherwise round to cents.
   const safe = _npExpr.replace(/×/g,'*').replace(/÷/g,'/');
   let finalVal = _npExpr;
+  const targetId = _npTarget?.id || '';
+  const isRateField = /rate/i.test(targetId);
   try {
     const val = Function('"use strict";return (' + safe + ')')();
     if (typeof val === 'number' && isFinite(val) && val >= 0) {
-      finalVal = String(Math.round(val * 100) / 100);
+      if (isRateField) {
+        // Full precision: use Number's shortest round-trip representation
+        finalVal = String(val);
+      } else {
+        // Amount fields: 2-decimal cents
+        finalVal = String(Math.round(val * 100) / 100);
+      }
     }
   } catch(e) {}
 
@@ -3287,9 +3301,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '22.3';
+const APP_VERSION = '22.4';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '22.4', date: 'May 2026', changes: [
+    '🐛 Fixed numpad rounding bug — rate fields now keep FULL precision (PLS #110)',
+    '🔧 Numpad detects rate fields by ID — full precision for rates, 2-decimal for amounts',
+    '🔧 Example: 13.2713499 now stays as-is (was truncated to 13.27)',
+    '🔧 Calc expressions on rates: 100/7.5 → 13.333333333333334 (was 13.33)',
+    '✅ Amount fields still round to cents (currency standard)',
+  ]},
   { ver: '22.3', date: 'May 2026', changes: [
     '🔬 Full FX rate precision — no more 4-decimal rounding (PLS #108)',
     '🔧 New fmtRate() helper preserves up to 15+ digits without artifacts',
