@@ -3268,9 +3268,19 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '22.1';
+const APP_VERSION = '22.2';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '22.2', date: 'May 2026', changes: [
+    '🌐 Remittance is now FULLY BIDIRECTIONAL (PLS #107)',
+    '🔧 From and To accept ANY currency pair, any direction',
+    '🔧 Rate label dynamic: "1 [FROM] = [TO]" updates on selection',
+    '🔧 Auto-suggests rate from current fxRates via home base bridge',
+    '🔧 Inverse rate auto-recorded to fxHistory for home→foreign sends',
+    '🔧 Both-foreign (e.g. PGK→USD) shows home equivalent in preview',
+    '🐛 Fixed hardcoded "TO (PGK)" label — now reflects selected destination',
+    '🐛 Fixed hardcoded "PGK received" preview — now dynamic',
+  ]},
   { ver: '22.1', date: 'May 2026', changes: [
     '🛡️ XSS hardening — all user-input renders now escape HTML (PLS #106)',
     '🔧 Added _esc() helper, applied to 86 render sites (account/loan/budget/installment/investment names, tx notes, person names, nicknames)',
@@ -4624,41 +4634,37 @@ function goBack() { _addState.step=1; _sharedPersons=[]; renderAddSheet(); }
 function renderRemittanceForm() {
   const accts = db.accounts.filter(a=>!a.archived);
   const homeCurr = _homeBase();
-  const foreignAccts = accts.filter(a => a.currency !== homeCurr);
-  const homeAccts = accts.filter(a => a.currency === homeCurr);
-  // ── PERSONAL LOGIC SET #85 ── no pre-selected account (Remittance)
+  // ── PERSONAL LOGIC SET #107 ── Remittance is now DIRECTIONLESS.
+  // FROM and TO can be any currency pair, in any direction. The app no longer
+  // assumes "foreign → home" — supports home→foreign, foreign→foreign too.
+  // Rate is always expressed as "1 [from currency] = X [to currency]".
+  // ── PERSONAL LOGIC SET #85 ── no pre-selected account
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
-  const foreignOpts = placeholderOpt + foreignAccts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${a.currency})</option>`).join('');
-  const homeOpts = placeholderOpt + homeAccts.map(a=>`<option value="${a.id}">${_esc(a.name)}</option>`).join('');
+  const allOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}" data-curr="${a.currency}">${_esc(a.name)} (${a.currency})</option>`).join('');
 
-  // Pre-fill rate from latest fxHistory for the default foreign currency
-  const defaultCurr = foreignAccts[0]?.currency || 'PGK';
-  const latestRate = getLatestFxRate(defaultCurr);
-
-  if (foreignAccts.length === 0) {
+  if (accts.length < 2) {
     return `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
-      You need a foreign currency account first (e.g. PGK, USD) to record a remittance.
+      You need at least 2 accounts (any currencies) to record a remittance.
     </div>`;
   }
-  if (homeAccts.length === 0) {
-    return `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
-      You need a ${homeCurr} account to receive the remittance.
-    </div>`;
-  }
+
+  // Default starting rate — pick first pair to suggest. Will be recomputed on selection.
+  const defaultFromCurr = accts[0]?.currency || homeCurr;
+  const defaultToCurr = accts.find(a => a.currency !== defaultFromCurr)?.currency || homeCurr;
 
   return `<div>
     <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
-      📤 Western Union or bank remittance. Sets FX rate anchor for this date.
+      📤 Western Union, bank wire, or any cross-account transfer with FX. Sets rate anchor for this date.
     </div>
 
     <div class="form-group">
       <label class="form-label">From (sending) *</label>
-      <select class="form-input" id="rem-from-acct" onchange="onRemittanceFromChange()">${foreignOpts}</select>
+      <select class="form-input" id="rem-from-acct" onchange="onRemittanceAcctChange()">${allOpts}</select>
     </div>
 
     <div class="form-group">
-      <label class="form-label">To (${_homeBase()}) *</label>
-      <select class="form-input" id="rem-to-acct">${homeOpts}</select>
+      <label class="form-label">To (receiving) *</label>
+      <select class="form-input" id="rem-to-acct" onchange="onRemittanceAcctChange()">${allOpts}</select>
     </div>
 
     <div class="form-row fr2">
@@ -4667,8 +4673,8 @@ function renderRemittanceForm() {
         <input class="form-input numpad-input" type="number" id="rem-amount" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
       <div class="form-group">
-        <label class="form-label">Rate (1 <span id="rem-curr-label">${defaultCurr}</span>) *</label>
-        <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="${latestRate.toFixed(4)}" step="any" value="${latestRate}" oninput="updateRemittancePhpPreview()" inputmode="none">
+        <label class="form-label">Rate (1 <span id="rem-from-label">${defaultFromCurr}</span> = <span id="rem-to-label">${defaultToCurr}</span>) *</label>
+        <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="0.0000" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
     </div>
 
@@ -4678,7 +4684,7 @@ function renderRemittanceForm() {
     </div>
 
     <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:40px;pointer-events:none">
-      ${_homeBase()} received: —
+      Received: —
     </div>
 
     <!-- More options expander -->
@@ -4723,30 +4729,59 @@ function toggleRemMore() {
   if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
-function onRemittanceFromChange() {
-  const acctId = document.getElementById('rem-from-acct')?.value;
-  const acct = db.accounts.find(a=>a.id===acctId);
-  if (!acct) return;
-  const curr = acct.currency;
-  document.getElementById('rem-curr-label').textContent = curr;
-  const latest = getLatestFxRate(curr);
-  const rateInp = document.getElementById('rem-rate');
-  if (rateInp) { rateInp.value = latest; rateInp.placeholder = latest.toFixed(4); }
+function onRemittanceAcctChange() {
+  const fromAcct = db.accounts.find(a=>a.id===document.getElementById('rem-from-acct')?.value);
+  const toAcct = db.accounts.find(a=>a.id===document.getElementById('rem-to-acct')?.value);
+  const fromCurr = fromAcct?.currency;
+  const toCurr = toAcct?.currency;
+  // Update rate labels (1 FROM = X TO)
+  const fromLabel = document.getElementById('rem-from-label');
+  const toLabel = document.getElementById('rem-to-label');
+  if (fromLabel && fromCurr) fromLabel.textContent = fromCurr;
+  if (toLabel && toCurr) toLabel.textContent = toCurr;
+  // Auto-suggest rate based on current FX rates if both selected
+  if (fromCurr && toCurr) {
+    const rateInp = document.getElementById('rem-rate');
+    if (rateInp && !rateInp.value) {
+      let suggested = 1;
+      if (fromCurr === toCurr) {
+        suggested = 1;
+      } else {
+        // db.fxRates[X] = "1 X = ? home". Compute 1 fromCurr = X toCurr via home bridge.
+        const home = _homeBase();
+        const fromToHome = fromCurr === home ? 1 : (db.fxRates[fromCurr] || 1);
+        const toToHome = toCurr === home ? 1 : (db.fxRates[toCurr] || 1);
+        suggested = fromToHome / toToHome; // 1 fromCurr = X toCurr
+      }
+      rateInp.value = suggested;
+      rateInp.placeholder = suggested.toFixed(6);
+    }
+  }
   updateRemittancePhpPreview();
 }
 
 function updateRemittancePhpPreview() {
   const amt = parseFloat(document.getElementById('rem-amount')?.value) || 0;
   const rate = parseFloat(document.getElementById('rem-rate')?.value) || 0;
-  const acctId = document.getElementById('rem-from-acct')?.value;
-  const acct = db.accounts.find(a=>a.id===acctId);
-  const curr = acct?.currency || 'PGK';
+  const fromAcct = db.accounts.find(a=>a.id===document.getElementById('rem-from-acct')?.value);
+  const toAcct = db.accounts.find(a=>a.id===document.getElementById('rem-to-acct')?.value);
+  const fromCurr = fromAcct?.currency;
+  const toCurr = toAcct?.currency;
   const el = document.getElementById('rem-php-preview');
   if (!el) return;
-  const homeCurr = _homeBase();
-  if (!amt || !rate) { el.innerHTML = `${homeCurr} received: —`; return; }
-  const php = amt * rate;
-  el.innerHTML = `${fmt(amt, curr)} × ${rate.toFixed(4)} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(php, homeCurr)}</strong>`;
+  if (!amt || !rate || !fromCurr || !toCurr) {
+    el.innerHTML = 'Received: —';
+    return;
+  }
+  const received = amt * rate;
+  // If cross-currency, also show home equivalent (if neither side is home)
+  const home = _homeBase();
+  let extra = '';
+  if (toCurr !== home && fromCurr !== home) {
+    const inHome = toPhp(received, toCurr);
+    extra = ` <span style="color:var(--text4);font-size:11px">(≈ ${fmt(inHome, home)})</span>`;
+  }
+  el.innerHTML = `${fmt(amt, fromCurr)} × ${rate.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toCurr)}</strong>${extra}`;
 }
 
 function getLatestFxRate(currency) {
@@ -4770,38 +4805,57 @@ function submitRemittance() {
     const notes = document.getElementById('rem-notes')?.value?.trim() || '';
 
     if (!fromId) { showToast('Select source account'); return; }
-    if (!toId) { showToast(`Select ${_homeBase()} account`); return; }
+    if (!toId) { showToast('Select destination account'); return; }
+    if (fromId === toId) { showToast('From and To must differ'); return; }
     if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
     if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
     if (!date) { showToast('Select date'); return; }
 
     const fromAcct = db.accounts.find(a=>a.id===fromId);
-    const currency = fromAcct.currency;
-    const phpAmount = amount * rate;
+    const toAcct = db.accounts.find(a=>a.id===toId);
+    const fromCurr = fromAcct.currency;
+    const toCurr = toAcct.currency;
+    const home = _homeBase();
+    const isCross = fromCurr !== toCurr;
+    const receivedAmount = amount * rate; // in toCurr units
 
-    // Record in fxHistory
-    if (!db.fxHistory[currency]) db.fxHistory[currency] = [];
-    db.fxHistory[currency].push({ date, rate, source: 'remittance' });
-    if (db.fxHistory[currency].length > 500) db.fxHistory[currency] = db.fxHistory[currency].slice(-500);
-    // Update current fxRates to this latest
-    db.fxRates[currency] = rate;
+    // ── PLS #107 ── Record rate in fxHistory. Rate format depends on direction:
+    // - If FROM is home: rate is "1 home = X foreign" → store inverse so fxHistory[foreign] = "1 foreign = X home"
+    // - If TO is home: rate is already "1 foreign = X home"
+    // - If both foreign: skip fxHistory recording (no home anchor available)
+    if (isCross) {
+      let recordCurr = null, recordRate = null;
+      if (toCurr === home) {
+        recordCurr = fromCurr;
+        recordRate = rate; // 1 fromCurr = X home
+      } else if (fromCurr === home) {
+        recordCurr = toCurr;
+        recordRate = 1 / rate; // 1 toCurr = X home (inverse of "1 home = Y toCurr")
+      }
+      if (recordCurr && recordRate > 0) {
+        if (!db.fxHistory[recordCurr]) db.fxHistory[recordCurr] = [];
+        db.fxHistory[recordCurr].push({ date, rate: recordRate, source: 'remittance' });
+        if (db.fxHistory[recordCurr].length > 500) db.fxHistory[recordCurr] = db.fxHistory[recordCurr].slice(-500);
+        db.fxRates[recordCurr] = recordRate;
+      }
+    }
 
     // Create the remittance transaction
     const id = genId();
     db.transactions.push({
       id,
       type: 'remittance',
-      currency,
+      currency: fromCurr,
       amount,
       rate,
-      phpAmount,
+      toAmount: receivedAmount,
       fromAccountId: fromId,
       toAccountId: toId,
       date,
       time,
       notes,
       categoryId: 'sc-remittance',
-      fxSnapshot: { [currency]: rate },
+      fxSnapshot: isCross ? buildFxSnapshot(date) : null,
       createdAt: new Date().toISOString()
     });
 
@@ -4832,7 +4886,7 @@ function submitRemittance() {
     else if (currentPage==='transactions') renderTransactions();
     else if (currentPage==='reimbursements') renderReimbursementsPage();
     else if (currentPage==='accounts') renderAccounts();
-    showToast(`Remittance saved: ${sym(currency)}${amount} → ${sym(_homeBase())}${phpAmount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${feeAmt>0?' (fee: '+fmt(feeAmt,feeAcct?.currency||currency)+')':''}`);
+    showToast(`Remittance saved: ${fmt(amount, fromCurr)} → ${fmt(receivedAmount, toCurr)}${feeAmt>0?' (fee: '+fmt(feeAmt,feeAcct?.currency||fromCurr)+')':''}`);
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -10976,7 +11030,13 @@ function renderAnalyticsCalendar() {
     // isSettlement excluded EXCEPT gain/loss children (real arbitrage)
     if (t.isSettlement && !t.isAutoForex && !t.isReimbSettlementGain && !t.isLoanSettlementGain && !t.isLoanSettlementLoss) return;
     if (!byDate[t.date]) byDate[t.date] = { income: 0, expense: 0, count: 0, txs: [] };
-    const amt = Math.abs(t.phpAmount || 0);
+    // PLS #107: remittances now store toAmount instead of phpAmount. Convert to home for analytics.
+    let amt;
+    if (t.type === 'remittance') {
+      amt = Math.abs(toPhp(t.toAmount || (t.amount * (t.rate||1)), t.toAccountId ? (db.accounts.find(a=>a.id===t.toAccountId)?.currency || _homeBase()) : _homeBase()));
+    } else {
+      amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
+    }
     if (t.type === 'income') byDate[t.date].income += amt;
     else if (t.type === 'expense') byDate[t.date].expense += amt;
     byDate[t.date].count += 1;
@@ -11137,7 +11197,13 @@ function openCalDay(dateStr) {
       if (t.isFeeReimbursable) return;
       if (t.isInvestmentFund) return;
       if (t.isSettlement && !t.isAutoForex && !t.isReimbSettlementGain && !t.isLoanSettlementGain && !t.isLoanSettlementLoss) return;
-      const amt = Math.abs(t.phpAmount || 0);
+      // PLS #107: remittances now store toAmount instead of phpAmount.
+      let amt;
+      if (t.type === 'remittance') {
+        amt = Math.abs(toPhp(t.toAmount || (t.amount * (t.rate||1)), t.toAccountId ? (db.accounts.find(a=>a.id===t.toAccountId)?.currency || _homeBase()) : _homeBase()));
+      } else {
+        amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
+      }
       if (t.type === 'income') dayIncome += amt;
       else if (t.type === 'expense') dayExpense += amt;
     });
@@ -15402,15 +15468,14 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
       if (!tx.fxSnapshot) tx.fxSnapshot = {};
       tx.fxSnapshot[currency] = newRate;
       updated++;
-      // If this tx is a remittance, also update its rate + phpAmount
+      // If this tx is a remittance, also update its rate + toAmount
       if (tx.type === 'remittance' && tx.currency === currency) {
         tx.rate = newRate;
-        // ── PERSONAL LOGIC SET #68 ── stored phpAmount is RAW (unrounded) for FX accuracy.
-        // Rounding only applied at display time via fmt(). Do not round here — preserves
-        // precision across multi-step conversions and prevents cumulative drift.
-        // NOTE: Field name `phpAmount` is LEGACY — value is in HOME BASE currency, not literal PHP.
-        // For an AUD user, `phpAmount` holds the AUD-equivalent of the remittance.
-        tx.phpAmount = tx.amount * newRate;
+        // ── PERSONAL LOGIC SET #68 ── stored amounts are RAW (unrounded) for FX accuracy.
+        // PLS #107: remittance now stores toAmount (in destination currency), not phpAmount.
+        // Legacy phpAmount field kept for back-compat with older saved data.
+        tx.toAmount = tx.amount * newRate;
+        if (tx.phpAmount !== undefined) tx.phpAmount = tx.amount * newRate; // back-compat
       }
     }
     // Also recompute auto-forex children of affected parent transfers
@@ -17070,7 +17135,10 @@ function exportCSV() {
         findAcct(tx.acctId),
         tx.amount || 0,
         tx.currency || dc,
-        (tx.phpAmount || 0).toFixed(2),
+        ((tx.type === 'remittance' && tx.toAccountId)
+          ? toPhp(tx.toAmount || (tx.amount * (tx.rate||1)), db.accounts.find(a=>a.id===tx.toAccountId)?.currency || dc)
+          : (tx.phpAmount || toPhp(tx.amount || 0, tx.currency || dc))
+        ).toFixed(2),
         tx.notes || '',
         tx.personName || '',
         tx.toAcctId ? findAcct(tx.toAcctId) : ''
