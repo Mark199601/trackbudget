@@ -1214,6 +1214,25 @@ function fmt(amt, code, sign=false) {
   const f=a>=1000?a.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}):a.toFixed(2);
   return (sign?(amt>=0?'+':'-'):'') + s + f;
 }
+// ── PERSONAL LOGIC SET #108 ── Full-precision FX rate display.
+// Never round FX rates in display — user explicitly requested visible full precision.
+// Stores up to 12 significant digits with trailing zeros trimmed.
+// Example: 0.07680613721589995 stays as "0.0768061372159", not "0.0768".
+// For amounts (₱, ¥), continue using fmt() which uses 2-decimal display.
+function fmtRate(rate) {
+  if (typeof rate !== 'number' || isNaN(rate)) return '—';
+  if (rate === 0) return '0';
+  // Use Number's natural string representation which gives optimal precision:
+  // - Avoids toFixed(N) creating false trailing precision (e.g. 13.0197929 → 13.019792900000001)
+  // - Avoids toFixed(N) truncating real precision (e.g. 0.076806137215 → 0.0768)
+  // JS Number.toString() returns the shortest string that round-trips to the same value.
+  let s = rate.toString();
+  // Edge case: scientific notation for very small/large values — expand to decimal
+  if (s.includes('e') || s.includes('E')) {
+    s = rate.toFixed(20).replace(/0+$/, '').replace(/\.$/, '');
+  }
+  return s;
+}
 function fmtD(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'short',day:'numeric'}); }
 function fmtDFull(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'}); }
 function fmtMonth(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'long',year:'numeric'}); }
@@ -2786,7 +2805,7 @@ function checkAlerts() {
       _alertCache.push({
         type: 'fx',
         id: curr,
-        msg: `${dir} ${curr}/${_homeBase()} moved ${sign}${(pctChange*100).toFixed(1)}% (${prev.toFixed(4)} → ${latest.toFixed(4)})`
+        msg: `${dir} ${curr}/${_homeBase()} moved ${sign}${(pctChange*100).toFixed(1)}% (${fmtRate(prev)} → ${fmtRate(latest)})`
       });
     }
   }
@@ -3268,9 +3287,17 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '22.2';
+const APP_VERSION = '22.3';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '22.3', date: 'May 2026', changes: [
+    '🔬 Full FX rate precision — no more 4-decimal rounding (PLS #108)',
+    '🔧 New fmtRate() helper preserves up to 15+ digits without artifacts',
+    '🔧 Example: 0.07680613721589995 now displays as-is, not 0.0768',
+    '🏠 FX Rates page: home base banner + "Reset to nationality" button (PLS #109)',
+    '🔧 Clearer "1 foreign = home" convention header on FX page',
+    '🐛 Fixed 21 rate display sites: settings page, tx details, transfer preview, loan, alerts',
+  ]},
   { ver: '22.2', date: 'May 2026', changes: [
     '🌐 Remittance is now FULLY BIDIRECTIONAL (PLS #107)',
     '🔧 From and To accept ANY currency pair, any direction',
@@ -4754,7 +4781,7 @@ function onRemittanceAcctChange() {
         suggested = fromToHome / toToHome; // 1 fromCurr = X toCurr
       }
       rateInp.value = suggested;
-      rateInp.placeholder = suggested.toFixed(6);
+      rateInp.placeholder = fmtRate(suggested);
     }
   }
   updateRemittancePhpPreview();
@@ -4781,7 +4808,7 @@ function updateRemittancePhpPreview() {
     const inHome = toPhp(received, toCurr);
     extra = ` <span style="color:var(--text4);font-size:11px">(≈ ${fmt(inHome, home)})</span>`;
   }
-  el.innerHTML = `${fmt(amt, fromCurr)} × ${rate.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toCurr)}</strong>${extra}`;
+  el.innerHTML = `${fmt(amt, fromCurr)} × ${fmtRate(rate)} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toCurr)}</strong>${extra}`;
 }
 
 function getLatestFxRate(currency) {
@@ -5251,7 +5278,7 @@ function updateTransferPreview() {
     const foreignCurr = fromCurr !== home ? fromCurr : toCurr;
     const snapRate = getLatestFxRate(foreignCurr);
     if (fxPair) fxPair.textContent = fromCurr + ' → ' + toCurr;
-    if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ' + sym(home) + (snapRate || 0).toFixed(4);
+    if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ' + sym(home) + fmtRate(snapRate || 0);
 
     // Compute "will receive"
     let autoAmt;
@@ -5511,7 +5538,7 @@ function submitTransfer() {
           categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
           accountId: forexAcct.id,
           date, time: time||nowTime(),
-          notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${forex.actualRate.toFixed(4)} vs snapshot ${forex.snapshotRate.toFixed(4)})`,
+          notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${fmtRate(forex.actualRate)} vs snapshot ${fmtRate(forex.snapshotRate)})`,
           fxSnapshot,
           parentId,
           isAutoForex: true,
@@ -6076,7 +6103,7 @@ function openTxDetail(txId) {
       </div>
       <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${tx.loanDirection==='lent'?'amber':'teal'}">${label}</span></div></div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${rate.toFixed(4)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctLoan.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -6099,7 +6126,7 @@ function openTxDetail(txId) {
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
       </div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${rate.toFixed(4)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctPay.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -6152,7 +6179,7 @@ function openTxDetail(txId) {
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono);font-size:16px">${fmt(tx.amount,tx.currency)}</div></div>`;
   }
-  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=toPhp((tx.type==='shared'?(tx.myShare||tx.amount):tx.amount),tx.currency); const rate=homeAmt>(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount)>0?homeAmt/(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount):0; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${(toPhp(1,tx.currency)).toFixed(4)})</span></div></div>`; } }
+  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=toPhp((tx.type==='shared'?(tx.myShare||tx.amount):tx.amount),tx.currency); const rate=homeAmt>(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount)>0?homeAmt/(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount):0; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(toPhp(1,tx.currency))})</span></div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
@@ -6322,7 +6349,7 @@ function openTxDetail(txId) {
       else if (toCurr === home) actualRate = tx.toAmount / tx.amount; // foreign→home
       else actualRate = snapRate;
     }
-    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ${sym(home)}${actualRate.toFixed(4)} (at time of transfer)</div>` : '';
+    const rateStr = isCross ? `<div style="font-size:11px;color:var(--text4);margin-top:4px">Rate: 1 ${foreignCurr} = ${sym(home)}${fmtRate(actualRate)} (at time of transfer)</div>` : '';
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-transfer" style="width:44px;height:44px;font-size:20px">↔️</div>
       <div>
@@ -6449,7 +6476,7 @@ function openTxReceipt(txId) {
         if (tx.currency === home) rate = tx.amount / tx.toAmount;
         else if (toCurr === home) rate = tx.toAmount / tx.amount;
       }
-      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Rate</div><div class="rcpt-row-value" style="font-family:var(--mono);font-size:11px">1 ${foreignCurr} = ${sym(home)}${rate.toFixed(4)}</div></div>`;
+      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Rate</div><div class="rcpt-row-value" style="font-family:var(--mono);font-size:11px">1 ${foreignCurr} = ${sym(home)}${fmtRate(rate)}</div></div>`;
     }
   } else {
     const acct = getAccountDisplay(tx.accountId);
@@ -7001,7 +7028,7 @@ function updateEditTransferPreview() {
     toAmt = isCross ? convert(amount, txCurr, toCurr) : amount;
   }
   if (previewVal) previewVal.textContent = fmt(toAmt, toCurr);
-  if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ${sym(home)}${snapRate.toFixed(4)} snapshot)` : '';
+  if (hint) hint.textContent = isCross ? `(1 ${foreignCurr} = ${sym(home)}${fmtRate(snapRate)} snapshot)` : '';
   // In custom mode, the paired input row IS the source of truth — hide read-only preview
   previewDiv.style.display = (amount > 0 && (useSnapshot || !isCrossCurrency)) ? 'block' : 'none';
   // Forex preview
@@ -7018,7 +7045,7 @@ function updateEditTransferPreview() {
       }
       const isLoss = diff < 0;
       fxPrev.style.display = 'block';
-      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${snapRate.toFixed(4)} | Transaction rate: ${sym(_homeBase())}${customRate.toFixed(4)}</div>
+      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${fmtRate(snapRate)} | Transaction rate: ${sym(_homeBase())}${fmtRate(customRate)}</div>
         <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
     } else { fxPrev.style.display = 'none'; }
   } else if (fxPrev) { fxPrev.style.display = 'none'; }
@@ -7231,7 +7258,7 @@ function recomputeTransferForexChild(parentId) {
     accountId: homeAcct.id,
     date: parent.date,
     time: parent.time,
-    notes: `Auto from transfer (${fromAcct.currency}→${toAcct.currency} @ ${actualRate.toFixed(4)} vs snapshot ${snapshotRate?.toFixed(4) || 'N/A'})`,
+    notes: `Auto from transfer (${fromAcct.currency}→${toAcct.currency} @ ${fmtRate(actualRate)} vs snapshot ${fmtRate(snapshotRate) || 'N/A'})`,
     fxSnapshot: parent.fxSnapshot || buildFxSnapshot(parent.date),
     parentId,
     isAutoForex: true
@@ -10537,7 +10564,7 @@ function updateAddLoanFx() {
   const ratePairLabel = document.getElementById('nl-rate-pair-label');
   if (pairEl) pairEl.textContent = `${loanCurr} → ${acctCurr}`;
   if (verbEl) verbEl.textContent = isLent ? 'Will deduct' : 'Will deposit';
-  if (rateLabel) rateLabel.textContent = `1 ${loanCurr} = ${snapshotRate.toFixed(4)} ${acctCurr}`;
+  if (rateLabel) rateLabel.textContent = `1 ${loanCurr} = ${fmtRate(snapshotRate)} ${acctCurr}`;
   if (disburseCurrLabel) disburseCurrLabel.textContent = acctCurr;
   if (ratePairLabel) ratePairLabel.textContent = `(1 ${loanCurr})`;
 
@@ -10558,7 +10585,7 @@ function updateAddLoanFx() {
     const extraEl = document.getElementById('nl-fx-extra');
     if (amountEl) amountEl.textContent = fmt(effectiveAcctAmt, acctCurr);
     if (extraEl) {
-      let extra = `${amount} ${loanCurr} × ${effectiveRate.toFixed(4)} (${using})`;
+      let extra = `${amount} ${loanCurr} × ${fmtRate(effectiveRate)} (${using})`;
       if (customRate > 0 && Math.abs(customRate - snapshotRate) > 0.0001) {
         // Projected FX gain/loss at current market — to be realized on settlement
         const diff = (snapshotAcctAmt - effectiveAcctAmt); // raw, no round
@@ -13579,7 +13606,7 @@ function renderAnalyticsForex() {
           <span style="font-size:18px">${currInfo.flag}</span>
           <div>
             <div style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${curr} <span style="font-size:11px;font-weight:400;color:var(--text3)">${currInfo.name||''}</span></div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())}${currentRate.toFixed(4)}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${curr} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())}${fmtRate(currentRate)}</span></div>
           </div>
         </div>
         <div style="text-align:right">
@@ -13608,17 +13635,17 @@ function renderAnalyticsForex() {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">${sym(_homeBase())}${maxRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">${sym(_homeBase())}${fmtRate(maxRate)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[maxIdx]?.label} ${months[maxIdx]?.year}</div>
         </div>
         <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">${sym(_homeBase())}${currentRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">${sym(_homeBase())}${fmtRate(currentRate)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">per 1 ${curr}</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
-          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">${sym(_homeBase())}${minRate.toFixed(4)}</div>
+          <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">${sym(_homeBase())}${fmtRate(minRate)}</div>
           <div style="font-size:9px;color:var(--text4);margin-top:1px">${months[minIdx]?.label} ${months[minIdx]?.year}</div>
         </div>
       </div>
@@ -15266,9 +15293,26 @@ function addTrackedCurr(code) {
 }
 
 function renderFXTab() {
-  const currencies = db.trackedCurrencies.filter(c=>c!==(_homeBase()));
+  const home = _homeBase();
+  const currencies = db.trackedCurrencies.filter(c=>c!==home);
 
+  // ── PERSONAL LOGIC SET #109 ── FX Rates page convention:
+  //   Always display "1 [foreign] = [home_symbol][rate]" — foreign on left, home on right.
+  //   Full precision via fmtRate() — no rounding visible to user.
+  //   Header banner clarifies which currency is the home base so users understand convention.
   let html = `<div class="page-pad">
+    <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Home base</div>
+    <div class="card" style="margin-bottom:14px;padding:12px 14px;background:linear-gradient(135deg,var(--accent-bg) 0%,transparent 100%)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:16px;font-weight:700;letter-spacing:-0.3px">${sym(home)} ${home}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">All rates shown as "1 foreign = ${sym(home)}home"</div>
+        </div>
+        ${db.profile?.nationality && COUNTRY_CURRENCIES[db.profile.nationality] && COUNTRY_CURRENCIES[db.profile.nationality] !== home ? `
+        <button class="btn btn-ghost btn-sm" onclick="resetHomeToNationality()" style="font-size:11px">↻ Reset to ${COUNTRY_CURRENCIES[db.profile.nationality]}</button>
+        ` : ''}
+      </div>
+    </div>
     <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend.</div>`;
 
   for (const c of currencies) {
@@ -15286,7 +15330,7 @@ function renderFXTab() {
           <span style="font-size:22px">${info.flag}</span>
           <div>
             <div style="font-size:15px;font-weight:600;letter-spacing:-0.3px">${c}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())}${current.toFixed(4)}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(home)}${fmtRate(current)}</span></div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
@@ -15302,6 +15346,28 @@ function renderFXTab() {
 
   html += `</div>`;
   return html;
+}
+
+// Allow user to reset displayCurrency back to what their nationality implies.
+// Useful if displayCurrency drifted from intent (e.g. legacy from older session).
+function resetHomeToNationality() {
+  const nat = db.profile?.nationality;
+  if (!nat || !COUNTRY_CURRENCIES[nat]) {
+    showToast('Set nationality in Profile first');
+    return;
+  }
+  const target = COUNTRY_CURRENCIES[nat];
+  const current = _homeBase();
+  if (target === current) {
+    showToast('Already on ' + target);
+    return;
+  }
+  // Recompute fxRates so they're relative to new home (PLS #92)
+  setDisplayCurrency(target);
+  saveDBWithSync();
+  renderSettings();
+  showToast(`🏠 Home reset to ${target}. Rates auto-recomputed.`);
+  haptic('success');
 }
 
 function openFxHistoryPage(currency) {
@@ -20696,7 +20762,7 @@ function renderAnalyticsCrossCurrency() {
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);font-family:var(--mono);margin-bottom:4px">
         <span>${sym(curr)}${data.native.toLocaleString(undefined,{maximumFractionDigits:2})}</span>
-        <span>${curr!==dc?`× ${rate.toFixed(2)} =`:''} ${fmt(data.equiv, dc)}</span>
+        <span>${curr!==dc?`× ${fmtRate(rate)} =`:''} ${fmt(data.equiv, dc)}</span>
       </div>
       <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div>
