@@ -1820,6 +1820,10 @@ function getAcctBalance(acctId) {
   let bal = acct.initialBalance || 0;
   for (const tx of db.transactions) {
     if (tx.archived) continue;
+    // ── PERSONAL LOGIC SET #116 ── skipBalance flag for write-off losses.
+    // Write-off creates an expense tx for analytics but no cash actually moved.
+    // Account balance must skip these entries to avoid phantom deduction.
+    if (tx.skipBalance) continue;
     // 📖 USER STORY: Pag nag-transfer ka cross-currency (e.g. PGK → PHP) at tinype mo yung actual
     // na natanggap (hindi snapshot rate), hindi na nag-doble-count yung forex difference sa account
     // balance. Yung app mismo ang bahala mag-adjust para tama parin yung running balance.
@@ -2122,6 +2126,7 @@ function txAmountDisplay(tx) {
     return {cls: isGain ? 'tx-pos' : 'tx-neg', str: '📉 ' + (isGain?'+':'-') + fmt(tx.amount,tx.currency)};
   }
   if (tx.isReimbSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
+  if (tx.isReimbSettlementLoss) return {cls:'tx-neg', str:'📉 -'+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='income') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='expense') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
@@ -3385,9 +3390,17 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '23.5';
+const APP_VERSION = '23.7';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '23.7', date: 'May 2026', changes: [
+    '🐛 Reimbursement write-off no longer double-deducts from account balance',
+    '🔧 New skipBalance flag: write-off counts as expense for analytics but no cash deduction',
+    '✅ Net Worth correctly drops by lost amount (receivable cleared), not by 2x',
+  ]},
+  { ver: '23.6', date: 'May 2026', changes: [
+    '🐛 Reimbursement write-off now displays as real expense (red 📉), not neutral transfer',
+  ]},
   { ver: '23.5', date: 'May 2026', changes: [
     '🐛 Fixed remittance fee double display sa Dashboard Recent Tx + Account Detail',
     '🔧 Account dropdowns no longer show double currency suffix (e.g. "Cash (PHP) (PHP)")',
@@ -8284,17 +8297,23 @@ function confirmWriteOffReimb(person) {
   for (const e of entries) {
     const tx = e.tx;
     const c = tx.currency || _homeBase();
-    // Create loss child tx (expense — real economic loss to user)
+    // Create loss child tx (expense — real economic loss to user).
+    // ── PERSONAL LOGIC SET #116 ── Write-off does NOT deduct from account balance.
+    // The receivable was already an asset that "evaporates" via paidSoFar marking.
+    // The new expense entry is for analytics/expense-tracking only — no real cash moved
+    // (you don't have the money to deduct because the friend never paid you back).
+    // So we set accountId=null and add a balance-skip flag.
     db.transactions.push({
       id: 'tx-' + genId(),
       type: 'expense',
       amount: e.remaining,
       currency: c,
-      accountId: tx.accountId,
+      accountId: null, // no cash account affected
       date, time,
       notes: `Reimbursement write-off from ${person} — ${lossNotes}`,
       isReimbSettlementLoss: true,
       isSettlement: true,
+      skipBalance: true, // explicit signal for getAcctBalance
       parentId: tx.id,
       writeOffReason: reason,
       categoryId: 'sc-misc',
@@ -17831,6 +17850,8 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
   for (const tx of (db.transactions || [])) {
     if (tx.archived) continue;
     if (tx.date && tx.date > asOfDate) continue;
+    // PLS #116: skipBalance flag (e.g. write-off losses) — no cash moved
+    if (tx.skipBalance) continue;
     // PLS #11: skip isAutoForex on toAmountIsActual parents
     if (tx.isAutoForex && tx.parentId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
