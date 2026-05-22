@@ -1216,18 +1216,13 @@ function fmt(amt, code, sign=false) {
 }
 // ── PERSONAL LOGIC SET #108 ── Full-precision FX rate display.
 // Never round FX rates in display — user explicitly requested visible full precision.
-// Stores up to 12 significant digits with trailing zeros trimmed.
-// Example: 0.07680613721589995 stays as "0.0768061372159", not "0.0768".
+// Example: 0.07680613721589995 stays as-is, not "0.0768".
 // For amounts (₱, ¥), continue using fmt() which uses 2-decimal display.
+// Per PLS #113: display exactly what user input — no cleanup, no transformation.
 function fmtRate(rate) {
   if (typeof rate !== 'number' || isNaN(rate)) return '—';
   if (rate === 0) return '0';
-  // Use Number's natural string representation which gives optimal precision:
-  // - Avoids toFixed(N) creating false trailing precision (e.g. 13.0197929 → 13.019792900000001)
-  // - Avoids toFixed(N) truncating real precision (e.g. 0.076806137215 → 0.0768)
-  // JS Number.toString() returns the shortest string that round-trips to the same value.
   let s = rate.toString();
-  // Edge case: scientific notation for very small/large values — expand to decimal
   if (s.includes('e') || s.includes('E')) {
     s = rate.toFixed(20).replace(/0+$/, '').replace(/\.$/, '');
   }
@@ -1268,7 +1263,12 @@ function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return
 //   - In pre-DB-load fallbacks (defaultDB seed, migration): SAFE — db not ready yet
 //   - In COUNTRY_CURRENCIES table / static data: SAFE — data values
 //   - Anywhere else: BUG — should be _homeBase()
-const STORED_BASE = 'PHP'; // Pre-DB-load fallback only. NOT a runtime rate base.
+// STORED_BASE: Pre-DB-load fallback only. Used when nationality AND displayCurrency
+// are both missing (edge case during app boot, before parsed data is loaded).
+// Kept as 'PHP' for backward-compat with existing user data that was historically
+// PHP-anchored before the home-agnostic refactor (PLS #104). NOT a runtime rate base.
+// Any user with nationality set gets their home from COUNTRY_CURRENCIES via _homeBase().
+const STORED_BASE = 'PHP';
 // ── PERSONAL LOGIC SET #104 ── Home-agnostic refactor (full multi-currency support)
 // All currency comparisons, fallbacks, and rate calculations route through _homeBase()
 // instead of hardcoded 'PHP'. Non-Filipino users (AUD/USD/NZD/etc home) get correct math
@@ -1514,6 +1514,7 @@ function defaultDB() {
         ]},
         {id:'c-financial',name:'Financial',icon:'💱',archived:false,subcats:[
           {id:'sc-remittance',name:'Remittance',icon:'📤',archived:false,autoOnly:true},
+          {id:'sc-remittancefee',name:'Remittance Fee',icon:'💸',archived:false,autoOnly:true},
           {id:'sc-externalin',name:'External In',icon:'📥',archived:false,autoOnly:true},
           {id:'sc-externalout',name:'External Out',icon:'📤',archived:false,autoOnly:true},
           {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false,autoOnly:true},
@@ -1572,8 +1573,8 @@ let db = (() => {
     if (!parsed.fxHistory) parsed.fxHistory = {};
         // ── PERSONAL LOGIC SET #8 ── inside IIFE, db is not yet initialized — cannot call _homeBase().
         // Use parsed.displayCurrency directly (with fallback chain).
-        const _migHome = parsed.displayCurrency || (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[parsed.profile?.nationality] : null) || 'PHP';
-        for (const c of (parsed.trackedCurrencies || ['PGK','USD','AUD','NZD'])) {
+        const _migHome = parsed.displayCurrency || (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[parsed.profile?.nationality] : null) || STORED_BASE;
+        for (const c of (parsed.trackedCurrencies || [])) {
           if (c === _migHome) continue;
           if (!parsed.fxHistory[c] || parsed.fxHistory[c].length === 0) {
             parsed.fxHistory[c] = [{ date:'2026-01-01', rate: parsed.fxRates?.[c] || 1, source:'baseline' }];
@@ -1581,7 +1582,7 @@ let db = (() => {
         }
     if (!parsed.archivedLoans) parsed.archivedLoans = [];
     if (!parsed.debugLog) parsed.debugLog = [];
-    if (!parsed.displayCurrency) { const nat = parsed.profile?.nationality || 'Philippines'; parsed.displayCurrency = (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[nat] : null) || 'PHP'; }
+    if (!parsed.displayCurrency) { const nat = parsed.profile?.nationality; parsed.displayCurrency = (typeof COUNTRY_CURRENCIES !== 'undefined' && nat ? COUNTRY_CURRENCIES[nat] : null) || STORED_BASE; }
     if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
     if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
     if (!parsed.recurringTxs) parsed.recurringTxs = [];
@@ -1596,6 +1597,18 @@ let db = (() => {
         }
       }
     }
+    // ── PERSONAL LOGIC SET #114 ── Seed missing sc-remittancefee subcategory.
+    // Older databases were missing this entry, causing "Deleted Category" labels
+    // on remittance fee txs that reference 'sc-remittancefee' as categoryId.
+    try {
+      const financialCat = (parsed.categories?.expense || []).find(c => c.id === 'c-financial');
+      if (financialCat && financialCat.subcats) {
+        const hasFee = financialCat.subcats.some(s => s.id === 'sc-remittancefee');
+        if (!hasFee) {
+          financialCat.subcats.splice(1, 0, {id:'sc-remittancefee', name:'Remittance Fee', icon:'💸', archived:false, autoOnly:true});
+        }
+      }
+    } catch(e) { /* defensive */ }
     if (!parsed.investments) parsed.investments = [];
     // Migration: fix any isInvestmentFund txs that were saved as type:'expense' → should be type:'transfer'
     if (parsed.transactions) {
@@ -1658,15 +1671,16 @@ let db = (() => {
       const plan = parsed.settings.investmentPlan;
       const migratedId = 'contract-migrated';
       const migrationDate = today(); // dynamic — records when migration actually ran
+      const _migHomeCurr = parsed.displayCurrency || (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[parsed.profile?.nationality] : null) || STORED_BASE;
       parsed.contracts.push({
         id: migratedId,
         location: '',
-        currency: 'PHP',
+        currency: _migHomeCurr,
         startDate: today(),
         endDate: '',
         monthlyGoal: plan.monthlyGoal || 0,
         targetAmount: plan.safeTarget || 0,
-        goalCurrency: parsed.displayCurrency || 'PHP',
+        goalCurrency: _migHomeCurr,
         notes: 'Migrated from previous savings plan',
         status: 'active',
         buckets: plan.buckets || {},
@@ -1707,10 +1721,12 @@ let db = (() => {
       if (!parsed.settings) parsed.settings = { contractEndDate:'', googleDriveConnected:false, googleDriveToken:null, lastDriveSync:null };
       if (!parsed.categories) parsed.categories = { expense:[], income:[] };
       if (!parsed.budgets) parsed.budgets = [];
-      if (!parsed.fxRates) parsed.fxRates = { PGK:13.02, USD:56.5, USDT:56.5, AUD:37.0, NZD:34.0 };
+      if (!parsed.fxRates) parsed.fxRates = {};
       if (!parsed.fxHistory) parsed.fxHistory = {};
-      if (!parsed.trackedCurrencies) parsed.trackedCurrencies = ['PHP','PGK','USD','AUD','NZD'];
-      if (!parsed.displayCurrency) parsed.displayCurrency = 'PHP';
+      // Derive defaults from nationality when available, else minimal {home only}
+      const _defHome = (typeof COUNTRY_CURRENCIES !== 'undefined' && parsed.profile?.nationality && COUNTRY_CURRENCIES[parsed.profile.nationality]) || parsed.displayCurrency || STORED_BASE;
+      if (!parsed.trackedCurrencies) parsed.trackedCurrencies = [_defHome];
+      if (!parsed.displayCurrency) parsed.displayCurrency = _defHome;
       if (!parsed.archivedTransactions) parsed.archivedTransactions = [];
       if (!parsed.paydaySchedules) parsed.paydaySchedules = [];
       if (!parsed.recurringTxs) parsed.recurringTxs = [];
@@ -2970,9 +2986,9 @@ function renderDashboard() {
   // Budget display logic:
   // - Nationality budget (PHP) always shown
   // - Location budget shown ONLY if location is set AND its native currency is in tracked currencies
-  const userNationality = db.profile?.nationality || 'Philippines';
+  const userNationality = db.profile?.nationality || '';
   const userLocation = db.profile?.country || '';
-  const natCurrency = COUNTRY_CURRENCIES[userNationality] || 'PHP';
+  const natCurrency = COUNTRY_CURRENCIES[userNationality] || _homeBase();
   const locationCurrency = COUNTRY_CURRENCIES[userLocation] || null;
   // Location budget condition: location is set AND location's currency is in tracked currencies AND different from nationality
   const locationBudgetActive = userLocation && locationCurrency && db.trackedCurrencies.includes(locationCurrency) && userLocation !== userNationality;
@@ -3342,9 +3358,41 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '23.0';
+const APP_VERSION = '23.4';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '23.4', date: 'May 2026', changes: [
+    '🐛 PLS #114: Fixed remittance fee double display in tx log',
+    '🔧 isAutoFee children now hidden from main tx log (shown only nested under parent)',
+    '🐛 Fixed missing sc-remittancefee category causing "Deleted Category" label',
+    '🔧 Added sc-remittancefee to seeded categories (Financial → Remittance Fee 💸)',
+    '🔧 Migration auto-seeds missing sc-remittancefee for existing users',
+    '✅ Fee still counted ONCE in totals (PLS #46 — no math change)',
+  ]},
+  { ver: '23.3', date: 'May 2026', changes: [
+    '🌍 Removed all situational hardcoded PHP/PGK references in code',
+    '🔧 Migration defaults use COUNTRY_CURRENCIES[nationality], not hardcoded PHP',
+    '🔧 Transfer rate fallbacks use first non-home tracked currency',
+    '🔧 Installment AI messages use inst.currency || _homeBase, not PGK',
+    '🔧 XLSX export labels use _homeBase, not (PHP) suffix',
+    '🔧 Budget bars use _homeBase fallback, not Philippines/PHP',
+    '✅ Lookup tables (COUNTRY_CURRENCIES, CURR_SYMBOLS) remain as world data',
+  ]},
+  { ver: '23.2', date: 'May 2026', changes: [
+    '🐛 PLS #113: No double conversion — user input is sacred',
+    '🔧 Removed auto-recompute of fxRates on nationality change',
+    '🔧 Removed cleanFp() — no silent modification of stored values',
+    '🔧 Nationality change now resets fxRates to {newHome: 1}; user re-enters foreign rates',
+    '🔧 Backup of old rates stored in db.fxRatesBackup for recovery',
+    '✅ Display shows exactly what user input — no transformation',
+  ]},
+  { ver: '23.1', date: 'May 2026', changes: [
+    '🐛 Fixed FP artifact: 13.271349900000002 now cleans to 13.2713499',
+    '🔧 New cleanFp() helper detects inverse-math artifacts (6+ zeros/nines tail)',
+    '🔧 saveProfile FX recompute uses cleanFp to prevent storage artifacts',
+    '🔧 ensureDBIntegrity migrates existing dirty stored values on next load',
+    '✅ Preserves genuine precision (0.07680613721589995 stays as-is)',
+  ]},
   { ver: '23.0', date: 'May 2026', changes: [
     '🐛 Fixed rate fields rounded to 4 decimals on derive (PLS #108 violation)',
     '🔧 Transfer auto-derive rate now uses fmtRate (full precision)',
@@ -4285,7 +4333,7 @@ function renderUnifiedAmountForm() {
   // (e.g. last-used "Beep Card" when user actually wanted Cash).
   const placeholderAcctOpt = `<option value="" disabled selected>— Select account —</option>`;
   const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
-  const currOpts = (db.trackedCurrencies || ['PHP']).map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = (db.trackedCurrencies || [_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('');
 
   if (isShared) {
     if (!cat) return renderCatPicker('expense');
@@ -5878,6 +5926,12 @@ function renderTxLog() {
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     // Hide isFeeReimbursable shared tx — tracking-only, visible in Reimbursements tab; fee tx is the real row
     if (t.isFeeReimbursable) return false;
+    // ── PERSONAL LOGIC SET #114 ── Hide isAutoFee children from main tx log.
+    // The fee is auto-generated when user creates a remittance with a fee amount.
+    // It's shown NESTED under the parent remittance (Linked · 1 sub-row), so showing it
+    // as a top-level row too causes visual double-accounting (one fee tx appearing twice).
+    // The fee is still counted ONCE in totals (PLS #46 — isAutoFee included as real expense).
+    if (t.isAutoFee && t.parentId) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
     const _isInvCapital = t.isInvestmentFund || t.isInvestmentReturn;
@@ -7188,7 +7242,7 @@ function openEditTransfer(txId) {
   // Detect if existing tx used custom rate (toAmount differs from snapshot conversion)
   const toAcct = accts.find(a=>a.id===tx.toAccountId);
   const foreignCurr = tx.currency !== _homeBase() ? tx.currency : toAcct?.currency;
-  const snapRate = getLatestFxRate(foreignCurr || 'PGK');
+  const snapRate = getLatestFxRate(foreignCurr || (db.trackedCurrencies.find(c=>c!==_homeBase()) || _homeBase()));
   let existingCustomRate = '';
   if (tx.toAmount != null && toAcct && tx.currency !== toAcct.currency) {
     const derivedRate = tx.currency === _homeBase() ? tx.amount / tx.toAmount : tx.toAmount / tx.amount;
@@ -7218,7 +7272,7 @@ function openEditTransfer(txId) {
           <input class="form-input numpad-input" type="number" id="etf-toamount"  placeholder="0.00" step="any" value="${hasCustomRate&&tx.toAmount!=null?tx.toAmount:''}" oninput="onEtfToAmountInput()" inputmode="none">
         </div>
         <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr||'PGK'}</span> = ? ${_homeBase()})</label>
+          <label class="form-label" style="font-size:11px">Or rate (1 <span id="etf-custom-curr-label">${foreignCurr || (db.trackedCurrencies.find(c=>c!==_homeBase()) || _homeBase())}</span> = ? ${_homeBase()})</label>
           <input class="form-input numpad-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()" inputmode="none">
         </div>
       </div>
@@ -15115,7 +15169,7 @@ function renderSettings() {
   try {
     // Defensive guards
     if (!db.profile) db.profile = { nickname:'', nationality:'', country:'' };
-    if (!db.trackedCurrencies) db.trackedCurrencies = ['PHP'];
+    if (!db.trackedCurrencies) db.trackedCurrencies = [_homeBase()];
     if (!db.fxRates) db.fxRates = {};
     if (!db.settings) db.settings = {};
     if (!db.categories) db.categories = { expense:[], income:[] };
@@ -15284,7 +15338,13 @@ function saveProfile() {
   // relative to the new home currency. Math:
   //   old: 1 USD = 56.5 (old home, e.g. PHP)
   //   if 1 newHome = X (old home), then new rate: 1 USD = 56.5 / X (newHome)
-  // FX history entries are also recomputed for consistency.
+  // ── PERSONAL LOGIC SET #113 ── No auto-recompute on nationality change.
+  // Rationale: previous behavior divided existing rates by new-home-rate-in-old-home,
+  // which introduced floating-point artifacts (e.g. 13.2713499 → 13.271349900000002 via
+  // 1/(1/13.2713499)). User explicitly asked: walang double conversion.
+  // New behavior: when nationality changes, RESET fxRates to just the new home (rate=1).
+  // User re-enters foreign rates from new home's perspective. Cleaner, no artifacts,
+  // no mental math confusion about "what does this stored value mean now."
   const oldNat = db.profile.nationality;
   if (nick) db.profile.nickname = nick;
   if (country) db.profile.country = country;
@@ -15293,51 +15353,18 @@ function saveProfile() {
     const newHomeCurr = (typeof COUNTRY_CURRENCIES !== 'undefined' ? COUNTRY_CURRENCIES[nat] : null) || COUNTRY_TO_CURRENCY[nat] || 'USD';
     const oldHomeCurr = _homeBase();
     if (newHomeCurr !== oldHomeCurr) {
-      // Find the new home currency's rate in old-home terms (e.g. 1 AFN = 0.786 PHP)
-      const newHomeRateInOldHome = db.fxRates[newHomeCurr];
-      if (newHomeRateInOldHome && newHomeRateInOldHome > 0) {
-        // Recompute every other currency's rate to be in newHome terms
-        const newRates = {};
-        const newHistory = {};
-        Object.keys(db.fxRates).forEach(curr => {
-          if (curr === newHomeCurr) {
-            newRates[curr] = 1; // new base
-          } else if (curr === oldHomeCurr) {
-            // Old home in new home terms = 1 / (1 newHome in oldHome)
-            newRates[curr] = 1 / newHomeRateInOldHome;
-          } else {
-            // Other currency: old_rate (in oldHome) / newHomeRateInOldHome
-            const oldRate = db.fxRates[curr];
-            if (oldRate && oldRate > 0) newRates[curr] = oldRate / newHomeRateInOldHome;
-          }
-        });
-        // Recompute history same way
-        Object.keys(db.fxHistory || {}).forEach(curr => {
-          newHistory[curr] = (db.fxHistory[curr] || []).map(entry => {
-            let newRate;
-            if (curr === newHomeCurr) newRate = 1;
-            else if (curr === oldHomeCurr) newRate = 1 / newHomeRateInOldHome;
-            else newRate = entry.rate / newHomeRateInOldHome;
-            return { ...entry, rate: newRate, source: entry.source || 'recomputed' };
-          });
-        });
-        // Ensure old home currency now has an entry in new rates (so it shows in FX list)
-        if (!newRates[oldHomeCurr]) newRates[oldHomeCurr] = 1 / newHomeRateInOldHome;
-        if (!newHistory[oldHomeCurr] || newHistory[oldHomeCurr].length === 0) {
-          newHistory[oldHomeCurr] = [{date: today(), rate: 1 / newHomeRateInOldHome, source: 'auto-recompute'}];
-        }
-        db.fxRates = newRates;
-        db.fxHistory = newHistory;
-        showToast(`🏠 Home base → ${newHomeCurr}. FX rates auto-recomputed.`);
-      } else {
-        // No existing rate for new home — needs manual setup
-        db.fxRates[newHomeCurr] = 1;
-        if (!db.fxHistory[newHomeCurr]) db.fxHistory[newHomeCurr] = [{date: today(), rate: 1, source: 'baseline'}];
-        showToast(`🏠 Home base → ${newHomeCurr}. Add FX rates manually for other currencies.`);
-      }
+      // Reset fxRates: only new home stays (rate=1). All other rates are old-home-relative
+      // and would be wrong/confusing after home change. User must re-enter them fresh.
+      const oldRatesBackup = { ...db.fxRates };
+      const oldHistoryBackup = JSON.parse(JSON.stringify(db.fxHistory || {}));
+      db.fxRates = { [newHomeCurr]: 1 };
+      db.fxHistory = { [newHomeCurr]: [{date: today(), rate: 1, source: 'baseline'}] };
+      // Stash backup so user can recover if needed (one-time, last switch only)
+      db.fxRatesBackup = { date: today(), oldHome: oldHomeCurr, rates: oldRatesBackup, history: oldHistoryBackup };
       db.displayCurrency = newHomeCurr;
       if (!db.trackedCurrencies.includes(newHomeCurr)) db.trackedCurrencies.unshift(newHomeCurr);
       if (!db.trackedCurrencies.includes(oldHomeCurr)) db.trackedCurrencies.push(oldHomeCurr);
+      showToast(`🏠 Home base → ${newHomeCurr}. Re-enter FX rates from ${newHomeCurr}'s perspective.`);
     }
   } else if (nat) {
     db.profile.nationality = nat;
@@ -17242,7 +17269,7 @@ function exportXLSX() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invRows), 'Investments');
 
     // ── Sheet 6: FX Rates ──
-    const fxRows = [['Currency','Rate (1 unit = PHP)','Source','Last Updated']];
+    const fxRows = [['Currency',`Rate (1 unit = ${_homeBase()})`,'Source','Last Updated']];
     for (const [curr, rate] of Object.entries(db.fxRates || {})) {
       const hist = (db.fxHistory?.[curr] || []).slice(-1)[0];
       fxRows.push([curr, rate, hist?.source || '', hist?.date || '']);
@@ -17253,15 +17280,16 @@ function exportXLSX() {
     const { net: netWorth } = getNetWorth();
     const monthKey = currMonthKey();
     const monthTotals = getMonthTotals(monthKey);
+    const _expHome = _homeBase();
     const summaryRows = [
       ['TrackBudget Export Summary', ''],
       ['Export Date', today_],
       [''],
-      ['Net Worth (PHP)', Math.round(netWorth * 100) / 100],
+      [`Net Worth (${_expHome})`, Math.round(netWorth * 100) / 100],
       [''],
-      [`${monthKey} Income (PHP)`, Math.round((monthTotals?.income || 0) * 100) / 100],
-      [`${monthKey} Expenses (PHP)`, Math.round((monthTotals?.expense || 0) * 100) / 100],
-      [`${monthKey} Net (PHP)`, Math.round(((monthTotals?.income || 0) - (monthTotals?.expense || 0)) * 100) / 100],
+      [`${monthKey} Income (${_expHome})`, Math.round((monthTotals?.income || 0) * 100) / 100],
+      [`${monthKey} Expenses (${_expHome})`, Math.round((monthTotals?.expense || 0) * 100) / 100],
+      [`${monthKey} Net (${_expHome})`, Math.round(((monthTotals?.income || 0) - (monthTotals?.expense || 0)) * 100) / 100],
       [''],
       ['Total Transactions', db.transactions.filter(t => !t.archived).length],
       ['Total Accounts', db.accounts.filter(a => !a.archived).length],
@@ -20124,9 +20152,9 @@ function aiInstallmentReminder() {
         daysUntil === 0 ? `${_esc(inst.name)} payment today` : `Heads up: ${_esc(inst.name)} ${dueText}`,
       ];
       const bodies = [
-        `~${fmt(inst.monthlyAmount, _homeBase())} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} ${aiPlural(remaining,'payment')} left.`,
-        `Month ${totalPaid+1} of ${inst.totalMonths} — ~${fmt(inst.monthlyAmount, 'PGK')}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
-        `${remaining} more ${aiPlural(remaining,'payment')} of ~${fmt(inst.monthlyAmount, 'PGK')} to go.`,
+        `~${fmt(inst.monthlyAmount, inst.currency || _homeBase())} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} ${aiPlural(remaining,'payment')} left.`,
+        `Month ${totalPaid+1} of ${inst.totalMonths} — ~${fmt(inst.monthlyAmount, inst.currency || _homeBase())}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
+        `${remaining} more ${aiPlural(remaining,'payment')} of ~${fmt(inst.monthlyAmount, inst.currency || _homeBase())} to go.`,
       ];
       insights.push({
         id, type: 'installment',
