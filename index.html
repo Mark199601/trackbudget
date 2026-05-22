@@ -2096,6 +2096,21 @@ function getAccountDisplay(acctId) {
   return a ? a : {name:'Unknown',currency:_homeBase()};
 }
 
+// ── PERSONAL LOGIC SET #115 ── Smart account label avoids double currency suffix.
+// If user already typed "(PHP)" into account name, don't append another " (PHP)".
+// Match is case-insensitive; trims trailing whitespace.
+// Returns: escaped "name (CURRENCY)" or just escaped "name" if it already contains the suffix.
+function acctLabel(a) {
+  if (!a) return '';
+  const name = (a.name || '').trim();
+  const curr = a.currency || '';
+  if (!curr) return _esc(name);
+  // Check if name already ends with "(CURR)" — case-insensitive
+  const suffix = `(${curr})`.toLowerCase();
+  if (name.toLowerCase().endsWith(suffix)) return _esc(name);
+  return `${_esc(name)} (${curr})`;
+}
+
 function txTypeColor(type) {
   const map = {expense:'red',income:'green',shared:'accent',transfer:'purple',lend:'amber',borrow:'teal'};
   return map[type] || 'gray';
@@ -3025,8 +3040,20 @@ function renderDashboard() {
     </div>`;
   }
 
-  // Recent transactions
-  const recentTxs = [...db.transactions].filter(t=>!t.archived).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
+  // Recent transactions — apply same exclusions as main tx log (PLS #114):
+  //   - Hide isAutoFee children (shown nested under parent remittance)
+  //   - Hide isLoanPayment children (shown under loan)
+  //   - Hide isAutoReimb (shown in Reimbursements tab)
+  //   - Hide isFeeReimbursable (tracking-only shared tx)
+  // Without these, fee/reimb children appear as standalone rows AND nested = visual duplication.
+  const recentTxs = [...db.transactions].filter(t => {
+    if (t.archived) return false;
+    if (t.isAutoFee && t.parentId) return false;
+    if (t.isLoanPayment && !t.isBatchSettlement) return false;
+    if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
+    if (t.isFeeReimbursable) return false;
+    return true;
+  }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
     `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions yet</div></div>`;
 
@@ -3358,9 +3385,14 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '23.4';
+const APP_VERSION = '23.5';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '23.5', date: 'May 2026', changes: [
+    '🐛 Fixed remittance fee double display sa Dashboard Recent Tx + Account Detail',
+    '🔧 Account dropdowns no longer show double currency suffix (e.g. "Cash (PHP) (PHP)")',
+    '✗ New: Write off reimbursement option — absorb remaining as loss (PLS #116)',
+  ]},
   { ver: '23.4', date: 'May 2026', changes: [
     '🐛 PLS #114: Fixed remittance fee double display in tx log',
     '🔧 isAutoFee children now hidden from main tx log (shown only nested under parent)',
@@ -4332,7 +4364,7 @@ function renderUnifiedAmountForm() {
   // Forces user to explicitly pick. Prevents accidentally submitting to wrong account
   // (e.g. last-used "Beep Card" when user actually wanted Cash).
   const placeholderAcctOpt = `<option value="" disabled selected>— Select account —</option>`;
-  const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const currOpts = (db.trackedCurrencies || [_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('');
 
   if (isShared) {
@@ -4827,7 +4859,7 @@ function renderRemittanceForm() {
   // Rate is always expressed as "1 [from currency] = X [to currency]".
   // ── PERSONAL LOGIC SET #85 ── no pre-selected account
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
-  const allOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}" data-curr="${a.currency}">${_esc(a.name)} (${a.currency})</option>`).join('');
+  const allOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}" data-curr="${a.currency}">${acctLabel(a)}</option>`).join('');
 
   if (accts.length < 2) {
     return `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
@@ -4891,7 +4923,7 @@ function renderRemittanceForm() {
             <label class="form-label">Fee Account</label>
             <select class="form-input" id="rem-fee-acct">
               <option value="">-- No fee --</option>
-              ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${_esc(a.name)} (${a.currency})</option>`).join('')}
+              ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -5083,7 +5115,7 @@ function renderExternalForm(type) {
   const accts = db.accounts.filter(a=>!a.archived);
   // ── PERSONAL LOGIC SET #86 ── no pre-selected account (External In/Out)
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
-  const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   return `<div>
     <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
@@ -5180,7 +5212,7 @@ function renderTransferForm() {
   // ── PERSONAL LOGIC SET #87 ── no pre-selected From/To (Transfer)
   // User must explicitly pick both accounts. Prevents accidental wrong-direction transfers.
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
-  const acctOpts = ()=>placeholderOpt + accts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = ()=>placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   return `<div>
     <div class="form-group"><label class="form-label">From *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
@@ -6876,7 +6908,7 @@ function openEditTx(txId) {
   if (tx.type==='transfer') { openEditTransfer(txId); return; }
   const accts = db.accounts.filter(a=>!a.archived);
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
-  const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
 
   const allCats = [...db.categories.expense, ...db.categories.income].filter(c=>!c.archived);
   const catOpts = allCats.flatMap(c=>[
@@ -7237,7 +7269,7 @@ function openEditTransfer(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
   const accts = db.accounts.filter(a=>!a.archived);
-  const acctOpts = (selId) => accts.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = (selId) => accts.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
   // Detect if existing tx used custom rate (toAmount differs from snapshot conversion)
   const toAcct = accts.find(a=>a.id===tx.toAccountId);
@@ -8092,7 +8124,7 @@ function openReimbDialog(person) {
        </div>`
     : `<input type="hidden" id="rsl-curr" value="${defaultCurr}">`;
 
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${acctLabel(a)}</option>`).join('');
 
   openDlg(`Receive from ${person}`,
     `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">${entries.length} pending · settled oldest first</div>
@@ -8118,6 +8150,7 @@ function openReimbDialog(person) {
        <input class="form-input" id="rsl-notes" placeholder="e.g. paid in full">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="openWriteOffReimb('${person.replace(/'/g,"\\'")}')" title="Absorb remaining as your loss">✗ Write off</button>
      <button class="btn btn-success btn-sm" onclick="confirmReimbSettlement('${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
   // Auto-fill total
@@ -8195,6 +8228,109 @@ function updateReimbBatchPreview(person) {
     if (untouched > 0) msg += `<div style="color:var(--text4);margin-top:2px">${untouched} ${untouched>1?'entries':'entry'} untouched</div>`;
     preview.innerHTML = msg;
   }
+}
+
+// ── PERSONAL LOGIC SET #116 ── Write-off reimbursement: absorb remaining as loss.
+// Use case: small dust amounts, uncollectible from friend/colleague, or you decide to
+// pay it forward. Creates one isReimbSettlementLoss expense child per pending entry,
+// marks the parent shared tx as settled with reason. Mirrors PLS #59 (loan write-off).
+function openWriteOffReimb(person) {
+  const entries = getReimbEntriesForPerson(person);
+  if (entries.length === 0) { showToast('No pending reimbursements'); return; }
+  const totalsByCurr = {};
+  for (const e of entries) {
+    const c = e.tx.currency || _homeBase();
+    totalsByCurr[c] = (totalsByCurr[c]||0) + e.remaining;
+  }
+  const summaryHtml = Object.entries(totalsByCurr)
+    .map(([c, amt]) => `<li><strong>${fmt(amt, c)}</strong> across ${entries.filter(e=>(e.tx.currency||_homeBase())===c).length} ${entries.filter(e=>(e.tx.currency||_homeBase())===c).length>1?'entries':'entry'}</li>`)
+    .join('');
+  const reasons = ['Uncollectible','Forgiven','Disputed','Person unreachable','Other'];
+  const reasonOpts = reasons.map(r=>`<option value="${r}">${r}</option>`).join('');
+
+  openDlg(`Write off reimbursement from ${person}?`,
+    `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">
+      You're absorbing the remaining as your own loss. This will:
+      <ul style="margin:8px 0 0 20px;padding:0;font-size:12px;color:var(--text3)">
+        ${summaryHtml}
+        <li>Log each as <strong>Reimbursement Settlement Loss</strong> (real expense)</li>
+        <li>Mark all entries as settled (won't appear in active list)</li>
+        <li>Cannot be undone — but each loss is a regular tx you can delete</li>
+      </ul>
+    </div>
+    <div class="form-group"><label class="form-label">Reason</label>
+      <select class="form-input" id="wor-reason">${reasonOpts}</select>
+    </div>
+    <div class="form-group"><label class="form-label">Notes (optional)</label>
+      <input class="form-input" id="wor-notes" placeholder="Additional context...">
+    </div>
+    <div class="form-group"><label class="form-label">Date</label>
+      <input class="form-input" type="date" id="wor-date" value="${today()}">
+    </div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="confirmWriteOffReimb('${person.replace(/'/g,"\\'")}')">Write off</button>`
+  );
+}
+
+function confirmWriteOffReimb(person) {
+  const entries = getReimbEntriesForPerson(person);
+  if (entries.length === 0) { showToast('No pending reimbursements'); closeDlg(); return; }
+  const reason = document.getElementById('wor-reason')?.value || 'Uncollectible';
+  const notes = document.getElementById('wor-notes')?.value?.trim() || '';
+  const date = document.getElementById('wor-date')?.value || today();
+  const time = nowTime();
+  const lossNotes = notes ? `${reason} — ${notes}` : reason;
+
+  for (const e of entries) {
+    const tx = e.tx;
+    const c = tx.currency || _homeBase();
+    // Create loss child tx (expense — real economic loss to user)
+    db.transactions.push({
+      id: 'tx-' + genId(),
+      type: 'expense',
+      amount: e.remaining,
+      currency: c,
+      accountId: tx.accountId,
+      date, time,
+      notes: `Reimbursement write-off from ${person} — ${lossNotes}`,
+      isReimbSettlementLoss: true,
+      isSettlement: true,
+      parentId: tx.id,
+      writeOffReason: reason,
+      categoryId: 'sc-misc',
+      fxSnapshot: buildFxSnapshot(date),
+      createdAt: new Date().toISOString()
+    });
+
+    // Mark paidSoFar so the parent reaches fully-settled state
+    if (!tx.paidSoFar || typeof tx.paidSoFar !== 'object') tx.paidSoFar = {};
+    tx.paidSoFar[person] = (tx.paidSoFar[person] || 0) + e.remaining;
+
+    // Check if all persons are fully settled to mark settled = true
+    let allSettled = true;
+    if (tx.persons && tx.persons.length > 0) {
+      for (const p of tx.persons) {
+        const paid = tx.paidSoFar[p.name] || 0;
+        if (paid + 0.001 < (p.share || 0)) { allSettled = false; break; }
+      }
+    } else {
+      const owed = (tx.totalBill || tx.amount) - (tx.myShare || 0);
+      if ((tx.paidSoFar[person] || 0) + 0.001 < owed) allSettled = false;
+    }
+    if (allSettled) {
+      tx.settled = true;
+      tx.settledAs = 'writeoff';
+      tx.writeOffReason = reason;
+    }
+  }
+
+  saveDBWithSync();
+  closeDlg();
+  if (currentPage === 'reimbursements') renderReimbursementsPage();
+  else if (currentPage === 'transactions') renderTransactions();
+  else if (currentPage === 'dashboard') renderDashboard();
+  showToast(`✓ Reimbursement written off (${entries.length} ${entries.length>1?'entries':'entry'})`);
+  haptic('success');
 }
 
 // 📖 USER STORY: Pag pinindot mo ang "Settle" sa reimbursement ng isang tao, lahat ng pending
@@ -8491,7 +8627,16 @@ function openAcctDetail(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
   const bal = getAcctBalance(a.id);
-  const recentTxs = db.transactions.filter(t=>!t.archived&&(t.accountId===acctId||t.fromAccountId===acctId||t.toAccountId===acctId)).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
+  const recentTxs = db.transactions.filter(t => {
+    if (t.archived) return false;
+    if (!(t.accountId===acctId || t.fromAccountId===acctId || t.toAccountId===acctId)) return false;
+    // PLS #114: hide children that are shown nested under their parent
+    if (t.isAutoFee && t.parentId) return false;
+    if (t.isLoanPayment && !t.isBatchSettlement) return false;
+    if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
+    if (t.isFeeReimbursable) return false;
+    return true;
+  }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
 
   openSheet('gen', a.name, `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -8906,7 +9051,7 @@ function invTypeIcon(type) {
 }
 
 function openAddInv() {
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   openSheet('gen','Add Investment',`
@@ -9020,7 +9165,7 @@ function openSellInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
   const gl = (inv.currentValue||inv.amount) - inv.amount;
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   openSheet('gen2','Sell / Close Investment',`<div style="padding:8px 4px">
     <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;text-align:center">
       <div style="font-size:13px;color:var(--text3)">Invested</div>
@@ -9062,7 +9207,7 @@ function openEditInv(invId) {
   if (!inv) return;
   const invTypes = ['Stocks','Crypto','Bonds','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Other'];
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===inv.currency?'selected':''}>${c}</option>`).join('');
-  const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   openSheet('gen2','Edit Investment',`
     <div class="form-group"><label class="form-label">Investment Name *</label>
       <input class="form-input" id="ei-name" value="${escapeAttr(inv.name)}"></div>
@@ -9332,7 +9477,7 @@ function openBatchSettleEdit(txId, direction) {
         <div style="font-family:var(--mono);color:var(--red)">-${fmt(lossChild.amount,lossChild.currency)}</div>
        </div>` : '';
 
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
 
   openDlg(`Edit Batch Settlement`,
     `<div style="font-size:11px;color:var(--text4);margin-bottom:10px">Settled loans (${loans.length})</div>
@@ -9446,7 +9591,7 @@ function openBatchReimbSettleEdit(txId) {
         <div style="font-family:var(--mono);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)}</div>
        </div>` : '';
 
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
 
   openDlg(`Edit Batch Reimbursement`,
     `<div style="font-size:11px;color:var(--text4);margin-bottom:10px">Settled entries (${settledTxs.length})</div>
@@ -9576,7 +9721,7 @@ function openBatchSettleLoans(direction, person) {
        </div>`
     : `<input type="hidden" id="bsl-curr" value="${defaultCurr}">`;
 
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.currency===defaultCurr?'selected':''}>${acctLabel(a)}</option>`).join('');
 
   const totalLabel = direction==='lent' ? 'Total received' : 'Total paid';
 
@@ -9844,7 +9989,7 @@ function openLoanDetail(loanId, direction) {
   const defaultPayCurr = defaultAcct?.currency || loan.currency;
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===defaultPayCurr?'selected':''}>${c}</option>`).join('');
   // account dropdown carries data-curr so currency auto-syncs on change
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.id===defaultAcct?.id?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.id===defaultAcct?.id?'selected':''}>${acctLabel(a)}</option>`).join('');
   const isLent = direction === 'lent';
   const accentColor = isLent ? 'var(--amber)' : 'var(--red)';
   const avatarLetters = loan.personName?.slice(0,2).toUpperCase() || '??';
@@ -10039,7 +10184,7 @@ function _recordLoanPayment(loanId, direction) {
 function editLoanFull(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.id===loan.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}" ${a.id===loan.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===loan.currency?'selected':''}>${c}</option>`).join('');
   const acct = db.accounts.find(a=>a.id===loan.accountId);
   const acctCurr = acct?.currency || _homeBase();
@@ -10132,7 +10277,7 @@ function saveLoanFull(loanId, direction) {
 function editLoanPayment(paymentId, loanId, direction) {
   const payment = db.transactions.find(t => t.id === paymentId);
   if (!payment) return;
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===payment.accountId?'selected':''}>${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===payment.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===payment.currency?'selected':''}>${c}</option>`).join('');
   openDlg('Edit Payment',
     `<div class="form-row fr2">
@@ -10582,7 +10727,7 @@ function confirmDeleteLoan(loanId) {
 
 function openAddLoan(direction='lent') {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${_esc(a.name)} (${a.currency})</option>`).join('');
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${acctLabel(a)}</option>`).join('');
   const isLent = direction === 'lent';
   const personLabel = isLent ? 'Lent To' : 'Borrowed From';
   const amtLabel = isLent ? 'Expected Receivable' : 'Expected Payable';
