@@ -698,14 +698,14 @@ option{background:var(--bg3);color:var(--text)}
       </div>
       
       <div style="position:relative;margin-bottom:16px">
-        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">NATIONALITY (HOME)</label>
-        <input id="ob-nat-search" placeholder="Search country..." oninput="searchNat(this.value)" onfocus="searchNat(this.value)" autocomplete="off" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;color:var(--text);font-size:15px;outline:none">
+        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">🏠 NATIONALITY (HOME BASE)</label>
+        <input id="ob-nat-search" placeholder="e.g. Philippines, Japan..." oninput="searchNat(this.value)" onfocus="searchNat(this.value)" autocomplete="off" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;color:var(--text);font-size:15px;outline:none">
         <div id="ob-nat-list" style="position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-top:4px;max-height:200px;overflow-y:auto;z-index:99;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
       </div>
       
       <div style="position:relative;margin-bottom:16px">
-        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">CURRENT LOCATION</label>
-        <input id="ob-loc-search" placeholder="Search country..." oninput="searchLoc(this.value)" onfocus="searchLoc(this.value)" autocomplete="off" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;color:var(--text);font-size:15px;outline:none">
+        <label style="font-size:11px;opacity:.7;letter-spacing:.5px;display:block;margin-bottom:6px">📍 CURRENT LOCATION</label>
+        <input id="ob-loc-search" placeholder="Where you live now..." oninput="searchLoc(this.value)" onfocus="searchLoc(this.value)" autocomplete="off" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;color:var(--text);font-size:15px;outline:none">
         <div id="ob-loc-list" style="position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-top:4px;max-height:200px;overflow-y:auto;z-index:99;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.5)"></div>
       </div>
       
@@ -1279,7 +1279,46 @@ const STORED_BASE = 'PHP'; // Pre-DB-load fallback only. NOT a runtime rate base
 // ── HOME-AGNOSTIC ── Returns the user's home base currency code dynamically.
 // Falls back to STORED_BASE for legacy/seed safety only. New users get home from nationality.
 // Use this everywhere instead of hardcoding 'PHP' for display/UX logic.
-function _homeBase() { return db?.displayCurrency || STORED_BASE; }
+// ── PERSONAL LOGIC SET #111 ── Home base is derived from NATIONALITY, not display currency.
+// IMPORTANT CONCEPTUAL CLARIFICATION:
+//   - HOME BASE: Determined by user's nationality. IMMUTABLE per identity.
+//     Filipino → PHP, Korean → KRW, Japanese → JPY, Australian → AUD, etc.
+//     This is the anchor for ALL FX math, Net Worth, salary tracking.
+//   - DISPLAY CURRENCY (legacy): Was a separate toggle. Now AUTO-SYNCED to home base.
+//     The two are kept identical at all times to prevent drift.
+// To change home base, user must change nationality in Profile.
+// This prevents the bug where users would accidentally see "1 PHP = K0.0768"
+// (PGK as home) when they're actually Filipino.
+function _homeBase() {
+  // Primary source: nationality → currency map
+  const nat = db?.profile?.nationality;
+  if (nat && typeof COUNTRY_CURRENCIES !== 'undefined' && COUNTRY_CURRENCIES[nat]) {
+    return COUNTRY_CURRENCIES[nat];
+  }
+  // Fallback chain (only when nationality not set or unknown):
+  //   1. db.displayCurrency (legacy compatibility)
+  //   2. STORED_BASE constant ('PHP' for pre-DB-load context)
+  return db?.displayCurrency || STORED_BASE;
+}
+
+// ── PERSONAL LOGIC SET #112 ── Display currency is DECOUPLED from home base.
+// Use _displayCurrency() for VIEW (dashboard total, equiv badges, receipt home-row).
+// Use _homeBase() for MATH ANCHOR (db.fxRates, Net Worth, FX gain/loss compute).
+// _inDisplay(homeAmt) converts a home-base value to display currency for presentation.
+function _displayCurrency() {
+  return db?.displayCurrency || _homeBase();
+}
+function _inDisplay(homeAmt) {
+  if (typeof homeAmt !== 'number' || isNaN(homeAmt)) return 0;
+  const disp = _displayCurrency();
+  const home = _homeBase();
+  if (disp === home) return homeAmt;
+  // db.fxRates[X] is stored as "1 X = home_base" (relative to home, not display).
+  // To convert home → display: divide home amount by the display currency's home rate.
+  const rate = db.fxRates[disp];
+  if (!rate || rate <= 0) return homeAmt; // graceful fallback
+  return homeAmt / rate;
+}
 
 // ═══════════════════════════════════════════════════════════
 // FX CONVERSION HELPERS — HOME-AGNOSTIC
@@ -1946,7 +1985,7 @@ function toggleDashReorderMode() {
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
-  const dispCurr = _homeBase();
+  const dispCurr = _displayCurrency();
   for (const t of txs) {
     // 📖 USER STORY: Pag nag-open ka ng Analytics, yung income at expense totals mo ay malinis —
     // hindi kasama ang loan transactions, settlement entries, o auto-generated reimbursements.
@@ -2356,7 +2395,9 @@ function npRender() {
     if (safe && /[\d)]$/.test(safe)) {
       const val = Function('"use strict";return (' + safe + ')')();
       if (typeof val === 'number' && isFinite(val) && String(val) !== _npExpr) {
-        resEl.textContent = '= ' + (Math.round(val * 10000) / 10000);
+        // PLS #110: rate fields show full precision in preview; amount fields → 4 decimals
+        const isRateField = /rate/i.test(_npTarget?.id || '');
+        resEl.textContent = '= ' + (isRateField ? fmtRate(val) : (Math.round(val * 10000) / 10000));
       } else resEl.textContent = '';
     } else resEl.textContent = '';
   } catch(e) { resEl.textContent = ''; }
@@ -2923,7 +2964,7 @@ function renderDashboard() {
   const lmk = lastMonthKey();
   const curr = getMonthTotals(mk);
   const insights = generateInsights();
-  const disp = _homeBase();
+  const disp = _displayCurrency();
 
   // Budget bars
   // Budget display logic:
@@ -2996,7 +3037,7 @@ function renderDashboard() {
   let onboardChecklistHTML = '';
   if (!dismissedOnboarding) {
     const steps = [
-      { id:'profile', label:'Set your nickname & country', done: !!(db.profile?.nickname && db.profile?.country), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'profile\'),50)' },
+      { id:'profile', label:'Set your nickname & nationality', done: !!(db.profile?.nickname && db.profile?.nationality), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'profile\'),50)' },
       { id:'accounts', label:'Add your first account', done: db.accounts.filter(a=>!a.archived).length > 0, action: 'nav(\'accounts\')' },
       { id:'fx', label:'Set FX rates for tracked currencies', done: db.trackedCurrencies.filter(c=>c!==(_homeBase())).every(c=>(db.fxRates[c]||0)>0), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'fx\'),50)' },
       { id:'firsttx', label:'Log your first transaction', done: db.transactions.filter(t=>!t.archived).length > 0, action: 'openAddSheet()' },
@@ -3301,9 +3342,59 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '22.4';
+const APP_VERSION = '23.0';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '23.0', date: 'May 2026', changes: [
+    '🐛 Fixed rate fields rounded to 4 decimals on derive (PLS #108 violation)',
+    '🔧 Transfer auto-derive rate now uses fmtRate (full precision)',
+    '🔧 Edit Transfer auto-derive rate uses fmtRate',
+    '🔧 Add Loan FX rate field uses fmtRate',
+    '🔧 Numpad live preview respects rate field precision (full vs cents)',
+    '✅ Verified: zero storage rounding (PLS #68 maintained throughout)',
+    '✅ All rounding sites are UI/export only (acceptable)',
+  ]},
+  { ver: '22.9', date: 'May 2026', changes: [
+    '✅ Consistent labeling throughout app: Home Base (nationality) vs Current Location',
+    '🔧 Onboarding: "NATIONALITY (HOME BASE)" + "CURRENT LOCATION" with proper placeholders',
+    '🔧 Setup checklist: "Set nickname & nationality" (was "& country")',
+    '🔧 Settings rows show: 🏠 Nationality | 📍 Current Location | 🏠 Home Base (auto) | 💱 Display',
+    '🔧 Contract wizard: "Work Location" label (separate from home base concept)',
+  ]},
+  { ver: '22.8', date: 'May 2026', changes: [
+    '🔧 Properly wired display currency throughout all 17 analytics tabs',
+    '🐛 Fixed: Cashflow/Trends/Overview/Calendar/YoY now show correct values when display≠home',
+    '🐛 Fixed: CrossCurrency/People/Budget/Subs/DayOfWeek/AccountHealth/AISummary now wrap toPhp accumulators with _inDisplay()',
+    '✅ getMonthTotals contract: returns values in display currency (no double conversion)',
+    '✅ toPhp accumulator contract: returns home base (display layer wraps with _inDisplay)',
+  ]},
+  { ver: '22.7', date: 'May 2026', changes: [
+    '💱 Display Currency selector restored (PLS #112)',
+    '🔧 Cleanly DECOUPLED from home base — display is view-only',
+    '🔧 Home Base (nationality) = math anchor · Display = visual preference',
+    '🔧 New _displayCurrency() and _inDisplay() helpers',
+    '🔧 Settings: 4 rows — Nickname/Nat · Location · Home Base · Display Currency selector',
+    '🔧 Dashboard Total Cash on Hand respects display currency',
+    '🔧 Account/Loan equiv badges show in display currency (was forced to home)',
+    '🔧 Receipt shows BOTH home + display rows when they differ',
+    '🐛 Fixed: switching display NO LONGER recomputes fxRates (was destroying user rates)',
+  ]},
+  { ver: '22.6', date: 'May 2026', changes: [
+    '🏠 Consistent labeling: Home Base (nationality) vs Current Location (where you live)',
+    '🔧 Settings: 3 rows — Nickname/Nationality · Current Location · Home Base (read-only)',
+    '🔧 Edit Profile: clarified labels with emoji + helper text',
+    '🔧 Removed redundant "Display Currency" selector (auto-synced to nationality)',
+    '🔧 Diagnostics panel: shows home vs display drift status',
+    '✅ Throughout app: nationality drives FX math, country is contextual only',
+  ]},
+  { ver: '22.5', date: 'May 2026', changes: [
+    '🏠 Home base now derived from NATIONALITY, not display currency (PLS #111)',
+    '🔧 Conceptual fix: home is identity (Filipino→PHP), display was wrongly conflated',
+    '🐛 Fixes display drift bug where "1 PHP = K0.0768" appeared for PH users',
+    '🔧 Auto-sync on app load: displayCurrency realigns to nationality, fxRates recompute',
+    '🔧 FX Rates page header now shows nationality flag + source',
+    '✅ To change home base, update nationality in Profile (one source of truth)',
+  ]},
   { ver: '22.4', date: 'May 2026', changes: [
     '🐛 Fixed numpad rounding bug — rate fields now keep FULL precision (PLS #110)',
     '🔧 Numpad detects rate fields by ID — full precision for rates, 2-decimal for amounts',
@@ -5219,7 +5310,7 @@ function onTfToAmountInput() {
     // Same currency or non-home-pair — fallback
     rate = toAmount / amount;
   }
-  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  rateEl.value = fmtRate(rate); // PLS #108: full precision for rate fields
   updateTransferPreview();
 }
 
@@ -6516,8 +6607,14 @@ function openTxReceipt(txId) {
 
   if (tx.currency !== _homeBase()) {
     const home = _homeBase();
+    const disp = _displayCurrency();
     const homeEquiv = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">In ${home}</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(homeEquiv, home)}</div></div>`;
+    // If display ≠ home, also show in display currency
+    if (disp !== home) {
+      const dispEquiv = _inDisplay(homeEquiv);
+      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">In ${disp}</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(dispEquiv, disp)}</div></div>`;
+    }
   }
 
   if (tx.notes) {
@@ -6977,7 +7074,7 @@ function onEtfToAmountInput() {
   if (txCurr !== home && toAcct.currency === home) rate = toAmount / amount;
   else if (txCurr === home && toAcct.currency !== home) rate = amount / toAmount;
   else rate = toAmount / amount;
-  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  rateEl.value = fmtRate(rate); // PLS #108: full precision for rate fields
   updateEditTransferPreview();
 }
 
@@ -8299,7 +8396,7 @@ function renderAcctCard(a) {
     </div>
     ${a.note?`<div style="font-size:11px;color:var(--text4);margin-bottom:4px">${a.note}</div>`:''}
     <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency)}</div>
-    ${a.currency!==_homeBase()?`<div style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_homeBase())}${toPhp(bal,a.currency).toFixed(0)}</div>`:''}
+    ${a.currency!==_displayCurrency()?`<div style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_displayCurrency())}${_inDisplay(toPhp(bal,a.currency)).toFixed(0)}</div>`:''}
     ${alerts.length>0?`<div style="margin-top:6px;font-size:10px;color:var(--amber)">⚠ ${alerts[0].msg}</div>`:''}
   </div>`;
 }
@@ -8651,7 +8748,7 @@ function renderInvestments() {
   const totalCurrent  = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
   const totalGL = totalCurrent - totalInvested;
   const totalGLPct = totalInvested > 0 ? (totalGL/totalInvested)*100 : 0;
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   const typeColors = { Stocks:'#6c63ff', Crypto:'#f7931a', Bonds:'#34d399', 'Mutual Fund':'#60a5fa', 'Time Deposit':'#f472b6', 'Real Estate':'#a78bfa', Cooperative:'#fb923c', Corporation:'#e879f9', 'Land Ownership':'#4ade80', Other:'#94a3b8' };
   const typeMap = {};
   invs.forEach(i=>{ const k=i.type||'Other'; typeMap[k]=(typeMap[k]||0)+toPhp(i.currentValue||i.amount,i.currency); });
@@ -9820,7 +9917,7 @@ function openLoanDetail(loanId, direction) {
       <div style="text-align:center;padding:8px 0 12px">
         <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Remaining</div>
         <div style="font-size:36px;font-family:var(--mono);font-weight:700;color:${accentColor}">${fmt(remaining,loan.currency)}</div>
-        ${loan.currency!==_homeBase()?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_homeBase())}${toPhp(remaining,loan.currency).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
+        ${loan.currency!==_displayCurrency()?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_displayCurrency())}${_inDisplay(toPhp(remaining,loan.currency)).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
       </div>
 
       <!-- Progress bar -->
@@ -10528,7 +10625,7 @@ function onNlDisburseInput() {
   // Rate semantics: "1 loanCurr = X acctCurr"
   // disburse [acctCurr] = amount [loanCurr] × rate → rate = disburse / amount
   const rate = disburse / amount;
-  rateEl.value = (Math.round(rate * 10000) / 10000).toString();
+  rateEl.value = fmtRate(rate); // PLS #108: full precision for rate fields
   updateAddLoanFx();
 }
 
@@ -11054,7 +11151,7 @@ function renderInlineInsights(types, opts = {}) {
 // _calMonth moved to top
 
 function renderAnalyticsCalendar() {
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   if (!_calMonth) {
     const now = new Date();
     _calMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -11128,11 +11225,11 @@ function renderAnalyticsCalendar() {
   html += `<div class="card" style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
     <div>
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Income</div>
-      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(fromPhp(monthIncome,dc), dc)}</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(monthIncome, dc)}</div>
     </div>
     <div>
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Expense</div>
-      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(fromPhp(monthExpense,dc), dc)}</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(monthExpense, dc)}</div>
     </div>
     <div>
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Txs</div>
@@ -11221,7 +11318,7 @@ function navCalMonth(delta) {
 }
 
 function openCalDay(dateStr) {
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   const dayTxs = (db.transactions || [])
     .filter(t => !t.archived && t.date === dateStr)
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -11290,7 +11387,7 @@ function openCalDay(dateStr) {
 
 function renderAnalyticsOverview() {
   // ── DEBUG-SCAN NOTE ── Empty state + NaN guards exist deeper in this function (uses `|| 0` fallbacks and "No data" empty UI). Naive regex scans may flag as missing — they are present.
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0-indexed
@@ -11383,7 +11480,7 @@ function renderAnalyticsOverview() {
   );
   const expCats = {}, incCats = {};
   let expTotal = 0, incTotal = 0;
-  const dispCurr = _homeBase();
+  const dispCurr = _displayCurrency();
   for (const tx of allTxs) {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = getCategoryDisplay(tx.categoryId);
@@ -11479,12 +11576,12 @@ function renderAnalyticsOverview() {
         <div class="fr4-resp" style="margin-top:14px">
       <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
         <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value tx-pos">${fmt(curr.income,disp)}</div>
+        <div class="metric-value tx-pos">${fmt(curr.income, disp)}</div>
         ${chgBadge(incomeChg)}
       </div>
       <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
         <div class="metric-label">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-        <div class="metric-value tx-neg">${fmt(curr.expense,disp)}</div>
+        <div class="metric-value tx-neg">${fmt(curr.expense, disp)}</div>
         ${chgBadge(expChg)}
       </div>
       <div class="metric-card">
@@ -12585,7 +12682,7 @@ function buildPieChart(cats, total, prefix, period) {
   if (!entries.length || total === 0) {
     return `<div style="text-align:center;color:var(--text4);font-size:13px;padding:28px 0">No data yet ✦</div>`;
   }
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const isMonthly = period && period !== 'ytd';
 
   // Gen Z donut — thick arc, gaps between slices, gradient-feel colors
@@ -12695,7 +12792,7 @@ function renderAnalyticsSpending() {
   const period = window._analyticsOverviewPeriod || 'ytd';
   // ── PERSONAL LOGIC SET #65 ── dynamic spending segmented control:
   // auto-detects user's budget currencies (1-2 most common), falls back to display currency
-  const _disp = _homeBase();
+  const _disp = _displayCurrency();
   const budgetCurrs = [...new Set((db.budgets||[]).filter(b=>!b.archived).map(b=>b.currency))];
   // If user has 2+ budgets in different currencies, allow toggle. Else show display currency only.
   const viewOptions = budgetCurrs.length >= 2 ? budgetCurrs.slice(0,2) : [_disp];
@@ -12746,7 +12843,7 @@ function renderAnalyticsSpending() {
   const total = sorted.reduce((s,[,v])=>s+v.total,0);
   const colors = ['var(--accent)','var(--red)','var(--amber)','var(--green)','var(--teal)','var(--purple)','var(--blue)'];
   // Display currency for the "total in display currency" countercheck
-  const dispCurr = _homeBase();
+  const dispCurr = _displayCurrency();
   const totalInDisp = view === dispCurr ? total : convert(total, view, dispCurr);
   // YTD has too many txs to expand; only monthly view shows the tx breakdown
   const isYTD = period === 'ytd';
@@ -12894,7 +12991,7 @@ function dismissOnboardChecklist() {
 }
 
 function renderAnalyticsTrends() {
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const months = [];
   for (let i=11; i>=0; i--) {
     const d = new Date(); d.setMonth(d.getMonth()-i);
@@ -12914,8 +13011,8 @@ function renderAnalyticsTrends() {
       <div style="height:4px;background:var(--red);border-radius:2px;width:${(m.expense/maxVal*80).toFixed(1)}%"></div>
     </div>
     <div style="text-align:right;min-width:100px">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(m.income,disp)}</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--red)">${fmt(m.expense,disp)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(m.income, disp)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--red)">${fmt(m.expense, disp)}</div>
     </div>
   </div>`).join('');
 
@@ -13127,7 +13224,7 @@ function renderSpendingHeatmap(disp) {
 function showHeatmapTooltip(e, dateKey, total, count) {
   const tip = document.getElementById('heatmap-tooltip');
   if (!tip) return;
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   tip.innerHTML = count === 0
     ? `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--text4);margin-top:2px">No expenses</div>`
     : `<div style="font-weight:600">${fmtDFull(dateKey)}</div><div style="color:var(--red);font-family:var(--mono);margin-top:2px">${fmt(total, disp)}</div><div style="color:var(--text4);font-size:10px;margin-top:1px">${count} transaction${count>1?'s':''} · tap to view</div>`;
@@ -13173,7 +13270,7 @@ function showHeatmapDay(dateKey) {
     showToast('No transactions on ' + fmtDFull(dateKey));
     return;
   }
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const rows = dayTxs.map(tx => {
     const acct = db.accounts.find(a=>a.id===tx.accountId);
     const acctName = acct?.name || '—';
@@ -13219,7 +13316,7 @@ function toggleWealthGroup(key) {
 }
 
 function renderAnalyticsWealth() {
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const { assets: totalAssets, liabs: totalLiab, net: nw, assetRows, liabRows } = getNetWorth();
 
   // iOS account type → SF Symbol-like icon mapping
@@ -13363,7 +13460,7 @@ function renderAnalyticsWealth() {
 
 
 function renderAnalyticsInvestments() {
-  const dispCurr = _homeBase();
+  const dispCurr = _displayCurrency();
   const all = (db.investments || []).filter(i => !i.archived);
   const active = all.filter(i => i.status !== 'sold');
   const sold = all.filter(i => i.status === 'sold');
@@ -13705,7 +13802,7 @@ function setPlanTab(t) { _planTab=t; renderPlanning(); }
 // ── WISHLIST ──
 function renderWishlistTab() {
   const wl = db.wishlist || [];
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   // Sort: not purchased first, by priority desc, then created desc
   const sorted = wl.slice().sort((a, b) => {
     if (!!a.purchased !== !!b.purchased) return a.purchased ? 1 : -1;
@@ -13760,7 +13857,7 @@ function renderWishlistTab() {
 
 function openAddWishlist(itemId) {
   const item = itemId ? (db.wishlist || []).find(w => w.id === itemId) : null;
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   const currencies = db.trackedCurrencies || [dc];
   const currOpts = currencies.map(c => `<option value="${c}" ${item && item.currency===c?'selected':(!item && c===dc?'selected':'')}>${c}</option>`).join('');
 
@@ -14648,7 +14745,7 @@ function doCheckin(contractId, hit) {
 function openContractWizard() {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   openSheet('gen', 'New Contract', `
-    <div class="form-group"><label class="form-label">Location / Country *</label>
+    <div class="form-group"><label class="form-label">📍 Work Location *</label>
       <input class="form-input" id="cw-location" placeholder="e.g. Papua New Guinea, Japan" oninput="searchEpList(this.value,'cw-loc-list','cw-location')" autocomplete="off">
       <div id="cw-loc-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:160px;overflow-y:auto"></div>
     </div>
@@ -15060,11 +15157,19 @@ function renderProfileTab() {
     <div class="card" style="margin-bottom:16px">
       <div class="section-hdr"><div class="section-title">Personal Info</div></div>
       <div class="settings-row" onclick="openEditProfile()">
-        <div class="sr-left"><div class="sr-icon">👤</div><div><div class="sr-text">${p.nickname||'Set nickname'}</div><div class="sr-sub">${p.country||'Set country'}</div></div></div>
+        <div class="sr-left"><div class="sr-icon">👤</div><div><div class="sr-text">${_esc(p.nickname)||'Set nickname'}</div><div class="sr-sub">🏠 ${_esc(p.nationality)||'Set nationality'}</div></div></div>
         <div class="sr-right">Edit →</div>
       </div>
+      <div class="settings-row" onclick="openEditProfile()">
+        <div class="sr-left"><div class="sr-icon">📍</div><div><div class="sr-text">Current Location</div><div class="sr-sub">${_esc(p.country)||'Not set'}</div></div></div>
+        <div class="sr-right">Edit →</div>
+      </div>
+      <div class="settings-row" style="cursor:default;opacity:0.85">
+        <div class="sr-left"><div class="sr-icon">🏠</div><div><div class="sr-text">Home Base</div><div class="sr-sub">From nationality · drives FX math</div></div></div>
+        <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())} ${_homeBase()}</div>
+      </div>
       <div class="settings-row" style="cursor:default">
-        <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">Primary display unit</div></div></div>
+        <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">View totals in this currency · view-only</div></div></div>
         <select class="form-input" style="width:auto;padding:5px 12px;font-size:12px" onchange="setDisplayCurrency(this.value)">${currOpts}</select>
       </div>
     </div>
@@ -15132,17 +15237,22 @@ function renderProfileTab() {
 
 function openEditProfile() {
   const p = db.profile;
+  const currentHome = p.nationality && typeof COUNTRY_CURRENCIES !== 'undefined' && COUNTRY_CURRENCIES[p.nationality]
+    ? COUNTRY_CURRENCIES[p.nationality]
+    : _homeBase();
   openSheet('gen','Edit Profile',`
     <div class="form-group"><label class="form-label">Nickname</label><input class="form-input" id="ep2-nick" value="${escapeAttr(p.nickname||'')}"></div>
     <div class="form-group">
-      <label class="form-label">Country</label>
-      <input class="form-input" id="ep2-country" value="${p.country||''}" placeholder="Search country..." oninput="searchEpList(this.value,'ep2-country-list','ep2-country')" autocomplete="off">
-      <div id="ep2-country-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
+      <label class="form-label">🏠 Nationality (Home Base)</label>
+      <input class="form-input" id="ep2-nat" value="${escapeAttr(p.nationality||'')}" placeholder="e.g. Philippines, Japan..." oninput="searchEpList(this.value,'ep2-nat-list','ep2-nat')" autocomplete="off">
+      <div id="ep2-nat-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
+      <div style="font-size:11px;color:var(--text4);margin-top:6px;line-height:1.4">Drives your home currency (${sym(currentHome)} ${currentHome}). All FX math anchored here. Changing this recomputes all rates.</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Nationality</label>
-      <input class="form-input" id="ep2-nat" value="${p.nationality||''}" placeholder="Search country..." oninput="searchEpList(this.value,'ep2-nat-list','ep2-nat')" autocomplete="off">
-      <div id="ep2-nat-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
+      <label class="form-label">📍 Current Location</label>
+      <input class="form-input" id="ep2-country" value="${escapeAttr(p.country||'')}" placeholder="Where you live now..." oninput="searchEpList(this.value,'ep2-country-list','ep2-country')" autocomplete="off">
+      <div id="ep2-country-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
+      <div style="font-size:11px;color:var(--text4);margin-top:6px;line-height:1.4">Where you live now. Optional context only — doesn't affect FX math.</div>
     </div>
     <button class="btn btn-primary btn-full" onclick="saveProfile()">Save Profile</button>
   `);
@@ -15241,39 +15351,17 @@ function saveProfile() {
 }
 
 function setDisplayCurrency(curr) {
-  // ── PERSONAL LOGIC SET #92 ── Display currency change = home base change.
-  // HOME-AGNOSTIC: Works for any user from any country (AU/NZ/US/PH/etc).
-  // FX rates are stored relative to home base. When home changes, rates must be
-  // recomputed so values display correctly. Without this, "convert(200, PHP, PGK)"
-  // would return 200 with PGK symbol instead of ~K15.36.
-  // Logic uses `oldHome → newHome` ratio — NOT tied to any specific currency pair.
-  const oldHome = _homeBase();
-  if (curr === oldHome) {
-    showToast(`Display currency: ${curr}`);
-    return;
-  }
-  // Get rate of new home in old home (e.g. 1 PGK = 13.02 PHP)
-  const newHomeRateInOldHome = db.fxRates[curr];
-  if (newHomeRateInOldHome && newHomeRateInOldHome > 0) {
-    // Recompute all FX rates: new = old / newHomeRateInOldHome
-    const newRates = {};
-    Object.keys(db.fxRates).forEach(c => {
-      if (c === curr) return; // new home doesn't need its own rate
-      newRates[c] = db.fxRates[c] / newHomeRateInOldHome;
-    });
-    // Old home now needs a rate (1 oldHome in newHome = 1/newHomeRateInOldHome)
-    newRates[oldHome] = 1 / newHomeRateInOldHome;
-    db.fxRates = newRates;
-    showToast(`🏠 Display currency → ${curr}. FX rates auto-recomputed.`);
-  } else {
-    db.fxRates[curr] = 1;
-    showToast(`🏠 Display currency → ${curr}. Set FX rates manually for accurate conversions.`);
-  }
+  // ── PERSONAL LOGIC SET #112 ── DECOUPLED display ≠ home base.
+  // displayCurrency is a VIEW preference only. It does NOT change FX math.
+  // FX rates always stay anchored to HOME BASE (from nationality).
+  // To actually change home base, user must update Nationality in Profile.
+  // This means switching display does NOT recompute fxRates — they stay home-relative.
+  if (!db.trackedCurrencies.includes(curr)) db.trackedCurrencies.push(curr);
   db.displayCurrency = curr;
-  if (!db.trackedCurrencies.includes(curr)) db.trackedCurrencies.unshift(curr);
-  if (!db.trackedCurrencies.includes(oldHome)) db.trackedCurrencies.push(oldHome);
   saveDBWithSync();
   renderSettings();
+  showToast(`💱 Display: ${sym(curr)} ${curr}`);
+  haptic('tap');
 }
 
 function removeTrackedCurr(code) {
@@ -15316,25 +15404,24 @@ function addTrackedCurr(code) {
 function renderFXTab() {
   const home = _homeBase();
   const currencies = db.trackedCurrencies.filter(c=>c!==home);
+  const nat = db.profile?.nationality;
+  const natFlag = nat && typeof getFlag === 'function' ? getFlag(nat) : '';
 
   // ── PERSONAL LOGIC SET #109 ── FX Rates page convention:
   //   Always display "1 [foreign] = [home_symbol][rate]" — foreign on left, home on right.
   //   Full precision via fmtRate() — no rounding visible to user.
-  //   Header banner clarifies which currency is the home base so users understand convention.
+  //   Header shows home base derived from NATIONALITY (PLS #111).
   let html = `<div class="page-pad">
     <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Home base</div>
     <div class="card" style="margin-bottom:14px;padding:12px 14px;background:linear-gradient(135deg,var(--accent-bg) 0%,transparent 100%)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
         <div>
           <div style="font-size:16px;font-weight:700;letter-spacing:-0.3px">${sym(home)} ${home}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">All rates shown as "1 foreign = ${sym(home)}home"</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${natFlag} ${nat ? `From your nationality (${nat})` : 'From STORED_BASE fallback'} · "1 foreign = ${sym(home)}home"</div>
         </div>
-        ${db.profile?.nationality && COUNTRY_CURRENCIES[db.profile.nationality] && COUNTRY_CURRENCIES[db.profile.nationality] !== home ? `
-        <button class="btn btn-ghost btn-sm" onclick="resetHomeToNationality()" style="font-size:11px">↻ Reset to ${COUNTRY_CURRENCIES[db.profile.nationality]}</button>
-        ` : ''}
       </div>
     </div>
-    <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend.</div>`;
+    <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend. To change home base, update your nationality in Profile.</div>`;
 
   for (const c of currencies) {
     const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵',name:c};
@@ -15369,8 +15456,7 @@ function renderFXTab() {
   return html;
 }
 
-// Allow user to reset displayCurrency back to what their nationality implies.
-// Useful if displayCurrency drifted from intent (e.g. legacy from older session).
+// Legacy: kept for back-compat but auto-sync now handles drift in ensureDBIntegrity
 function resetHomeToNationality() {
   const nat = db.profile?.nationality;
   if (!nat || !COUNTRY_CURRENCIES[nat]) {
@@ -15378,12 +15464,11 @@ function resetHomeToNationality() {
     return;
   }
   const target = COUNTRY_CURRENCIES[nat];
-  const current = _homeBase();
+  const current = db.displayCurrency || _homeBase();
   if (target === current) {
     showToast('Already on ' + target);
     return;
   }
-  // Recompute fxRates so they're relative to new home (PLS #92)
   setDisplayCurrency(target);
   saveDBWithSync();
   renderSettings();
@@ -16858,9 +16943,10 @@ function runDiagDbIntegrity() {
 
   _diagSection('2. Profile & settings');
   _diagLog('  Nickname: ' + (db.profile?.nickname || '—'));
-  _diagLog('  Nationality: ' + (db.profile?.nationality || '—'));
-  _diagLog('  Country: ' + (db.profile?.country || '—'));
-  _diagLog('  Display currency: ' + (db.displayCurrency || '—'));
+  _diagLog('  🏠 Nationality (Home): ' + (db.profile?.nationality || '—'));
+  _diagLog('  📍 Current Location: ' + (db.profile?.country || '—'));
+  _diagLog('  Home base currency: ' + _homeBase() + ' (derived from nationality)');
+  _diagLog('  Display currency (legacy): ' + (db.displayCurrency || '—') + (db.displayCurrency !== _homeBase() ? ' ⚠️ drift!' : ' ✅ aligned'));
   _diagLog('  Onboarded: ' + (db.onboarded ? '✅' : '⚠️ false'));
   _diagLog('  Tracked currencies: ' + (db.trackedCurrencies || []).join(', '));
 
@@ -17199,7 +17285,7 @@ function exportXLSX() {
 function exportCSV() {
   showLoading('Generating CSV...');
   try {
-    const dc = _homeBase();
+    const dc = _displayCurrency();
     const accts = db.accounts || [];
     const cats = db.categories || { income: [], expense: [] };
     const findAcct = (id) => accts.find(a => a.id === id)?.name || '';
@@ -17350,7 +17436,7 @@ function autoMapCSVColumns(header) {
 function renderCSVImportBody() {
   const s = _csvImportState;
   if (!s) return '<div class="page-pad">No CSV loaded</div>';
-  const dc = _homeBase();
+  const dc = _displayCurrency();
   const colOpts = s.header.map((c, i) => `<option value="${i}">${escapeAttr(c)} (col ${i+1})</option>`).join('');
   const accts = (db.accounts || []).filter(a => !a.archived);
   const acctOpts = '<option value="">— Pick account —</option>' + accts.map(a => `<option value="${a.id}">${escapeAttr(a.name)}</option>`).join('');
@@ -19166,6 +19252,21 @@ function ensureDBIntegrity() {
     if (!db.settings || typeof db.settings !== 'object') { db.settings = {}; issues.push('init db.settings'); }
     if (!db.profile || typeof db.profile !== 'object') { db.profile = {}; issues.push('init db.profile'); }
 
+    // ── PLS #111 ── displayCurrency is DECOUPLED from home base (PLS #112).
+    // Home base is from nationality (immutable). Display is a separate user preference.
+    // Only initialize if missing; do NOT force-sync to nationality.
+    try {
+      const nat = db.profile?.nationality;
+      if (!db.displayCurrency) {
+        if (nat && typeof COUNTRY_CURRENCIES !== 'undefined' && COUNTRY_CURRENCIES[nat]) {
+          db.displayCurrency = COUNTRY_CURRENCIES[nat];
+          issues.push(`displayCurrency initialized to ${db.displayCurrency} (from nationality)`);
+        } else {
+          db.displayCurrency = STORED_BASE;
+        }
+      }
+    } catch(e) { /* nationality check failed — skip */ }
+
     // Tx-level integrity: ensure required fields don't break aggregators
     let fixedTxs = 0;
     db.transactions.forEach(t => {
@@ -20530,7 +20631,7 @@ function aiScheduleCheck() {
 
 // ── External Analytics Tab ──
 function renderAnalyticsExternal() {
-  const disp = _homeBase();
+  const disp = _displayCurrency();
   const txs = db.transactions.filter(t=>!t.archived&&(t.type==='external-in'||t.type==='external-out'));
   if (!txs.length) return `<div class="empty-state page-pad"><div class="empty-icon">📥</div><div class="empty-text">No external transactions yet</div><div style="font-size:12px;color:var(--text4)">Use External In/Out in Add Transaction</div></div>`;
   const inTxs = txs.filter(t=>t.type==='external-in');
@@ -20647,7 +20748,7 @@ function renderAnalyticsExternal() {
 // TAB: Cashflow — Income vs Expense vs Net (6 months)
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsCashflow() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   // Empty state: no transactions in last 6 months
   const hasAnyTx = (db.transactions || []).some(t => {
     const td = new Date(t.date);
@@ -20736,7 +20837,11 @@ function renderAnalyticsCashflow() {
 // TAB: Cross-Currency Summary
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsCrossCurrency() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  // ── PLS #112 ── Cross-currency view uses DISPLAY currency for the total header.
+  // Each native-currency account row still shows its own currency.
+  // The aggregated home equivalent (for sorting/percentages) uses home base.
+  const dc = _displayCurrency();
+  const home = _homeBase();
   const accts = db.accounts.filter(a=>!a.archived);
   // Empty state: no accounts
   if (accts.length === 0) {
@@ -20767,7 +20872,7 @@ function renderAnalyticsCrossCurrency() {
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Total Cash on Hand</div>
-      <div style="font-size:26px;font-weight:700;font-family:var(--mono)">${fmt(total, dc)}</div>
+      <div style="font-size:26px;font-weight:700;font-family:var(--mono)">${fmt(_inDisplay(total), dc)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">Across ${sortedCurr.length} ${aiPlural(sortedCurr.length,'currency','currencies')} · liquid holdings only</div>
     </div>
 
@@ -20783,7 +20888,7 @@ function renderAnalyticsCrossCurrency() {
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);font-family:var(--mono);margin-bottom:4px">
         <span>${sym(curr)}${data.native.toLocaleString(undefined,{maximumFractionDigits:2})}</span>
-        <span>${curr!==dc?`× ${fmtRate(rate)} =`:''} ${fmt(data.equiv, dc)}</span>
+        <span>${curr!==dc?`× ${fmtRate(rate)} =`:''} ${fmt(_inDisplay(data.equiv), dc)}</span>
       </div>
       <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div>
@@ -20797,15 +20902,15 @@ function renderAnalyticsCrossCurrency() {
     <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">FX Activity YTD</div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
       <span style="color:var(--text2)">Gains</span>
-      <span style="color:var(--green);font-family:var(--mono);font-weight:600">+${fmt(ytdGains, dc)}</span>
+      <span style="color:var(--green);font-family:var(--mono);font-weight:600">+${fmt(_inDisplay(ytdGains), dc)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
       <span style="color:var(--text2)">Losses</span>
-      <span style="color:var(--red);font-family:var(--mono);font-weight:600">-${fmt(ytdLosses, dc)}</span>
+      <span style="color:var(--red);font-family:var(--mono);font-weight:600">-${fmt(_inDisplay(ytdLosses), dc)}</span>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between">
       <b style="font-size:13px">Net FX P/L</b>
-      <b style="color:${netFX>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${netFX>=0?'+':''}${fmt(netFX, dc)}</b>
+      <b style="color:${netFX>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${netFX>=0?'+':''}${fmt(_inDisplay(netFX), dc)}</b>
     </div>
     <div style="font-size:10px;color:var(--text4);margin-top:6px">From loan/reimb settlements with FX changes</div>
   </div>`;
@@ -20818,7 +20923,7 @@ function renderAnalyticsCrossCurrency() {
 // TAB: People — combined Loans + Shared expenses per person
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsPeople() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   // Empty state: no loans + no shared txs
   const hasLent = (db.loans?.lent || []).some(l => !l.settled);
   const hasBorrowed = (db.loans?.borrowed || []).some(l => !l.settled);
@@ -20874,15 +20979,15 @@ function renderAnalyticsPeople() {
     <div class="metric-grid fr2-always" style="margin-bottom:14px">
       <div class="metric-card">
         <div class="metric-label">Owed to Me</div>
-        <div class="metric-value mfit" style="color:var(--green)">${fmt(totalOwedToMe, dc)}</div>
+        <div class="metric-value mfit" style="color:var(--green)">${fmt(_inDisplay(totalOwedToMe), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">I Owe</div>
-        <div class="metric-value mfit" style="color:var(--red)">${fmt(totalIOwe, dc)}</div>
+        <div class="metric-value mfit" style="color:var(--red)">${fmt(_inDisplay(totalIOwe), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Net Position</div>
-        <div class="metric-value mfit" style="color:${netPosition>=0?'var(--green)':'var(--red)'}">${netPosition>=0?'+':''}${fmt(netPosition, dc)}</div>
+        <div class="metric-value mfit" style="color:${netPosition>=0?'var(--green)':'var(--red)'}">${netPosition>=0?'+':''}${fmt(_inDisplay(netPosition), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">People</div>
@@ -20901,13 +21006,13 @@ function renderAnalyticsPeople() {
         <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${escapeAttr(initials)}</div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:600">${escapeAttr(p.name)}</div>
-          <div style="font-size:11px;color:var(--text3)">Net: <span style="color:${netColor};font-weight:600">${p.netOwedToMe>=0?'+':''}${fmt(Math.abs(p.netOwedToMe), dc)}</span> · ${direction}</div>
+          <div style="font-size:11px;color:var(--text3)">Net: <span style="color:${netColor};font-weight:600">${p.netOwedToMe>=0?'+':''}${fmt(_inDisplay(Math.abs(p.netOwedToMe)), dc)}</span> · ${direction}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px">
-        ${p.lentCount>0?`<span class="pill pill-amber">📤 Lent ${p.lentCount} · ${fmt(p.lent, dc)}</span>`:''}
-        ${p.borrowedCount>0?`<span class="pill pill-red">📥 Borrowed ${p.borrowedCount} · ${fmt(p.borrowed, dc)}</span>`:''}
-        ${p.sharedCount>0?`<span class="pill pill-gray">🤝 Shared ${p.sharedCount} · ${fmt(p.sharedOwed, dc)}</span>`:''}
+        ${p.lentCount>0?`<span class="pill pill-amber">📤 Lent ${p.lentCount} · ${fmt(_inDisplay(p.lent), dc)}</span>`:''}
+        ${p.borrowedCount>0?`<span class="pill pill-red">📥 Borrowed ${p.borrowedCount} · ${fmt(_inDisplay(p.borrowed), dc)}</span>`:''}
+        ${p.sharedCount>0?`<span class="pill pill-gray">🤝 Shared ${p.sharedCount} · ${fmt(_inDisplay(p.sharedOwed), dc)}</span>`:''}
       </div>
     </div>`;
   });
@@ -20920,7 +21025,7 @@ function renderAnalyticsPeople() {
 // TAB: Budget vs Actual — current month burn rate
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsBudget() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const budgets = (db.budgets || []).filter(b => b.active !== false && !b.archived);
   if (budgets.length === 0) {
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No budgets set</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Set budgets in Settings → Budgets</div></div></div>`;
@@ -20994,15 +21099,15 @@ function renderAnalyticsBudget() {
     <div class="metric-grid fr2-always" style="margin-bottom:14px">
       <div class="metric-card">
         <div class="metric-label">Budget Total</div>
-        <div class="metric-value mfit">${fmt(totalLimit, dc)}</div>
+        <div class="metric-value mfit">${fmt(_inDisplay(totalLimit), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Spent</div>
-        <div class="metric-value mfit">${fmt(totalSpent, dc)}</div>
+        <div class="metric-value mfit">${fmt(_inDisplay(totalSpent), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Remaining</div>
-        <div class="metric-value mfit" style="color:${totalRemaining>=0?'var(--green)':'var(--red)'}">${fmt(totalRemaining, dc)}</div>
+        <div class="metric-value mfit" style="color:${totalRemaining>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(totalRemaining), dc)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Days Left</div>
@@ -21082,7 +21187,7 @@ function renderAnalyticsBudget() {
 // TAB: Subscriptions Audit — recurring monthly spend
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsSubs() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const subs = (db.recurringTxs || []).filter(r => r.active !== false && !r.archived && r.type === 'expense');
   if (subs.length === 0) {
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🔁</div><div class="empty-text">No active subscriptions</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Set recurring expenses in Planning tab</div></div></div>`;
@@ -21111,8 +21216,8 @@ function renderAnalyticsSubs() {
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Monthly Subscription Burn</div>
-      <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(totalMonthly, dc)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(totalYearly, dc)}/year · ${subs.length} active</div>
+      <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(_inDisplay(totalYearly), dc)}/year · ${subs.length} active</div>
     </div>
 
     <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Active Subscriptions</div>`;
@@ -21129,7 +21234,7 @@ function renderAnalyticsSubs() {
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(s.amount, s.currency || dc)}</div>
-          <div style="font-size:10px;color:var(--text4)">${fmt(s.monthly, dc)}/mo equiv</div>
+          <div style="font-size:10px;color:var(--text4)">${fmt(_inDisplay(s.monthly), dc)}/mo equiv</div>
         </div>
       </div>
       <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
@@ -21151,7 +21256,7 @@ function renderAnalyticsSubs() {
 // TAB: Day-of-Week Heatmap — spending behavior by weekday
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsDayOfWeek() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const txs = db.transactions.filter(t => !t.archived && t.type === 'expense' &&
     !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund);
   if (txs.length === 0) {
@@ -21187,7 +21292,7 @@ function renderAnalyticsDayOfWeek() {
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Peak Spending Day</div>
       <div style="font-size:24px;font-weight:700">${topDay}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${fmt(byDay[topDayIdx].total, dc)} across ${byDay[topDayIdx].count} ${aiPlural(byDay[topDayIdx].count,'tx')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${fmt(_inDisplay(byDay[topDayIdx].total), dc)} across ${byDay[topDayIdx].count} ${aiPlural(byDay[topDayIdx].count,'tx')}</div>
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
@@ -21200,7 +21305,7 @@ function renderAnalyticsDayOfWeek() {
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:6px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:6px"></div>
       </div>
-      <div style="width:84px;text-align:right;font-family:var(--mono);font-size:11px">${fmt(d.total, dc)}</div>
+      <div style="width:84px;text-align:right;font-family:var(--mono);font-size:11px">${fmt(_inDisplay(d.total), dc)}</div>
       <div style="width:30px;text-align:right;font-size:10px;color:var(--text4)">${d.count}×</div>
     </div>`;
   });
@@ -21214,7 +21319,7 @@ function renderAnalyticsDayOfWeek() {
     html += `<div style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
         <span>${b.label}</span>
-        <span style="font-family:var(--mono)">${fmt(b.total, dc)} · ${pct.toFixed(0)}%</span>
+        <span style="font-family:var(--mono)">${fmt(_inDisplay(b.total), dc)} · ${pct.toFixed(0)}%</span>
       </div>
       <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div></div>
     </div>`;
@@ -21231,7 +21336,7 @@ function renderAnalyticsDayOfWeek() {
 // TAB: Year over Year — current YTD vs same period last year
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsYoY() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const now = new Date();
   const curYear = now.getFullYear();
   const lastYear = curYear - 1;
@@ -21329,9 +21434,9 @@ function renderAnalyticsYoY() {
     html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:13px;font-weight:600">${escapeAttr(c.cat)}</div>
-        <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">${fmt(c.prev, dc)} → ${fmt(c.cur, dc)}</div>
+        <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">${fmt(_inDisplay(c.prev), dc)} → ${fmt(_inDisplay(c.cur), dc)}</div>
       </div>
-      <div style="font-size:11px;color:${color};font-weight:600;font-family:var(--mono)">${c.diff>=0?'+':''}${fmt(Math.abs(c.diff), dc)}<br><span style="font-size:9px">${pct>=0?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span></div>
+      <div style="font-size:11px;color:${color};font-weight:600;font-family:var(--mono)">${c.diff>=0?'+':''}${fmt(_inDisplay(Math.abs(c.diff)), dc)}<br><span style="font-size:9px">${pct>=0?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span></div>
     </div>`;
   });
 
@@ -21343,7 +21448,7 @@ function renderAnalyticsYoY() {
 // TAB: Account Health — per-account activity, dormancy
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsAccountHealth() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const accts = db.accounts.filter(a => !a.archived);
   if (accts.length === 0) {
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🏦</div><div class="empty-text">No active accounts</div></div></div>`;
@@ -21383,11 +21488,11 @@ function renderAnalyticsAccountHealth() {
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:10px">
         ${dormantBadge}
         <span class="pill pill-gray">${a.txCount} ${aiPlural(a.txCount,'tx')}</span>
-        ${a.avgTx > 0 ? `<span class="pill pill-gray">Avg ${fmt(a.avgTx, dc)}</span>` : ''}
+        ${a.avgTx > 0 ? `<span class="pill pill-gray">Avg ${fmt(_inDisplay(a.avgTx), dc)}</span>` : ''}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text4);font-family:var(--mono)">
-        <span style="color:var(--green)">↓ ${fmt(a.totalIn, dc)}</span>
-        <span style="color:var(--red)">↑ ${fmt(a.totalOut, dc)}</span>
+        <span style="color:var(--green)">↓ ${fmt(_inDisplay(a.totalIn), dc)}</span>
+        <span style="color:var(--red)">↑ ${fmt(_inDisplay(a.totalOut), dc)}</span>
       </div>
     </div>`;
   });
@@ -21399,7 +21504,7 @@ function renderAnalyticsAccountHealth() {
 // TAB: AI Monthly Summary — narrative for the month
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsAISummary() {
-  const dc = db.settings?.displayCurrency || _homeBase();
+  const dc = _displayCurrency();
   const now = new Date();
   const mk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const monthLabel = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -21458,7 +21563,7 @@ function renderAnalyticsAISummary() {
   else summary.push(`Income roughly steady vs last month`);
   if (expensePct > 10) summary.push(`Expenses jumped ${expensePct.toFixed(0)}%`);
   else if (expensePct < -10) summary.push(`Expenses dropped ${Math.abs(expensePct).toFixed(0)}%`);
-  if (topCat) summary.push(`Biggest spend: ${topCat[0]} at ${fmt(topCat[1], dc)}`);
+  if (topCat) summary.push(`Biggest spend: ${topCat[0]} at ${fmt(_inDisplay(topCat[1]), dc)}`);
   if (savingsRate >= 20) summary.push(`Strong savings rate at ${savingsRate.toFixed(0)}%`);
   else if (savingsRate > 0) summary.push(`Saved ${savingsRate.toFixed(0)}% this month`);
   else summary.push(`Spent more than earned — review next month`);
