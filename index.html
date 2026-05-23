@@ -3390,9 +3390,13 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '23.7';
+const APP_VERSION = '23.8';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '23.8', date: 'May 2026', changes: [
+    '🔧 Auto-migration: legacy reimb write-offs now consistent with new flow (PLS #116)',
+    '✅ Existing write-off entries automatically get skipBalance flag + null accountId',
+  ]},
   { ver: '23.7', date: 'May 2026', changes: [
     '🐛 Reimbursement write-off no longer double-deducts from account balance',
     '🔧 New skipBalance flag: write-off counts as expense for analytics but no cash deduction',
@@ -19445,6 +19449,28 @@ function ensureDBIntegrity() {
     if (!db.fxRates || typeof db.fxRates !== 'object') { db.fxRates = {}; issues.push('init db.fxRates'); }
     if (!db.settings || typeof db.settings !== 'object') { db.settings = {}; issues.push('init db.settings'); }
     if (!db.profile || typeof db.profile !== 'object') { db.profile = {}; issues.push('init db.profile'); }
+
+    // ── PERSONAL LOGIC SET #116 ── Migration: legacy reimb write-offs (pre-v23.7)
+    // had accountId set + no skipBalance flag, causing double deduction of account
+    // balance (the original shared tx already deducted; write-off was deducting again).
+    // Fix: add skipBalance=true and null out accountId on existing entries so balance
+    // recalculates correctly. Math becomes consistent with new write-off flow.
+    let fixedReimbLoss = 0;
+    for (const tx of (db.transactions || [])) {
+      if (tx.isReimbSettlementLoss && !tx.skipBalance) {
+        tx.skipBalance = true;
+        tx.accountId = null;
+        fixedReimbLoss++;
+      }
+    }
+    for (const tx of (db.archivedTransactions || [])) {
+      if (tx.isReimbSettlementLoss && !tx.skipBalance) {
+        tx.skipBalance = true;
+        tx.accountId = null;
+        fixedReimbLoss++;
+      }
+    }
+    if (fixedReimbLoss > 0) issues.push(`migrated ${fixedReimbLoss} legacy reimb write-off(s)`);
 
     // ── PLS #111 ── displayCurrency is DECOUPLED from home base (PLS #112).
     // Home base is from nationality (immutable). Display is a separate user preference.
