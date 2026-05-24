@@ -1362,7 +1362,7 @@ function txToPhp(tx) {
   if (tx.fxSnapshot && tx.fxSnapshot[tx.currency]) {
     return amt * tx.fxSnapshot[tx.currency];
   }
-  if (tx.date) return amt * getSnapshotRate(tx.currency, tx.date);
+  if (tx.date) return amt * getSnapshotRate(tx.currency, tx.date, tx.time);
   return toPhp(amt, tx.currency);
 }
 
@@ -1386,31 +1386,43 @@ function convert(amount, from, to) {
   return fromPhp(toPhp(amount, from), to);
 }
 
-function getSnapshotRate(currency, date) {
+function getSnapshotRate(currency, date, time) {
   const home = _homeBase();
   if (currency === home) return 1;
-  const info = getSnapshotInfo(currency, date);
+  const info = getSnapshotInfo(currency, date, time);
   return info.rate;
 }
 
 // Returns {rate, source, sourceDate} for snapshot resolution
 // source: 'remittance' | 'manual' | 'baseline' | 'fallback'
-function getSnapshotInfo(currency, date) {
+// ── PERSONAL LOGIC SET #118 ── Timestamp-sensitive snapshot lookup.
+// Within same date, rate added at 1pm covers txs from 1pm onwards; earlier txs that day
+// still use prior entry. Comparison key = "YYYY-MM-DD HH:MM" (string-safe ordering).
+function _fxKey(date, time) {
+  if (!date) return '';
+  const t = (time && /^\d{1,2}:\d{2}/.test(time)) ? time.padStart(5,'0') : '23:59';
+  return date + ' ' + t;
+}
+function getSnapshotInfo(currency, date, time) {
   const home = _homeBase();
   if (currency === home) return { rate:1, source:'base', sourceDate:null };
-  const history = (db.fxHistory[currency] || []).filter(h => h.date <= date).sort((a,b)=>b.date.localeCompare(a.date));
+  const txKey = _fxKey(date, time || '23:59'); // tx with no time defaults to end-of-day
+  const history = (db.fxHistory[currency] || [])
+    .filter(h => _fxKey(h.date, h.time) <= txKey)
+    .sort((a,b) => _fxKey(b.date, b.time).localeCompare(_fxKey(a.date, a.time)));
   if (history.length > 0) {
-    return { rate: history[0].rate, source: history[0].source || 'manual', sourceDate: history[0].date };
+    return { rate: history[0].rate, source: history[0].source || 'manual', sourceDate: history[0].date, sourceTime: history[0].time };
   }
   return { rate: db.fxRates[currency] || 1, source: 'fallback', sourceDate: null };
 }
-function recordFxSnapshot(currency, rate, date, source) {
-  if (currency === _homeBase()) return; // home currency = implicit rate 1, no snapshot needed
+function recordFxSnapshot(currency, rate, date, source, time) {
+  if (currency === _homeBase()) return;
   if (!db.fxHistory[currency]) db.fxHistory[currency] = [];
-  // Only record if rate actually changed vs last entry
   const last = db.fxHistory[currency].slice(-1)[0];
   if (!last || last.rate !== rate) {
-    db.fxHistory[currency].push({ date, rate, source: source || 'manual' });
+    const entry = { date, rate, source: source || 'manual' };
+    if (time) entry.time = time;
+    db.fxHistory[currency].push(entry);
     if (db.fxHistory[currency].length > 500) db.fxHistory[currency] = db.fxHistory[currency].slice(-500);
   }
 }
@@ -2045,11 +2057,11 @@ function getMonthTotals(monthKey) {
   return { income, expense, net: income-expense, currency: dispCurr };
 }
 
-function buildFxSnapshot(date) {
+function buildFxSnapshot(date, time) {
   const snap = {};
   for (const curr of db.trackedCurrencies) {
     if (curr === _homeBase()) continue;
-    snap[curr] = getSnapshotRate(curr, date);
+    snap[curr] = getSnapshotRate(curr, date, time);
   }
   return snap;
 }
@@ -3390,9 +3402,28 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '23.8';
+const APP_VERSION = '24.1';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '24.1', date: 'May 2026', changes: [
+    '🐛 CRITICAL: Fixed openAddLoan TDZ error (acctLabel const shadowed global helper)',
+    '🔧 Settlement preview now time-aware (uses date+time, PLS #118)',
+    '🔧 Auto-fill total uses selected date+time, not hardcoded today',
+    '🔧 Loan/reimb time field now triggers preview update on change',
+  ]},
+  { ver: '24.0', date: 'May 2026', changes: [
+    '⏰ PLS #118: Time-sensitive FX rate history',
+    '🔧 Rate entries now include time — covers txs from that moment onwards',
+    '🔧 Add Rate auto-stamps current time; remittance uses tx time',
+    '🔧 Rate History page now shows date + time inputs',
+    '🔧 Tx snapshot lookup is timestamp-aware (HH:MM precision)',
+    '🔧 Removed v23.9 auto-migration (no more silent modification of user data)',
+  ]},
+  { ver: '23.9', date: 'May 2026', changes: [
+    '🐛 Transaction Detail rate display now uses snapshot rate (not current)',
+    '🔧 Label shows "snapshot rate" or "current rate" para malinaw',
+    '✅ K19.65 × 13.35 (snapshot May 16) = ₱262.32 — historically accurate',
+  ]},
   { ver: '23.8', date: 'May 2026', changes: [
     '🔧 Auto-migration: legacy reimb write-offs now consistent with new flow (PLS #116)',
     '✅ Existing write-off entries automatically get skipBalance flag + null accountId',
@@ -5070,7 +5101,8 @@ function submitRemittance() {
       }
       if (recordCurr && recordRate > 0) {
         if (!db.fxHistory[recordCurr]) db.fxHistory[recordCurr] = [];
-        db.fxHistory[recordCurr].push({ date, rate: recordRate, source: 'remittance' });
+        // PLS #118: stamp tx time so rate applies from this moment onwards
+        db.fxHistory[recordCurr].push({ date, time, rate: recordRate, source: 'remittance' });
         if (db.fxHistory[recordCurr].length > 500) db.fxHistory[recordCurr] = db.fxHistory[recordCurr].slice(-500);
         db.fxRates[recordCurr] = recordRate;
       }
@@ -5091,7 +5123,7 @@ function submitRemittance() {
       time,
       notes,
       categoryId: 'sc-remittance',
-      fxSnapshot: isCross ? buildFxSnapshot(date) : null,
+      fxSnapshot: isCross ? buildFxSnapshot(date, time) : null,
       createdAt: new Date().toISOString()
     });
 
@@ -5109,7 +5141,7 @@ function submitRemittance() {
         categoryId: 'sc-remittancefee',
         date, time,
         notes: `Remittance fee${notes?' — '+notes:''}`,
-        fxSnapshot: buildFxSnapshot(date),
+        fxSnapshot: buildFxSnapshot(date, time),
         parentId: id,
         isAutoFee: true,
         createdAt: new Date().toISOString()
@@ -5205,7 +5237,7 @@ function submitExternal(type) {
   if (!acctId) { showToast('Select an account'); return; }
   if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
   if (!date) { showToast('Select date'); return; }
-  const fxSnapshot = buildFxSnapshot(date);
+  const fxSnapshot = buildFxSnapshot(date, time);
   db.transactions.push({
     id: genId(), type, amount, currency,
     accountId: acctId, externalParty: person, date, time,
@@ -5576,7 +5608,7 @@ function submitAddTx() {
   }
 
   const catId = s.subCatId || s.catId;
-  const fxSnapshot = buildFxSnapshot(date);
+  const fxSnapshot = buildFxSnapshot(date, time);
   const id = genId();
   const tx = {
     id, type:s.type, amount: s.type==='shared' ? totalBill : amount, currency,
@@ -5644,7 +5676,7 @@ function savePaydayFx(currency) {
   const rate = parseFloat(document.getElementById('payday-fx-rate')?.value);
   if (!rate || rate <= 0) { showToast('Enter a valid rate'); return; }
   db.fxRates[currency] = rate;
-  recordFxSnapshot(currency, rate, today());
+  recordFxSnapshot(currency, rate, today(), 'manual', nowTime());
   saveDBWithSync();
   closeDlg();
   showToast(`${currency} rate updated to ${sym(_homeBase())}${rate}`);
@@ -5712,7 +5744,7 @@ function submitTransfer() {
   if (!amount || amount <= 0) { showToast('Enter amount'); return; }
   if (fromId === toId) { showToast('Select different accounts'); return; }
 
-  const fxSnapshot = buildFxSnapshot(date);
+  const fxSnapshot = buildFxSnapshot(date, time);
   const parentId = genId();
   // toAmountIsActual: true → signals getAcctBalance to skip this tx's isAutoForex child
   // (diff already baked into toAmount). Only set when user provided actual received amount.
@@ -5777,7 +5809,7 @@ function submitTransfer() {
         categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
         date, time: time||nowTime(),
         notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
-        fxSnapshot: buildFxSnapshot(date),
+        fxSnapshot: buildFxSnapshot(date, time),
         parentId,
         isAutoForex: true,
         createdAt: new Date().toISOString()
@@ -6318,7 +6350,7 @@ function openTxDetail(txId) {
       </div>
       <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${tx.loanDirection==='lent'?'amber':'teal'}">${label}</span></div></div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const rate=baseAmt>0?(homeAmt/baseAmt):0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctLoan.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -6341,7 +6373,7 @@ function openTxDetail(txId) {
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
       </div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=toPhp(tx.amount,tx.currency); const rate=tx.amount>0?(homeAmt/tx.amount):0; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const rate=baseAmt>0?(homeAmt/baseAmt):0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acctPay.name}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${loan.personName}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${tx.time||''}</div></div>
@@ -6394,7 +6426,7 @@ function openTxDetail(txId) {
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono);font-size:16px">${fmt(tx.amount,tx.currency)}</div></div>`;
   }
-  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=toPhp((tx.type==='shared'?(tx.myShare||tx.amount):tx.amount),tx.currency); const rate=homeAmt>(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount)>0?homeAmt/(tx.type==='shared'?(tx.myShare||tx.amount):tx.amount):0; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(rate: ${fmtRate(toPhp(1,tx.currency))})</span></div></div>`; } }
+  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare||tx.amount):tx.amount; const rate=baseAmt>0?homeAmt/baseAmt:0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
@@ -8160,7 +8192,7 @@ function openReimbDialog(person) {
          <input class="form-input" type="date" id="rsl-date" value="${today()}" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
        </div>
        <div class="form-group"><label class="form-label">Time</label>
-         <input class="form-input" type="time" id="rsl-time" value="${nowTime()}">
+         <input class="form-input" type="time" id="rsl-time" value="${nowTime()}" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
        </div>
      </div>
      <div class="form-group"><label class="form-label">Notes (optional)</label>
@@ -8172,7 +8204,11 @@ function openReimbDialog(person) {
   );
   // Auto-fill total
   setTimeout(()=>{
-    const total = computeReimbBatchTotal(entries, defaultCurr, today());
+    const dEl = document.getElementById('rsl-date');
+    const tEl = document.getElementById('rsl-time');
+    const d = dEl?.value || today();
+    const t = tEl?.value || nowTime();
+    const total = computeReimbBatchTotal(entries, defaultCurr, d, t);
     const inp = document.getElementById('rsl-amount');
     if (inp) { inp.value = total.toFixed(2); updateReimbBatchPreview(person); }
   }, 50);
@@ -8185,8 +8221,8 @@ function openReimbDialog(person) {
 // because snap[PGK] = undefined (home is skipped in snapshot). The toPhp/fromPhp pair
 // internally handles the home base correctly. Applies to all batch settle / reimb / loan flows.
 // Compute grand total in target currency using snapshot FX
-function computeReimbBatchTotal(entries, targetCurr, settlementDate) {
-  const snap = buildFxSnapshot(settlementDate);
+function computeReimbBatchTotal(entries, targetCurr, settlementDate, settlementTime) {
+  const snap = buildFxSnapshot(settlementDate, settlementTime);
   let total = 0;
   for (const e of entries) {
     const c = e.tx.currency || _homeBase();
@@ -8203,8 +8239,9 @@ function updateReimbBatchPreview(person) {
   const entries = getReimbEntriesForPerson(person);
   const targetCurr = document.getElementById('rsl-curr')?.value || (entries[0]?.tx.currency || _homeBase());
   const date = document.getElementById('rsl-date')?.value || today();
+  const time = document.getElementById('rsl-time')?.value || nowTime();
   const received = parseFloat(document.getElementById('rsl-amount')?.value) || 0;
-  const grandTotal = computeReimbBatchTotal(entries, targetCurr, date);
+  const grandTotal = computeReimbBatchTotal(entries, targetCurr, date, time);
   const preview = document.getElementById('rsl-preview');
   const fmtEl = document.getElementById('rsl-amount-fmt');
   if (fmtEl) fmtEl.textContent = received > 0 ? fmt(received, targetCurr) : '';
@@ -8226,7 +8263,7 @@ function updateReimbBatchPreview(person) {
     let remainAmt = received;
     let fullyPaid = 0;
     let partialAmt = 0;
-    const snap = buildFxSnapshot(date);
+    const snap = buildFxSnapshot(date, time);
     for (const e of entries) {
       const c = e.tx.currency || _homeBase();
       let rInTarget;
@@ -8321,7 +8358,7 @@ function confirmWriteOffReimb(person) {
       parentId: tx.id,
       writeOffReason: reason,
       categoryId: 'sc-misc',
-      fxSnapshot: buildFxSnapshot(date),
+      fxSnapshot: buildFxSnapshot(date, time),
       createdAt: new Date().toISOString()
     });
 
@@ -8375,7 +8412,7 @@ function confirmReimbSettlement(person) {
   if (!acct) { showToast('Pick an account'); return; }
   if (received <= 0) { showToast('Enter received amount'); return; }
 
-  const snap = buildFxSnapshot(date);
+  const snap = buildFxSnapshot(date, time);
 
   // Helper: convert with snapshot
   // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
@@ -8797,7 +8834,7 @@ function submitBalanceCorrection(acctId, appBal) {
     date,
     time: nowTime(),
     notes,
-    fxSnapshot: a.currency !== _homeBase() ? buildFxSnapshot(date) : null,
+    fxSnapshot: a.currency !== _homeBase() ? buildFxSnapshot(date, time) : null,
     createdAt: new Date().toISOString()
   });
 
@@ -9765,7 +9802,7 @@ function openBatchSettleLoans(direction, person) {
          <input class="form-input" type="date" id="bsl-date" value="${today()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
        </div>
        <div class="form-group"><label class="form-label">Time</label>
-         <input class="form-input" type="time" id="bsl-time" value="${nowTime()}">
+         <input class="form-input" type="time" id="bsl-time" value="${nowTime()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
        </div>
      </div>
      <div class="form-group"><label class="form-label">Notes (optional)</label>
@@ -9776,7 +9813,11 @@ function openBatchSettleLoans(direction, person) {
   );
   // Auto-fill with grand total in settlement currency
   setTimeout(()=>{
-    const total = computeBatchSettleTotal(loans, defaultCurr, today());
+    const dEl = document.getElementById('bsl-date');
+    const tEl = document.getElementById('bsl-time');
+    const d = dEl?.value || today();
+    const t = tEl?.value || nowTime();
+    const total = computeBatchSettleTotal(loans, defaultCurr, d, t);
     const inp = document.getElementById('bsl-amount');
     if (inp) { inp.value = total.toFixed(2); updateBatchSettlePreview(direction, person); }
   }, 50);
@@ -9784,8 +9825,8 @@ function openBatchSettleLoans(direction, person) {
 
 // Convert all loans to target currency using snapshot FX of settlement date
 // HOME-AGNOSTIC: Uses toPhp/fromPhp pattern (where "Php" means home currency)
-function computeBatchSettleTotal(loans, targetCurr, settlementDate) {
-  const snap = buildFxSnapshot(settlementDate);
+function computeBatchSettleTotal(loans, targetCurr, settlementDate, settlementTime) {
+  const snap = buildFxSnapshot(settlementDate, settlementTime);
   let total = 0;
   for (const l of loans) {
     const remain = l.remaining || l.amount;
@@ -9808,8 +9849,9 @@ function updateBatchSettlePreview(direction, person) {
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0]?.currency || _homeBase());
   const date = document.getElementById('bsl-date')?.value || today();
+  const time = document.getElementById('bsl-time')?.value || nowTime();
   const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
-  const grandTotal = computeBatchSettleTotal(loans, targetCurr, date);
+  const grandTotal = computeBatchSettleTotal(loans, targetCurr, date, time);
   const preview = document.getElementById('bsl-preview');
   // Format display below input (comma separators)
   const fmtEl = document.getElementById('bsl-amount-fmt');
@@ -9845,7 +9887,7 @@ function updateBatchSettlePreview(direction, person) {
       if (loanCurr === targetCurr) {
         rInTarget = r;
       } else {
-        const snap = buildFxSnapshot(date);
+        const snap = buildFxSnapshot(date, time);
         const inHome = toPhp(r, loanCurr, snap);
         rInTarget = fromPhp(inHome, targetCurr, snap);
       }
@@ -9887,7 +9929,7 @@ function confirmBatchSettleLoans(direction, person) {
   if (!acct) { showToast('Pick an account'); return; }
   if (received <= 0) { showToast('Enter received amount'); return; }
 
-  const snap = buildFxSnapshot(date);
+  const snap = buildFxSnapshot(date, time);
 
   // Helper: convert amount from one currency to another using snapshot
   // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
@@ -10460,7 +10502,7 @@ function confirmWriteOffLoan(loanId, direction) {
     parentId: loanId,
     writeOffReason: reason,
     categoryId: direction === 'lent' ? 'sc-misc' : 'sc-investreturns',
-    fxSnapshot: buildFxSnapshot(date),
+    fxSnapshot: buildFxSnapshot(date, time),
     createdAt: new Date().toISOString(),
   });
 
@@ -10754,7 +10796,7 @@ function openAddLoan(direction='lent') {
   const isLent = direction === 'lent';
   const personLabel = isLent ? 'Lent To' : 'Borrowed From';
   const amtLabel = isLent ? 'Expected Receivable' : 'Expected Payable';
-  const acctLabel = isLent ? 'Source Account (deducted from)' : 'Destination Account (deposited into)';
+  const acctLabelText = isLent ? 'Source Account (deducted from)' : 'Destination Account (deposited into)';
   const amtHelp = isLent ? 'How much they\'ll pay you back' : 'How much you\'ll pay back';
   const disburseLabel = isLent ? 'Deduct from source' : 'Deposit to destination';
   openSheet('gen', isLent?'Add Loan Out':'Add Debt', `
@@ -10768,7 +10810,7 @@ function openAddLoan(direction='lent') {
       <div class="form-group"><label class="form-label">Currency</label><select class="form-input" id="nl-currency" onchange="updateAddLoanFx()">${currOpts}</select></div>
     </div>
     <div class="form-group">
-      <label class="form-label">${acctLabel} *</label>
+      <label class="form-label">${acctLabelText} *</label>
       <select class="form-input" id="nl-account" onchange="updateAddLoanFx()">${acctOpts}</select>
     </div>
 
@@ -11006,7 +11048,7 @@ function saveAddLoan(direction) {
     notes: useCustom
       ? `${isLent?'Lent to':'Borrowed from'} ${person} — ${amount} ${currency} @ ${customRate} ${acctCurr}/${currency}`
       : `${isLent?'Lent to':'Borrowed from'} ${person}`,
-    fxSnapshot: buildFxSnapshot(date),
+    fxSnapshot: buildFxSnapshot(date, time),
     parentId: null,
     isLoanTx: true,
     loanId,
@@ -15677,18 +15719,24 @@ function openFxHistoryPage(currency) {
   function buildBody() {
     // Always read fresh from db (not captured at call time)
     const current = db.fxRates[currency] || 1;
-    const history = (db.fxHistory[currency] || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
+    const history = (db.fxHistory[currency] || []).slice().sort((a,b)=>{
+      // PLS #118: sort by date+time desc
+      const ak = (a.date||'') + ' ' + (a.time || '23:59');
+      const bk = (b.date||'') + ' ' + (b.time || '23:59');
+      return bk.localeCompare(ak);
+    });
     const rows = history.length === 0
       ? `<div style="padding:24px;text-align:center;color:var(--text4);font-size:13px">No rate history yet.<br>Log a Remittance or add manually.</div>`
       : history.map((entry, i) => {
           const sourceIcon = entry.source==='remittance'?'📤':entry.source==='baseline'?'🌱':'✏️';
           const isLatest = i===0;
-          return `<div style="display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--border);${isLatest?'background:var(--accent-bg)':''}">
+          return `<div style="display:flex;align-items:center;gap:6px;padding:11px 16px;border-bottom:1px solid var(--border);${isLatest?'background:var(--accent-bg)':''}">
             <span style="font-size:13px;flex-shrink:0">${sourceIcon}</span>
-            <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 8px;flex:1;min-width:0;max-width:140px">
+            <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 6px;flex:1;min-width:0;max-width:120px">
+            <input class="form-input fx-hist-time" type="time" value="${entry.time || ''}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 6px;width:80px;flex-shrink:0" title="Time this rate took effect">
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
               <span style="color:var(--text3);font-size:12px">${sym(_homeBase())}</span>
-              <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:110px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
+              <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:100px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
             </div>
             <button class="btn btn-ghost btn-sm" onclick="saveFxHistoryEntry('${currency}',${i})" style="font-size:11px;padding:4px 8px;flex-shrink:0">Save</button>
             ${entry.source!=='baseline'?`<button aria-label="Close" class="btn btn-ghost btn-sm" onclick="deleteFxHistoryEntry('${currency}',${i})" style="color:var(--red);font-size:14px;padding:4px 6px;flex-shrink:0">×</button>`:''}
@@ -15737,33 +15785,105 @@ function confirmAddFxHistory(currency) {
   if (!date) { showToast('Enter date'); return; }
   if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
   if (!db.fxHistory[currency]) db.fxHistory[currency] = [];
-  db.fxHistory[currency].push({ date, rate, source: 'manual' });
+  // PLS #118: stamp time automatically — covers txs going forward from this moment
+  db.fxHistory[currency].push({ date, time: nowTime(), rate, source: 'manual' });
   if (db.fxHistory[currency].length > 500) db.fxHistory[currency] = db.fxHistory[currency].slice(-500);
   // Update current rate if this is the latest date
   const sorted = db.fxHistory[currency].slice().sort((a,b)=>b.date.localeCompare(a.date));
   db.fxRates[currency] = sorted[0].rate;
+
+  // ── PERSONAL LOGIC SET #117 ── Retroactive recompute on Add Rate.
+  // Adding a new rate entry can cover transactions in its date-period that previously
+  // used a stale snapshot (baked at tx creation time). Find affected txs, offer to
+  // recompute their fxSnapshot so historical math reflects the corrected timeline.
+  // Mirrors the prompt in saveFxHistoryEntry/applyFxHistoryEdit.
+  const allDates = sorted.map(h => h.date);
+  let nextDate = null;
+  for (const d of allDates.slice().sort()) {
+    if (d > date) { nextDate = d; break; }
+  }
+  const affected = db.transactions.filter(tx => {
+    if (tx.archived || tx.currency !== currency || !tx.date) return false;
+    if (tx.date < date) return false;
+    if (nextDate && tx.date >= nextDate) return false;
+    // Only count if current baked snapshot differs from new rate
+    const baked = tx.fxSnapshot?.[currency];
+    return !baked || baked !== rate;
+  }).length;
+
   saveDBWithSync();
   closeDlg();
   renderSettings();
   openFxHistoryPage(currency);
-  showToast(`${currency} rate added for ${date}`);
+
+  if (affected > 0) {
+    setTimeout(() => {
+      openDlg('Recompute past transactions?',
+        `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+          Added <strong>${currency}</strong> rate <strong>${sym(_homeBase())}${fmtRate(rate)}</strong> for ${date}.
+          <div style="margin:10px 0;padding:10px;background:var(--bg3);border-radius:var(--r-md);font-size:12px">This covers <strong>${affected}</strong> existing transaction${affected>1?'s':''} that have stale FX snapshots.</div>
+          <div style="font-size:12px;color:var(--text3)">Update their stored snapshots to use this rate?</div>
+        </div>`,
+        `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Keep As-Is</button>
+         <button class="btn btn-primary btn-sm" onclick="recomputeAffectedTxs('${currency}','${date}',${rate});closeDlg()">Recompute ${affected} tx${affected>1?'s':''}</button>`
+      );
+    }, 100);
+  } else {
+    showToast(`${currency} rate added for ${date}`);
+  }
+}
+
+// PLS #117: Recompute fxSnapshot for txs in the date-period after a rate is added/edited.
+function recomputeAffectedTxs(currency, periodStart, newRate) {
+  const sorted = (db.fxHistory[currency] || []).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  let nextDate = null;
+  for (const h of sorted) {
+    if (h.date > periodStart) { nextDate = h.date; break; }
+  }
+  let updated = 0;
+  for (const tx of db.transactions) {
+    if (tx.archived || tx.currency !== currency || !tx.date) continue;
+    if (tx.date < periodStart) continue;
+    if (nextDate && tx.date >= nextDate) continue;
+    if (!tx.fxSnapshot) tx.fxSnapshot = {};
+    if (tx.fxSnapshot[currency] !== newRate) {
+      tx.fxSnapshot[currency] = newRate;
+      updated++;
+      // Remittance txs also update rate + toAmount
+      if (tx.type === 'remittance') {
+        tx.rate = newRate;
+        tx.toAmount = tx.amount * newRate;
+        if (tx.phpAmount !== undefined) tx.phpAmount = tx.amount * newRate;
+      }
+    }
+  }
+  saveDBWithSync();
+  if (currentPage === 'transactions') renderTransactions();
+  if (currentPage === 'dashboard') renderDashboard();
+  showToast(`✓ Recomputed ${updated} transaction${updated>1?'s':''}`);
+  haptic('success');
 }
 
 function saveFxHistoryEntry(currency, idx) {
   const row = document.querySelector(`.fx-hist-date[data-curr="${currency}"][data-idx="${idx}"]`);
+  const timeRow = document.querySelector(`.fx-hist-time[data-curr="${currency}"][data-idx="${idx}"]`);
   const rateRow = document.querySelector(`.fx-hist-rate[data-curr="${currency}"][data-idx="${idx}"]`);
   if (!row || !rateRow) return;
 
-  // Sort history desc to match display order
-  const sorted = (db.fxHistory[currency] || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  // Sort history desc to match display order (PLS #118: by date+time)
+  const sorted = (db.fxHistory[currency] || []).slice().sort((a,b)=>{
+    const ak = (a.date||'') + ' ' + (a.time || '23:59');
+    const bk = (b.date||'') + ' ' + (b.time || '23:59');
+    return bk.localeCompare(ak);
+  });
   const entry = sorted[idx];
   if (!entry) return;
 
-  // Find the actual entry in unsorted fxHistory
-  const realIdx = db.fxHistory[currency].findIndex(e => e.date === entry.date && e.rate === entry.rate && e.source === entry.source);
+  const realIdx = db.fxHistory[currency].findIndex(e => e.date === entry.date && e.rate === entry.rate && e.source === entry.source && (e.time || '') === (entry.time || ''));
   if (realIdx < 0) return;
 
   const newDate = row.value;
+  const newTime = timeRow ? timeRow.value : entry.time;
   const newRate = parseFloat(rateRow.value);
   if (!newDate || !newRate || newRate <= 0) { showToast('Invalid values'); return; }
 
@@ -15779,11 +15899,11 @@ function saveFxHistoryEntry(currency, idx) {
         <div style="margin:10px 0;padding:10px;background:var(--bg3);border-radius:var(--r-md);font-size:12px">This affects <strong>${affected}</strong> transaction${affected>1?'s':''} in this rate period.</div>
         <div style="font-size:12px;color:var(--text3)">Recompute their stored FX snapshots to use the new rate?</div>
       </div>`,
-      `<button class="btn btn-ghost btn-sm" onclick="applyFxHistoryEdit('${currency}',${realIdx},'${newDate}',${newRate},false);closeDlg()">Just Update Rate</button>
-       <button class="btn btn-primary btn-sm" onclick="applyFxHistoryEdit('${currency}',${realIdx},'${newDate}',${newRate},true);closeDlg()">Update & Recompute</button>`
+      `<button class="btn btn-ghost btn-sm" onclick="applyFxHistoryEdit('${currency}',${realIdx},'${newDate}',${newRate},false,'${newTime||''}');closeDlg()">Just Update Rate</button>
+       <button class="btn btn-primary btn-sm" onclick="applyFxHistoryEdit('${currency}',${realIdx},'${newDate}',${newRate},true,'${newTime||''}');closeDlg()">Update & Recompute</button>`
     );
   } else {
-    applyFxHistoryEdit(currency, realIdx, newDate, newRate, false);
+    applyFxHistoryEdit(currency, realIdx, newDate, newRate, false, newTime);
   }
 }
 
@@ -15805,7 +15925,7 @@ function countAffectedTxs(currency, periodStart, periodEndCandidate) {
   }).length;
 }
 
-function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
+function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute, newTime) {
   const entry = db.fxHistory[currency][idx];
   if (!entry) return;
   const oldDate = entry.date;
@@ -15813,6 +15933,7 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute) {
 
   entry.date = newDate;
   entry.rate = newRate;
+  if (newTime !== undefined) entry.time = newTime || undefined;
   entry.source = entry.source === 'baseline' ? 'baseline' : 'manual';
 
   // Update fxRates to the latest entry's rate
