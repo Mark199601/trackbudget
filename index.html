@@ -3073,7 +3073,7 @@ function renderDashboard() {
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
@@ -3407,9 +3407,22 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '24.4';
+const APP_VERSION = '24.6';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '24.6', date: 'May 2026', changes: [
+    '🐛 PLS #121: Archive/delete write-off properly reverts parent shared tx state',
+    '🔧 Pending reimbursement reappears when write-off entry deleted',
+    '🔧 Net Worth receivable restored automatically',
+    '🔧 Analytics auto-self-correct (no extra revert needed)',
+  ]},
+  { ver: '24.5', date: 'May 2026', changes: [
+    '🐛 PLS #120: Write-off entries now properly distinguished from real payment',
+    '🔧 Shared tx breakdown: "Written off ✗" badge instead of "Paid ✓" for write-offs',
+    '🔧 Tx Detail Status row shows write-off reason',
+    '🔧 Write-off tx visible standalone sa main tx log (was hidden as nested child)',
+    '🔧 Write-off Tx Detail shows "— (no cash account)" instead of "Unknown"',
+  ]},
   { ver: '24.4', date: 'May 2026', changes: [
     '🐛 CRITICAL: Fixed Reconcile button silently failing (time scope ReferenceError)',
     '🐛 Fixed same scope bug sa Write Off Loan',
@@ -4062,16 +4075,24 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     // sa batch reimb settlement (updates paidSoFar directly without per-tx children).
     // ── PERSONAL LOGIC SET #30 ── shared tx breakdown reads from tx.paidSoFar (authoritative source) instead of summing children — works for both legacy per-tx and new batch reimb settlement flows
     const paidSoFarMap = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? tx.paidSoFar : {};
+    const writtenOffMap = (tx.writtenOff && typeof tx.writtenOff === 'object') ? tx.writtenOff : {};
     for (const p of persons) {
       const totalReimbursed = parseFloat(paidSoFarMap[p.name]) || 0;
+      const writtenOff = parseFloat(writtenOffMap[p.name]) || 0;
+      const realPaid = totalReimbursed - writtenOff;
       const remaining = Math.max(0, (p.share || 0) - totalReimbursed);
       const fullyPaid = remaining <= 0.01;
+      // PLS #120: distinguish write-off from real payment
+      const fullyWrittenOff = fullyPaid && writtenOff >= (p.share || 0) - 0.01;
+      const partialWrittenOff = !fullyWrittenOff && writtenOff > 0;
 
-      const statusBadge = fullyPaid
-        ? `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Paid ✓</span>`
-        : totalReimbursed > 0
-          ? `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600">Partial</span>`
-          : `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--bg4);color:var(--text4);font-weight:600">Pending</span>`;
+      const statusBadge = fullyWrittenOff
+        ? `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">Written off ✗</span>`
+        : fullyPaid
+          ? `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Paid ✓</span>`
+          : (totalReimbursed > 0
+            ? `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600">Partial</span>`
+            : `<span style="font-size:10px;padding:2px 7px;border-radius:var(--r-full);background:var(--bg4);color:var(--text4);font-weight:600">Pending</span>`);
 
       personRows += `
         <div style="padding:8px 0;border-bottom:1px solid var(--border)">
@@ -4083,8 +4104,9 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
                   <span style="font-size:12px;font-weight:500;color:var(--text)">${_esc(p.name)}</span>
                   ${statusBadge}
                 </div>
-                ${totalReimbursed > 0 && !fullyPaid ? `<div style="font-size:10px;color:var(--text4);margin-top:2px">Paid ${fmt(totalReimbursed, tx.currency)} · owes ${fmt(remaining, tx.currency)}</div>` : ''}
-                ${fullyPaid ? `<div style="font-size:10px;color:var(--green);margin-top:2px">Fully reimbursed</div>` : ''}
+                ${realPaid > 0 && !fullyPaid ? `<div style="font-size:10px;color:var(--text4);margin-top:2px">Paid ${fmt(realPaid, tx.currency)} · owes ${fmt(remaining, tx.currency)}</div>` : ''}
+                ${fullyWrittenOff ? `<div style="font-size:10px;color:var(--red);margin-top:2px">Absorbed as loss</div>` : (fullyPaid ? `<div style="font-size:10px;color:var(--green);margin-top:2px">Fully reimbursed</div>` : '')}
+                ${partialWrittenOff && !fullyPaid ? `<div style="font-size:10px;color:var(--amber);margin-top:2px">Partial · ${fmt(writtenOff, tx.currency)} written off</div>` : ''}
               </div>
             </div>
             <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(p.share||0, tx.currency)}</span>
@@ -6039,7 +6061,8 @@ function renderTxLog() {
     // ── PERSONAL LOGIC SET #12 (revised) ── Hide gain/loss settlement children from top-level
     // tx log — shown nested under their parent settlement row. Counted ONCE in monthly totals
     // (PLS #47) but skipped from balance (parent already covered cash).
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
+    // EXCEPTION: write-offs (with writeOffReason) are discrete events, shown standalone.
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
     const _isInvCapital = t.isInvestmentFund || t.isInvestmentReturn;
@@ -6433,11 +6456,19 @@ function openTxDetail(txId) {
     }
     const remaining = Math.max(0, owed - totalPaid);
     const isFullyPaid = remaining <= 0.01 && totalPaid > 0;
+    // PLS #120: distinguish write-off from real payment
+    const totalWrittenOff = (tx.writtenOff && typeof tx.writtenOff === 'object')
+      ? Object.values(tx.writtenOff).reduce((s,v) => s + (parseFloat(v) || 0), 0)
+      : 0;
+    const isFullyWrittenOff = isFullyPaid && totalWrittenOff >= owed - 0.01;
+    const isPartialWrittenOff = !isFullyWrittenOff && totalWrittenOff > 0;
 
     rows += `<div class="detail-row"><div class="detail-label">Receipt Total</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.totalBill||tx.amount,tx.currency)}</div></div>`;
     rows += `<div class="detail-row"><div class="detail-label">My Share</div><div class="detail-value" style="font-family:var(--mono);color:var(--red)">${fmt(tx.myShare||tx.amount,tx.currency)}</div></div>`;
-    if (isFullyPaid) {
-      rows += `<div class="detail-row"><div class="detail-label">Status</div><div class="detail-value" style="color:var(--green);font-weight:600">✓ Fully Reimbursed</div></div>`;
+    if (isFullyWrittenOff) {
+      rows += `<div class="detail-row"><div class="detail-label">Status</div><div class="detail-value" style="color:var(--red);font-weight:600">✗ Written off (${tx.writeOffReason || 'Loss'})</div></div>`;
+    } else if (isFullyPaid) {
+      rows += `<div class="detail-row"><div class="detail-label">Status</div><div class="detail-value" style="color:var(--green);font-weight:600">✓ Fully Reimbursed${isPartialWrittenOff?` (${fmt(totalWrittenOff,tx.currency)} written off)`:''}</div></div>`;
     } else {
       rows += `<div class="detail-row"><div class="detail-label">Others Owe</div><div class="detail-value" style="font-family:var(--mono);color:${remaining>0?'var(--amber)':'var(--green)'}">${fmt(remaining,tx.currency)}${totalPaid>0?` <span style="font-size:11px;color:var(--text4)">(${fmt(totalPaid,tx.currency)} paid)</span>`:''}</div></div>`;
     }
@@ -6459,6 +6490,9 @@ function openTxDetail(txId) {
     const to = getAccountDisplay(tx.toAccountId);
     rows += `<div class="detail-row"><div class="detail-label">From</div><div class="detail-value">${from.name}</div></div>`;
     rows += `<div class="detail-row"><div class="detail-label">To</div><div class="detail-value">${to.name} ${tx.toAmount?`(${fmt(tx.toAmount,to.currency)})`:''}</div></div>`;
+  } else if (tx.skipBalance && !tx.accountId) {
+    // PLS #116: write-off tx has no account (analytics-only, no real cash moved)
+    rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value" style="color:var(--text4);font-style:italic">— (no cash account)</div></div>`;
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acct?.name||'—'}</div></div>`;
   }
@@ -7621,6 +7655,38 @@ function archiveTx(txId, skipConfirm) {
     return;
   }
 
+  // ── PERSONAL LOGIC SET #121 ── Reverting reimb write-off:
+  // When user archives a reimbursement write-off loss tx, revert the parent shared tx's
+  // paidSoFar + writtenOff + settled state for the affected person so the entry reappears
+  // in pending Reimbursements list.
+  if (tx.isReimbSettlementLoss && tx.writeOffReason && tx.parentId) {
+    const parent = db.transactions.find(t => t.id === tx.parentId);
+    if (parent) {
+      // Find person from notes (format: "Reimbursement write-off from <Name> — ...")
+      const m = (tx.notes || '').match(/from ([^—]+?) —/);
+      const person = m ? m[1].trim() : null;
+      if (person) {
+        if (parent.paidSoFar && typeof parent.paidSoFar === 'object') {
+          parent.paidSoFar[person] = Math.max(0, (parent.paidSoFar[person] || 0) - tx.amount);
+          if (parent.paidSoFar[person] <= 0.001) delete parent.paidSoFar[person];
+        }
+        if (parent.writtenOff && typeof parent.writtenOff === 'object') {
+          parent.writtenOff[person] = Math.max(0, (parent.writtenOff[person] || 0) - tx.amount);
+          if (parent.writtenOff[person] <= 0.001) delete parent.writtenOff[person];
+        }
+        // Recalculate settled status
+        const persons = parent.persons || [];
+        const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
+        const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+(parseFloat(v)||0), 0);
+        if (totalPaid < totalOwed - 0.01) {
+          parent.settled = false;
+          delete parent.settledAs;
+          delete parent.writeOffReason;
+        }
+      }
+    }
+  }
+
   const idx = db.transactions.findIndex(t=>t.id===txId);
   if (idx < 0) return;
   db.transactions.splice(idx,1);
@@ -7814,6 +7880,36 @@ function promptArchiveDelete(txId, txName, childCount) {
 // cascade-deleted permanently din. Walang survivor.
 // ── PERSONAL LOGIC SET #40 ── confirmDeleteTx cascades children by cascadedFrom OR parentId, 2 levels deep (children + grandchildren)
 function confirmDeleteTx(txId) {
+  // PLS #121: If deleting a reimb write-off loss, revert parent shared tx state so
+  // the entry reappears in pending Reimbursements + Net Worth includes receivable again.
+  const txBeingDeleted = db.archivedTransactions.find(t => t.id === txId);
+  if (txBeingDeleted && txBeingDeleted.isReimbSettlementLoss && txBeingDeleted.writeOffReason && txBeingDeleted.parentId) {
+    const parent = db.transactions.find(t => t.id === txBeingDeleted.parentId)
+                 || db.archivedTransactions.find(t => t.id === txBeingDeleted.parentId);
+    if (parent) {
+      const m = (txBeingDeleted.notes || '').match(/from ([^—]+?) —/);
+      const person = m ? m[1].trim() : null;
+      if (person) {
+        if (parent.paidSoFar && typeof parent.paidSoFar === 'object') {
+          parent.paidSoFar[person] = Math.max(0, (parent.paidSoFar[person] || 0) - txBeingDeleted.amount);
+          if (parent.paidSoFar[person] <= 0.001) delete parent.paidSoFar[person];
+        }
+        if (parent.writtenOff && typeof parent.writtenOff === 'object') {
+          parent.writtenOff[person] = Math.max(0, (parent.writtenOff[person] || 0) - txBeingDeleted.amount);
+          if (parent.writtenOff[person] <= 0.001) delete parent.writtenOff[person];
+        }
+        const persons = parent.persons || [];
+        const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
+        const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+(parseFloat(v)||0), 0);
+        if (totalPaid < totalOwed - 0.01) {
+          parent.settled = false;
+          delete parent.settledAs;
+          delete parent.writeOffReason;
+        }
+      }
+    }
+  }
+
   // Delete the tx itself + direct children
   const beforeCount = db.archivedTransactions.length;
   // Find direct children first
@@ -8392,6 +8488,9 @@ function confirmWriteOffReimb(person) {
     // Mark paidSoFar so the parent reaches fully-settled state
     if (!tx.paidSoFar || typeof tx.paidSoFar !== 'object') tx.paidSoFar = {};
     tx.paidSoFar[person] = (tx.paidSoFar[person] || 0) + e.remaining;
+    // PLS #120: Track write-off amount per person so display can distinguish from real payment
+    if (!tx.writtenOff || typeof tx.writtenOff !== 'object') tx.writtenOff = {};
+    tx.writtenOff[person] = (tx.writtenOff[person] || 0) + e.remaining;
 
     // Check if all persons are fully settled to mark settled = true
     let allSettled = true;
@@ -8727,7 +8826,7 @@ function openAcctDetail(acctId) {
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     return true;
   }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
 
