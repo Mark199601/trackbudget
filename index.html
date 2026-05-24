@@ -371,6 +371,7 @@ option{background:var(--bg3);color:var(--text)}
 .tx-meta{flex:1;min-width:0}
 .tx-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tx-detail{font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-pill{display:inline-block;padding:1px 7px;background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r-full);font-size:10px;color:var(--text2);font-weight:500;line-height:1.4;vertical-align:baseline}
 .tx-right{text-align:right;flex-shrink:0}
 .tx-amount{font-family:var(--mono);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums slashed-zero}
 .tx-neg{color:var(--red)}
@@ -3406,9 +3407,13 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '24.2';
+const APP_VERSION = '24.3';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '24.3', date: 'May 2026', changes: [
+    '🎨 Account names sa tx logs ay naka-pill na (rounded badge)',
+    '🎨 Unified batch loan + batch reimb breakdown style sa tx logs',
+  ]},
   { ver: '24.2', date: 'May 2026', changes: [
     '🐛 PLS #12 (revised): Settlement gain/loss children are analytics-only (no balance)',
     '🔧 Loan/Reimb settlement gain/loss now hidden from top-level tx log (nested only)',
@@ -3944,7 +3949,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon ${iconBg}">${icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
-        <div class="tx-detail">${acct.name}${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount tx-neu">⇄ ${fmt(tx.amount,tx.currency)}</div>
@@ -3964,7 +3969,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
-        <div class="tx-detail">${acct.name}${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
@@ -3982,7 +3987,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon" style="background:var(--bg4);color:var(--text2)">⚖️</div>
       <div class="tx-meta">
         <div class="tx-name">Balance Correction</div>
-        <div class="tx-detail">${acct.name} · ${dirLabel}${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span> · ${dirLabel}${tx.notes?' · '+_esc(tx.notes):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount ${dirColor}">${sign}${fmt(tx.amount,tx.currency)}</div>
@@ -4005,7 +4010,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
         <div class="tx-name">Transfer</div>
-        <div class="tx-detail">${from.name} → ${to.name}${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(from.name)}</span> → <span class="acct-pill">${_esc(to.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount tx-neu">↔ ${fmt(tx.amount,tx.currency)}</div>
@@ -4015,13 +4020,13 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   } else if (tx.isInvestmentFund) {
     // Investment fund tx — use source account as detail, fall through to full rendering
     const from = getAccountDisplay(tx.fromAccountId);
-    detail = `${from.name} → Investment`;
+    detail = `<span class="acct-pill">${_esc(from.name)}</span> → Investment`;
   } else if (tx.type==='lend'||tx.type==='borrow') {
-    detail = `${tx.type==='lend'?'To':'From'}: ${tx.personName||'?'} · ${acct.name}`;
+    detail = `${tx.type==='lend'?'To':'From'}: ${_esc(tx.personName||'?')} · <span class="acct-pill">${_esc(acct.name)}</span>`;
   } else if (tx.type==='shared') {
-    detail = `Shared w/ ${tx.sharedWith||'?'} · ${acct.name}`;
+    detail = `Shared w/ ${_esc(tx.sharedWith||'?')} · <span class="acct-pill">${_esc(acct.name)}</span>`;
   } else {
-    detail = acct.name;
+    detail = `<span class="acct-pill">${_esc(acct.name)}</span>`;
   }
   if (tx.notes) detail += ` · ${_esc(tx.notes)}`;
   // For shared txs — iOS-style clean breakdown card
@@ -4163,10 +4168,12 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         ? `<span class="pill" style="font-size:9px;padding:1px 8px;background:var(--red-bg);color:var(--red)">-${fmt(lossChild.amount,lossChild.currency)} loss</span>`
         : '';
       const loanRows = linkedLoans.map(loan => {
+        const lent = direction === 'lent';
+        const iconEmoji = lent ? '💸' : '💰';
         return `<div onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-            <div class="pool-avatar" style="width:24px;height:24px;font-size:10px">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-            <div style="font-size:12px;color:var(--text2);min-width:0">${loan.personName||'Unknown'} · ${fmtD(loan.date)}</div>
+            <span style="font-size:14px">${iconEmoji}</span>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${_esc(loan.personName||'Unknown')} · ${fmtD(loan.date)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(loan.amount, loan.currency)}</span>
