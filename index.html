@@ -1846,13 +1846,15 @@ function getAcctBalance(acctId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
       if (parent?.toAmountIsActual) continue;
     }
-    // 📖 USER STORY: Yung loan settlement gain/loss children ay para lang sa tracking — hindi sila
-    // nag-aaffect ng account balance kasi yung parent settlement tx (or yung original loan tx) ang
-    // mismo nag-handle ng cash movement. Skipping prevents double-counting.
-    // ── PERSONAL LOGIC SET #12 ── PLS #47 FIX: Gain/Loss ARE real FX arbitrage — include in balance
-    // (previously skipped to avoid double-count, but per user expectation, gain/loss must affect cash)
-    // if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
-    // if (tx.isReimbSettlementGain) continue;
+    // 📖 USER STORY: Yung settlement gain/loss children ay para lang sa analytics — hindi sila
+    // nag-aaffect ng account balance kasi yung parent settlement tx (or original loan tx) ang
+    // mismo nag-handle ng full cash movement. Skipping prevents double-counting.
+    // ── PERSONAL LOGIC SET #12 (revised) ── Gain/Loss children are ANALYTICS-ONLY.
+    // Parent batch settlement tx already deducts/adds the full amount (e.g. Celso pays K200 →
+    // parent +K200 to account). The gain child K15.97 is for monthly income recognition only
+    // (PLS #47), NOT for balance — adding it would double-count by K15.97.
+    if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
+    if (tx.isReimbSettlementGain || tx.isReimbSettlementLoss) continue;
     // 📖 USER STORY: Pag nagpautang ka (Lend), bumababa ang account mo kasi lumabas yung pera.
     // Pag may inutang ka (Borrow), tumataas — kasi may pumasok na pera sa account mo.
     // Hindi sila nila-log as expense or income kasi pautang lang, hindi naman ginastos o kinita.
@@ -3057,18 +3059,20 @@ function renderDashboard() {
     </div>`;
   }
 
-  // Recent transactions — apply same exclusions as main tx log (PLS #114):
+  // Recent transactions — apply same exclusions as main tx log (PLS #114 + #12 revised):
   //   - Hide isAutoFee children (shown nested under parent remittance)
   //   - Hide isLoanPayment children (shown under loan)
   //   - Hide isAutoReimb (shown in Reimbursements tab)
   //   - Hide isFeeReimbursable (tracking-only shared tx)
-  // Without these, fee/reimb children appear as standalone rows AND nested = visual duplication.
+  //   - Hide gain/loss settlement children (shown nested under parent settlement)
+  // Without these, children appear as standalone rows AND nested = visual duplication.
   const recentTxs = [...db.transactions].filter(t => {
     if (t.archived) return false;
     if (t.isAutoFee && t.parentId) return false;
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
@@ -3402,9 +3406,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '24.1';
+const APP_VERSION = '24.2';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '24.2', date: 'May 2026', changes: [
+    '🐛 PLS #12 (revised): Settlement gain/loss children are analytics-only (no balance)',
+    '🔧 Loan/Reimb settlement gain/loss now hidden from top-level tx log (nested only)',
+    '🐛 PLS #119: Fee reimb income tx no longer double-credits account (was +2x)',
+    '🔧 Auto-migration: legacy fee reimb income gets skipBalance flag',
+    '✅ Walang ibang double accounting issue na natira sa app',
+  ]},
   { ver: '24.1', date: 'May 2026', changes: [
     '🐛 CRITICAL: Fixed openAddLoan TDZ error (acctLabel const shadowed global helper)',
     '🔧 Settlement preview now time-aware (uses date+time, PLS #118)',
@@ -6013,6 +6024,10 @@ function renderTxLog() {
     // as a top-level row too causes visual double-accounting (one fee tx appearing twice).
     // The fee is still counted ONCE in totals (PLS #46 — isAutoFee included as real expense).
     if (t.isAutoFee && t.parentId) return false;
+    // ── PERSONAL LOGIC SET #12 (revised) ── Hide gain/loss settlement children from top-level
+    // tx log — shown nested under their parent settlement row. Counted ONCE in monthly totals
+    // (PLS #47) but skipped from balance (parent already covered cash).
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
     const _isInvCapital = t.isInvestmentFund || t.isInvestmentReturn;
@@ -8460,6 +8475,10 @@ function confirmReimbSettlement(person) {
       // ── PERSONAL LOGIC SET #49 ── isFeeReimbursable shared tx settlement creates income tx "Bank transfer fee reimb from [person]"
       // category: sc-bankcharges. isAutoFee remains as expense always — this income tx offsets it.
       // Net effect on monthly totals: -fee expense + fee income = 0 (neutral after reimbursement).
+      // ── PERSONAL LOGIC SET #119 ── Fee reimb income is analytics-only.
+      // Batch parent (L8496) already credits the account with the actual received cash.
+      // This tx is for monthly fee-offset recognition only (PLS #49), NOT for balance —
+      // adding it would double-credit the account by the fee amount.
       if (parent.isFeeReimbursable) {
         db.transactions.push({
           id: 'tx-'+genId(),
@@ -8471,6 +8490,7 @@ function confirmReimbSettlement(person) {
           notes: `Bank transfer fee reimb from ${person}`,
           categoryId: 'sc-bankcharges',
           isAutoReimb: true,
+          skipBalance: true,
           parentId: parent.id,
           fxSnapshot: snap,
           createdAt: new Date().toISOString(),
@@ -8690,11 +8710,12 @@ function openAcctDetail(acctId) {
   const recentTxs = db.transactions.filter(t => {
     if (t.archived) return false;
     if (!(t.accountId===acctId || t.fromAccountId===acctId || t.toAccountId===acctId)) return false;
-    // PLS #114: hide children that are shown nested under their parent
+    // PLS #114 + #12 revised: hide children that are shown nested under their parent
     if (t.isAutoFee && t.parentId) return false;
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId) return false;
     return true;
   }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
 
@@ -17977,6 +17998,9 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
     if (tx.date && tx.date > asOfDate) continue;
     // PLS #116: skipBalance flag (e.g. write-off losses) — no cash moved
     if (tx.skipBalance) continue;
+    // PLS #12 (revised): gain/loss children are analytics-only, parent covered cash
+    if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) continue;
+    if (tx.isReimbSettlementGain || tx.isReimbSettlementLoss) continue;
     // PLS #11: skip isAutoForex on toAmountIsActual parents
     if (tx.isAutoForex && tx.parentId) {
       const parent = db.transactions.find(t => t.id === tx.parentId);
@@ -19592,6 +19616,25 @@ function ensureDBIntegrity() {
       }
     }
     if (fixedReimbLoss > 0) issues.push(`migrated ${fixedReimbLoss} legacy reimb write-off(s)`);
+
+    // ── PERSONAL LOGIC SET #119 ── Migrate legacy fee reimb income txs.
+    // Old isAutoReimb fee-reimb txs (created via PLS #49 path) had accountId but no
+    // skipBalance flag, causing double-credit alongside the batch parent. Add skipBalance
+    // retroactively. Detection: isAutoReimb + categoryId='sc-bankcharges' + has accountId.
+    let fixedFeeReimb = 0;
+    for (const tx of (db.transactions || [])) {
+      if (tx.isAutoReimb && tx.categoryId === 'sc-bankcharges' && tx.accountId && !tx.skipBalance && !tx.isBatchReimbSettlement) {
+        tx.skipBalance = true;
+        fixedFeeReimb++;
+      }
+    }
+    for (const tx of (db.archivedTransactions || [])) {
+      if (tx.isAutoReimb && tx.categoryId === 'sc-bankcharges' && tx.accountId && !tx.skipBalance && !tx.isBatchReimbSettlement) {
+        tx.skipBalance = true;
+        fixedFeeReimb++;
+      }
+    }
+    if (fixedFeeReimb > 0) issues.push(`migrated ${fixedFeeReimb} legacy fee reimb credit(s)`);
 
     // ── PLS #111 ── displayCurrency is DECOUPLED from home base (PLS #112).
     // Home base is from nationality (immutable). Display is a separate user preference.
