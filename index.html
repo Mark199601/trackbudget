@@ -71,6 +71,10 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .field-row .fr-label{flex:1;min-width:0;font-size:13px;color:var(--text2)}
 .field-row .fr-value{font-size:13px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;text-align:right}
 .field-row-wrap{position:relative}
+.field-row-split{display:flex;gap:8px;margin-bottom:0}
+.field-row-split .field-row-wrap{flex:1;min-width:0}
+.field-row-split .field-row-wrap.fw-date{flex:1.7}
+.field-row-split .field-row-wrap.fw-time{flex:1}
 .field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
 /* ── DARK MODE (default) — purple-tinted, more contrast ── */
 :root, [data-theme="dark"] {
@@ -1237,6 +1241,12 @@ function fmtDFull(d) { if (!d || typeof d !== 'string') return '—'; const t = 
 function fmtMonth(d) { if (!d || typeof d !== 'string') return '—'; const t = new Date(d+'T12:00'); return isNaN(t)? '—' : t.toLocaleDateString('en',{month:'long',year:'numeric'}); }
 function today() { return new Date().toISOString().split('T')[0]; }
 function nowTime() { return new Date().toTimeString().slice(0,5); }
+function fmtT(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h);
+  return ((hour % 12) || 12) + ':' + m + ' ' + (hour >= 12 ? 'PM' : 'AM');
+}
 function daysUntil(ds) { if(!ds)return null; const d=new Date(ds+'T12:00'),n=new Date(); n.setHours(0,0,0,0); return Math.ceil((d-n)/86400000); }
 function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function currMonthKey() { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
@@ -3430,9 +3440,20 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '24.7';
+const APP_VERSION = '24.9';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '24.9', date: 'May 2026', changes: [
+    '🎨 Date + Time sa isang row (tappable, walang dropdown)',
+    '🎨 Notes always visible (hindi na sa More options)',
+    '🎨 Applied sa Transfer, Remittance, External In/Out',
+    '✅ Existing tx data unaffected — IDs at handlers unchanged',
+  ]},
+  { ver: '24.8', date: 'May 2026', changes: [
+    '🎨 Unified all Add Transaction forms to Apple Wallet style',
+    '🎨 Transfer, Remittance, External In/Out: big amount hero + field-row pattern',
+    '✅ All IDs at submit handlers unchanged — existing data unaffected',
+  ]},
   { ver: '24.7', date: 'May 2026', changes: [
     '🐛 PLS #14: Cross-currency shared tx now converts to account currency (was raw subtract)',
     '🐛 PLS #28 (revised): Cash & Wallets excludes Credit Card (proper asset/liability separation)',
@@ -4994,38 +5015,75 @@ function renderRemittanceForm() {
   const defaultFromCurr = accts[0]?.currency || homeCurr;
   const defaultToCurr = accts.find(a => a.currency !== defaultFromCurr)?.currency || homeCurr;
 
-  return `<div>
+  return `<div class="big-amt-wrap">
     <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
       📤 Western Union, bank wire, or any cross-account transfer with FX. Sets rate anchor for this date.
     </div>
 
-    <div class="form-group">
-      <label class="form-label">From (sending) *</label>
-      <select class="form-input" id="rem-from-acct" onchange="onRemittanceAcctChange()">${allOpts}</select>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">To (receiving) *</label>
-      <select class="form-input" id="rem-to-acct" onchange="onRemittanceAcctChange()">${allOpts}</select>
-    </div>
-
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Amount Sent *</label>
-        <input class="form-input numpad-input" type="number" id="rem-amount" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Rate (1 <span id="rem-from-label">${defaultFromCurr}</span> = <span id="rem-to-label">${defaultToCurr}</span>) *</label>
-        <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="0.0000" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
+    <!-- Big amount hero -->
+    <div style="text-align:center;padding:12px 0 18px">
+      <div style="display:inline-flex;align-items:flex-start;justify-content:center">
+        <span class="big-amt-curr" id="rem-amt-curr-sym">${sym(defaultFromCurr)}</span>
+        <input class="big-amt-input numpad-input" type="number" id="rem-amount" min="0" step="any" placeholder="0" oninput="updateRemittancePhpPreview()" inputmode="none">
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Date *</label>
-      ${dtField('rem-date','date','Today')}
+    <!-- From account -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">📤</div>
+        <div class="fr-label">From</div>
+        <div class="fr-value" id="rem-from-display" style="color:var(--text4)">Tap to select</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="rem-from-acct" onchange="onRemittanceAcctChange();updateRemFromDisplay()">${allOpts}</select>
     </div>
 
-    <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:40px;pointer-events:none">
+    <!-- To account -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">📥</div>
+        <div class="fr-label">To</div>
+        <div class="fr-value" id="rem-to-display" style="color:var(--text4)">Tap to select</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="rem-to-acct" onchange="onRemittanceAcctChange();updateRemToDisplay()">${allOpts}</select>
+    </div>
+
+    <!-- Rate field -->
+    <div class="form-group" style="margin-top:6px">
+      <label class="form-label" style="font-size:11px">Rate (1 <span id="rem-from-label">${defaultFromCurr}</span> = <span id="rem-to-label">${defaultToCurr}</span>) *</label>
+      <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="0.0000" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
+    </div>
+
+    <!-- Date + Time split row -->
+    <div class="field-row-split">
+      <div class="field-row-wrap fw-date">
+        <div class="field-row" onclick="document.getElementById('rem-date-native')?.showPicker?document.getElementById('rem-date-native').showPicker():document.getElementById('rem-date-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">📅</div>
+          <div class="fr-label">Date</div>
+          <div class="fr-value" id="rem-date-display">${fmtD(today())}</div>
+        </div>
+        <input type="date" id="rem-date-native" value="${today()}" onchange="document.getElementById('rem-date').value=this.value;document.getElementById('rem-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="rem-date" value="${today()}">
+      </div>
+      <div class="field-row-wrap fw-time">
+        <div class="field-row" onclick="document.getElementById('rem-time-native')?.showPicker?document.getElementById('rem-time-native').showPicker():document.getElementById('rem-time-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">🕐</div>
+          <div class="fr-value" id="rem-time-display">${fmtT(nowTime())}</div>
+        </div>
+        <input type="time" id="rem-time-native" value="${nowTime()}" onchange="document.getElementById('rem-time').value=this.value;document.getElementById('rem-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="rem-time" value="${nowTime()}">
+      </div>
+    </div>
+
+    <!-- Notes always visible -->
+    <div class="form-group" style="margin-top:6px">
+      <label class="form-label" style="font-size:11px">Notes</label>
+      <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU receipt #12345"></textarea>
+    </div>
+
+    <div id="rem-php-preview" style="font-size:13px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin:10px 0;min-height:40px;pointer-events:none">
       Received: —
     </div>
 
@@ -5050,16 +5108,41 @@ function renderRemittanceForm() {
             </select>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Time</label>${dtField('rem-time','time','Now')}</div>
-        <div class="form-group">
-          <label class="form-label">Notes</label>
-          <textarea class="form-input" id="rem-notes" rows="2" style="resize:none" placeholder="e.g. WU receipt #12345"></textarea>
-        </div>
       </div>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitRemittance()">Save Remittance</button>
   </div>`;
+}
+
+// Helpers for Remittance form
+function updateRemFromDisplay() {
+  const sel = document.getElementById('rem-from-acct');
+  const disp = document.getElementById('rem-from-display');
+  const symEl = document.getElementById('rem-amt-curr-sym');
+  if (!sel || !disp) return;
+  const a = db.accounts.find(x=>x.id===sel.value);
+  if (a) {
+    disp.textContent = acctLabel(a).replace(/<[^>]+>/g,'');
+    disp.style.color = 'var(--text)';
+    if (symEl) symEl.textContent = sym(a.currency);
+  } else {
+    disp.textContent = 'Tap to select';
+    disp.style.color = 'var(--text4)';
+  }
+}
+function updateRemToDisplay() {
+  const sel = document.getElementById('rem-to-acct');
+  const disp = document.getElementById('rem-to-display');
+  if (!sel || !disp) return;
+  const a = db.accounts.find(x=>x.id===sel.value);
+  if (a) {
+    disp.textContent = acctLabel(a).replace(/<[^>]+>/g,'');
+    disp.style.color = 'var(--text)';
+  } else {
+    disp.textContent = 'Tap to select';
+    disp.style.color = 'var(--text4)';
+  }
 }
 
 function toggleRemMore() {
@@ -5241,47 +5324,85 @@ function renderExternalForm(type) {
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
   const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  return `<div>
+  return `<div class="big-amt-wrap">
     <div style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:14px;line-height:1.5">
       ${isIn ? '📥 <strong>External In</strong> — Adds to balance. Not counted as income.' : '📤 <strong>External Out</strong> — Reduces balance. Not counted as expense.'}
     </div>
-    <div class="form-row fr2">
-      <div class="form-group">
-        <label class="form-label">Amount *</label>
-        <input class="form-input numpad-input" type="number" id="ext-amount" placeholder="0.00" step="any" inputmode="none">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Date *</label>
-        ${dtField('ext-date','date','Today')}
+
+    <!-- Big amount hero -->
+    <div style="text-align:center;padding:12px 0 18px">
+      <div style="display:inline-flex;align-items:flex-start;justify-content:center">
+        <span class="big-amt-curr" id="ext-amt-curr-sym">${sym(_homeBase())}</span>
+        <input class="big-amt-input numpad-input" type="number" id="ext-amount" min="0" step="any" placeholder="0" inputmode="none">
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">${isIn ? 'To Account *' : 'From Account *'}</label>
-      <select class="form-input" id="ext-account" onchange="syncExtCurrency()">${acctOpts}</select>
+
+    <!-- Account field -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">${isIn ? '📥' : '📤'}</div>
+        <div class="fr-label">${isIn ? 'To Account' : 'From Account'}</div>
+        <div class="fr-value" id="ext-acct-display" style="color:var(--text4)">Tap to select</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="ext-account" onchange="syncExtCurrency();updateExtAcctDisplay()">${acctOpts}</select>
     </div>
-    <div class="form-group">
-      <label class="form-label">${isIn ? 'From' : 'To'}</label>
+
+    <!-- Person field (display only — not a picker) -->
+    <div class="form-group" style="margin-top:6px">
+      <label class="form-label" style="font-size:11px">${isIn ? 'From' : 'To'}</label>
       <input class="form-input" id="ext-person" placeholder="${isIn ? 'e.g. Papa, Company advance' : 'e.g. Pasalubong, Papa'}">
     </div>
+
+    <!-- Date + Time split row -->
+    <div class="field-row-split">
+      <div class="field-row-wrap fw-date">
+        <div class="field-row" onclick="document.getElementById('ext-date-native')?.showPicker?document.getElementById('ext-date-native').showPicker():document.getElementById('ext-date-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">📅</div>
+          <div class="fr-label">Date</div>
+          <div class="fr-value" id="ext-date-display">${fmtD(today())}</div>
+        </div>
+        <input type="date" id="ext-date-native" value="${today()}" onchange="document.getElementById('ext-date').value=this.value;document.getElementById('ext-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="ext-date" value="${today()}">
+      </div>
+      <div class="field-row-wrap fw-time">
+        <div class="field-row" onclick="document.getElementById('ext-time-native')?.showPicker?document.getElementById('ext-time-native').showPicker():document.getElementById('ext-time-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">🕐</div>
+          <div class="fr-value" id="ext-time-display">${fmtT(nowTime())}</div>
+        </div>
+        <input type="time" id="ext-time-native" value="${nowTime()}" onchange="document.getElementById('ext-time').value=this.value;document.getElementById('ext-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="ext-time" value="${nowTime()}">
+      </div>
+    </div>
+
+    <!-- Notes always visible -->
+    <div class="form-group" style="margin-top:6px">
+      <label class="form-label" style="font-size:11px">Notes</label>
+      <textarea class="form-input" id="ext-notes" rows="2" style="resize:none"></textarea>
+    </div>
+
     <!-- Currency hidden — auto from account -->
     <select id="ext-currency" style="display:none">${currOpts}</select>
 
-    <!-- More options expander -->
-    <div style="margin-bottom:10px">
-      <div onclick="toggleExtMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
-        <svg id="ext-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div id="ext-more-row" style="display:none;margin-top:8px">
-        <div class="form-group"><label class="form-label">Time</label>${dtField('ext-time','time','Now')}</div>
-        <div class="form-group">
-          <label class="form-label">Notes</label>
-          <textarea class="form-input" id="ext-notes" rows="2" style="resize:none"></textarea>
-        </div>
-      </div>
-    </div>
     <button class="btn btn-primary btn-full" onclick="submitExternal('${type}')">Save</button>
   </div>`;
+}
+
+// Helper for External form
+function updateExtAcctDisplay() {
+  const sel = document.getElementById('ext-account');
+  const disp = document.getElementById('ext-acct-display');
+  const symEl = document.getElementById('ext-amt-curr-sym');
+  if (!sel || !disp) return;
+  const a = db.accounts.find(x=>x.id===sel.value);
+  if (a) {
+    disp.textContent = acctLabel(a).replace(/<[^>]+>/g,'');
+    disp.style.color = 'var(--text)';
+    if (symEl) symEl.textContent = sym(a.currency);
+  } else {
+    disp.textContent = 'Tap to select';
+    disp.style.color = 'var(--text4)';
+  }
 }
 
 function toggleExtMore() {
@@ -5338,18 +5459,67 @@ function renderTransferForm() {
   const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
   const acctOpts = ()=>placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  return `<div>
-    <div class="form-group"><label class="form-label">From *</label><select class="form-input" id="tf-from" onchange="syncTransferCurrency();updateTransferPreview()">${acctOpts(false)}</select></div>
-    <div class="form-group"><label class="form-label">To *</label><select class="form-input" id="tf-to" onchange="updateTransferPreview()">${acctOpts(true)}</select></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Amount *</label><input class="form-input numpad-input" type="number" id="tf-amount" placeholder="0.00" step="any" oninput="updateTransferPreview()" inputmode="none"></div>
-      <div class="form-group"><label class="form-label">Date *</label>${dtField('tf-date','date','Today')}</div>
+  return `<div class="big-amt-wrap">
+
+    <!-- Big amount hero -->
+    <div style="text-align:center;padding:16px 0 18px">
+      <div style="display:inline-flex;align-items:flex-start;justify-content:center">
+        <span class="big-amt-curr" id="tf-amt-curr-sym">${sym(_homeBase())}</span>
+        <input class="big-amt-input numpad-input" type="number" id="tf-amount" min="0" step="any" placeholder="0" oninput="updateTransferPreview()" inputmode="none">
+      </div>
     </div>
+
+    <!-- From account -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">📤</div>
+        <div class="fr-label">From</div>
+        <div class="fr-value" id="tf-from-display" style="color:var(--text4)">Tap to select</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="tf-from" onchange="syncTransferCurrency();updateTransferPreview();updateTfFromDisplay()">${acctOpts()}</select>
+    </div>
+
+    <!-- To account -->
+    <div class="field-row-wrap">
+      <div class="field-row">
+        <div class="fr-icon" style="background:var(--bg3)">📥</div>
+        <div class="fr-label">To</div>
+        <div class="fr-value" id="tf-to-display" style="color:var(--text4)">Tap to select</div>
+        <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <select id="tf-to" onchange="updateTransferPreview();updateTfToDisplay()">${acctOpts()}</select>
+    </div>
+
+    <!-- Date + Time split row -->
+    <div class="field-row-split">
+      <div class="field-row-wrap fw-date">
+        <div class="field-row" onclick="document.getElementById('tf-date-native')?.showPicker?document.getElementById('tf-date-native').showPicker():document.getElementById('tf-date-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">📅</div>
+          <div class="fr-label">Date</div>
+          <div class="fr-value" id="tf-date-display">${fmtD(today())}</div>
+        </div>
+        <input type="date" id="tf-date-native" value="${today()}" onchange="document.getElementById('tf-date').value=this.value;document.getElementById('tf-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="tf-date" value="${today()}">
+      </div>
+      <div class="field-row-wrap fw-time">
+        <div class="field-row" onclick="document.getElementById('tf-time-native')?.showPicker?document.getElementById('tf-time-native').showPicker():document.getElementById('tf-time-native')?.focus()">
+          <div class="fr-icon" style="background:var(--bg3)">🕐</div>
+          <div class="fr-value" id="tf-time-display">${fmtT(nowTime())}</div>
+        </div>
+        <input type="time" id="tf-time-native" value="${nowTime()}" onchange="document.getElementById('tf-time').value=this.value;document.getElementById('tf-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;pointer-events:none">
+        <input type="hidden" id="tf-time" value="${nowTime()}">
+      </div>
+    </div>
+
+    <!-- Notes always visible -->
+    <div class="form-group" style="margin-top:6px"><label class="form-label" style="font-size:11px">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
+
     <!-- Currency hidden — auto-derived from From account -->
     <select id="tf-currency" style="display:none" onchange="updateTransferPreview()">${currOpts}</select>
 
     <!-- Forex preview card — only visible for cross-currency, display-only -->
-    <div id="tf-forex-preview" style="display:none;background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;border:1px solid var(--border)">
+    <div id="tf-forex-preview" style="display:none;background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin:10px 0;border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">💱 <span id="tf-fx-pair">PGK → ${_homeBase()}</span></div>
         <div style="font-size:10px;color:var(--text4)">snapshot <span id="tf-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
@@ -5360,7 +5530,7 @@ function renderTransferForm() {
     <input type="checkbox" id="tf-use-snapshot" style="display:none">
 
     <!-- More options expander -->
-    <div style="margin-bottom:10px">
+    <div style="margin:10px 0">
       <div onclick="toggleTfMore()" id="tf-more-toggle" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
         <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
         <svg id="tf-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -5392,7 +5562,7 @@ function renderTransferForm() {
             </div>
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label" style="font-size:11px">Charged to</label>
-              <select class="form-input" id="tf-fee-acct"><option value="">— Same as From —</option>${acctOpts(false)}</select>
+              <select class="form-input" id="tf-fee-acct"><option value="">— Same as From —</option>${acctOpts()}</select>
             </div>
           </div>
           <div class="form-group" style="margin-top:8px;margin-bottom:0">
@@ -5401,14 +5571,41 @@ function renderTransferForm() {
             <div style="font-size:10px;color:var(--text4);margin-top:4px;line-height:1.3">💡 If filled, this fee will become a Shared transaction reimbursable from that person.</div>
           </div>
         </div>
-
-        <div class="form-group" style="margin-top:8px"><label class="form-label">Time</label>${dtField('tf-time','time','Now')}</div>
-        <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="tf-notes" placeholder="Optional"></div>
       </div>
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitTransfer()">Save Transfer</button>
   </div>`;
+}
+
+// Helper: update From/To display text when dropdown changes
+function updateTfFromDisplay() {
+  const sel = document.getElementById('tf-from');
+  const disp = document.getElementById('tf-from-display');
+  const symEl = document.getElementById('tf-amt-curr-sym');
+  if (!sel || !disp) return;
+  const a = db.accounts.find(x=>x.id===sel.value);
+  if (a) {
+    disp.textContent = acctLabel(a).replace(/<[^>]+>/g,''); // strip HTML if any
+    disp.style.color = 'var(--text)';
+    if (symEl) symEl.textContent = sym(a.currency);
+  } else {
+    disp.textContent = 'Tap to select';
+    disp.style.color = 'var(--text4)';
+  }
+}
+function updateTfToDisplay() {
+  const sel = document.getElementById('tf-to');
+  const disp = document.getElementById('tf-to-display');
+  if (!sel || !disp) return;
+  const a = db.accounts.find(x=>x.id===sel.value);
+  if (a) {
+    disp.textContent = acctLabel(a).replace(/<[^>]+>/g,'');
+    disp.style.color = 'var(--text)';
+  } else {
+    disp.textContent = 'Tap to select';
+    disp.style.color = 'var(--text4)';
+  }
 }
 
 function toggleTfMore() {
@@ -8518,7 +8715,10 @@ function confirmWriteOffReimb(person) {
     // Mark paidSoFar so the parent reaches fully-settled state
     if (!tx.paidSoFar || typeof tx.paidSoFar !== 'object') tx.paidSoFar = {};
     tx.paidSoFar[person] = (tx.paidSoFar[person] || 0) + e.remaining;
-    // PLS #120: Track write-off amount per person so display can distinguish from real payment
+    // ── PERSONAL LOGIC SET #120 ── Track write-off amount per person via tx.writtenOff[].
+    // Parallel to paidSoFar — lets display distinguish "Paid ✓" (real payment) from
+    // "Written off ✗" (absorbed as loss). Used by status badge logic in shared tx breakdown
+    // and tx detail Status row.
     if (!tx.writtenOff || typeof tx.writtenOff !== 'object') tx.writtenOff = {};
     tx.writtenOff[person] = (tx.writtenOff[person] || 0) + e.remaining;
 
