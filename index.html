@@ -65,17 +65,20 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .big-amt-input{width:100%;border:none;background:transparent;text-align:center;font-family:var(--mono);font-weight:700;letter-spacing:-2px;color:var(--text);outline:none;padding:8px 0;font-variant-numeric:tabular-nums;font-size:clamp(40px,10vw,64px);line-height:1.1}
 .big-amt-input::placeholder{color:var(--text4);opacity:0.4}
 .big-amt-curr{font-size:clamp(20px,4vw,28px);color:var(--text4);font-weight:600;margin-right:6px;vertical-align:top;display:inline-block;margin-top:8px}
-.field-row{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;margin-bottom:8px}
+.field-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;margin-bottom:10px}
 .field-row:hover{background:var(--bg3)}
-.field-row .fr-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--bg3)}
-.field-row .fr-label{flex:1;min-width:0;font-size:13px;color:var(--text2)}
-.field-row .fr-value{font-size:13px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;text-align:right}
+.field-row:active{background:var(--bg3);transform:scale(0.995)}
+.field-row .fr-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;background:var(--bg3)}
+.field-row .fr-label{flex:1;min-width:0;font-size:14px;color:var(--text2);font-weight:400}
+.field-row .fr-value{font-size:14px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;text-align:right}
 .field-row-wrap{position:relative}
-.field-row-split{display:flex;gap:8px;margin-bottom:0}
+.field-row-split{display:flex;gap:10px;margin-bottom:0}
 .field-row-split .field-row-wrap{flex:1;min-width:0}
 .field-row-split .field-row-wrap.fw-date{flex:1.7}
 .field-row-split .field-row-wrap.fw-time{flex:1}
 .field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
+/* big amount hero spacing refinements */
+.big-amt-wrap .big-amt-input{font-weight:600;letter-spacing:-1.5px}
 /* ── DARK MODE (default) — purple-tinted, more contrast ── */
 :root, [data-theme="dark"] {
   --bg:#06060d;--bg2:#0e0d1a;--bg3:#16142a;--bg4:#1f1c38;--bg5:#2a2647;
@@ -3440,9 +3443,14 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '25.0';
+const APP_VERSION = '25.1';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '25.1', date: 'May 2026', changes: [
+    '🎨 Cleaner iOS spacing across all Add Tx forms (14px padding, 30px icons, 14px text)',
+    '🎨 Shared form: Category is now tappable inside form (not separate picker screen)',
+    '✅ No function changes — pure UI polish',
+  ]},
   { ver: '25.0', date: 'May 2026', changes: [
     '🎨 Shared form unified to Apple Wallet style (big amount hero + tappable fields)',
     '🎨 Expense/Income: Date+Time isang row, Notes always visible',
@@ -4518,7 +4526,7 @@ function renderUnifiedAmountForm() {
   const currOpts = (db.trackedCurrencies || [_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('');
 
   if (isShared) {
-    if (!cat) return renderCatPicker('expense');
+    // Pass cat (may be null) — form renders with Category as tappable field like Expense
     return renderSharedFormBody(cat, acctOpts, currOpts);
   }
 
@@ -4649,22 +4657,24 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
   // Previous "smart default" behavior misled users when the last-used account differed from intent.
   const s = _addState;
   if (s && _sharedPersons.length === 0) _sharedPersons = [{ name: '', share: '' }];
+  const displayCat = cat;
   return `<div class="big-amt-wrap">
 
-    <!-- Header: category + back -->
-    <div style="display:flex;align-items:center;gap:10px;padding:4px 0 12px;cursor:pointer" onclick="goBack()">
-      <span style="color:var(--accent)">←</span>
-      <span style="font-size:20px">${cat.icon}</span>
-      <span style="font-size:14px;font-weight:600">${cat.name}</span>
-    </div>
-
     <!-- Big amount hero — Receipt Total -->
-    <div style="text-align:center;padding:8px 0 4px">
-      <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:2px">Receipt Total</div>
+    <div style="text-align:center;padding:12px 0 6px">
+      <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px">Receipt Total</div>
       <div style="display:inline-flex;align-items:flex-start;justify-content:center">
         <span class="big-amt-curr" id="big-amt-curr-sym">${sym(_homeBase())}</span>
         <input class="big-amt-input numpad-input" type="number" id="add-total-bill" min="0" step="any" placeholder="0" onchange="onTotalBillChange()" oninput="recalcShared()" inputmode="none">
       </div>
+    </div>
+
+    <!-- Category field — tappable -->
+    <div class="field-row" onclick="openCatPickerSheet()">
+      <div class="fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
+      <div class="fr-label">Category</div>
+      <div class="fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
+      <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
 
     <!-- Account field -->
@@ -4700,24 +4710,24 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
     </div>
 
     <!-- Split With section -->
-    <div class="form-group" style="margin-top:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <label class="form-label" style="margin-bottom:0">Split With (others)</label>
+    <div style="margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px">
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin:0">Split With (others)</label>
         <button type="button" onclick="equalSplitShared()" style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);font-size:11px;font-weight:600;padding:4px 10px;border-radius:var(--r-full);cursor:pointer;letter-spacing:-0.1px">÷ Equal split</button>
       </div>
       <div id="shared-persons-list"></div>
       <button type="button" onclick="addSharedPerson()"
-        style="width:100%;padding:9px;background:transparent;border:1.5px dashed var(--border3);border-radius:var(--r-md);color:var(--text3);font-size:13px;cursor:pointer;margin-top:4px">
+        style="width:100%;padding:10px;background:transparent;border:1.5px dashed var(--border3);border-radius:var(--r-md);color:var(--text3);font-size:13px;cursor:pointer;margin-top:6px">
         + Add person
       </button>
     </div>
 
-    <div id="shared-calc-result" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:12px;min-height:36px;pointer-events:none">
+    <div id="shared-calc-result" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-top:10px;min-height:36px;pointer-events:none">
       Add people and receipt total to calculate.
     </div>
 
     <!-- Notes always visible -->
-    <div class="form-group">
+    <div class="form-group" style="margin-top:12px">
       <label class="form-label" style="font-size:11px">Notes</label>
       <textarea class="form-input" id="add-notes" rows="2" placeholder="Optional details..." style="resize:none"></textarea>
     </div>
@@ -4727,21 +4737,21 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
     <input type="hidden" id="add-amount" value="0">
 
     <!-- More options expander -->
-    <div style="margin:10px 0">
-      <div onclick="toggleSharedMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent">
+    <div style="margin:12px 0 14px">
+      <div onclick="toggleSharedMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 4px;-webkit-tap-highlight-color:transparent">
         <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
         <svg id="shared-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div id="shared-more-row" style="display:none;margin-top:8px">
         <div class="form-group">
-          <label class="form-label">Amount to Split <span style="color:var(--text4);font-weight:400">(if different from total)</span></label>
+          <label class="form-label" style="font-size:11px">Amount to Split <span style="color:var(--text4);font-weight:400">(if different from total)</span></label>
           <input class="form-input numpad-input" type="number" id="add-amount-to-split" placeholder="Same as total" step="any"
             oninput="recalcShared()" inputmode="none">
         </div>
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full" onclick="submitAddTx()">Save Transaction</button>
+    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-bottom:12px">Save Transaction</button>
   </div>`;
 }
 
