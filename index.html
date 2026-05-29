@@ -171,19 +171,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* ── LAYOUT ── */
 #app-shell{display:flex;height:100dvh;width:100%;overflow:hidden;position:relative}
-#sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 0 20px;overflow-y:auto;transition:transform var(--transition)}
-#sidebar-logo{padding:20px 20px 8px;display:flex;align-items:center;gap:10px}
-.logo-mark{width:32px;height:32px;border-radius:var(--r-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0}
+#sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 0 16px;overflow-y:auto;transition:transform var(--transition);scrollbar-width:none;-ms-overflow-style:none}
+#sidebar::-webkit-scrollbar{display:none;width:0}
+#sidebar-logo{padding:16px 20px 6px;display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;border-radius:var(--r-md);background:linear-gradient(135deg,var(--accent3),var(--accent));display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px var(--accent-glow)}
+.logo-mark svg{width:18px;height:18px}
 .logo-text{font-size:16px;font-weight:700;letter-spacing:-0.3px}
 .logo-sub{font-size:11px;color:var(--text3);margin-top:1px}
-.sb-section{padding:16px 12px 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text4)}
-.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:1px 8px;border-radius:var(--r-md);cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:all var(--transition);border:1px solid transparent;user-select:none;position:relative}
+.sb-section{padding:12px 12px 2px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text4)}
+.sb-item{display:flex;align-items:center;gap:10px;padding:7px 12px;margin:1px 8px;border-radius:var(--r-md);cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:all var(--transition);border:1px solid transparent;user-select:none;position:relative}
 .sb-item:hover{background:var(--bg3);color:var(--text)}
 .sb-item.active{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-border);font-weight:600}
 .sb-item.active::before{content:'';position:absolute;left:-8px;top:6px;bottom:6px;width:3px;background:var(--accent);border-radius:0 2px 2px 0;box-shadow:0 0 8px var(--accent-glow)}
 .sb-item .si-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
 .sb-item .si-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:var(--r-full);min-width:18px;text-align:center}
-.sb-divider{height:1px;background:var(--border);margin:8px 16px}
+.sb-divider{height:1px;background:var(--border);margin:6px 16px}
 
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #page-header{height:var(--header-h);display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;gap:12px}
@@ -733,7 +735,7 @@ option{background:var(--bg3);color:var(--text)}
 <div id="onboard" class="onboard-screen">
   <div class="onboard-card">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px">
-      <div class="logo-mark">T</div>
+      <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="14" width="3.5" height="6" rx="1" fill="#fff" opacity="0.6"/><rect x="10.25" y="9" width="3.5" height="11" rx="1" fill="#fff" opacity="0.85"/><rect x="16.5" y="4" width="3.5" height="16" rx="1" fill="#fff"/></svg></div>
       <div style="font-size:20px;font-weight:700;letter-spacing:-0.5px">TrackBudget</div>
     </div>
     <div class="ob-progress" id="ob-progress"></div>
@@ -786,7 +788,7 @@ option{background:var(--bg3);color:var(--text)}
 <div id="app-shell" style="display:none">
   <nav id="sidebar" aria-label="Main navigation">
     <div id="sidebar-logo">
-      <div class="logo-mark">T</div>
+      <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="14" width="3.5" height="6" rx="1" fill="#fff" opacity="0.6"/><rect x="10.25" y="9" width="3.5" height="11" rx="1" fill="#fff" opacity="0.85"/><rect x="16.5" y="4" width="3.5" height="16" rx="1" fill="#fff"/></svg></div>
       <div><div class="logo-text">TrackBudget</div><div class="logo-sub" id="sb-name">—</div></div>
     </div>
     <div class="sb-section">Overview</div>
@@ -3484,9 +3486,15 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.0.1';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
+  { ver: '1.0.1', date: 'May 2026', changes: [
+    '🐛 Diagnostics: tests only tracked currencies (not stale fxRates)',
+    '🐛 Diagnostics: snapshot test expects history value if present',
+    '🎨 Cleaner sidebar — hidden scrollbar + tighter spacing (no scroll needed)',
+    '🎨 New iOS-style logo (rising bars SVG, replaces "T" text)',
+  ]},
   { ver: '1.0', date: 'May 2026', changes: [
     '🚀 First public release of TrackBudget',
     '💰 Multi-currency support with time-sensitive FX history',
@@ -17397,38 +17405,45 @@ function runDiagFxMath() {
   const home = _homeBase();
   const T = (lbl, a, e, tol) => { const ok = _diagAssert(lbl, a, e, tol); ok ? pass++ : fail++; };
 
+  // Only test currencies the user actually tracks (PLS #67/#111).
+  // Iterating db.fxRates would include stale rates for currencies the user no longer uses.
+  const tracked = (db.trackedCurrencies || []).filter(c => c !== home);
+
   _diagSection('1. Self-conversion (home → home)');
   T('1000 ' + home + ' → ' + home + ' = 1000', toPhp(1000, home), 1000);
   T('0 ' + home + ' → ' + home + ' = 0', toPhp(0, home), 0);
 
   _diagSection('2. Foreign → home conversion');
-  Object.keys(db.fxRates || {}).forEach(curr => {
-    if (curr === home) return;
+  tracked.forEach(curr => {
     const rate = db.fxRates[curr];
+    if (!rate) { _diagLog('  ⚠ ' + curr + ' has no rate in fxRates — skipped'); return; }
     T('100 ' + curr + ' → ' + home, toPhp(100, curr), 100 * rate, Math.max(0.01, rate*0.0001));
   });
 
   _diagSection('3. Home → foreign conversion');
-  Object.keys(db.fxRates || {}).forEach(curr => {
-    if (curr === home) return;
+  tracked.forEach(curr => {
     const rate = db.fxRates[curr];
+    if (!rate) return;
     T('100 ' + home + ' → ' + curr, fromPhp(100, curr), 100 / rate, Math.max(0.01, (1/rate)*0.0001));
   });
 
   _diagSection('4. Roundtrip (lossless)');
-  Object.keys(db.fxRates || {}).forEach(curr => {
-    if (curr === home) return;
+  tracked.forEach(curr => {
+    if (!db.fxRates[curr]) return;
     const back = fromPhp(toPhp(100, curr), curr);
     T('100 ' + curr + ' → ' + home + ' → ' + curr, back, 100, 0.001);
   });
 
   _diagSection('5. Cross-currency (foreign → foreign)');
-  const currs = Object.keys(db.fxRates || {}).filter(c => c !== home);
-  if (currs.length >= 2) {
-    const c1 = currs[0], c2 = currs[1];
+  if (tracked.length >= 2) {
+    const c1 = tracked[0], c2 = tracked[1];
     const r1 = db.fxRates[c1], r2 = db.fxRates[c2];
-    const expected = (100 * r1) / r2;
-    T('100 ' + c1 + ' → ' + c2, convert(100, c1, c2), expected, expected * 0.0001);
+    if (r1 && r2) {
+      const expected = (100 * r1) / r2;
+      T('100 ' + c1 + ' → ' + c2, convert(100, c1, c2), expected, expected * 0.0001);
+    } else {
+      _diagLog('   ⚠ Missing rates for cross-conversion — skipped.');
+    }
   } else {
     _diagLog('   ⚠ Need ≥2 foreign currencies to test cross-conversion. Skipped.');
   }
@@ -17440,10 +17455,20 @@ function runDiagFxMath() {
   T('Negative amount preserves sign', toPhp(-100, home), -100);
 
   _diagSection('7. Snapshot rates (historical)');
-  Object.keys(db.fxRates || {}).forEach(curr => {
-    if (curr === home) return;
-    T('Snapshot ' + curr + ' (no date) matches current rate',
-       getSnapshotRate(curr, today()), db.fxRates[curr], db.fxRates[curr] * 0.0001);
+  // Snapshot for today returns: most recent fxHistory entry ≤ today, OR current rate if no history.
+  // The expected value depends on what's in fxHistory.
+  tracked.forEach(curr => {
+    const rate = db.fxRates[curr];
+    if (!rate) return;
+    const history = (db.fxHistory && db.fxHistory[curr]) || [];
+    const todayKey = today();
+    // Find most recent history entry ≤ today
+    const sorted = [...history].sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||'')));
+    const recent = sorted.find(e => e.date <= todayKey);
+    const expected = recent ? recent.rate : rate;
+    const source = recent ? 'history@' + recent.date : 'current';
+    T('Snapshot ' + curr + ' (today, expect ' + source + ')',
+       getSnapshotRate(curr, todayKey), expected, expected * 0.0001);
   });
   T('Home snapshot = 1.0', getSnapshotRate(home, today()), 1);
 
