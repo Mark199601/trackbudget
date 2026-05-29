@@ -49,6 +49,21 @@
   --purple:#7c6df0;--purple-bg:rgba(124,109,240,0.1);
   --blue:#2563eb;--blue-bg:rgba(37,99,235,0.1);
   --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;--r-full:999px;
+  /* ── DESIGN TOKENS — Type scale ── */
+  --fs-xs:10px;--fs-sm:11px;--fs-base:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fs-hero:32px;
+  /* ── DESIGN TOKENS — Shadow scale ── */
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.12);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.15);
+  --shadow-lg:0 12px 40px rgba(0,0,0,0.3);
+  --shadow-accent:0 4px 16px var(--accent-glow);
+  --shadow-accent-lg:0 8px 32px var(--accent-glow);
+  /* ── DESIGN TOKENS — Transition scale ── */
+  --t-fast:0.15s ease;
+  --t-base:0.25s cubic-bezier(0.32,0.72,0,1);
+  --t-slow:0.4s cubic-bezier(0.32,0.72,0,1);
+  --t-spring:0.34s cubic-bezier(0.34,1.3,0.64,1);
+  /* ── DESIGN TOKENS — Icon size scale ── */
+  --icon-xs:16px;--icon-sm:20px;--icon-md:28px;--icon-lg:40px;
   /* iOS-style spacing scale */
   /* spacing scale removed — never adopted in stylesheet */
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;--mono:ui-monospace,'SF Mono','Menlo','Monaco',monospace;
@@ -79,6 +94,32 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
 /* big amount hero spacing refinements */
 .big-amt-wrap .big-amt-input{font-weight:600;letter-spacing:-1.5px}
+
+/* ── UTILITY CLASSES — replaces common inline-style patterns ── */
+.u-flex{display:flex}
+.u-flex-col{display:flex;flex-direction:column}
+.u-flex-center{display:flex;align-items:center;justify-content:center}
+.u-flex-between{display:flex;align-items:center;justify-content:space-between}
+.u-flex-1{flex:1;min-width:0}
+.u-gap-4{gap:4px} .u-gap-6{gap:6px} .u-gap-8{gap:8px} .u-gap-10{gap:10px} .u-gap-12{gap:12px}
+.u-text-center{text-align:center}
+.u-text-right{text-align:right}
+.u-mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.u-truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-mt-4{margin-top:4px} .u-mt-6{margin-top:6px} .u-mt-8{margin-top:8px} .u-mt-10{margin-top:10px} .u-mt-12{margin-top:12px} .u-mt-16{margin-top:16px}
+.u-mb-4{margin-bottom:4px} .u-mb-6{margin-bottom:6px} .u-mb-8{margin-bottom:8px} .u-mb-10{margin-bottom:10px} .u-mb-12{margin-bottom:12px} .u-mb-16{margin-bottom:16px}
+.u-c-text{color:var(--text)} .u-c-text2{color:var(--text2)} .u-c-text3{color:var(--text3)} .u-c-text4{color:var(--text4)}
+.u-c-accent{color:var(--accent)} .u-c-green{color:var(--green)} .u-c-red{color:var(--red)} .u-c-amber{color:var(--amber)}
+.u-fs-xs{font-size:var(--fs-xs)} .u-fs-sm{font-size:var(--fs-sm)} .u-fs-base{font-size:var(--fs-base)} .u-fs-md{font-size:var(--fs-md)} .u-fs-lg{font-size:var(--fs-lg)}
+.u-fw-500{font-weight:500} .u-fw-600{font-weight:600} .u-fw-700{font-weight:700}
+.u-label{font-size:var(--fs-sm);color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.u-section-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px}
+.u-divider{height:1px;background:var(--border);margin:12px 0}
+.u-pill{display:inline-block;padding:3px 10px;border-radius:var(--r-full);font-size:var(--fs-xs);font-weight:600}
+.u-pill-accent{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border)}
+.u-pill-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.u-pill-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.u-pill-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
 /* ── DARK MODE (default) — purple-tinted, more contrast ── */
 :root, [data-theme="dark"] {
   --bg:#06060d;--bg2:#0e0d1a;--bg3:#16142a;--bg4:#1f1c38;--bg5:#2a2647;
@@ -3443,252 +3484,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '25.2';
+const APP_VERSION = '1.0';
 const APP_VERSION_DATE = 'May 2026';
 const APP_CHANGELOG = [
-  { ver: '25.2', date: 'May 2026', changes: [
-    '🐛 Fixed Date + Time fields not tappable on phone/PC',
-    '🔧 Native date/time inputs now overlay field-row (proper picker trigger)',
-  ]},
-  { ver: '25.1', date: 'May 2026', changes: [
-    '🎨 Cleaner iOS spacing across all Add Tx forms (14px padding, 30px icons, 14px text)',
-    '🎨 Shared form: Category is now tappable inside form (not separate picker screen)',
-    '✅ No function changes — pure UI polish',
-  ]},
-  { ver: '25.0', date: 'May 2026', changes: [
-    '🎨 Shared form unified to Apple Wallet style (big amount hero + tappable fields)',
-    '🎨 Expense/Income: Date+Time isang row, Notes always visible',
-    '🎨 External: Papa placeholder → Parents (more generic)',
-    '✅ All forms now consistent — Expense, Income, Shared, Transfer, Remittance, External',
-  ]},
-  { ver: '24.9', date: 'May 2026', changes: [
-    '🎨 Date + Time sa isang row (tappable, walang dropdown)',
-    '🎨 Notes always visible (hindi na sa More options)',
-    '🎨 Applied sa Transfer, Remittance, External In/Out',
-    '✅ Existing tx data unaffected — IDs at handlers unchanged',
-  ]},
-  { ver: '24.8', date: 'May 2026', changes: [
-    '🎨 Unified all Add Transaction forms to Apple Wallet style',
-    '🎨 Transfer, Remittance, External In/Out: big amount hero + field-row pattern',
-    '✅ All IDs at submit handlers unchanged — existing data unaffected',
-  ]},
-  { ver: '24.7', date: 'May 2026', changes: [
-    '🐛 PLS #14: Cross-currency shared tx now converts to account currency (was raw subtract)',
-    '🐛 PLS #28 (revised): Cash & Wallets excludes Credit Card (proper asset/liability separation)',
-    '🐛 PLS #15: Positive Credit Card balance now counted as asset (overpaid = receivable)',
-    '🐛 Remittance from-side now currency-aware (was raw subtract)',
-    '✅ Accounting compliance: proper currency conversion + asset/liability classification',
-  ]},
-  { ver: '24.6', date: 'May 2026', changes: [
-    '🐛 PLS #121: Archive/delete write-off properly reverts parent shared tx state',
-    '🔧 Pending reimbursement reappears when write-off entry deleted',
-    '🔧 Net Worth receivable restored automatically',
-    '🔧 Analytics auto-self-correct (no extra revert needed)',
-  ]},
-  { ver: '24.5', date: 'May 2026', changes: [
-    '🐛 PLS #120: Write-off entries now properly distinguished from real payment',
-    '🔧 Shared tx breakdown: "Written off ✗" badge instead of "Paid ✓" for write-offs',
-    '🔧 Tx Detail Status row shows write-off reason',
-    '🔧 Write-off tx visible standalone sa main tx log (was hidden as nested child)',
-    '🔧 Write-off Tx Detail shows "— (no cash account)" instead of "Unknown"',
-  ]},
-  { ver: '24.4', date: 'May 2026', changes: [
-    '🐛 CRITICAL: Fixed Reconcile button silently failing (time scope ReferenceError)',
-    '🐛 Fixed same scope bug sa Write Off Loan',
-    '✅ Reconcile entries now properly save and appear sa tx log',
-  ]},
-  { ver: '24.3', date: 'May 2026', changes: [
-    '🎨 Account names sa tx logs ay naka-pill na (rounded badge)',
-    '🎨 Unified batch loan + batch reimb breakdown style sa tx logs',
-  ]},
-  { ver: '24.2', date: 'May 2026', changes: [
-    '🐛 PLS #12 (revised): Settlement gain/loss children are analytics-only (no balance)',
-    '🔧 Loan/Reimb settlement gain/loss now hidden from top-level tx log (nested only)',
-    '🐛 PLS #119: Fee reimb income tx no longer double-credits account (was +2x)',
-    '🔧 Auto-migration: legacy fee reimb income gets skipBalance flag',
-    '✅ Walang ibang double accounting issue na natira sa app',
-  ]},
-  { ver: '24.1', date: 'May 2026', changes: [
-    '🐛 CRITICAL: Fixed openAddLoan TDZ error (acctLabel const shadowed global helper)',
-    '🔧 Settlement preview now time-aware (uses date+time, PLS #118)',
-    '🔧 Auto-fill total uses selected date+time, not hardcoded today',
-    '🔧 Loan/reimb time field now triggers preview update on change',
-  ]},
-  { ver: '24.0', date: 'May 2026', changes: [
-    '⏰ PLS #118: Time-sensitive FX rate history',
-    '🔧 Rate entries now include time — covers txs from that moment onwards',
-    '🔧 Add Rate auto-stamps current time; remittance uses tx time',
-    '🔧 Rate History page now shows date + time inputs',
-    '🔧 Tx snapshot lookup is timestamp-aware (HH:MM precision)',
-    '🔧 Removed v23.9 auto-migration (no more silent modification of user data)',
-  ]},
-  { ver: '23.9', date: 'May 2026', changes: [
-    '🐛 Transaction Detail rate display now uses snapshot rate (not current)',
-    '🔧 Label shows "snapshot rate" or "current rate" para malinaw',
-    '✅ K19.65 × 13.35 (snapshot May 16) = ₱262.32 — historically accurate',
-  ]},
-  { ver: '23.8', date: 'May 2026', changes: [
-    '🔧 Auto-migration: legacy reimb write-offs now consistent with new flow (PLS #116)',
-    '✅ Existing write-off entries automatically get skipBalance flag + null accountId',
-  ]},
-  { ver: '23.7', date: 'May 2026', changes: [
-    '🐛 Reimbursement write-off no longer double-deducts from account balance',
-    '🔧 New skipBalance flag: write-off counts as expense for analytics but no cash deduction',
-    '✅ Net Worth correctly drops by lost amount (receivable cleared), not by 2x',
-  ]},
-  { ver: '23.6', date: 'May 2026', changes: [
-    '🐛 Reimbursement write-off now displays as real expense (red 📉), not neutral transfer',
-  ]},
-  { ver: '23.5', date: 'May 2026', changes: [
-    '🐛 Fixed remittance fee double display sa Dashboard Recent Tx + Account Detail',
-    '🔧 Account dropdowns no longer show double currency suffix (e.g. "Cash (PHP) (PHP)")',
-    '✗ New: Write off reimbursement option — absorb remaining as loss (PLS #116)',
-  ]},
-  { ver: '23.4', date: 'May 2026', changes: [
-    '🐛 PLS #114: Fixed remittance fee double display in tx log',
-    '🔧 isAutoFee children now hidden from main tx log (shown only nested under parent)',
-    '🐛 Fixed missing sc-remittancefee category causing "Deleted Category" label',
-    '🔧 Added sc-remittancefee to seeded categories (Financial → Remittance Fee 💸)',
-    '🔧 Migration auto-seeds missing sc-remittancefee for existing users',
-    '✅ Fee still counted ONCE in totals (PLS #46 — no math change)',
-  ]},
-  { ver: '23.3', date: 'May 2026', changes: [
-    '🌍 Removed all situational hardcoded PHP/PGK references in code',
-    '🔧 Migration defaults use COUNTRY_CURRENCIES[nationality], not hardcoded PHP',
-    '🔧 Transfer rate fallbacks use first non-home tracked currency',
-    '🔧 Installment AI messages use inst.currency || _homeBase, not PGK',
-    '🔧 XLSX export labels use _homeBase, not (PHP) suffix',
-    '🔧 Budget bars use _homeBase fallback, not Philippines/PHP',
-    '✅ Lookup tables (COUNTRY_CURRENCIES, CURR_SYMBOLS) remain as world data',
-  ]},
-  { ver: '23.2', date: 'May 2026', changes: [
-    '🐛 PLS #113: No double conversion — user input is sacred',
-    '🔧 Removed auto-recompute of fxRates on nationality change',
-    '🔧 Removed cleanFp() — no silent modification of stored values',
-    '🔧 Nationality change now resets fxRates to {newHome: 1}; user re-enters foreign rates',
-    '🔧 Backup of old rates stored in db.fxRatesBackup for recovery',
-    '✅ Display shows exactly what user input — no transformation',
-  ]},
-  { ver: '23.1', date: 'May 2026', changes: [
-    '🐛 Fixed FP artifact: 13.271349900000002 now cleans to 13.2713499',
-    '🔧 New cleanFp() helper detects inverse-math artifacts (6+ zeros/nines tail)',
-    '🔧 saveProfile FX recompute uses cleanFp to prevent storage artifacts',
-    '🔧 ensureDBIntegrity migrates existing dirty stored values on next load',
-    '✅ Preserves genuine precision (0.07680613721589995 stays as-is)',
-  ]},
-  { ver: '23.0', date: 'May 2026', changes: [
-    '🐛 Fixed rate fields rounded to 4 decimals on derive (PLS #108 violation)',
-    '🔧 Transfer auto-derive rate now uses fmtRate (full precision)',
-    '🔧 Edit Transfer auto-derive rate uses fmtRate',
-    '🔧 Add Loan FX rate field uses fmtRate',
-    '🔧 Numpad live preview respects rate field precision (full vs cents)',
-    '✅ Verified: zero storage rounding (PLS #68 maintained throughout)',
-    '✅ All rounding sites are UI/export only (acceptable)',
-  ]},
-  { ver: '22.9', date: 'May 2026', changes: [
-    '✅ Consistent labeling throughout app: Home Base (nationality) vs Current Location',
-    '🔧 Onboarding: "NATIONALITY (HOME BASE)" + "CURRENT LOCATION" with proper placeholders',
-    '🔧 Setup checklist: "Set nickname & nationality" (was "& country")',
-    '🔧 Settings rows show: 🏠 Nationality | 📍 Current Location | 🏠 Home Base (auto) | 💱 Display',
-    '🔧 Contract wizard: "Work Location" label (separate from home base concept)',
-  ]},
-  { ver: '22.8', date: 'May 2026', changes: [
-    '🔧 Properly wired display currency throughout all 17 analytics tabs',
-    '🐛 Fixed: Cashflow/Trends/Overview/Calendar/YoY now show correct values when display≠home',
-    '🐛 Fixed: CrossCurrency/People/Budget/Subs/DayOfWeek/AccountHealth/AISummary now wrap toPhp accumulators with _inDisplay()',
-    '✅ getMonthTotals contract: returns values in display currency (no double conversion)',
-    '✅ toPhp accumulator contract: returns home base (display layer wraps with _inDisplay)',
-  ]},
-  { ver: '22.7', date: 'May 2026', changes: [
-    '💱 Display Currency selector restored (PLS #112)',
-    '🔧 Cleanly DECOUPLED from home base — display is view-only',
-    '🔧 Home Base (nationality) = math anchor · Display = visual preference',
-    '🔧 New _displayCurrency() and _inDisplay() helpers',
-    '🔧 Settings: 4 rows — Nickname/Nat · Location · Home Base · Display Currency selector',
-    '🔧 Dashboard Total Cash on Hand respects display currency',
-    '🔧 Account/Loan equiv badges show in display currency (was forced to home)',
-    '🔧 Receipt shows BOTH home + display rows when they differ',
-    '🐛 Fixed: switching display NO LONGER recomputes fxRates (was destroying user rates)',
-  ]},
-  { ver: '22.6', date: 'May 2026', changes: [
-    '🏠 Consistent labeling: Home Base (nationality) vs Current Location (where you live)',
-    '🔧 Settings: 3 rows — Nickname/Nationality · Current Location · Home Base (read-only)',
-    '🔧 Edit Profile: clarified labels with emoji + helper text',
-    '🔧 Removed redundant "Display Currency" selector (auto-synced to nationality)',
-    '🔧 Diagnostics panel: shows home vs display drift status',
-    '✅ Throughout app: nationality drives FX math, country is contextual only',
-  ]},
-  { ver: '22.5', date: 'May 2026', changes: [
-    '🏠 Home base now derived from NATIONALITY, not display currency (PLS #111)',
-    '🔧 Conceptual fix: home is identity (Filipino→PHP), display was wrongly conflated',
-    '🐛 Fixes display drift bug where "1 PHP = K0.0768" appeared for PH users',
-    '🔧 Auto-sync on app load: displayCurrency realigns to nationality, fxRates recompute',
-    '🔧 FX Rates page header now shows nationality flag + source',
-    '✅ To change home base, update nationality in Profile (one source of truth)',
-  ]},
-  { ver: '22.4', date: 'May 2026', changes: [
-    '🐛 Fixed numpad rounding bug — rate fields now keep FULL precision (PLS #110)',
-    '🔧 Numpad detects rate fields by ID — full precision for rates, 2-decimal for amounts',
-    '🔧 Example: 13.2713499 now stays as-is (was truncated to 13.27)',
-    '🔧 Calc expressions on rates: 100/7.5 → 13.333333333333334 (was 13.33)',
-    '✅ Amount fields still round to cents (currency standard)',
-  ]},
-  { ver: '22.3', date: 'May 2026', changes: [
-    '🔬 Full FX rate precision — no more 4-decimal rounding (PLS #108)',
-    '🔧 New fmtRate() helper preserves up to 15+ digits without artifacts',
-    '🔧 Example: 0.07680613721589995 now displays as-is, not 0.0768',
-    '🏠 FX Rates page: home base banner + "Reset to nationality" button (PLS #109)',
-    '🔧 Clearer "1 foreign = home" convention header on FX page',
-    '🐛 Fixed 21 rate display sites: settings page, tx details, transfer preview, loan, alerts',
-  ]},
-  { ver: '22.2', date: 'May 2026', changes: [
-    '🌐 Remittance is now FULLY BIDIRECTIONAL (PLS #107)',
-    '🔧 From and To accept ANY currency pair, any direction',
-    '🔧 Rate label dynamic: "1 [FROM] = [TO]" updates on selection',
-    '🔧 Auto-suggests rate from current fxRates via home base bridge',
-    '🔧 Inverse rate auto-recorded to fxHistory for home→foreign sends',
-    '🔧 Both-foreign (e.g. PGK→USD) shows home equivalent in preview',
-    '🐛 Fixed hardcoded "TO (PGK)" label — now reflects selected destination',
-    '🐛 Fixed hardcoded "PGK received" preview — now dynamic',
-  ]},
-  { ver: '22.1', date: 'May 2026', changes: [
-    '🛡️ XSS hardening — all user-input renders now escape HTML (PLS #106)',
-    '🔧 Added _esc() helper, applied to 86 render sites (account/loan/budget/installment/investment names, tx notes, person names, nicknames)',
-    '🗑️ Removed dead code (renderAmountForm, 7,853 chars)',
-    '🧹 Deduped defaultDB fields (settings, contracts, activeContractId, aiCatMemory)',
-    '📝 Fixed misleading STORED_BASE comment',
-    '🧹 Removed 12 unused CSS variables'
-  ]},
-  { ver: '22.0', date: 'May 2026', changes: [
-    '🌏 Full home-agnostic refactor — works correctly for AUD/USD/NZD/PGK/etc home users',
-    '🔧 Replaced 30+ hardcoded \'PHP\' checks with dynamic _homeBase()',
-    '🔧 Simplified toPhp/fromPhp — leverages recomputed fxRates directly',
-    '🔧 Transfer FX math: home-agnostic across all 3 branches',
-    '🔧 Loan rate calc: home-agnostic snapshot bridge',
-    '🔧 Forex children now route to home-currency account, not hardcoded PHP',
-    '🔬 NEW: Settings → About → Diagnostics — in-app FX math tests + DB health scan',
-    '✅ All 46 math test scenarios pass (PHP/PGK/AUD home + chain migrations)',
-    '📚 Added PLS #104 (home-agnostic) and #105 (diagnostics)'
-  ]},
-  { ver: '17.1', date: 'May 2026', changes: [
-    '✨ Added Bank Reconciliation — compare app balance vs real bank',
-    '✨ Added CSV import/export for bulk transactions',
-    '✨ Added Wishlist tab in Planning',
-    '✨ Added Calendar view in Analytics',
-    '🔧 Added loading states for exports/imports',
-    '📳 Added haptic feedback on key actions',
-    '🛡️ Added data integrity check on app load',
-    '♿ Improved accessibility (aria labels, dialog roles)',
-    '🐛 Fixed 7 bugs in new features (balance, navigation, field naming)'
-  ]},
-  { ver: '17.0', date: 'May 2026', changes: [
-    '✨ iOS Health-style analytics picker (replaces 17-tab scroll)',
-    '✨ 10 new analytics tabs (Cashflow, Cross-FX, People, Goals, etc.)',
-    '✨ Accordion Overview sections',
-    '🔧 Home-agnostic FX system (currency change recomputes rates)',
-    '🔧 Archive-first account deletion',
-    '🎨 UI consistency cleanup (CSS vars, rounded corners)',
-    '🐛 Net Worth no longer double-counts fee reimbursements'
+  { ver: '1.0', date: 'May 2026', changes: [
+    '🚀 First public release of TrackBudget',
+    '💰 Multi-currency support with time-sensitive FX history',
+    '📤 Remittance, transfers, shared expenses, loans, reimbursements',
+    '📊 17 analytics tabs + AI insights',
+    '☁️ Google Drive sync + Excel export',
+    '📱 Installable as PWA on iOS, Android, desktop',
   ]},
 ];
 
@@ -5025,6 +4830,9 @@ function afterRenderShared() {
 }
 
 
+// DEBUG_SCANNER_NOTE: toggleAddMore() is ORPHANED — Expense/Income form no longer has More Options
+// (Notes always visible, Time merged into split row). Kept for safety.
+// Defensive null check inside makes it safe — no crash if add-more-row doesn't exist.
 function toggleAddMore() {
   const row = document.getElementById('add-more-row');
   const chev = document.getElementById('add-more-chevron');
@@ -5447,6 +5255,9 @@ function updateExtAcctDisplay() {
   }
 }
 
+// DEBUG_SCANNER_NOTE: toggleExtMore() is ORPHANED — External form no longer has More Options
+// (Time + Notes are always visible now). Kept for safety in case caller is added later.
+// Defensive null check inside makes it safe — no crash if ext-more-row doesn't exist.
 function toggleExtMore() {
   const row = document.getElementById('ext-more-row');
   const chev = document.getElementById('ext-more-chevron');
