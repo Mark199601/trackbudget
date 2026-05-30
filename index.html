@@ -12523,13 +12523,20 @@ function buildVelocityGauge(metricMk, dispCurr) {
 
 // ─── 2. Runway Bar (account-by-account) ───
 function buildRunwayBar(dispCurr) {
-  // Aggregate accounts by currency, exclude archived, compute days-of-runway based on 30d avg expense
+  // Aggregate accounts by currency, exclude archived, compute days-of-runway based on recent avg expense
   const last30 = new Date(); last30.setDate(last30.getDate() - 30);
   const cutoffStr = last30.toISOString().slice(0,10);
   const recentExp = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund && t.date >= cutoffStr && (t.type==='expense'||t.type==='shared'));
   if (recentExp.length === 0) return '';
   const totalExp30d = recentExp.reduce((s,t) => s + _ovExpAmt(t, dispCurr), 0);
-  const dailyBurn = totalExp30d / 30;
+  // PLS #123: divide by the ACTUAL span of expense history (capped to 30 days), not a fixed 30.
+  // If the user only has e.g. 12 days of data, dividing by 30 understates the true daily burn
+  // and overstates runway. We use days-since-first-recent-expense (min 1, max 30) instead.
+  const allExpDates = recentExp.map(t => t.date).sort();
+  const firstExpDate = allExpDates[0];
+  const daysSinceFirst = Math.floor((Date.now() - new Date(firstExpDate + 'T00:00').getTime()) / 86400000) + 1;
+  const burnDays = Math.max(1, Math.min(30, daysSinceFirst));
+  const dailyBurn = totalExp30d / burnDays;
   if (dailyBurn === 0) return '';
 
   // Total liquid funds (savings/checking/cash, excluding credit card and investments)
@@ -12750,35 +12757,40 @@ function buildSubscriptionPanel(dispCurr) {
 // ─── 6. Savings Trend Sparkline ───
 function buildSavingsSparkline(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
+  // PLS #123: only consider months from the user's first transaction onward — no phantom
+  // flat/empty segment for pre-history months. Mirrors the Net Worth Trend behavior.
+  const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
+  const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(y, m-1-i, 1);
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    // Skip months entirely before the first transaction's month.
+    if (earliestTx && k < earliestTx.slice(0,7)) continue;
     const t = getMonthTotals(k);
     const rate = t.income > 0 ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
     months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, income: t.income, expense: t.expense});
   }
-  const validRates = months.filter(m => m.rate !== null).map(m => m.rate);
+  const validRates = months.filter(mo => mo.rate !== null).map(mo => mo.rate);
   if (validRates.length < 2) return '';
-  const currentRate = months[months.length-1].rate;
-  const prevRate = months[months.length-2].rate;
-  const avgPriorRates = validRates.slice(0, -1);
-  const avgPrior = avgPriorRates.length > 0 ? avgPriorRates.reduce((s,v)=>s+v,0)/avgPriorRates.length : 0;
-  const trend = currentRate !== null && prevRate !== null ? currentRate - prevRate : 0;
+  // Current = last month that HAS a rate; prev = the one before it.
+  const ratedMonths = months.filter(mo => mo.rate !== null);
+  const currentRate = ratedMonths[ratedMonths.length-1].rate;
+  const prevRate = ratedMonths[ratedMonths.length-2].rate;
+  const trend = currentRate - prevRate;
   const trendColor = trend > 2 ? 'var(--green)' : trend < -2 ? 'var(--red)' : 'var(--text3)';
   const trendIcon = trend > 2 ? '▲' : trend < -2 ? '▼' : '→';
-  // Sparkline SVG
+  const n = months.length;
+  // Sparkline SVG — x-axis spans only the plotted (post-history) months.
   const W = 240, H = 40, padX = 2, padY = 4;
   const cw = W - padX*2, ch = H - padY*2;
   const maxRate = Math.max(...validRates, 50);
-  const xAt = (i) => padX + (i / (months.length-1)) * cw;
+  const xAt = (i) => padX + (n === 1 ? cw/2 : (i / (n-1)) * cw);
   const yAt = (r) => r === null ? null : padY + ch - (r / maxRate) * ch;
   let path = '';
-  let segs = [];
   for (let i = 0; i < months.length; i++) {
     if (months[i].rate !== null) {
       const x = xAt(i).toFixed(1), yv = yAt(months[i].rate).toFixed(1);
-      segs.push((path === '' ? 'M' : 'L') + x + ',' + yv);
       if (path === '') path = 'M' + x + ',' + yv;
       else path += ' L' + x + ',' + yv;
     }
@@ -12787,7 +12799,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
-      <div style="font-size:11px;color:var(--text3)">Last 6 months</div>
+      <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:44px;display:block;margin-bottom:6px">
       <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
@@ -12808,20 +12820,32 @@ function buildSavingsSparkline(metricMk, dispCurr) {
 
 // ─── 7. Fixed vs Discretionary Ratio ───
 function buildFixedVsDiscretionary(metricMk, dispCurr) {
-  // "Fixed" = recurring expenses + utilities/rent/insurance categories (heuristic)
+  // "Fixed" = obligations you can't easily cut this month. Detected via three signals:
+  //  1. tx.recurringId — the tx was generated from a recurring template (strongest signal)
+  //  2. tx's category matches a category used by any active recurring template (e.g. you have a
+  //     recurring "Rent" under category Housing → all Housing this month counts as fixed)
+  //  3. category-name / notes keyword match (fallback heuristic)
   const recurring = (db.recurringTxs || []).filter(r => r.active);
-  const recurringNames = new Set(recurring.map(r => (r.name || '').toLowerCase()));
-  // Fixed category keywords (heuristic — adjustable)
-  const FIXED_KW = ['rent', 'utility', 'utilities', 'electric', 'water', 'internet', 'insurance', 'mortgage', 'tuition', 'subscription', 'membership', 'gym'];
+  const recurringNames = new Set(recurring.map(r => (r.name || '').toLowerCase()).filter(Boolean));
+  const recurringCatIds = new Set(recurring.map(r => r.categoryId).filter(Boolean));
+  // Expanded fixed keywords — obligations + common recurring bills.
+  const FIXED_KW = ['rent', 'utility', 'utilities', 'electric', 'water', 'internet', 'wifi',
+    'insurance', 'mortgage', 'tuition', 'school fee', 'subscription', 'membership', 'gym',
+    'loan', 'amortization', 'amortisation', 'installment', 'instalment', 'lease', 'bill',
+    'phone bill', 'cable', 'streaming', 'netflix', 'spotify', 'tax', 'association due', 'hoa'];
   const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
   if (txs.length === 0) return '';
   let fixed = 0, discretionary = 0;
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    const catName = cat.name.toLowerCase();
+    const catName = (cat.name || '').toLowerCase();
     const txNotes = (tx.notes || '').toLowerCase();
-    const isFixed = FIXED_KW.some(kw => catName.includes(kw) || txNotes.includes(kw)) ||
-                    [...recurringNames].some(rn => rn && txNotes.includes(rn));
+    const isFixed =
+      !!tx.recurringId ||                                   // (1) generated from recurring template
+      recurringCatIds.has(tx.categoryId) ||                 // (2) category has a recurring template
+      tx.subCatId && recurringCatIds.has(tx.subCatId) ||    //     (also check subcategory link)
+      FIXED_KW.some(kw => catName.includes(kw) || txNotes.includes(kw)) || // (3) keyword
+      [...recurringNames].some(rn => rn && txNotes.includes(rn));
     const amt = _ovExpAmt(tx, dispCurr);
     if (isFixed) fixed += amt;
     else discretionary += amt;
@@ -12924,11 +12948,13 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
     </div>
     <div style="display:flex;gap:4px;align-items:flex-end;height:64px;margin-bottom:6px">
       ${dowAvgs.map((avg, i) => {
-        const h = Math.max(8, (avg / maxAvg) * 60);
+        const h = avg > 0 ? Math.max(10, (avg / maxAvg) * 58) : 3;
         const isPeak = i === peakIdx;
         const isWeekend = i === 0 || i === 6;
+        const bg = avg === 0 ? 'var(--border2)' : (isPeak ? 'var(--red)' : isWeekend ? 'var(--accent)' : 'var(--text3)');
+        const op = avg === 0 ? '0.5' : (isPeak ? '0.92' : isWeekend ? '0.7' : '0.55');
         return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-          <div style="width:100%;height:${h}px;background:${isPeak ? 'var(--red)' : isWeekend ? 'var(--accent)' : 'var(--text3)'};border-radius:var(--r-sm) 3px 0 0;opacity:${isPeak ? '1' : '0.7'};transition:height 0.3s"></div>
+          <div style="width:100%;height:${h}px;background:${bg};border-radius:var(--r-sm);opacity:${op};transition:height 0.3s"></div>
         </div>`;
       }).join('')}
     </div>
@@ -13241,54 +13267,68 @@ function buildConcentrationRisk(dispCurr) {
 }
 
 // ─── 17. Net Worth Trend (line over 6 months) ───
-// Reconstructs net worth at each month-end using getAcctBalanceAsOf across all active accounts,
-// converted to display currency. Pure read — no state mutation. Returns '' if <2 data points.
+// Reconstructs net worth at each month-end using getAcctBalanceAsOf across all active accounts.
+// Uses the SAME classification as getNetWorth() (PLS #15): asset accounts count only when
+// positive; when negative (overdrawn) they're a liability; credit cards subtract when negative.
+// Only plots months that actually have account activity (no flat phantom line for pre-history
+// months). Pure read — no state mutation. Returns '' if <2 real data points.
 function buildNetWorthTrend(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
   const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
+  // Earliest transaction date — months before this have no meaningful net worth to plot.
+  const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
+  const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
   const points = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(y, m-1-i, 1);
-    // last day of that month
     const eom = new Date(d.getFullYear(), d.getMonth()+1, 0);
     const eomStr = `${eom.getFullYear()}-${String(eom.getMonth()+1).padStart(2,'0')}-${String(eom.getDate()).padStart(2,'0')}`;
+    // Skip months entirely before the first transaction (no history yet).
+    const hasHistory = earliestTx && eomStr >= earliestTx;
     let netPhp = 0;
-    for (const acct of db.accounts) {
-      if (acct.archived) continue;
-      const bal = getAcctBalanceAsOf(acct.id, eomStr);
-      const phpBal = toPhp(bal, acct.currency);
-      if (assetTypes.includes(acct.type)) netPhp += phpBal;
-      else if (acct.type === 'Credit Card') netPhp += phpBal; // negative reduces net
+    if (hasHistory) {
+      // Mirror getNetWorth() classification exactly so the trend's last point == hero card.
+      for (const acct of db.accounts) {
+        if (acct.archived) continue;
+        const phpBal = toPhp(getAcctBalanceAsOf(acct.id, eomStr), acct.currency);
+        if (assetTypes.includes(acct.type)) {
+          if (phpBal > 0) netPhp += phpBal;
+          else if (phpBal < 0) netPhp -= Math.abs(phpBal); // overdrawn = liability
+        } else if (acct.type === 'Credit Card') {
+          if (phpBal < 0) netPhp -= Math.abs(phpBal); // debt
+          else if (phpBal > 0) netPhp += phpBal;       // overpaid = receivable
+        }
+      }
     }
-    points.push({ label: d.toLocaleString('en',{month:'short'}), php: netPhp });
+    points.push({ label: d.toLocaleString('en',{month:'short'}), php: netPhp, hasHistory });
   }
-  const vals = points.map(p => p.php);
-  const nonZero = vals.filter(v => Math.abs(v) > 0.01);
-  if (nonZero.length < 2) return '';
-  const dispVals = points.map(p => fromPhp(p.php, dispCurr));
+  // Only the months with real history are plotted.
+  const plotted = points.filter(p => p.hasHistory);
+  if (plotted.length < 2) return '';
+  const dispVals = plotted.map(p => fromPhp(p.php, dispCurr));
   const cur = dispVals[dispVals.length-1];
   const prev = dispVals[dispVals.length-2];
   const change = cur - prev;
   const changePct = Math.abs(prev) > 0.01 ? (change / Math.abs(prev) * 100) : 0;
   const trendColor = change > 0 ? 'var(--green)' : change < 0 ? 'var(--red)' : 'var(--text3)';
   const trendIcon = change > 0 ? '▲' : change < 0 ? '▼' : '→';
-  // SVG line (allow negative net worth — baseline scales to min)
+  // SVG line spans only plotted points (no phantom flat segment for pre-history months).
   const W = 240, H = 48, padX = 2, padY = 5;
   const cw = W - padX*2, ch = H - padY*2;
   const maxV = Math.max(...dispVals), minV = Math.min(...dispVals, 0);
   const range = (maxV - minV) || 1;
-  const xAt = (i) => padX + (i / (points.length-1)) * cw;
+  const n = plotted.length;
+  const xAt = (i) => padX + (n === 1 ? cw/2 : (i / (n-1)) * cw);
   const yAt = (v) => padY + ch - ((v - minV) / range) * ch;
   let path = '';
   dispVals.forEach((v, i) => { path += (i===0?'M':' L') + xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1); });
-  // area fill under line down to baseline (zero or min)
   const zeroY = yAt(Math.max(minV, 0)).toFixed(1);
-  const areaPath = path + ` L${xAt(points.length-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
+  const areaPath = path + ` L${xAt(n-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
   const dots = dispVals.map((v,i)=>`<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="2.5" fill="var(--accent)"/>`).join('');
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📈 Net Worth Trend</div>
-      <div style="font-size:11px;color:var(--text3)">Last 6 months</div>
+      <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:52px;display:block;margin-bottom:6px">
       <path d="${areaPath}" fill="var(--accent)" opacity="0.08"/>
@@ -13296,7 +13336,7 @@ function buildNetWorthTrend(metricMk, dispCurr) {
       ${dots}
     </svg>
     <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px;color:var(--text4)">
-      ${points.map(p=>`<span>${p.label}</span>`).join('')}
+      ${plotted.map(p=>`<span>${p.label}</span>`).join('')}
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px solid var(--border)">
       <div style="font-size:11px;color:var(--text3)">Current</div>
@@ -13311,10 +13351,14 @@ function buildNetWorthTrend(metricMk, dispCurr) {
 // ─── 18. Income vs Expense paired bars (6 months) ───
 function buildIncomeExpenseBars(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
+  // PLS #123: only show months from the user's first transaction onward (no empty pre-history bars).
+  const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
+  const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(y, m-1-i, 1);
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (earliestTx && k < earliestTx.slice(0,7)) continue;
     const t = getMonthTotals(k);
     months.push({ label: d.toLocaleString('en',{month:'short'}), income: t.income, expense: t.expense });
   }
@@ -13346,26 +13390,25 @@ function buildCashflowWaterfall(metricMk, dispCurr) {
   const income = t.income, expense = t.expense, net = income - expense;
   const maxV = Math.max(income, expense, Math.abs(net), 1);
   const monthLabel = (()=>{ const [y,m]=metricMk.split('-').map(Number); return new Date(y,m-1,1).toLocaleString('en',{month:'long'}); })();
-  // Three steps: Income (up from 0), Expense (down), Net (final)
-  const barH = 56;
-  const step = (label, val, color, fromBase, toBase) => {
-    const top = barH - (Math.max(fromBase, toBase)/maxV*barH);
-    const h = Math.abs(fromBase - toBase)/maxV*barH;
-    return `<div style="flex:1;text-align:center;min-width:0">
-      <div style="height:${barH}px;position:relative;margin-bottom:5px">
-        <div style="position:absolute;left:50%;transform:translateX(-50%);width:28px;background:${color};border-radius:var(--r-sm);top:${top.toFixed(1)}px;height:${Math.max(h,3).toFixed(1)}px;opacity:0.88"></div>
+  // Clean grounded bars: all sit on a common baseline, height ∝ value. No floating offsets.
+  const barH = 72;
+  const bar = (label, val, color) => {
+    const h = Math.max(4, (Math.abs(val) / maxV) * barH);
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">
+      <div style="height:${barH}px;display:flex;align-items:flex-end;width:100%;justify-content:center">
+        <div style="width:34px;background:${color};border-radius:var(--r-sm);height:${h.toFixed(1)}px;opacity:0.9"></div>
       </div>
-      <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${fmt(val,dispCurr)}</div>
+      <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color};margin-top:6px">${fmt(val,dispCurr)}</div>
       <div style="font-size:10px;color:var(--text4);margin-top:1px">${label}</div>
     </div>`;
   };
   const netColor = net >= 0 ? 'var(--green)' : 'var(--red)';
   return `<div class="card" style="padding:14px;margin-bottom:14px">
-    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">🌊 ${monthLabel} Cashflow</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">🌊 ${monthLabel} Cashflow</div>
     <div style="display:flex;gap:8px;align-items:flex-end">
-      ${step('Income', income, 'var(--green)', 0, income)}
-      ${step('Expenses', expense, 'var(--red)', income, income - expense)}
-      ${step(net>=0?'Saved':'Deficit', Math.abs(net), netColor, 0, net)}
+      ${bar('Income', income, 'var(--green)')}
+      ${bar('Expenses', expense, 'var(--red)')}
+      ${bar(net>=0?'Saved':'Deficit', Math.abs(net), netColor)}
     </div>
   </div>`;
 }
@@ -13408,12 +13451,15 @@ function buildSpendingDistribution(metricMk, dispCurr) {
     </div>
     <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px">
       ${buckets.map(b => {
-        const h = b.count > 0 ? Math.max(8, (b.count / maxCount) * 56) : 4;
         const isDom = b === dominant;
         const pct = totalCount > 0 ? (b.count / totalCount * 100) : 0;
+        // Empty buckets render as a faint 3px baseline tick (not a floating stub).
+        const h = b.count > 0 ? Math.max(10, (b.count / maxCount) * 54) : 3;
+        const bg = b.count === 0 ? 'var(--border2)' : (isDom ? 'var(--accent)' : 'var(--text3)');
+        const op = b.count === 0 ? '0.5' : (isDom ? '1' : '0.55');
         return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${b.count} txns · ${fmt(b.total, dispCurr)}">
           <div style="font-size:10px;color:var(--text4);font-weight:${isDom?'600':'400'}">${pct >= 8 ? pct.toFixed(0)+'%' : ''}</div>
-          <div style="width:100%;height:${h}px;background:${isDom ? 'var(--accent)' : 'var(--text3)'};opacity:${isDom ? '1' : '0.6'};border-radius:var(--r-sm) 3px 0 0"></div>
+          <div style="width:100%;height:${h}px;background:${bg};opacity:${op};border-radius:var(--r-sm)"></div>
         </div>`;
       }).join('')}
     </div>
