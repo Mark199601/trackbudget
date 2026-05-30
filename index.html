@@ -2140,6 +2140,25 @@ function toggleDashReorderMode() {
   renderDashboard();
 }
 
+// ── PERSONAL LOGIC SET #124 ── Unified runway burn rate (6-month average).
+// Both runway widgets — Goal Runway (Planning → Contract) and Cash Runway (Analytics) —
+// share ONE burn-rate source so they never disagree. We use a 6-month average monthly
+// expense rather than 3 months: 6 months is more conservative for emergency planning
+// because it captures occasional/quarterly costs (insurance, tuition, repairs) that a
+// 3-month window misses. Auto-adjusts when the user has <6 months of data (averages only
+// the months that actually have expenses; never divides by empty months).
+// Naming: "Goal Runway" = contract savings ÷ burn; "Cash Runway" = all liquid cash ÷ burn.
+function avgMonthlyExpense6mo() {
+  let total = 0, months = 0;
+  for (let i = 1; i <= 6; i++) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const t = getMonthTotals(key); // returns display-currency totals
+    if (t.expense > 0) { total += t.expense; months++; }
+  }
+  return months > 0 ? total / months : 0;
+}
+
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
@@ -2490,7 +2509,7 @@ function closeDlg() { document.getElementById('dlg-overlay').classList.remove('o
 // ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap ⓘ icon shows plain-English definition
 const _WIDGET_INFO = {
   'velocity': {title:'⏱ Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.'},
-  'runway': {title:'🛟 Cashflow Runway', body:'How many <b>months your cash can last</b> at your current spending rate, broken down per account. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
+  'runway': {title:'🛟 Cash Runway', body:'How many <b>months your liquid cash can last</b> at your <b>6-month average</b> spending rate. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
   'anomaly': {title:'⚡ Unusual Transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
   'forecast': {title:'🔮 Month-End Forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
   'subscription': {title:'🔁 Recurring Commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection — useful for spotting "money leaks."'},
@@ -12523,21 +12542,10 @@ function buildVelocityGauge(metricMk, dispCurr) {
 
 // ─── 2. Runway Bar (account-by-account) ───
 function buildRunwayBar(dispCurr) {
-  // Aggregate accounts by currency, exclude archived, compute days-of-runway based on recent avg expense
-  const last30 = new Date(); last30.setDate(last30.getDate() - 30);
-  const cutoffStr = last30.toISOString().slice(0,10);
-  const recentExp = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund && t.date >= cutoffStr && (t.type==='expense'||t.type==='shared'));
-  if (recentExp.length === 0) return '';
-  const totalExp30d = recentExp.reduce((s,t) => s + _ovExpAmt(t, dispCurr), 0);
-  // PLS #123: divide by the ACTUAL span of expense history (capped to 30 days), not a fixed 30.
-  // If the user only has e.g. 12 days of data, dividing by 30 understates the true daily burn
-  // and overstates runway. We use days-since-first-recent-expense (min 1, max 30) instead.
-  const allExpDates = recentExp.map(t => t.date).sort();
-  const firstExpDate = allExpDates[0];
-  const daysSinceFirst = Math.floor((Date.now() - new Date(firstExpDate + 'T00:00').getTime()) / 86400000) + 1;
-  const burnDays = Math.max(1, Math.min(30, daysSinceFirst));
-  const dailyBurn = totalExp30d / burnDays;
-  if (dailyBurn === 0) return '';
+  // "Cash Runway" — how long ALL liquid funds last at the 6-month average monthly burn.
+  // PLS #124: uses the same avgMonthlyExpense6mo() as Goal Runway so both agree.
+  const monthlyBurn = avgMonthlyExpense6mo();
+  if (monthlyBurn === 0) return '';
 
   // Total liquid funds (savings/checking/cash, excluding credit card and investments)
   let liquid = 0;
@@ -12548,21 +12556,22 @@ function buildRunwayBar(dispCurr) {
     if (bal > 0) liquid += a.currency === dispCurr ? bal : convert(bal, a.currency, dispCurr);
   }
   if (liquid === 0) return '';
-  const daysRunway = Math.floor(liquid / dailyBurn);
-  const monthsRunway = (daysRunway / 30).toFixed(1);
-  const color = daysRunway >= 180 ? 'var(--green)' : daysRunway >= 90 ? 'var(--amber)' : 'var(--red)';
-  const label = daysRunway >= 180 ? 'Healthy buffer' : daysRunway >= 90 ? 'Adequate' : daysRunway >= 30 ? 'Tight — build emergency fund' : 'Critical';
+  const monthsExact = liquid / monthlyBurn;
+  const monthsRunway = monthsExact.toFixed(1);
+  const daysRunway = Math.floor(monthsExact * 30.44);
+  const color = monthsExact >= 6 ? 'var(--green)' : monthsExact >= 3 ? 'var(--amber)' : 'var(--red)';
+  const label = monthsExact >= 6 ? 'Healthy buffer' : monthsExact >= 3 ? 'Adequate' : monthsExact >= 1 ? 'Tight — build emergency fund' : 'Critical';
   // Visual segments — 12 cells = 1 year
   const cells = 12;
-  const filled = Math.min(cells, Math.round(daysRunway / 30));
+  const filled = Math.min(cells, Math.round(monthsExact));
   const segments = Array.from({length: cells}, (_, i) =>
     `<div style="flex:1;height:6px;border-radius:var(--r-sm);background:${i < filled ? color : 'var(--border2)'};opacity:${i < filled ? '1' : '0.4'}"></div>`
   ).join('');
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cashflow Runway${_infoBtn('runway')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">If income stops at current burn rate</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cash Runway${_infoBtn('runway')}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">All liquid cash at your 6-month avg burn</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${color}">${monthsRunway}mo</div>
@@ -12572,7 +12581,7 @@ function buildRunwayBar(dispCurr) {
     <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
       <span style="color:${color};font-weight:500">${label}</span>
-      <span>${fmt(dailyBurn, dispCurr)}/day burn</span>
+      <span>${fmt(monthlyBurn, dispCurr)}/mo burn</span>
     </div>
   </div>`;
 }
@@ -12754,7 +12763,12 @@ function buildSubscriptionPanel(dispCurr) {
   </div>`;
 }
 
-// ─── 6. Savings Trend Sparkline ───
+// ── PERSONAL LOGIC SET #123 ── Charts start at first transaction (no phantom pre-history).
+// Multi-month trend charts (Savings Trend, Net Worth Trend, Income vs Expense) only plot
+// months from the user's FIRST transaction onward. Without this, a "Last 6 months" chart
+// would draw flat/empty points for months before the user started logging (e.g. a user who
+// began in April would see phantom Dec–Mar points). The header text is also made dynamic
+// ("Last N months") to reflect the real number of plotted months.
 function buildSavingsSparkline(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
   // PLS #123: only consider months from the user's first transaction onward — no phantom
@@ -13170,30 +13184,27 @@ function buildIncomeDiversification(metricMk, dispCurr) {
 
 // ─── 14. Goal Progress (uses contracts/savings goals if any) ───
 function buildGoalProgress(dispCurr) {
-  // Look for active contract with target amount
+  // Active savings contract with a target. Uses the SAME computeContractActual() as the
+  // Planning → Contract page, so the dashboard widget always matches that page exactly.
   const activeContract = (db.contracts || []).find(c => c.id === db.activeContractId);
   if (!activeContract || !activeContract.targetAmount) return '';
-  const target = activeContract.targetAmount;
-  // Sum savings linked to this contract via buckets
-  const linkedBuckets = (db.buckets || []).filter(b => activeContract.bucketIds && activeContract.bucketIds.includes(b.id));
-  if (linkedBuckets.length === 0) return '';
-  let actual = 0;
-  for (const bucket of linkedBuckets) {
-    const acct = db.accounts.find(a => a.id === bucket.accountId);
-    if (!acct || acct.archived) continue;
-    const bal = getAcctBalance(acct.id);
-    actual += acct.currency === dispCurr ? bal : convert(bal, acct.currency, dispCurr);
-  }
-  if (actual <= 0) return '';
-  const pct = Math.min(100, (actual / target * 100));
-  // Contract dates for trajectory
-  const startDate = activeContract.startDate ? new Date(activeContract.startDate) : null;
-  const endDate = activeContract.endDate ? new Date(activeContract.endDate) : null;
+  const goalCurr = activeContract.goalCurrency || _homeBase();
+  const targetPhp = toPhp(activeContract.targetAmount, goalCurr);
+  // computeContractActual returns the contract's saved balance already in PHP.
+  const actualPhp = computeContractActual(activeContract);
+  if (actualPhp <= 0) return '';
+  // Display in the dashboard's display currency.
+  const target = fromPhp(targetPhp, dispCurr);
+  const actual = fromPhp(actualPhp, dispCurr);
+  const pct = Math.min(100, (actualPhp / targetPhp * 100));
+  // Contract dates for trajectory marker.
+  const startDate = activeContract.startDate ? new Date(activeContract.startDate + 'T00:00:00') : null;
+  const endDate = activeContract.endDate ? new Date(activeContract.endDate + 'T00:00:00') : null;
   let timeProgress = null;
-  if (startDate && endDate) {
+  if (startDate && endDate && !isNaN(startDate) && !isNaN(endDate)) {
     const totalDays = (endDate - startDate) / (1000*60*60*24);
     const elapsed = (new Date() - startDate) / (1000*60*60*24);
-    timeProgress = Math.max(0, Math.min(100, (elapsed / totalDays * 100)));
+    if (totalDays > 0) timeProgress = Math.max(0, Math.min(100, (elapsed / totalDays * 100)));
   }
   const onTrack = timeProgress === null || pct >= timeProgress - 5;
   const statusColor = onTrack ? 'var(--green)' : 'var(--amber)';
@@ -13275,7 +13286,7 @@ function buildConcentrationRisk(dispCurr) {
 function buildNetWorthTrend(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
   const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
-  // Earliest transaction date — months before this have no meaningful net worth to plot.
+  // PLS #123: earliest transaction date — months before this have no meaningful net worth to plot.
   const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
   const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
   const points = [];
@@ -15450,28 +15461,19 @@ function renderWhatIfSimulator(contract, totalActual, currentMonthly, safeGoal, 
 function renderRunwayCalc(contract) {
   const goalCurr = contract.goalCurrency || _homeBase();
   const totalActual = computeContractActual(contract);
-  const mk = currMonthKey();
-  const avgMonthlyExpense = (() => {
-    let total = 0, months = 0;
-    for (let i=1; i<=3; i++) {
-      const d = new Date(); d.setMonth(d.getMonth()-i);
-      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      const t = getMonthTotals(key);
-      if (t.expense > 0) { total += t.expense; months++; }
-    }
-    return months > 0 ? total/months : 0;
-  })();
+  // PLS #124: 6-month average monthly expense (shared with Cash Runway for consistency).
+  const avgMonthlyExpense = avgMonthlyExpense6mo();
 
   const runwayMonths = avgMonthlyExpense > 0 ? Math.floor(toPhp(totalActual, goalCurr) / avgMonthlyExpense) : null;
 
   return `<div class="card" style="margin-bottom:14px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:10px">🛬 Runway Calculator</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">If you stop working today, how long can your savings last?</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">🛬 Goal Runway</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">If you stop working today, how long can your contract savings last?</div>
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="color:var(--text2)">Total savings</span><span style="font-family:var(--mono)">${fmt(Math.round(totalActual),goalCurr)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text2)">Avg monthly expenses (3mo)</span><span style="font-family:var(--mono)">${avgMonthlyExpense>0?fmt(Math.round(avgMonthlyExpense), _homeBase()):'—'}</span>
+      <span style="color:var(--text2)">Avg monthly expenses (6mo)</span><span style="font-family:var(--mono)">${avgMonthlyExpense>0?fmt(Math.round(avgMonthlyExpense), _homeBase()):'—'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;padding:8px 0">
       <span>Runway</span>
