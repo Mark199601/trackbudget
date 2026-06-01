@@ -16581,12 +16581,12 @@ function renderBudgetsTab() {
         const pct = limAmt > 0 ? Math.min(spent/limAmt*100, 100) : 0;
         const overBgt = spent > limAmt;
         const barColor = overBgt ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--accent)';
-        return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:12px"><span>${cat.icon}</span><span>${cat.name.replace(/^[^ ]+ /,'')}</span>${overBgt?'<span style="color:var(--red);font-size:10px">⚠</span>':''}</div>
+        return `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${cat.name}</span>${overBgt?'<span style="color:var(--red);font-size:10px">⚠</span>':''}</div>
             <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(b.currency)}${limAmt.toFixed(0)}</span></div>
           </div>
-          <div style="height:4px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden">
+          <div style="height:5px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div>
           </div>
         </div>`;
@@ -16594,31 +16594,32 @@ function renderBudgetsTab() {
 
       const rollAmt = b.rollover ? (b.rolloverAmount||0) : 0;
       const effectiveLimit = b.limit + rollAmt;
-      return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div><div style="font-size:14px;font-weight:600">${getFlag(b.location)} ${b.location}</div>
-        <div style="font-size:11px;color:var(--text3)">${b.currency} budget</div></div>
+      return `<div class="card" style="margin-bottom:12px;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div><div style="font-size:15px;font-weight:600">${getFlag(b.location)} ${b.location}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px">${b.currency} budget</div></div>
         <label class="toggle"><input type="checkbox" ${b.active?'checked':''} onchange="toggleBudget('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
       </div>
-      <div class="form-group"><label class="form-label">Monthly Limit (${sym(b.currency)})</label>
+      <div style="margin-bottom:12px">
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:6px">Monthly Limit (${sym(b.currency)})</label>
         <input class="form-input numpad-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value)" inputmode="none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:var(--r-sm)">
-          <div>
-            <div style="font-size:12px;color:var(--text2)">Rollover unspent</div>
-            <div style="font-size:10px;color:var(--text4)">Carry leftover to next month</div>
-          </div>
-          <label class="toggle"><input type="checkbox" ${b.rollover?'checked':''} onchange="toggleBudgetRollover('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
-        </div>
-        ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin-top:6px;font-family:var(--mono)">+ ${fmt(b.rolloverAmount||0, b.currency)} carried over from last month</div>` : ''}
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:${allocCount?'14':'0'}px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px">
+        <div>
+          <div style="font-size:13px;color:var(--text2);font-weight:500">Rollover unspent</div>
+          <div style="font-size:11px;color:var(--text4);margin-top:1px">Carry leftover to next month</div>
+        </div>
+        <label class="toggle"><input type="checkbox" ${b.rollover?'checked':''} onchange="toggleBudgetRollover('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
+      </div>
+      ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin:-6px 0 12px;font-family:var(--mono)">+ ${fmt(b.rolloverAmount||0, b.currency)} carried over from last month</div>` : ''}
+      <div style="display:flex;gap:8px;${allocCount?'margin-bottom:16px':''}">
         <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
         ${allocCount?`<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="clearAllocations('${b.id}')">Clear</button>`:''}
       </div>
-      ${allocCount > 0 ? `<div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600">Sub-budgets (${allocCount})</div>
-          <div style="font-size:10px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${effectiveLimit.toFixed(0)} <span>(${allocPct.toFixed(0)}%)</span></div>
+      ${allocCount > 0 ? `<div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600">Sub-budgets (${allocCount})</div>
+          <div style="font-size:11px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${effectiveLimit.toFixed(0)} <span style="color:var(--text4)">(${allocPct.toFixed(0)}%)</span></div>
         </div>
         ${subRows}
       </div>` : ''}
@@ -16631,7 +16632,12 @@ function toggleBudgetRollover(bgtId, enabled) {
   const b = db.budgets.find(x=>x.id===bgtId);
   if (!b) return;
   b.rollover = enabled;
-  if (!enabled) b.rolloverAmount = 0;
+  if (!enabled) {
+    b.rolloverAmount = 0;
+  } else {
+    // Recompute immediately so the carried-over amount shows without needing an app reload.
+    computeBudgetRollover();
+  }
   saveDBWithSync();
   renderSettings();
   showToast(enabled ? '✅ Rollover enabled' : 'Rollover disabled');
@@ -21966,11 +21972,22 @@ function renderAnalyticsBudget() {
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No budgets set</div><div style="font-size:12px;color:var(--text4);margin-top:4px">Set budgets in Settings → Budgets</div></div></div>`;
   }
   const now = new Date();
-  const dayOfMonth = now.getDate();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const daysLeft = daysInMonth - dayOfMonth;
+  // ── PERSONAL LOGIC SET #125 ── Budget tab shares the Overview period picker.
+  // The Analytics → Budget tab follows the SAME period state as Overview
+  // (window._analyticsOverviewPeriod), so there is ONE month context across all Analytics
+  // tabs instead of two competing selectors. Budgets are inherently monthly, so when the
+  // shared period is 'ytd' the Budget tab shows the current month; a specific 'YYYY-MM'
+  // shows that historical month (lets the user review past-month budget spend). For past
+  // months the day-fraction pace projection ("at pace …") is suppressed since the month is
+  // already fully elapsed.
+  const sharedPeriod = window._analyticsOverviewPeriod || 'ytd';
+  const mk = (sharedPeriod === 'ytd') ? currMonthKey() : sharedPeriod;
+  const [vy, vm] = mk.split('-').map(Number);
+  const isCurrentMonth = mk === currMonthKey();
+  const daysInMonth = new Date(vy, vm, 0).getDate();
+  const dayOfMonth = isCurrentMonth ? now.getDate() : daysInMonth;
+  const daysLeft = isCurrentMonth ? (daysInMonth - dayOfMonth) : 0;
   const monthFrac = dayOfMonth / daysInMonth;
-  const mk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
   if (typeof computeBudgetRollover === 'function') {
     try { computeBudgetRollover(); } catch(e) {}
@@ -22018,7 +22035,7 @@ function renderAnalyticsBudget() {
     breakdown.sort((a,b) => b.spent - a.spent);
     const pct = limit > 0 ? (spent / limit) * 100 : 0;
     const remaining = limit - spent;
-    const willExceed = limit > 0 && monthFrac > 0 && (spent / monthFrac) > limit;
+    const willExceed = isCurrentMonth && limit > 0 && monthFrac > 0 && (spent / monthFrac) > limit;
     const projectedEnd = monthFrac > 0 ? spent / monthFrac : 0;
     const expectedPctNow = monthFrac * 100;
     return { ...b, spent, limit, pct, remaining, willExceed, projectedEnd, expectedPctNow, allocCount, breakdown };
@@ -22030,7 +22047,30 @@ function renderAnalyticsBudget() {
   const overCount = rows.filter(r => r.pct > 100).length;
   const warnCount = rows.filter(r => r.pct > 80 && r.pct <= 100).length;
 
+  // Period selector — same picker as Overview, drives the shared _analyticsOverviewPeriod.
+  const _bAllMonths = [];
+  {
+    const _txd = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
+    const _uniq = [...new Set(_txd)].sort().reverse();
+    for (const _mk of _uniq) {
+      const [_y,_mo] = _mk.split('-').map(Number);
+      _bAllMonths.push({ key:_mk, label:new Date(_y,_mo-1,1).toLocaleString('en',{month:'long',year:'numeric'}) });
+    }
+    const _curMk = currMonthKey();
+    if (!_bAllMonths.find(m=>m.key===_curMk)) _bAllMonths.unshift({ key:_curMk, label:new Date().toLocaleString('en',{month:'long',year:'numeric'}) });
+  }
+  const _bSelOpts = [
+    `<option value="ytd" ${sharedPeriod==='ytd'?'selected':''}>This month</option>`,
+    ..._bAllMonths.filter(m=>m.key!==currMonthKey()).map(m=>`<option value="${m.key}" ${sharedPeriod===m.key?'selected':''}>${m.label}</option>`)
+  ].join('');
+
   let html = `<div class="page-pad">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:600">${fmtMonth(mk + '-01')}${isCurrentMonth?` <span style="font-size:11px;color:var(--text4);font-weight:400">· ${daysLeft} ${aiPlural(daysLeft,'day')} left</span>`:''}</div>
+      <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('budget')">
+        ${_bSelOpts}
+      </select>
+    </div>
     <div class="metric-grid fr2-always" style="margin-bottom:14px">
       <div class="metric-card">
         <div class="metric-label">Budget Total</div>
