@@ -3634,9 +3634,19 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0.3';
-const APP_VERSION_DATE = 'May 2026';
+const APP_VERSION = '1.0.4';
+const APP_VERSION_DATE = 'June 2026';
+// ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
+// toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
+// developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.0.4', date: 'June 2026', changes: [
+    '➕ Add Capital — top up an existing investment from a source account (capital + value rise together, no phantom gain/loss)',
+    '💵 Record Dividend — log a cash payout as income without touching your gain/loss %',
+    '🛡️ Backup safety — the loader now warns before replacing more complete data with a backup that has fewer transactions',
+    '☁️ Backup picker now shows the transaction count per backup, not just file size',
+    '🎨 Cleaner, more minimal interface — softer section headers, lighter separators',
+  ]},
   { ver: '1.0.3', date: 'May 2026', changes: [
     '🔢 Per-currency precision: fiat rounds to 2 decimals, crypto to 8 (Bitcoin standard)',
     '🐛 Fixed floating-point noise in amounts (1.1999... now shows 1.20)',
@@ -9658,11 +9668,10 @@ function confirmSellInv(invId) {
   showToast(`Sold! ${glMsg}`);
 }
 
-// ── ADD CAPITAL (top-up) ──
-// 📖 USER STORY: May existing investment ka na (e.g. ICTSI Coop ₱600). Gusto mong dagdagan
-// ng capital (e.g. +₱400). Bumababa ang source account mo, tumataas ang invested capital.
-// Capital AND current value tumataas ng parehong amount → NEUTRAL (walang phantom gain/loss).
-// Ginagamit ang isInvestmentFund transfer (gaya ng original funding) — di lumalabas sa monthly totals.
+// ── PERSONAL LOGIC SET #126 ── Add Capital (investment top-up).
+// Capital (inv.amount) AND current value (inv.currentValue) both increase by the SAME amount →
+// NEUTRAL: no phantom gain/loss is created on top-up. Source account is deducted via an
+// isInvestmentFund transfer (excluded from monthly totals, just like the original funding).
 function openAddCapital(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
@@ -9707,11 +9716,12 @@ function confirmAddCapital(invId) {
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast(`Capital added: ${fmt(add,inv.currency)}`);
 }
 
-// ── RECORD DIVIDEND (cash payout) ──
-// 📖 USER STORY: Nakatanggap ka ng dividend mula sa investment (e.g. ICTSI Coop nagbigay ng ₱50).
-// Pumapasok ito as CASH sa account mo (real income). HIWALAY ito sa price gain/loss — di nagbabago
-// ang capital o ang currentValue, kaya yung % sa card ay pure price movement pa rin. Sinusubaybayan
-// ang cumulative dividendsReceived para sa display. Tinatag as type:'income' (kasama sa monthly totals).
+// ── PERSONAL LOGIC SET #127 ── Record Dividend (cash payout).
+// A dividend is recorded as separate type:'income' (counts in monthly totals) credited to an
+// account. It does NOT touch inv.amount or inv.currentValue, so the investment's gain/loss %
+// stays a pure price-movement figure. Cumulative inv.dividendsReceived is tracked for display,
+// and dividend txs cascade-delete with the investment via investmentId. NOT isInvestmentReturn
+// (that flag is for sale proceeds), so dividends never mis-nest under the funding transaction.
 function openRecordDividend(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
@@ -19611,13 +19621,14 @@ async function showBackupPicker() {
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>`
     );
 
-    // Lazy-load device names in background
+    // Lazy-load device names + transaction counts in background
     files.files.forEach(async (f) => {
       try {
         const data = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
         const device = data?._backupMeta?.deviceName || 'Unknown Device';
+        const txc = data?._backupMeta?.txCount ?? (data?.transactions||[]).length;
         const el = document.getElementById('dev-' + f.id);
-        if (el) el.textContent = '📱 ' + device;
+        if (el) el.textContent = '📱 ' + device + ' · ' + txc + ' tx';
       } catch(e) {
         const el = document.getElementById('dev-' + f.id);
         if (el) el.textContent = '';
@@ -19637,13 +19648,35 @@ async function showBackupPicker() {
   }
 }
 
-async function confirmLoadDriveBackup(fileId) {
+async function confirmLoadDriveBackup(fileId, force) {
   try {
     closeDlg();
     showLoading('Loading backup...');
     const backup = await driveRequest('GET',
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     );
+    hideLoading();
+    // ── PERSONAL LOGIC SET #128 ── Backup completeness guard.
+    // A backup load is a FULL REPLACE. If the chosen backup has FEWER transactions than the
+    // current local data, warn before proceeding — this prevents a stale device's older backup
+    // from silently overwriting more complete data. The "Load Anyway" button (force=true) is the
+    // deliberate escape hatch. Transaction count is also shown per row in the backup picker.
+    const backupTx = (backup && backup._backupMeta && typeof backup._backupMeta.txCount === 'number')
+      ? backup._backupMeta.txCount
+      : ((backup && backup.transactions) ? backup.transactions.length : 0);
+    const localTx = (db && db.transactions) ? db.transactions.length : 0;
+    if (!force && backupTx < localTx) {
+      const diff = localTx - backupTx;
+      openDlg('⚠️ Fewer Transactions in Backup',
+        `<div style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:14px">This backup has <strong style="color:var(--text)">${backupTx}</strong> transaction${backupTx===1?'':'s'}, but your current data has <strong style="color:var(--text)">${localTx}</strong>.</div>
+         <div style="background:var(--red-bg);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red)">Loading replaces your current data — you'll lose <strong>${diff}</strong> transaction${diff===1?'':'s'}.</div>
+         <div style="font-size:12px;color:var(--text4)">Only continue if you're sure this older backup is the one you want.</div>`,
+        `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+         <button class="btn btn-danger btn-sm" onclick="confirmLoadDriveBackup('${fileId}', true)">Load Anyway</button>`
+      );
+      return;
+    }
+    showLoading('Loading backup...');
     delete backup._backupMeta;
     // ── PERSONAL LOGIC SET #72 ── full replace instead of Object.assign shallow merge.
     // Object.assign(db, backup) leaves any keys present in the OLD db that are absent in the
