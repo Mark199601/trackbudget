@@ -2258,6 +2258,7 @@ function txCategoryDisplay(tx) {
   if (tx.isReimbSettlementGain)  return {icon:'📈', name:'Reimbursement Gain'};
   if (tx.isReimbSettlementLoss)  return {icon:'📉', name:'Reimbursement Loss'};
   if (tx.isInvestmentFund)       return {icon:'💼', name:'Investment Fund'};
+  if (tx.isDividend)             return {icon:'💵', name:'Dividend'};
   if (tx.isInvestmentReturn)     return {icon:'📈', name:'Investment Return'};
   return getCategoryDisplay(tx.categoryId);
 }
@@ -9563,6 +9564,7 @@ function openInvDetail(invId) {
       <div style="font-size:22px;font-weight:700;font-family:var(--mono)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
       ${gl!==0?`<div style="font-size:13px;color:${gl>0?'var(--green)':'var(--red)'};margin-top:4px">${gl>0?'▲':'▼'} ${fmt(Math.abs(gl),inv.currency)} (${gl>0?'+':''}${glPct.toFixed(1)}%) ${isSold?'realized':'unrealized'}</div>`:''}
       <div style="font-size:11px;color:var(--text3);margin-top:6px">${inv.type} &middot; Invested ${fmt(inv.amount,inv.currency)}</div>
+      ${(inv.dividendsReceived||0)>0?`<div style="font-size:12px;color:var(--green);margin-top:4px">💵 ${fmt(inv.dividendsReceived,inv.currency)} dividends received</div>`:''}
     </div>
     <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;margin-bottom:12px">
       ${iRow('Date',fmtD(inv.date))}
@@ -9572,7 +9574,9 @@ function openInvDetail(invId) {
     </div>
     ${!isSold?`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <button class="btn btn-primary" onclick="openUpdateInvValue('${invId}')">📊 Update Value</button>
+      <button class="btn btn-primary" onclick="openAddCapital('${invId}')">➕ Add Capital</button>
+      <button class="btn btn-outline" onclick="openUpdateInvValue('${invId}')">📊 Update Value</button>
+      <button class="btn btn-outline" onclick="openRecordDividend('${invId}')">💵 Dividend</button>
       <button class="btn btn-success" onclick="openSellInv('${invId}')">💰 Sell / Close</button>
     </div>
     <button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="openEditInv('${invId}')">Edit Details</button>
@@ -9652,6 +9656,92 @@ function confirmSellInv(invId) {
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
   const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
   showToast(`Sold! ${glMsg}`);
+}
+
+// ── ADD CAPITAL (top-up) ──
+// 📖 USER STORY: May existing investment ka na (e.g. ICTSI Coop ₱600). Gusto mong dagdagan
+// ng capital (e.g. +₱400). Bumababa ang source account mo, tumataas ang invested capital.
+// Capital AND current value tumataas ng parehong amount → NEUTRAL (walang phantom gain/loss).
+// Ginagamit ang isInvestmentFund transfer (gaya ng original funding) — di lumalabas sa monthly totals.
+function openAddCapital(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
+  openSheet('gen2','Add Capital',`<div style="padding:8px 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;text-align:center">
+      <div style="font-size:13px;color:var(--text3)">Current capital</div>
+      <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(inv.amount,inv.currency)}</div>
+    </div>
+    <div class="form-group"><label class="form-label">Add Amount (${inv.currency})</label>
+      <input class="form-input numpad-input" type="number" id="acap-amt" placeholder="0" inputmode="none"></div>
+    <div class="form-group"><label class="form-label">Deduct from Account</label>
+      <select class="form-input" id="acap-acct">${acctOpts}</select></div>
+    ${dtField('acap-date','date','Today')}
+    <div class="form-group"><label class="form-label">Notes</label>
+      <input class="form-input" id="acap-notes" placeholder="Optional"></div>
+    <div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:10px">Capital +amount, current value +same (neutral — walang gain/loss change)</div>
+    <button class="btn btn-primary btn-full" onclick="confirmAddCapital('${invId}')">Add Capital</button>
+  </div>`);
+}
+
+function confirmAddCapital(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const add = parseFloat(document.getElementById('acap-amt')?.value);
+  if (!add || add<=0) { showToast('Enter valid amount'); return; }
+  const acctId = document.getElementById('acap-acct')?.value;
+  const date = document.getElementById('acap-date')?.value||today();
+  const notes = document.getElementById('acap-notes')?.value?.trim()||'';
+  // Capital + currentValue both increase by the same amount → neutral (no phantom gain/loss)
+  inv.amount = roundMoney((inv.amount||0) + add, inv.currency);
+  inv.currentValue = roundMoney((inv.currentValue!=null?inv.currentValue:inv.amount) + add, inv.currency);
+  if (acctId) {
+    db.transactions.push({ id:'tx-'+genId(), type:'transfer', fromAccountId:acctId, toAccountId:null, amount:add, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Added capital to ${inv.name}${notes?' — '+notes:''}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+  }
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast(`Capital added: ${fmt(add,inv.currency)}`);
+}
+
+// ── RECORD DIVIDEND (cash payout) ──
+// 📖 USER STORY: Nakatanggap ka ng dividend mula sa investment (e.g. ICTSI Coop nagbigay ng ₱50).
+// Pumapasok ito as CASH sa account mo (real income). HIWALAY ito sa price gain/loss — di nagbabago
+// ang capital o ang currentValue, kaya yung % sa card ay pure price movement pa rin. Sinusubaybayan
+// ang cumulative dividendsReceived para sa display. Tinatag as type:'income' (kasama sa monthly totals).
+function openRecordDividend(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
+  const totalDiv = inv.dividendsReceived||0;
+  openSheet('gen2','Record Dividend',`<div style="padding:8px 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;text-align:center">
+      <div style="font-size:13px;color:var(--text3)">Dividends received so far</div>
+      <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(totalDiv,inv.currency)}</div>
+    </div>
+    <div class="form-group"><label class="form-label">Dividend Amount (${inv.currency})</label>
+      <input class="form-input numpad-input" type="number" id="div-amt" placeholder="0" inputmode="none"></div>
+    <div class="form-group"><label class="form-label">Receive to Account</label>
+      <select class="form-input" id="div-acct">${acctOpts}</select></div>
+    ${dtField('div-date','date','Today')}
+    <div class="form-group"><label class="form-label">Notes</label>
+      <input class="form-input" id="div-notes" placeholder="Optional"></div>
+    <div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:10px">Recorded as income — di nagbabago ang capital o gain/loss %</div>
+    <button class="btn btn-success btn-full" onclick="confirmRecordDividend('${invId}')">Record Dividend</button>
+  </div>`);
+}
+
+function confirmRecordDividend(invId) {
+  const inv = db.investments.find(i=>i.id===invId);
+  if (!inv) return;
+  const amt = parseFloat(document.getElementById('div-amt')?.value);
+  if (!amt || amt<=0) { showToast('Enter valid amount'); return; }
+  const acctId = document.getElementById('div-acct')?.value;
+  const date = document.getElementById('div-date')?.value||today();
+  const notes = document.getElementById('div-notes')?.value?.trim()||'';
+  // Dividend = separate income. Does NOT touch inv.amount or inv.currentValue (price gain/loss stays pure).
+  inv.dividendsReceived = roundMoney((inv.dividendsReceived||0) + amt, inv.currency);
+  if (acctId) {
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:amt, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Dividend from ${inv.name}${notes?' — '+notes:''}`, isDividend:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+  }
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast(`Dividend recorded: ${fmt(amt,inv.currency)}`);
 }
 
 function openEditInv(invId) {
