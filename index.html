@@ -9676,7 +9676,13 @@ function openAddCapital(invId) {
       <input class="form-input numpad-input" type="number" id="acap-amt" placeholder="0" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Deduct from Account</label>
       <select class="form-input" id="acap-acct">${acctOpts}</select></div>
-    ${dtField('acap-date','date','Today')}
+    <div class="form-group">
+      <label class="form-label">Date & Time</label>
+      <div class="dt-row">
+        ${dtField('acap-date','date','Today')}
+        ${dtField('acap-time','time','Now')}
+      </div>
+    </div>
     <div class="form-group"><label class="form-label">Notes</label>
       <input class="form-input" id="acap-notes" placeholder="Optional"></div>
     <div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:10px">Capital +amount, current value +same (neutral — walang gain/loss change)</div>
@@ -9691,12 +9697,13 @@ function confirmAddCapital(invId) {
   if (!add || add<=0) { showToast('Enter valid amount'); return; }
   const acctId = document.getElementById('acap-acct')?.value;
   const date = document.getElementById('acap-date')?.value||today();
+  const time = document.getElementById('acap-time')?.value||nowTime();
   const notes = document.getElementById('acap-notes')?.value?.trim()||'';
   // Capital + currentValue both increase by the same amount → neutral (no phantom gain/loss)
   inv.amount = roundMoney((inv.amount||0) + add, inv.currency);
   inv.currentValue = roundMoney((inv.currentValue!=null?inv.currentValue:inv.amount) + add, inv.currency);
   if (acctId) {
-    db.transactions.push({ id:'tx-'+genId(), type:'transfer', fromAccountId:acctId, toAccountId:null, amount:add, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Added capital to ${inv.name}${notes?' — '+notes:''}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'transfer', fromAccountId:acctId, toAccountId:null, amount:add, currency:inv.currency, accountId:acctId, date, time, categoryId:'sc-investreturns', notes:`Added capital to ${inv.name}${notes?' — '+notes:''}`, isInvestmentFund:true, investmentId:invId, fxSnapshot:buildFxSnapshot(date,time), createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast(`Capital added: ${fmt(add,inv.currency)}`);
 }
@@ -9720,7 +9727,13 @@ function openRecordDividend(invId) {
       <input class="form-input numpad-input" type="number" id="div-amt" placeholder="0" inputmode="none"></div>
     <div class="form-group"><label class="form-label">Receive to Account</label>
       <select class="form-input" id="div-acct">${acctOpts}</select></div>
-    ${dtField('div-date','date','Today')}
+    <div class="form-group">
+      <label class="form-label">Date & Time</label>
+      <div class="dt-row">
+        ${dtField('div-date','date','Today')}
+        ${dtField('div-time','time','Now')}
+      </div>
+    </div>
     <div class="form-group"><label class="form-label">Notes</label>
       <input class="form-input" id="div-notes" placeholder="Optional"></div>
     <div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:10px">Recorded as income — di nagbabago ang capital o gain/loss %</div>
@@ -9735,11 +9748,12 @@ function confirmRecordDividend(invId) {
   if (!amt || amt<=0) { showToast('Enter valid amount'); return; }
   const acctId = document.getElementById('div-acct')?.value;
   const date = document.getElementById('div-date')?.value||today();
+  const time = document.getElementById('div-time')?.value||nowTime();
   const notes = document.getElementById('div-notes')?.value?.trim()||'';
   // Dividend = separate income. Does NOT touch inv.amount or inv.currentValue (price gain/loss stays pure).
   inv.dividendsReceived = roundMoney((inv.dividendsReceived||0) + amt, inv.currency);
   if (acctId) {
-    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:amt, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Dividend from ${inv.name}${notes?' — '+notes:''}`, isDividend:true, investmentId:invId, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:amt, currency:inv.currency, accountId:acctId, date, time, categoryId:'sc-investreturns', notes:`Dividend from ${inv.name}${notes?' — '+notes:''}`, isDividend:true, investmentId:invId, fxSnapshot:buildFxSnapshot(date,time), createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast(`Dividend recorded: ${fmt(amt,inv.currency)}`);
 }
