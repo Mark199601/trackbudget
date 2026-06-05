@@ -15285,15 +15285,16 @@ function renderContractTab() {
   const safeGoal = active.targetAmount || 0;
   const goalCurr = active.goalCurrency || _homeBase();
   // Monthly goal: use the saved value; if somehow unset, derive from goal pace (no hardcoded number).
-  const monthly = active.monthlyGoal || (totalMonths > 0 ? Math.round(safeGoal / totalMonths) : 0);
+  // Overall monthly pace is DERIVED from the total target (the slider now sets the total target,
+  // not a monthly amount). Per-bucket monthlies are likewise derived from each bucket's allocation.
+  const monthly = totalMonths > 0 ? Math.round(safeGoal / totalMonths) : 0;
   const targetToday = monthly * monthsElapsed;
-  // ── Dynamic monthly-goal slider range ── fits BOTH the current monthly AND the pace needed to hit
-  // the goal (target ÷ months), with headroom. Currency/magnitude agnostic — never clamps the value.
-  const _paceMonthly = totalMonths > 0 ? safeGoal / totalMonths : monthly;
-  const _sliderAnchor = Math.max(monthly, _paceMonthly, 1);
-  const _sliderStep = Math.max(1, Math.pow(10, Math.floor(Math.log10(_sliderAnchor * 2)) - 2));
-  const _sliderMax = Math.max(_sliderStep, Math.ceil((_sliderAnchor * 2) / _sliderStep) * _sliderStep);
-  const _sliderVal = Math.min(_sliderMax, Math.max(0, monthly));
+  // ── Dynamic TOTAL-TARGET slider range ── based on the current target with headroom. Currency/
+  // magnitude agnostic — never clamps the value.
+  const _tgtAnchor = Math.max(safeGoal, 1);
+  const _sliderStep = Math.max(1, Math.pow(10, Math.floor(Math.log10(_tgtAnchor * 2)) - 2));
+  const _sliderMax = Math.max(_sliderStep, Math.ceil((_tgtAnchor * 2) / _sliderStep) * _sliderStep);
+  const _sliderVal = Math.min(_sliderMax, Math.max(0, safeGoal));
   const isEnded = now > endDate;
 
   // Monthly check-in prompt
@@ -15354,37 +15355,54 @@ function renderContractTab() {
     const links = active.bucketLinks || {};
     const linked = links[b.id] || [];
     if (linked.length > 0) {
-      // Convert each linked account's balance to home base (bucket totals are tracked in home)
-      return linked.reduce((s, id) => {
-        const acct = db.accounts.find(a => a.id === id);
-        if (!acct) return s;
-        const bal = parseFloat(getAcctBalance(id)) || 0;
-        const inHome = acct.currency === _homeBase() ? bal : toPhp(bal, acct.currency);
-        return s + inHome;
-      }, 0);
+      // Linked entities may be accounts OR investments — both resolved to home base.
+      return linked.reduce((s, id) => s + _linkedHomeBalance(id), 0);
     }
     return parseFloat((active.buckets||{})[b.id]) || 0;
   };
 
+  // Compute each bucket's TARGET via the rate-greedy waterfall over the contract's total target.
+  const _alloc = computeBucketAllocation(safeGoal, active.bucketDefs, totalMonths);
+  const _allocSum = Object.values(_alloc.targets).reduce((s,v)=>s+v,0);
+  const _unalloc = _alloc.unallocated;
+
   const allAccounts = db.accounts.filter(a=>!a.archived);
+  const activeInvs = (db.investments||[]).filter(i=>!i.archived && i.status!=='sold');
   const editMode = window._bucketEditMode === activeId;
   const bucketsHTML = BUCKET_DEFS.map((b, idx)=>{
     const linked = (active.bucketLinks||{})[b.id] || [];
     const val = getBucketBalance(b);
     const isLinked = linked.length > 0;
-    const expectedNow = monthsElapsed > 0 ? b.monthly * monthsElapsed : 0;
-    const bPct = b.cap ? Math.min(100,(val/b.cap)*100) : (expectedNow>0?Math.min(100,(val/expectedNow)*100):0);
+    const af = _bucketAllocFields(b, totalMonths);
+    const target = _alloc.targets[b.id] || 0;            // waterfall allocation of the total target
+    const perMonth = totalMonths > 0 ? target / totalMonths : 0;
+    const expectedNow = perMonth * monthsElapsed;        // linear pace for this bucket
+    const isFull = b.cap && b.cap > 0 && val >= b.cap * 0.999;
     const diff = val - expectedNow;
-    const statusTxt = expectedNow>0?(diff>=0?`+${fmt(Math.round(diff),goalCurr)} ahead`:`${fmt(Math.round(Math.abs(diff)),goalCurr)} behind`):'—';
-    const statusColor = diff>=0?'var(--green)':'var(--red)';
-    // Gauge color: red if behind expected pace, green if on/ahead. If no expectation yet (early), use neutral.
-    const gaugeColor = expectedNow>0 ? (diff>=0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)';
-    const linkedNames = linked.map(id=>db.accounts.find(a=>a.id===id)?.name||id).join(', ');
-    const checkboxes = allAccounts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
+    const bPct = isFull ? 100 : (target > 0 ? Math.min(100, (val/target)*100) : 0);
+    const statusTxt = isFull ? '✓ Full'
+      : (expectedNow > 0 ? (diff >= 0 ? `+${fmt(Math.round(diff),goalCurr)} ahead` : `${fmt(Math.round(Math.abs(diff)),goalCurr)} behind`) : '—');
+    const statusColor = isFull ? 'var(--green)' : (diff >= 0 ? 'var(--green)' : 'var(--red)');
+    const gaugeColor = isFull ? 'var(--green)' : (expectedNow > 0 ? (diff >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)');
+    const rateLabel = b.rate || (af.rateNum ? af.rateNum + '% p.a.' : '—');
+    const allocText = af.mode === 'percent' ? `${(+af.value.toFixed(1))}% of target` : 'fixed';
+    const subLine = `${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo${b.cap?` · cap ${fmt(b.cap,goalCurr)}`:''}`;
+    const linkedNames = linked.map(id=>{
+      const a=db.accounts.find(x=>x.id===id); if(a) return _esc(a.name);
+      const iv=(db.investments||[]).find(x=>x.id===id); if(iv) return _esc(iv.name);
+      return _esc(id);
+    }).join(', ');
+    const acctBoxes = allAccounts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${linked.includes(a.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${a.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
       <span style="flex:1;color:var(--text2)">${_esc(a.name)}</span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${a.currency} · ${fmt(getAcctBalance(a.id),a.currency)}</span>
     </label>`).join('');
+    const invBoxes = activeInvs.map(iv=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${linked.includes(iv.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${iv.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <span style="flex:1;color:var(--text2)">${_esc(iv.name)} <span style="color:var(--text4);font-size:10px">· ${_esc(iv.type||'Investment')}</span></span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${iv.currency} · ${fmt(iv.currentValue!=null?iv.currentValue:iv.amount,iv.currency)}</span>
+    </label>`).join('');
+    const checkboxes = `<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);padding:4px 0 2px">Accounts</div>${acctBoxes||'<div style="font-size:11px;color:var(--text4);padding:4px 0">No accounts</div>'}${activeInvs.length?`<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);padding:8px 0 2px">Investments</div>${invBoxes}`:''}`;
     const editControls = editMode ? `
       <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0">
         <button aria-label="Edit" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">✎</button>
@@ -15398,12 +15416,13 @@ function renderContractTab() {
           <div style="width:10px;height:10px;border-radius:50%;background:${b.color};flex-shrink:0;margin-top:5px;box-shadow:0 0 4px ${b.color}66"></div>
           <div style="min-width:0;flex:1">
             <div style="font-size:13px;font-weight:600">${_esc(b.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${b.rate||'—'} · ${fmt(b.monthly||0,goalCurr)}/mo${b.cap?` · cap ${fmt(b.cap,goalCurr)}`:''}</div>
+            <div style="font-size:11px;color:var(--text3)">${subLine}</div>
           </div>
         </div>
         ${editControls}
         <div style="text-align:right;margin-left:8px">
           <div style="font-family:var(--mono);font-size:14px;font-weight:600">${isLinked?fmt(Math.round(val),goalCurr):'—'}</div>
+          <div style="font-size:10px;color:var(--text4)">of ${fmt(Math.round(target),goalCurr)}</div>
           <div style="font-size:11px;color:${statusColor}">${statusTxt}</div>
         </div>
       </div>
@@ -15417,8 +15436,8 @@ function renderContractTab() {
            onchange="saveContractBucket('${activeId}','${b.id}',this.value)"
            oninput="saveContractBucket('${activeId}','${b.id}',this.value)"></div>`}
       <details style="margin-top:4px">
-        <summary style="font-size:11px;color:var(--accent);cursor:pointer;list-style:none;user-select:none">${isLinked?'✓ '+linked.length+' account(s) linked — change':'+ Link accounts'}</summary>
-        <div style="margin-top:8px;border:1px solid var(--border2);border-radius:var(--r-md);padding:4px 10px;max-height:200px;overflow-y:auto">${checkboxes}</div>
+        <summary style="font-size:11px;color:var(--accent);cursor:pointer;list-style:none;user-select:none">${isLinked?'✓ '+linked.length+' linked — change':'+ Link account / investment'}</summary>
+        <div style="margin-top:8px;border:1px solid var(--border2);border-radius:var(--r-md);padding:4px 10px;max-height:220px;overflow-y:auto">${checkboxes}</div>
       </details>
     </div>`;
   }).join('');
@@ -15502,13 +15521,13 @@ function renderContractTab() {
 
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600">Monthly savings goal</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent)">${fmt(monthly,goalCurr)}/mo</div>
+        <div style="font-size:13px;font-weight:600">Total savings target</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent)">${fmt(safeGoal,goalCurr)}</div>
       </div>
-      <input type="range" min="0" max="${_sliderMax}" step="${_sliderStep}" value="${_sliderVal}" style="width:100%;margin-bottom:8px" oninput="saveContractMonthly('${activeId}',this.value)">
+      <input type="range" min="0" max="${_sliderMax}" step="${_sliderStep}" value="${_sliderVal}" style="width:100%;margin-bottom:8px" oninput="saveContractTarget('${activeId}',this.value)">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
         <span>${fmt(0,goalCurr)}</span>
-        <span>Proj. total: <strong style="color:var(--text)">${fmt(monthly*Math.round(totalMonths),goalCurr)}</strong></span>
+        <span>≈ <strong style="color:var(--text)">${fmt(monthly,goalCurr)}/mo</strong> over ${Math.round(totalMonths)}mo</span>
         <span>${fmt(_sliderMax,goalCurr)}</span>
       </div>
     </div>
@@ -15524,6 +15543,12 @@ function renderContractTab() {
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;${window._bucketEditMode===activeId?'color:var(--accent)':''}" onclick="toggleBucketEditMode('${activeId}')">${window._bucketEditMode===activeId?'Done':'Edit list'}</button>
       </div>
     </div>
+    ${BUCKET_DEFS.length>0?`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px;font-size:11px">
+      <span style="color:var(--text3)">Allocated <span style="font-family:var(--mono);color:var(--text)">${fmt(Math.round(_allocSum),goalCurr)}</span> / target <span style="font-family:var(--mono)">${fmt(Math.round(safeGoal),goalCurr)}</span></span>
+      ${_unalloc>0.5
+        ? `<span style="color:var(--amber);font-weight:500">${fmt(Math.round(_unalloc),goalCurr)} unallocated</span>`
+        : `<span style="color:var(--green);font-weight:500">✓ fully allocated</span>`}
+    </div>`:''}
     ${BUCKET_DEFS.length===0
       ? `<div class="card" style="text-align:center;padding:24px 16px;margin-bottom:14px">
           <div style="font-size:13px;color:var(--text3);margin-bottom:6px">No buckets yet</div>
@@ -15539,6 +15564,77 @@ function renderContractTab() {
   </div>`;
 }
 
+// ── CONTRACT BUCKET ALLOCATION ENGINE (rate-greedy waterfall) ──
+// PLS: the contract slider now sets the TOTAL savings target for the whole contract; each bucket
+// claims a share of that target — either a % of the target or a fixed home-base amount — capped by
+// its `cap`. Buckets are filled highest-interest-rate first; whatever a capped bucket can't hold
+// overflows to the next-highest-rate bucket. All amounts are computed in the home base currency.
+
+// Numeric annual rate for priority sorting. Prefers explicit `rateNum`; else parses the rate label.
+function _bucketRateNum(b) {
+  if (typeof b.rateNum === 'number' && isFinite(b.rateNum)) return b.rateNum;
+  const m = String(b.rate || '').match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+// Resolve a bucket's allocation fields, defaulting legacy buckets ON THE FLY (no stored rewrite):
+// a pre-existing bucket with only a monthly amount becomes fixed ≈ monthly × contract months.
+function _bucketAllocFields(b, totalMonths) {
+  const rateNum = _bucketRateNum(b);
+  let mode = (b.allocMode === 'percent' || b.allocMode === 'fixed') ? b.allocMode : null;
+  let value = (typeof b.allocValue === 'number' && isFinite(b.allocValue)) ? b.allocValue : null;
+  if (!mode) {
+    mode = 'fixed';
+    if (value == null) value = (parseFloat(b.monthly) || 0) * Math.max(1, Math.round(totalMonths || 1));
+  }
+  if (value == null || !isFinite(value)) value = 0;
+  return { mode, value, rateNum };
+}
+// Home-base balance of a linked entity — works for an ACCOUNT or an INVESTMENT.
+function _linkedHomeBalance(id) {
+  const acct = db.accounts.find(a => a.id === id);
+  if (acct) {
+    const bal = parseFloat(getAcctBalance(id)) || 0;
+    return acct.currency === _homeBase() ? bal : toPhp(bal, acct.currency);
+  }
+  const inv = (db.investments || []).find(i => i.id === id && !i.archived && i.status !== 'sold');
+  if (inv) {
+    const v = parseFloat(inv.currentValue != null ? inv.currentValue : inv.amount) || 0;
+    return inv.currency === _homeBase() ? v : toPhp(v, inv.currency);
+  }
+  return 0;
+}
+// Rate-greedy waterfall allocation. Returns { targets:{id:amount}, unallocated, orderIds:[by rate desc] }.
+function computeBucketAllocation(totalTarget, bucketDefs, totalMonths) {
+  const list = (bucketDefs || []).map((b, i) => {
+    const a = _bucketAllocFields(b, totalMonths);
+    return { id: b.id, rateNum: a.rateNum, mode: a.mode, value: a.value,
+             cap: (b.cap && b.cap > 0) ? b.cap : Infinity, _i: i };
+  });
+  list.sort((a, b) => (b.rateNum - a.rateNum) || (a._i - b._i)); // rate desc, stable
+  let remaining = Math.max(0, totalTarget || 0);
+  const targets = {};
+  // Pass 1 — each bucket takes its desired share, capped, limited by what's left.
+  for (const b of list) {
+    const desired = b.mode === 'percent' ? (b.value / 100) * (totalTarget || 0) : b.value;
+    const take = Math.min(Math.min(Math.max(0, desired), b.cap), remaining);
+    targets[b.id] = take;
+    remaining -= take;
+  }
+  // Pass 2 — overflow: leftover cascades into buckets with remaining cap room, highest rate first.
+  if (remaining > 0.5) {
+    for (const b of list) {
+      const room = b.cap - targets[b.id];
+      if (room > 0) {
+        const add = Math.min(room, remaining);
+        targets[b.id] += add;
+        remaining -= add;
+        if (remaining <= 0.5) break;
+      }
+    }
+  }
+  return { targets, unallocated: Math.max(0, remaining), orderIds: list.map(b => b.id) };
+}
+
 function computeContractActual(contract) {
   if (!contract) return 0;
   // Use the contract's own bucket definitions (post-migration); fall back to legacy ids if absent
@@ -15549,12 +15645,7 @@ function computeContractActual(contract) {
   for (const bid of bucketIds) {
     const linked = (contract.bucketLinks||{})[bid] || [];
     if (linked.length > 0) {
-      total += linked.reduce((s,id) => {
-        const acct = db.accounts.find(a=>a.id===id);
-        if (!acct) return s;
-        const bal = parseFloat(getAcctBalance(id)) || 0;
-        return s + toPhp(bal, acct.currency);
-      }, 0);
+      total += linked.reduce((s,id) => s + _linkedHomeBalance(id), 0);
     } else {
       total += parseFloat((contract.buckets||{})[bid]) || 0;
     }
@@ -15846,6 +15937,11 @@ function openBucketSheet(contractId, bucketId) {
   const isEdit = !!bucketId;
   const b = isEdit ? c.bucketDefs.find(x=>x.id===bucketId) : null;
   if (isEdit && !b) return;
+  const _tm = (c.startDate && c.endDate) ? Math.max(1, (new Date(c.endDate)-new Date(c.startDate))/(1000*60*60*24*30.44)) : 24;
+  const _af = b ? _bucketAllocFields(b, _tm) : { mode:'percent', value:0, rateNum:0 };
+  const initMode = (b && (b.allocMode==='percent'||b.allocMode==='fixed')) ? b.allocMode : (b ? _af.mode : 'percent');
+  const initVal = (b && typeof b.allocValue==='number') ? b.allocValue : (b ? (initMode==='percent'?'':Math.round(_af.value)) : '');
+  const initRateNum = (b && typeof b.rateNum==='number') ? b.rateNum : (b ? (_af.rateNum||'') : '');
   const initColor = b?.color || BUCKET_PRESET_COLORS[0].hex;
   const swatches = BUCKET_PRESET_COLORS.map(p=>`
     <button type="button" data-hex="${p.hex}" onclick="pickBucketColor('${p.hex}')" 
@@ -15861,17 +15957,28 @@ function openBucketSheet(contractId, bucketId) {
     </div>
     <div class="form-group">
       <label class="form-label">Rate label</label>
-      <input class="form-input" id="bk-rate" type="text" placeholder="e.g., 4% p.a." value="${b?.rate?.replace(/"/g,'&quot;')||''}">
+      <input class="form-input" id="bk-rate" type="text" placeholder="e.g., 10% p.a. boosted" value="${b?.rate?.replace(/"/g,'&quot;')||''}">
     </div>
-    <div class="form-row fr2" style="margin-bottom:14px">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Monthly (${sym(_homeBase())}) *</label>
-        <input class="form-input numpad-input" id="bk-monthly" type="number" step="100" min="0" placeholder="0" value="${b?.monthly||''}" inputmode="none">
+    <div class="form-group">
+      <label class="form-label">Priority rate % <span style="color:var(--text4);font-weight:400">— for fill order</span></label>
+      <input class="form-input numpad-input" id="bk-ratenum" type="number" step="0.1" min="0" placeholder="e.g., 10" value="${initRateNum}" inputmode="none">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${[10,5,6,3.5].map(r=>`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bk-ratenum').value=${r}">${r}%</button>`).join('')}
       </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Cap (${sym(_homeBase())}) — optional</label>
-        <input class="form-input numpad-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap" value="${b?.cap||''}" inputmode="none">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Allocation</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button type="button" id="bk-mode-pct" class="btn btn-sm ${initMode==='percent'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('percent')">% of target</button>
+        <button type="button" id="bk-mode-fix" class="btn btn-sm ${initMode==='fixed'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('fixed')">Fixed amount</button>
       </div>
+      <input type="hidden" id="bk-allocmode" value="${initMode}">
+      <input class="form-input numpad-input" id="bk-allocval" type="number" step="${initMode==='percent'?'1':'1000'}" min="0" placeholder="${initMode==='percent'?'e.g., 35 (%)':sym(_homeBase())+' amount'}" value="${initVal}" inputmode="none">
+      <div id="bk-alloc-hint" style="font-size:11px;color:var(--text4);margin-top:4px">${initMode==='percent'?'Share of the total contract target.':'Exact '+sym(_homeBase())+' amount for the whole contract.'}</div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Cap (${sym(_homeBase())}) — optional</label>
+      <input class="form-input numpad-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap — overflow when reached" value="${b?.cap||''}" inputmode="none">
     </div>
     <div class="form-group">
       <label class="form-label">Color</label>
@@ -15952,25 +16059,43 @@ function saveBucketDef() {
   if (!Array.isArray(c.bucketDefs)) c.bucketDefs = [];
   const name = document.getElementById('bk-name').value.trim();
   const rate = document.getElementById('bk-rate').value.trim();
-  const monthly = parseFloat(document.getElementById('bk-monthly').value)||0;
+  const rateNumRaw = (document.getElementById('bk-ratenum').value||'').trim();
+  let rateNum = rateNumRaw === '' ? null : (parseFloat(rateNumRaw)||0);
+  if (rateNum == null) { const m = rate.match(/(\d+(?:\.\d+)?)/); rateNum = m ? parseFloat(m[1]) : 0; } // fall back to label
+  const allocMode = document.getElementById('bk-allocmode').value === 'fixed' ? 'fixed' : 'percent';
+  const allocValue = parseFloat(document.getElementById('bk-allocval').value)||0;
   const capRaw = document.getElementById('bk-cap').value.trim();
   const cap = capRaw === '' ? null : (parseFloat(capRaw)||null);
   const color = document.getElementById('bk-color').value || '#2dd98a';
   if (!name) { showToast('Name is required'); return; }
-  if (monthly <= 0) { showToast('Monthly amount required'); return; }
+  if (allocMode === 'percent' && allocValue > 100) { showToast('Percent cannot exceed 100'); return; }
+  if (allocValue <= 0) { showToast('Allocation must be greater than 0'); return; }
   if (bid) {
-    // Edit existing
     const b = c.bucketDefs.find(x=>x.id===bid);
     if (!b) return;
-    b.name = name; b.rate = rate; b.monthly = monthly; b.cap = cap; b.color = color;
+    b.name = name; b.rate = rate; b.rateNum = rateNum; b.allocMode = allocMode; b.allocValue = allocValue; b.cap = cap; b.color = color;
   } else {
-    // Add new
-    c.bucketDefs.push({ id: 'bk_'+genId(), name, rate, monthly, cap, color });
+    c.bucketDefs.push({ id: 'bk_'+genId(), name, rate, rateNum, allocMode, allocValue, cap, color, monthly: 0 });
   }
   saveDBWithSync();
   closeSheet('gen');
   renderPlanning();
   showToast(bid?'Bucket updated':'Bucket added');
+}
+
+// Toggle the bucket allocation mode (% of target vs fixed amount) in the bucket sheet.
+function setBucketAllocMode(mode) {
+  const hid = document.getElementById('bk-allocmode');
+  if (hid) hid.value = mode;
+  const pct = document.getElementById('bk-mode-pct'), fix = document.getElementById('bk-mode-fix');
+  if (pct && fix) {
+    pct.className = 'btn btn-sm ' + (mode==='percent'?'btn-primary':'btn-ghost');
+    fix.className = 'btn btn-sm ' + (mode==='fixed'?'btn-primary':'btn-ghost');
+  }
+  const val = document.getElementById('bk-allocval'), hint = document.getElementById('bk-alloc-hint');
+  const homeSym = (typeof sym==='function') ? sym(_homeBase()) : '';
+  if (val) { val.step = mode==='percent'?'1':'1000'; val.placeholder = mode==='percent'?'e.g., 35 (%)':homeSym+' amount'; }
+  if (hint) hint.textContent = mode==='percent'?'Share of the total contract target.':'Exact '+homeSym+' amount for the whole contract.';
 }
 
 function deleteBucket(contractId, bucketId) {
@@ -16030,6 +16155,16 @@ function saveContractMonthly(contractId, val) {
   const c = (db.contracts||[]).find(x=>x.id===contractId);
   if (!c) return;
   c.monthlyGoal=parseInt(val)||c.monthlyGoal;
+  saveDBWithSync(); renderPlanning();
+}
+
+// Slider handler — sets the contract's TOTAL savings target (whole contract). Bucket allocations
+// (% of target) auto-recompute against this; the overall monthly pace is derived from it.
+function saveContractTarget(contractId, val) {
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c) return;
+  const v = parseFloat(val);
+  if (!isNaN(v)) c.targetAmount = Math.max(0, Math.round(v));
   saveDBWithSync(); renderPlanning();
 }
 
