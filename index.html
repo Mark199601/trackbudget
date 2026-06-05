@@ -13350,7 +13350,9 @@ function buildGoalProgress(dispCurr) {
     const elapsed = (new Date() - startDate) / (1000*60*60*24);
     if (totalDays > 0) timeProgress = Math.max(0, Math.min(100, (elapsed / totalDays * 100)));
   }
-  const onTrack = timeProgress === null || pct >= timeProgress - 5;
+  // On track only if savings keep pace with time: saved% must be at least the % of time elapsed.
+  // (Previously had a lenient 5-point buffer that mislabeled clearly-behind goals as "on track".)
+  const onTrack = timeProgress === null || pct >= timeProgress;
   const statusColor = onTrack ? 'var(--green)' : 'var(--amber)';
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
@@ -15280,15 +15282,19 @@ function renderContractTab() {
   const daysLeft = Math.max(0, totalDays - daysSince);
   const monthsElapsed = daysSince / 30.44;
   const totalMonths = totalDays / 30.44;
-  const monthly = active.monthlyGoal || 45000;
-  const safeGoal = active.targetAmount || 970000;
+  const safeGoal = active.targetAmount || 0;
   const goalCurr = active.goalCurrency || _homeBase();
+  // Monthly goal: use the saved value; if somehow unset, derive from goal pace (no hardcoded number).
+  const monthly = active.monthlyGoal || (totalMonths > 0 ? Math.round(safeGoal / totalMonths) : 0);
   const targetToday = monthly * monthsElapsed;
+  // ── Dynamic monthly-goal slider range ── fits BOTH the current monthly AND the pace needed to hit
+  // the goal (target ÷ months), with headroom. Currency/magnitude agnostic — never clamps the value.
+  const _paceMonthly = totalMonths > 0 ? safeGoal / totalMonths : monthly;
+  const _sliderAnchor = Math.max(monthly, _paceMonthly, 1);
+  const _sliderStep = Math.max(1, Math.pow(10, Math.floor(Math.log10(_sliderAnchor * 2)) - 2));
+  const _sliderMax = Math.max(_sliderStep, Math.ceil((_sliderAnchor * 2) / _sliderStep) * _sliderStep);
+  const _sliderVal = Math.min(_sliderMax, Math.max(0, monthly));
   const isEnded = now > endDate;
-
-  // Streak calculation
-  const streak = active.savingsStreak || 0;
-  const checkinHistory = active.checkinHistory || [];
 
   // Monthly check-in prompt
   const thisMonth = currMonthKey();
@@ -15445,12 +15451,6 @@ function renderContractTab() {
   // Runway calculator
   const runwayHTML = renderRunwayCalc(active);
 
-  // Timeline (horizontal scrollable)
-  const timelinePct = Math.min(100, (daysSince/totalDays)*100);
-  const timelineHTML = '';
-
-  const streakHTML = '';
-
   return `<div class="page-pad">
     ${checkinPromptHTML}
 
@@ -15465,33 +15465,38 @@ function renderContractTab() {
       </div>
     </div>
 
-    ${streakHTML}
-
-    <div class="metric-grid g4" style="margin-bottom:14px">
+    <div class="metric-grid g3" style="margin-bottom:14px">
       <div class="metric-card"><div class="metric-label">Day</div><div class="metric-value" style="font-size:22px">${daysSince}</div><div class="metric-sub">of ${totalDays}</div></div>
       <div class="metric-card"><div class="metric-label">Days Left</div><div class="metric-value" style="font-size:22px">${daysLeft}</div><div class="metric-sub">${Math.round(totalMonths-monthsElapsed)}mo left</div></div>
       <div class="metric-card"><div class="metric-label">Months</div><div class="metric-value" style="font-size:22px">${monthsElapsed.toFixed(1)}</div><div class="metric-sub">of ${Math.round(totalMonths)}</div></div>
-      <div class="metric-card"><div class="metric-label">Target Today</div><div class="metric-value" style="font-size:14px">${fmt(Math.round(targetToday),goalCurr)}</div><div class="metric-sub">at ${fmt(monthly,goalCurr)}/mo</div></div>
     </div>
 
-    ${timelineHTML}
-
     <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600">Cumulative target vs actual</div>
-        <div style="font-size:12px;color:var(--text3)">${overallPct.toFixed(1)}% of goal</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Progress to goal</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Marker = target pace today (${targetPct.toFixed(0)}%)</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700">${overallPct.toFixed(1)}%</div>
+          <div style="font-size:11px;color:${gapColor};font-weight:500">${gapLabel}</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Target pace</div>
-      <div style="height:8px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px">
-        <div style="height:100%;border-radius:var(--r-sm);background:var(--green);width:${targetPct.toFixed(1)}%"></div>
+      <div style="height:10px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px;position:relative">
+        <div style="height:100%;background:var(--accent);width:${overallPct.toFixed(1)}%;transition:width 0.4s"></div>
+        <div style="position:absolute;left:${targetPct.toFixed(1)}%;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:0.5" title="Target pace today"></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Actual balance</div>
-      <div style="height:8px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
-        <div style="height:100%;border-radius:var(--r-sm);background:var(--accent);width:${overallPct.toFixed(1)}%"></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
+        <span style="color:var(--text2)">Saved</span><span style="font-family:var(--mono);font-weight:500">${fmt(Math.round(totalActual),goalCurr)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
-        <span>Target today: <span style="font-family:var(--mono);color:var(--text)">${fmt(Math.round(targetToday),goalCurr)}</span></span>
-        <span>Goal: <span style="font-family:var(--mono);color:var(--text)">${fmt(safeGoal,goalCurr)}</span></span>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
+        <span style="color:var(--text2)">Target today</span><span style="font-family:var(--mono)">${fmt(Math.round(targetToday),goalCurr)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
+        <span style="color:var(--text2)">Still needed</span><span style="font-family:var(--mono)">${fmt(Math.round(toGoal),goalCurr)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;padding:7px 0 2px;border-top:1px solid var(--border)">
+        <span>Goal</span><span style="font-family:var(--mono);color:var(--accent)">${fmt(safeGoal,goalCurr)}</span>
       </div>
     </div>
 
@@ -15500,26 +15505,11 @@ function renderContractTab() {
         <div style="font-size:13px;font-weight:600">Monthly savings goal</div>
         <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent)">${fmt(monthly,goalCurr)}/mo</div>
       </div>
-      <input type="range" min="30000" max="80000" step="1000" value="${monthly}" style="width:100%;margin-bottom:8px" oninput="saveContractMonthly('${activeId}',this.value)">
+      <input type="range" min="0" max="${_sliderMax}" step="${_sliderStep}" value="${_sliderVal}" style="width:100%;margin-bottom:8px" oninput="saveContractMonthly('${activeId}',this.value)">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
-        <span>${fmt(30000,goalCurr)}</span>
+        <span>${fmt(0,goalCurr)}</span>
         <span>Proj. total: <strong style="color:var(--text)">${fmt(monthly*Math.round(totalMonths),goalCurr)}</strong></span>
-        <span>${fmt(80000,goalCurr)}</span>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="color:var(--text2)">Total actual balance</span><span style="font-family:var(--mono)">${fmt(Math.round(totalActual),goalCurr)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="color:var(--text2)">Pace status</span><span style="color:${gapColor};font-weight:500">${gapLabel}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="color:var(--text2)">Still needed</span><span style="font-family:var(--mono)">${fmt(Math.round(toGoal),goalCurr)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;padding:8px 0">
-        <span>% of goal reached</span><span style="color:var(--accent)">${overallPct.toFixed(1)}%</span>
+        <span>${fmt(_sliderMax,goalCurr)}</span>
       </div>
     </div>
 
@@ -15608,7 +15598,8 @@ function renderRunwayCalc(contract) {
   // PLS #124: 6-month average monthly expense (shared with Cash Runway for consistency).
   const avgMonthlyExpense = avgMonthlyExpense6mo();
 
-  const runwayMonths = avgMonthlyExpense > 0 ? Math.floor(toPhp(totalActual, goalCurr) / avgMonthlyExpense) : null;
+  // computeContractActual already returns home-base; avgMonthlyExpense is home-base too — divide directly.
+  const runwayMonths = avgMonthlyExpense > 0 ? Math.floor(totalActual / avgMonthlyExpense) : null;
 
   return `<div class="card" style="margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">🛬 Goal Runway</div>
@@ -17583,7 +17574,8 @@ function showArchivedCatsPage() {
   const rows = all.map(c => {
     const n = linkedCount(c);
     const restore = c.isParent ? `toggleArchiveCat('${c.id}','${c.forType}')` : `toggleArchiveSubCat('${c.parentId}','${c.id}','${c.forType}')`;
-    const subtitle = (c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`) + (n>0 ? ` · ${n} txn${n===1?'':'s'}` : '');
+    const _subBase = c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`;
+    const subtitle = _subBase + (n>0 ? ` · <span style="color:var(--accent);text-decoration:underline;cursor:pointer" onclick="showCatLinkedTxs('${c.id}',${c.isParent?'true':'false'},'${c.parentId||''}','${c.forType}')">${n} txn${n===1?'':'s'} →</span>` : '');
     const delBtn = n === 0
       ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="confirmDeleteArchivedCat('${c.id}','${c.forType}',${c.isParent ? 'true' : 'false'},'${c.parentId||''}')">🗑 Delete</button>`
       : '';
@@ -17610,6 +17602,38 @@ function showArchivedCatsPage() {
 // ACTIVE transaction links to the category. Trashed (archived) transactions do NOT block deletion —
 // they are already out of the ledger; if one is later restored it shows as Uncategorized. If any
 // active tx is linked, the sheet shows Restore only. doDeleteArchivedCat re-checks defensively.
+// ── PERSONAL LOGIC SET #69 ── Tapping a category's "· N txns" link lists the ACTIVE transactions
+// keeping it alive, each tappable to open its detail (where it can be deleted/recategorized).
+// Useful for auto-only system categories like sc-remittance, whose txns aren't obvious otherwise.
+function showCatLinkedTxs(catId, isParent, parentId, forType) {
+  const allTx = db.transactions || [];
+  let linked;
+  if (isParent) {
+    const cat = db.categories[forType].find(c=>c.id===catId);
+    const subIds = (cat?.subcats||[]).map(s=>s.id);
+    linked = allTx.filter(t => t.categoryId === catId || subIds.includes(t.categoryId) || subIds.includes(t.subCatId));
+  } else {
+    linked = allTx.filter(t => t.categoryId === catId || t.subCatId === catId);
+  }
+  linked.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if (linked.length === 0) { showArchivedCatsPage(); return; }
+  const rows = linked.map(t => {
+    const amtD = txAmountDisplay(t);
+    const label = t.notes || (t.type ? t.type.charAt(0).toUpperCase()+t.type.slice(1) : 'Transaction');
+    return `<div onclick="closeDlg();setTimeout(()=>openTxDetail('${t.id}'),60)" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(label)}</div>
+        <div style="font-size:11px;color:var(--text4)">${fmtDFull(t.date)}${t.time?' · '+t.time:''}</div>
+      </div>
+      <span class="${amtD.cls}" style="font-family:var(--mono);font-size:13px;font-weight:600;flex-shrink:0">${amtD.str}</span>
+    </div>`;
+  }).join('');
+  openDlg('Linked transactions',
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">Tap a transaction to open it. Delete or recategorize it to free up this category.</div><div style="max-height:55vh;overflow-y:auto">${rows}</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="showArchivedCatsPage()">← Back</button>`
+  );
+}
+
 function confirmDeleteArchivedCat(catId, forType, isParent, parentId) {
   let label = 'this category';
   if (isParent) {
