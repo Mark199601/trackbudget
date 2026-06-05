@@ -714,9 +714,14 @@ option{background:var(--bg3);color:var(--text)}
 .rcpt-stamp{margin-top:8px;font-size:10px;color:var(--text4);font-family:var(--mono)}
 
 @media print{
+  /* Isolate the receipt sheet so a long receipt flows across pages instead of being
+     clipped to a single viewport page (the old position:fixed could not paginate). */
+  body > *{display:none!important}
+  #gen-sheet{display:block!important;position:static!important;max-height:none!important;height:auto!important;overflow:visible!important;transform:none!important;box-shadow:none!important;width:auto!important;border:none!important;background:#fff!important}
   body *{visibility:hidden!important}
   .receipt-print, .receipt-print *{visibility:visible!important}
-  .receipt-print{position:fixed;top:0;left:0;right:0;bottom:0;margin:0;padding:32px 28px;max-width:100%;border:none;border-radius:0;background:#fff!important;color:#000!important;box-shadow:none}
+  #gen-body{overflow:visible!important;max-height:none!important;padding:0!important}
+  .receipt-print{position:static!important;margin:0!important;padding:32px 28px;max-width:100%;border:none;border-radius:0;background:#fff!important;color:#000!important;box-shadow:none}
   .receipt-print::before{background:#000!important}
   .rcpt-brand-name,.rcpt-row-value,.rcpt-amount{color:#000!important}
   .rcpt-brand-sub,.rcpt-no,.rcpt-no-label,.rcpt-row-label,.rcpt-section-title,.rcpt-cat,.rcpt-footer,.rcpt-stamp{color:#555!important}
@@ -3285,6 +3290,9 @@ function renderDashboard() {
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
+    // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
+    // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
+    if (t.isAutoForex && t.parentId) return false;
     if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
@@ -6325,6 +6333,9 @@ function renderTxLog() {
     // tx log — shown nested under their parent settlement row. Counted ONCE in monthly totals
     // (PLS #47) but skipped from balance (parent already covered cash).
     // EXCEPTION: write-offs (with writeOffReason) are discrete events, shown standalone.
+    // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
+    // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
+    if (t.isAutoForex && t.parentId) return false;
     if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
@@ -9096,6 +9107,9 @@ function openAcctDetail(acctId) {
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
+    // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
+    // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
+    if (t.isAutoForex && t.parentId) return false;
     if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     return true;
   }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
@@ -12137,9 +12151,18 @@ function openCalDay(dateStr) {
         </div>
       </div>
       ${dayTxs.map(t => {
-        const catName = t.type === 'transfer' ? 'Transfer' :
-                        t.type === 'income' ? findCat(t.catId, 'income') :
-                        findCat(t.catId, 'expense');
+        // ── PERSONAL LOGIC SET #31 ── Hide auto-generated children from the day list (consistent
+        // with the main tx logs) — they're represented by their parent. Day income/expense totals
+        // above still include forex gain/loss (PLS #47); only the standalone rows are suppressed.
+        if (t.isAutoForex) return '';
+        if (t.isAutoFee && t.parentId) return '';
+        if (t.isLoanPayment && !t.isBatchSettlement) return '';
+        if (t.isAutoReimb && !t.isBatchReimbSettlement) return '';
+        if (t.isFeeReimbursable) return '';
+        if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return '';
+        // Category name via the canonical resolver (handles subcategories + 3-tier fallback).
+        // Previously looked up the wrong tx field (catId instead of categoryId), so it was always blank.
+        const catName = t.type === 'transfer' ? 'Transfer' : txCategoryDisplay(t).name;
         const color = t.type === 'income' ? 'var(--green)' : t.type === 'transfer' ? 'var(--text2)' : 'var(--red)';
         const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-';
         return `<div class="card" style="margin-bottom:8px;padding:10px">
@@ -17545,21 +17568,89 @@ function showArchivedCatsPage() {
     return;
   }
 
-  const rows = all.map(c => `
+  // Count linked transactions (active + archived) per category. Permanent delete is offered
+  // ONLY when zero are linked; otherwise just Restore (deleting would orphan those txs).
+  const allTx = [...(db.transactions||[]), ...(db.archivedTransactions||[])];
+  const linkedCount = (c) => {
+    if (c.isParent) {
+      const subIds = (c.subcats||[]).map(s=>s.id);
+      return allTx.filter(t => t.categoryId === c.id || subIds.includes(t.categoryId) || subIds.includes(t.subCatId)).length;
+    }
+    return allTx.filter(t => t.categoryId === c.id || t.subCatId === c.id).length;
+  };
+
+  const rows = all.map(c => {
+    const n = linkedCount(c);
+    const restore = c.isParent ? `toggleArchiveCat('${c.id}','${c.forType}')` : `toggleArchiveSubCat('${c.parentId}','${c.id}','${c.forType}')`;
+    const subtitle = (c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`) + (n>0 ? ` · ${n} txn${n===1?'':'s'}` : '');
+    const delBtn = n === 0
+      ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="confirmDeleteArchivedCat('${c.id}','${c.forType}',${c.isParent ? 'true' : 'false'},'${c.parentId||''}')">🗑 Delete</button>`
+      : '';
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
+      <div style="min-width:0;flex:1">
         <div style="font-size:13px;font-weight:500">${c.icon||''} ${c.name}</div>
-        <div style="font-size:11px;color:var(--text4)">${c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`}</div>
+        <div style="font-size:11px;color:var(--text4)">${subtitle}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="${c.isParent ? `toggleArchiveCat('${c.id}','${c.forType}')` : `toggleArchiveSubCat('${c.parentId}','${c.id}','${c.forType}')`};closeDlg()">
-        ↩ Restore
-      </button>
-    </div>`).join('');
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        ${delBtn}
+        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="${restore};closeDlg()">↩ Restore</button>
+      </div>
+    </div>`;
+  }).join('');
 
   openDlg('Archived Categories',
     `<div style="max-height:60vh;overflow-y:auto">${rows}</div>`,
     '<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>'
   );
+}
+
+// ── PERSONAL LOGIC SET #69 ── Permanent delete for archived categories is offered ONLY when
+// no transaction (active or archived) links to the category. If any tx is linked, the archived
+// sheet shows Restore only — permanent delete would orphan those transactions. doDeleteArchivedCat
+// re-checks the count defensively before removing, in case the data changed since render.
+function confirmDeleteArchivedCat(catId, forType, isParent, parentId) {
+  let label = 'this category';
+  if (isParent) {
+    const cat = db.categories[forType].find(c=>c.id===catId);
+    if (cat) label = `${cat.icon||''} ${cat.name}`;
+  } else {
+    const cat = db.categories[forType].find(c=>c.id===parentId);
+    const sc = cat?.subcats?.find(s=>s.id===catId);
+    if (sc) label = `${sc.icon||''} ${sc.name}`;
+  }
+  openDlg('Delete permanently?',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.6">Permanently delete <strong>${label}</strong>? This cannot be undone.<br><br>No transactions use this category, so nothing else is affected.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="showArchivedCatsPage()">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="doDeleteArchivedCat('${catId}','${forType}',${isParent ? 'true' : 'false'},'${parentId||''}')">Delete</button>`
+  );
+}
+
+function doDeleteArchivedCat(catId, forType, isParent, parentId) {
+  // Defensive re-check — never permanently delete if any tx (active or archived) still links here.
+  const allTx = [...(db.transactions||[]), ...(db.archivedTransactions||[])];
+  let n;
+  if (isParent) {
+    const cat = db.categories[forType].find(c=>c.id===catId);
+    const subIds = (cat?.subcats||[]).map(s=>s.id);
+    n = allTx.filter(t => t.categoryId === catId || subIds.includes(t.categoryId) || subIds.includes(t.subCatId)).length;
+  } else {
+    n = allTx.filter(t => t.categoryId === catId || t.subCatId === catId).length;
+  }
+  if (n > 0) { showToast('Cannot delete — transactions are linked'); showArchivedCatsPage(); return; }
+  if (isParent) {
+    const idx = db.categories[forType].findIndex(c=>c.id===catId);
+    if (idx >= 0) db.categories[forType].splice(idx, 1);
+  } else {
+    const cat = db.categories[forType].find(c=>c.id===parentId);
+    if (cat && cat.subcats) {
+      const idx = cat.subcats.findIndex(s=>s.id===catId);
+      if (idx >= 0) cat.subcats.splice(idx, 1);
+    }
+  }
+  saveDBWithSync();
+  showToast('Category deleted permanently');
+  showArchivedCatsPage();
 }
 
 function toggleArchiveCat(catId, forType) {
@@ -18292,21 +18383,20 @@ function exportCSV() {
     const findAcct = (id) => accts.find(a => a.id === id)?.name || '';
     const findCat = (id, type) => (cats[type] || []).find(c => c.id === id)?.name || '';
 
-    // Header row
-    const header = ['Date','Type','Category','Account','Amount','Currency','Amount (' + dc + ')','Notes','Person','To Account'];
+    // Header row — normalized amount column uses home base (matches the toPhp value below,
+    // and is consistent with the XLSX export's "{home} Equiv" column).
+    const header = ['Date','Type','Category','Account','Amount','Currency','Amount (' + _homeBase() + ')','Notes','Person','To Account'];
     const rows = [header];
 
     // Sort by date desc
     const txs = (db.transactions || []).slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
     txs.forEach(tx => {
-      const catName = tx.type === 'transfer' ? 'Transfer' :
-                      tx.type === 'income' ? findCat(tx.catId, 'income') :
-                      findCat(tx.catId, 'expense');
+      const catName = tx.type === 'transfer' ? 'Transfer' : txCategoryDisplay(tx).name;
       rows.push([
         tx.date || '',
         tx.type || '',
         catName,
-        findAcct(tx.acctId),
+        findAcct(tx.accountId),
         tx.amount || 0,
         tx.currency || dc,
         ((tx.type === 'remittance' && tx.toAccountId)
@@ -18315,7 +18405,7 @@ function exportCSV() {
         ).toFixed(2),
         tx.notes || '',
         tx.personName || '',
-        tx.toAcctId ? findAcct(tx.toAcctId) : ''
+        tx.toAccountId ? findAcct(tx.toAccountId) : ''
       ]);
     });
 
@@ -18753,7 +18843,7 @@ function renderBankReconBody() {
     cutoff.setDate(cutoff.getDate() - UX_RECENT_TX_DAYS);
     const cutoffStr = cutoff.toISOString().slice(0,10);
     const recentTxs = (db.transactions || [])
-      .filter(t => !t.archived && (t.accountId === s.acctId || t.fromAccountId === s.acctId || t.toAccountId === s.acctId) && t.date >= cutoffStr && t.date <= s.asOfDate)
+      .filter(t => !t.archived && !t.isAutoForex && (t.accountId === s.acctId || t.fromAccountId === s.acctId || t.toAccountId === s.acctId) && t.date >= cutoffStr && t.date <= s.asOfDate)
       .sort((a,b) => (b.date||'').localeCompare(a.date||''))
       .slice(0, 10);
 
