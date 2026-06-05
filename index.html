@@ -1796,7 +1796,6 @@ let db = (() => {
         buckets: plan.buckets || {},
         bucketLinks: plan.bucketLinks || {},
         milestones: [],
-        savingsStreak: 0,
         lastCheckin: null,
         checkinHistory: [],
         createdAt: migrationDate,
@@ -15346,10 +15345,11 @@ function renderContractTab() {
     active.bucketDefs = LEGACY_BUCKET_DEFS.map(b => ({...b}));
     saveDBWithSync();
   }
-  // Sort: alphabetical by default; preserve manual order if user dragged
+  // Sort: by interest rate (highest first) by default; preserve manual order if the user dragged.
+  // New buckets therefore auto-slot into the right place by rate.
   const BUCKET_DEFS = active.bucketManualOrder
     ? [...active.bucketDefs]
-    : [...active.bucketDefs].sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
+    : [...active.bucketDefs].sort((a,b) => (_bucketRateNum(b) - _bucketRateNum(a)) || a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
 
   const getBucketBalance = (b) => {
     const links = active.bucketLinks || {};
@@ -15363,8 +15363,9 @@ function renderContractTab() {
 
   // Compute each bucket's TARGET via the rate-greedy waterfall over the contract's total target.
   const _alloc = computeBucketAllocation(safeGoal, active.bucketDefs, totalMonths);
-  const _allocSum = Object.values(_alloc.targets).reduce((s,v)=>s+v,0);
-  const _unalloc = _alloc.unallocated;
+  const _allocSum = _alloc.allocSum;
+  const _allocPct = safeGoal > 0 ? (_allocSum / safeGoal) * 100 : 0;
+  const _over = _allocSum - safeGoal;   // >0 over-allocated, <0 under
 
   const allAccounts = db.accounts.filter(a=>!a.archived);
   const activeInvs = (db.investments||[]).filter(i=>!i.archived && i.status!=='sold');
@@ -15374,19 +15375,23 @@ function renderContractTab() {
     const val = getBucketBalance(b);
     const isLinked = linked.length > 0;
     const af = _bucketAllocFields(b, totalMonths);
-    const target = _alloc.targets[b.id] || 0;            // waterfall allocation of the total target
+    const target = _alloc.targets[b.id] || 0;            // this bucket's allocation = its ceiling
     const perMonth = totalMonths > 0 ? target / totalMonths : 0;
     const expectedNow = perMonth * monthsElapsed;        // linear pace for this bucket
-    const isFull = b.cap && b.cap > 0 && val >= b.cap * 0.999;
+    const isFull = target > 0 && val >= target * 0.999;  // reached its allocation
     const diff = val - expectedNow;
-    const bPct = isFull ? 100 : (target > 0 ? Math.min(100, (val/target)*100) : 0);
+    const bPct = target > 0 ? Math.min(100, (val/target)*100) : 0;
     const statusTxt = isFull ? '✓ Full'
       : (expectedNow > 0 ? (diff >= 0 ? `+${fmt(Math.round(diff),goalCurr)} ahead` : `${fmt(Math.round(Math.abs(diff)),goalCurr)} behind`) : '—');
     const statusColor = isFull ? 'var(--green)' : (diff >= 0 ? 'var(--green)' : 'var(--red)');
     const gaugeColor = isFull ? 'var(--green)' : (expectedNow > 0 ? (diff >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)');
     const rateLabel = b.rate || (af.rateNum ? af.rateNum + '% p.a.' : '—');
-    const allocText = af.mode === 'percent' ? `${(+af.value.toFixed(1))}% of target` : 'fixed';
-    const subLine = `${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo${b.cap?` · cap ${fmt(b.cap,goalCurr)}`:''}`;
+    // Show both the % and ₱ equivalent regardless of how it was entered (fixed ⇄ percent).
+    const sharePct = safeGoal > 0 ? (target / safeGoal) * 100 : 0;
+    const allocText = af.mode === 'percent'
+      ? `${(+sharePct.toFixed(1))}% (${fmt(Math.round(target),goalCurr)})`
+      : `${fmt(Math.round(target),goalCurr)} (${(+sharePct.toFixed(1))}%)`;
+    const subLine = `${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo`;
     const linkedNames = linked.map(id=>{
       const a=db.accounts.find(x=>x.id===id); if(a) return _esc(a.name);
       const iv=(db.investments||[]).find(x=>x.id===id); if(iv) return _esc(iv.name);
@@ -15544,10 +15549,12 @@ function renderContractTab() {
       </div>
     </div>
     ${BUCKET_DEFS.length>0?`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px;font-size:11px">
-      <span style="color:var(--text3)">Allocated <span style="font-family:var(--mono);color:var(--text)">${fmt(Math.round(_allocSum),goalCurr)}</span> / target <span style="font-family:var(--mono)">${fmt(Math.round(safeGoal),goalCurr)}</span></span>
-      ${_unalloc>0.5
-        ? `<span style="color:var(--amber);font-weight:500">${fmt(Math.round(_unalloc),goalCurr)} unallocated</span>`
-        : `<span style="color:var(--green);font-weight:500">✓ fully allocated</span>`}
+      <span style="color:var(--text3)">Allocated <span style="font-family:var(--mono);color:var(--text)">${fmt(Math.round(_allocSum),goalCurr)}</span> (${(+_allocPct.toFixed(0))}%) / <span style="font-family:var(--mono)">${fmt(Math.round(safeGoal),goalCurr)}</span></span>
+      ${Math.abs(_over) <= Math.max(1, safeGoal*0.005)
+        ? `<span style="color:var(--green);font-weight:500">✓ 100% allocated</span>`
+        : (_over > 0
+          ? `<span style="color:var(--amber);font-weight:500">Over by ${fmt(Math.round(_over),goalCurr)}</span>`
+          : `<span style="color:var(--text3);font-weight:500">${fmt(Math.round(-_over),goalCurr)} left</span>`)}
     </div>`:''}
     ${BUCKET_DEFS.length===0
       ? `<div class="card" style="text-align:center;padding:24px 16px;margin-bottom:14px">
@@ -15603,36 +15610,20 @@ function _linkedHomeBalance(id) {
   }
   return 0;
 }
-// Rate-greedy waterfall allocation. Returns { targets:{id:amount}, unallocated, orderIds:[by rate desc] }.
+// Allocation = each bucket claims a share of the total target: a fixed home-base amount OR a % of
+// the total (Option A — % is of the WHOLE target). That share is also the bucket's ceiling — there
+// is no separate cap and no overflow. The reconciliation strip flags over/under vs 100%.
+// Returns { targets:{id:amount}, allocSum }.
 function computeBucketAllocation(totalTarget, bucketDefs, totalMonths) {
-  const list = (bucketDefs || []).map((b, i) => {
-    const a = _bucketAllocFields(b, totalMonths);
-    return { id: b.id, rateNum: a.rateNum, mode: a.mode, value: a.value,
-             cap: (b.cap && b.cap > 0) ? b.cap : Infinity, _i: i };
-  });
-  list.sort((a, b) => (b.rateNum - a.rateNum) || (a._i - b._i)); // rate desc, stable
-  let remaining = Math.max(0, totalTarget || 0);
   const targets = {};
-  // Pass 1 — each bucket takes its desired share, capped, limited by what's left.
-  for (const b of list) {
-    const desired = b.mode === 'percent' ? (b.value / 100) * (totalTarget || 0) : b.value;
-    const take = Math.min(Math.min(Math.max(0, desired), b.cap), remaining);
-    targets[b.id] = take;
-    remaining -= take;
+  let allocSum = 0;
+  for (const b of (bucketDefs || [])) {
+    const af = _bucketAllocFields(b, totalMonths);
+    const t = Math.max(0, af.mode === 'percent' ? (af.value / 100) * (totalTarget || 0) : af.value);
+    targets[b.id] = t;
+    allocSum += t;
   }
-  // Pass 2 — overflow: leftover cascades into buckets with remaining cap room, highest rate first.
-  if (remaining > 0.5) {
-    for (const b of list) {
-      const room = b.cap - targets[b.id];
-      if (room > 0) {
-        const add = Math.min(room, remaining);
-        targets[b.id] += add;
-        remaining -= add;
-        if (remaining <= 0.5) break;
-      }
-    }
-  }
-  return { targets, unallocated: Math.max(0, remaining), orderIds: list.map(b => b.id) };
+  return { targets, allocSum };
 }
 
 function computeContractActual(contract) {
@@ -15752,14 +15743,9 @@ function doCheckin(contractId, hit) {
   contract.lastCheckin = mk;
   if (!contract.checkinHistory) contract.checkinHistory = [];
   contract.checkinHistory.push({ month: mk, hit, ts: Date.now() });
-  if (hit) {
-    contract.savingsStreak = (contract.savingsStreak||0) + 1;
-  } else {
-    contract.savingsStreak = 0;
-  }
   saveDB();
   renderPlanning();
-  showToast(hit ? `🔥 Streak: ${contract.savingsStreak} ${aiPlural(contract.savingsStreak,'month')}!` : 'Keep going next month! 💪');
+  showToast(hit ? '✅ Logged — nice work!' : 'Keep going next month! 💪');
 }
 
 function openContractWizard() {
@@ -15838,7 +15824,6 @@ function saveContractWizard() {
       { label:`Month ${Math.round(totalMonths/2)}`, date: (() => { const d=new Date(startDate+'T00:00:00'); d.setMonth(d.getMonth()+Math.round(totalMonths/2)); return d.toISOString().split('T')[0]; })(), note:'Midpoint review' },
       { label:`Month ${totalMonths} — end`, date:endDate, note:'Final deployment' },
     ],
-    savingsStreak: 0,
     lastCheckin: null,
     checkinHistory: [],
     createdAt: today(),
@@ -15974,11 +15959,7 @@ function openBucketSheet(contractId, bucketId) {
       </div>
       <input type="hidden" id="bk-allocmode" value="${initMode}">
       <input class="form-input numpad-input" id="bk-allocval" type="number" step="${initMode==='percent'?'1':'1000'}" min="0" placeholder="${initMode==='percent'?'e.g., 35 (%)':sym(_homeBase())+' amount'}" value="${initVal}" inputmode="none">
-      <div id="bk-alloc-hint" style="font-size:11px;color:var(--text4);margin-top:4px">${initMode==='percent'?'Share of the total contract target.':'Exact '+sym(_homeBase())+' amount for the whole contract.'}</div>
-    </div>
-    <div class="form-group" style="margin-bottom:14px">
-      <label class="form-label">Cap (${sym(_homeBase())}) — optional</label>
-      <input class="form-input numpad-input" id="bk-cap" type="number" step="1000" min="0" placeholder="No cap — overflow when reached" value="${b?.cap||''}" inputmode="none">
+      <div id="bk-alloc-hint" style="font-size:11px;color:var(--text4);margin-top:4px">${initMode==='percent'?'Share of the total contract target — this is also the bucket ceiling.':'Exact '+sym(_homeBase())+' amount for the whole contract — this is also the bucket ceiling.'}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Color</label>
@@ -16064,8 +16045,7 @@ function saveBucketDef() {
   if (rateNum == null) { const m = rate.match(/(\d+(?:\.\d+)?)/); rateNum = m ? parseFloat(m[1]) : 0; } // fall back to label
   const allocMode = document.getElementById('bk-allocmode').value === 'fixed' ? 'fixed' : 'percent';
   const allocValue = parseFloat(document.getElementById('bk-allocval').value)||0;
-  const capRaw = document.getElementById('bk-cap').value.trim();
-  const cap = capRaw === '' ? null : (parseFloat(capRaw)||null);
+  const cap = null; // no separate cap — the allocation (fixed amount or % share) is the ceiling
   const color = document.getElementById('bk-color').value || '#2dd98a';
   if (!name) { showToast('Name is required'); return; }
   if (allocMode === 'percent' && allocValue > 100) { showToast('Percent cannot exceed 100'); return; }
