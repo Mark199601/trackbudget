@@ -15391,7 +15391,17 @@ function renderContractTab() {
     const allocText = af.mode === 'percent'
       ? `${(+sharePct.toFixed(1))}% (${fmt(Math.round(target),goalCurr)})`
       : `${fmt(Math.round(target),goalCurr)} (${(+sharePct.toFixed(1))}%)`;
-    const subLine = `${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo`;
+    const riskLvl = _bucketRisk(b);
+    const riskBadge = riskLvl==='low' ? '🟢' : riskLvl==='high' ? '🔴' : '🟡';
+    const subLine = `${riskBadge} ${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo`;
+    // Inline % slider (edit mode, % buckets only) — dragging rebalances the other % buckets to 100%.
+    const pctSlider = (editMode && af.mode==='percent') ? `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <input type="range" min="0" max="100" step="0.5" value="${(+(af.value||0).toFixed(1))}" style="flex:1"
+          oninput="this.nextElementSibling.textContent=(+parseFloat(this.value).toFixed(1))+'%'"
+          onchange="adjustBucketPct('${activeId}','${b.id}',this.value)">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--accent);min-width:46px;text-align:right">${(+(af.value||0).toFixed(1))}%</span>
+      </div>` : '';
     const linkedNames = linked.map(id=>{
       const a=db.accounts.find(x=>x.id===id); if(a) return _esc(a.name);
       const iv=(db.investments||[]).find(x=>x.id===id); if(iv) return _esc(iv.name);
@@ -15434,6 +15444,7 @@ function renderContractTab() {
       <div style="margin-bottom:8px;height:4px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden">
         <div style="height:100%;border-radius:var(--r-sm);background:${gaugeColor};width:${bPct.toFixed(1)}%;transition:width 0.4s"></div>
       </div>
+      ${pctSlider}
       ${isLinked
         ?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Linked: <span style="color:var(--accent)">${linkedNames}</span></div>`
         :`<div style="margin-bottom:8px"><input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="${sym(_homeBase())} manual balance" style="font-size:13px;padding:8px 10px"
@@ -15545,6 +15556,7 @@ function renderContractTab() {
       <div style="display:flex;gap:6px">
         ${(window._bucketEditMode===activeId && active.bucketManualOrder)?`<button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="resortBucketsAZ('${activeId}')" title="Re-sort alphabetically">A→Z</button>`:''}
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="openBucketSheet('${activeId}',null)">+ Add</button>
+        ${window._bucketEditMode===activeId?`<button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;color:var(--accent)" onclick="autoBalanceBuckets('${activeId}')" title="Auto-distribute % by risk &amp; rate">⚖️ Balance</button>`:''}
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px;${window._bucketEditMode===activeId?'color:var(--accent)':''}" onclick="toggleBucketEditMode('${activeId}')">${window._bucketEditMode===activeId?'Done':'Edit list'}</button>
       </div>
     </div>
@@ -15927,6 +15939,7 @@ function openBucketSheet(contractId, bucketId) {
   const initMode = (b && (b.allocMode==='percent'||b.allocMode==='fixed')) ? b.allocMode : (b ? _af.mode : 'percent');
   const initVal = (b && typeof b.allocValue==='number') ? b.allocValue : (b ? (initMode==='percent'?'':Math.round(_af.value)) : '');
   const initRateNum = (b && typeof b.rateNum==='number') ? b.rateNum : (b ? (_af.rateNum||'') : '');
+  const initRisk = (b && (b.risk==='low'||b.risk==='medium'||b.risk==='high')) ? b.risk : 'medium';
   const initColor = b?.color || BUCKET_PRESET_COLORS[0].hex;
   const swatches = BUCKET_PRESET_COLORS.map(p=>`
     <button type="button" data-hex="${p.hex}" onclick="pickBucketColor('${p.hex}')" 
@@ -15941,15 +15954,21 @@ function openBucketSheet(contractId, bucketId) {
       <input class="form-input" id="bk-name" type="text" placeholder="e.g., High-Yield Savings" value="${escapeAttr(b?.name||'')}">
     </div>
     <div class="form-group">
-      <label class="form-label">Rate label</label>
-      <input class="form-input" id="bk-rate" type="text" placeholder="e.g., 10% p.a. boosted" value="${b?.rate?.replace(/"/g,'&quot;')||''}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Priority rate % <span style="color:var(--text4);font-weight:400">— for fill order</span></label>
+      <label class="form-label">Annual rate % <span style="color:var(--text4);font-weight:400">— drives label & auto-balance weight</span></label>
       <input class="form-input numpad-input" id="bk-ratenum" type="number" step="0.1" min="0" placeholder="e.g., 10" value="${initRateNum}" inputmode="none">
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        ${[10,5,6,3.5].map(r=>`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bk-ratenum').value=${r}">${r}%</button>`).join('')}
+        ${[10,6,5,3.5].map(r=>`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bk-ratenum').value=${r}">${r}%</button>`).join('')}
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Risk level <span style="color:var(--text4);font-weight:400">— conservative auto-balance gives less to riskier buckets</span></label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="bk-risk-low" class="btn btn-sm ${initRisk==='low'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketRisk('low')">🟢 Low</button>
+        <button type="button" id="bk-risk-medium" class="btn btn-sm ${initRisk==='medium'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketRisk('medium')">🟡 Medium</button>
+        <button type="button" id="bk-risk-high" class="btn btn-sm ${initRisk==='high'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketRisk('high')">🔴 High</button>
+      </div>
+      <input type="hidden" id="bk-risk" value="${initRisk}">
+      <div style="font-size:11px;color:var(--text4);margin-top:4px">Banks / insured savings = Low · REITs / bonds = Medium · crypto / stocks = High.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Allocation</label>
@@ -16039,13 +16058,12 @@ function saveBucketDef() {
   if (!c) return;
   if (!Array.isArray(c.bucketDefs)) c.bucketDefs = [];
   const name = document.getElementById('bk-name').value.trim();
-  const rate = document.getElementById('bk-rate').value.trim();
   const rateNumRaw = (document.getElementById('bk-ratenum').value||'').trim();
-  let rateNum = rateNumRaw === '' ? null : (parseFloat(rateNumRaw)||0);
-  if (rateNum == null) { const m = rate.match(/(\d+(?:\.\d+)?)/); rateNum = m ? parseFloat(m[1]) : 0; } // fall back to label
+  const rateNum = rateNumRaw === '' ? 0 : (parseFloat(rateNumRaw)||0);
+  const rate = rateNum > 0 ? rateNum + '% p.a.' : ''; // label is derived from the numeric rate
+  const risk = (document.getElementById('bk-risk')||{}).value || 'medium';
   const allocMode = document.getElementById('bk-allocmode').value === 'fixed' ? 'fixed' : 'percent';
   const allocValue = parseFloat(document.getElementById('bk-allocval').value)||0;
-  const cap = null; // no separate cap — the allocation (fixed amount or % share) is the ceiling
   const color = document.getElementById('bk-color').value || '#2dd98a';
   if (!name) { showToast('Name is required'); return; }
   if (allocMode === 'percent' && allocValue > 100) { showToast('Percent cannot exceed 100'); return; }
@@ -16053,9 +16071,9 @@ function saveBucketDef() {
   if (bid) {
     const b = c.bucketDefs.find(x=>x.id===bid);
     if (!b) return;
-    b.name = name; b.rate = rate; b.rateNum = rateNum; b.allocMode = allocMode; b.allocValue = allocValue; b.cap = cap; b.color = color;
+    b.name = name; b.rate = rate; b.rateNum = rateNum; b.risk = risk; b.allocMode = allocMode; b.allocValue = allocValue; b.cap = null; b.color = color;
   } else {
-    c.bucketDefs.push({ id: 'bk_'+genId(), name, rate, rateNum, allocMode, allocValue, cap, color, monthly: 0 });
+    c.bucketDefs.push({ id: 'bk_'+genId(), name, rate, rateNum, risk, allocMode, allocValue, cap: null, color, monthly: 0 });
   }
   saveDBWithSync();
   closeSheet('gen');
@@ -16076,6 +16094,76 @@ function setBucketAllocMode(mode) {
   const homeSym = (typeof sym==='function') ? sym(_homeBase()) : '';
   if (val) { val.step = mode==='percent'?'1':'1000'; val.placeholder = mode==='percent'?'e.g., 35 (%)':homeSym+' amount'; }
   if (hint) hint.textContent = mode==='percent'?'Share of the total contract target.':'Exact '+homeSym+' amount for the whole contract.';
+}
+
+// Toggle the bucket risk level in the bucket sheet.
+function setBucketRisk(level) {
+  const hid = document.getElementById('bk-risk');
+  if (hid) hid.value = level;
+  ['low','medium','high'].forEach(lv => {
+    const el = document.getElementById('bk-risk-'+lv);
+    if (el) el.className = 'btn btn-sm ' + (lv===level ? 'btn-primary' : 'btn-ghost');
+  });
+}
+
+// ── CONSERVATIVE RISK-WEIGHTED AUTO-BALANCE ──
+// Auto-balance distributes the % pool (100% minus locked fixed buckets) among the % buckets,
+// weighted by (rate+1) × riskFactor. Lower risk earns a bigger share, so riskier holdings get
+// less even at a higher headline rate. Manual edits rebalance the OTHER % buckets to keep 100%.
+function _riskFactor(risk) { return risk === 'low' ? 1.0 : risk === 'high' ? 0.35 : 0.6; }
+function _bucketRisk(b) { return (b && (b.risk==='low'||b.risk==='medium'||b.risk==='high')) ? b.risk : 'medium'; }
+function _bucketWeight(b) { return (_bucketRateNum(b) + 1) * _riskFactor(_bucketRisk(b)); }
+
+// Sum of locked fixed-amount buckets as a % of the total target.
+function _fixedPctOfTarget(contract, target) {
+  if (!(target > 0)) return 0;
+  let fixed = 0;
+  for (const b of (contract.bucketDefs||[])) {
+    const af = _bucketAllocFields(b, 1);
+    if (af.mode === 'fixed') fixed += Math.max(0, af.value);
+  }
+  return (fixed / target) * 100;
+}
+
+function autoBalanceBuckets(contractId) {
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c || !Array.isArray(c.bucketDefs)) return;
+  const target = parseFloat(c.targetAmount) || 0;
+  const pctBuckets = c.bucketDefs.filter(b => _bucketAllocFields(b,1).mode === 'percent');
+  if (pctBuckets.length === 0) { showToast('No % buckets to balance — fixed ones are locked'); return; }
+  const fixedPct = _fixedPctOfTarget(c, target);
+  const pool = Math.max(0, 100 - fixedPct);
+  const sumW = pctBuckets.reduce((s,b)=>s+_bucketWeight(b),0) || 1;
+  // Distribute, then fix rounding drift onto the largest share so the total lands exactly on `pool`.
+  let acc = 0, maxIdx = 0, maxV = -1;
+  pctBuckets.forEach((b,i)=>{ const v = pool * _bucketWeight(b) / sumW; b.allocValue = Math.round(v*10)/10; acc += b.allocValue; if (b.allocValue>maxV){maxV=b.allocValue;maxIdx=i;} });
+  const drift = Math.round((pool - acc)*10)/10;
+  if (pctBuckets[maxIdx]) pctBuckets[maxIdx].allocValue = Math.max(0, Math.round((pctBuckets[maxIdx].allocValue + drift)*10)/10);
+  saveDBWithSync();
+  renderPlanning();
+  showToast(fixedPct>100 ? '⚠ Fixed buckets exceed target' : '⚖️ Balanced to 100% by risk & rate');
+}
+
+// Set one % bucket to newPct and rebalance the OTHER % buckets proportionally so the total = 100%.
+function adjustBucketPct(contractId, bucketId, newPct) {
+  const c = (db.contracts||[]).find(x=>x.id===contractId);
+  if (!c || !Array.isArray(c.bucketDefs)) return;
+  const target = parseFloat(c.targetAmount) || 0;
+  const fixedPct = _fixedPctOfTarget(c, target);
+  const pool = Math.max(0, 100 - fixedPct);
+  const me = c.bucketDefs.find(b=>b.id===bucketId);
+  if (!me) return;
+  let np = Math.max(0, Math.min(pool, parseFloat(newPct)||0));
+  const others = c.bucketDefs.filter(b => b.id !== bucketId && _bucketAllocFields(b,1).mode === 'percent');
+  const remaining = Math.max(0, pool - np);
+  const sumOthers = others.reduce((s,b)=>s+(parseFloat(b.allocValue)||0),0);
+  if (others.length > 0) {
+    if (sumOthers > 0) others.forEach(b => { b.allocValue = Math.round(((parseFloat(b.allocValue)||0) * remaining / sumOthers)*10)/10; });
+    else others.forEach(b => { b.allocValue = Math.round((remaining/others.length)*10)/10; });
+  }
+  me.allocValue = Math.round(np*10)/10;
+  saveDBWithSync();
+  renderPlanning();
 }
 
 function deleteBucket(contractId, bucketId) {
