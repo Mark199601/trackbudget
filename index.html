@@ -17568,9 +17568,10 @@ function showArchivedCatsPage() {
     return;
   }
 
-  // Count linked transactions (active + archived) per category. Permanent delete is offered
-  // ONLY when zero are linked; otherwise just Restore (deleting would orphan those txs).
-  const allTx = [...(db.transactions||[]), ...(db.archivedTransactions||[])];
+  // Count only ACTIVE transactions. A trashed (archived) tx is already removed from the ledger and
+  // should not block deleting the category. If such a tx is later restored, it shows as Uncategorized
+  // (getCategoryDisplay handles a missing category gracefully).
+  const allTx = db.transactions || [];
   const linkedCount = (c) => {
     if (c.isParent) {
       const subIds = (c.subcats||[]).map(s=>s.id);
@@ -17605,10 +17606,10 @@ function showArchivedCatsPage() {
   );
 }
 
-// ── PERSONAL LOGIC SET #69 ── Permanent delete for archived categories is offered ONLY when
-// no transaction (active or archived) links to the category. If any tx is linked, the archived
-// sheet shows Restore only — permanent delete would orphan those transactions. doDeleteArchivedCat
-// re-checks the count defensively before removing, in case the data changed since render.
+// ── PERSONAL LOGIC SET #69 ── Permanent delete for archived categories is offered ONLY when no
+// ACTIVE transaction links to the category. Trashed (archived) transactions do NOT block deletion —
+// they are already out of the ledger; if one is later restored it shows as Uncategorized. If any
+// active tx is linked, the sheet shows Restore only. doDeleteArchivedCat re-checks defensively.
 function confirmDeleteArchivedCat(catId, forType, isParent, parentId) {
   let label = 'this category';
   if (isParent) {
@@ -17627,8 +17628,8 @@ function confirmDeleteArchivedCat(catId, forType, isParent, parentId) {
 }
 
 function doDeleteArchivedCat(catId, forType, isParent, parentId) {
-  // Defensive re-check — never permanently delete if any tx (active or archived) still links here.
-  const allTx = [...(db.transactions||[]), ...(db.archivedTransactions||[])];
+  // Defensive re-check — never permanently delete if any ACTIVE tx still links here.
+  const allTx = db.transactions || [];
   let n;
   if (isParent) {
     const cat = db.categories[forType].find(c=>c.id===catId);
