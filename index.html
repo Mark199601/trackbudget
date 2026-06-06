@@ -2563,7 +2563,7 @@ function _widgetInfo(key) {
 }
 // Reusable info button HTML — small ⓘ that taps to show definition (unified clean outlined style)
 function _infoBtn(key) {
-  return `<span onclick="_widgetInfo('${key}')" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;user-select:none;font-style:italic;flex-shrink:0;text-transform:none;letter-spacing:0" title="What is this?">i</span>`;
+  return `<span onclick="_widgetInfo('${key}')" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none" title="What is this?">ⓘ</span>`;
 }
 
 // Wire up close buttons — use addEventListener for reliability
@@ -4555,9 +4555,9 @@ function renderUnifiedAmountForm() {
 
     <!-- Category field — tappable -->
     <div class="field-row" onclick="openCatPickerSheet()">
-      <div class="fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
+      <div class="fr-icon" id="cat-fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
       <div class="fr-label">Category</div>
-      <div class="fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
+      <div class="fr-value" id="cat-fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
       <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
 
@@ -4694,9 +4694,9 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
 
     <!-- Category field — tappable -->
     <div class="field-row" onclick="openCatPickerSheet()">
-      <div class="fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
+      <div class="fr-icon" id="cat-fr-icon" style="background:${displayCat?'var(--accent-bg)':'var(--bg3)'}">${displayCat?displayCat.icon:'🏷️'}</div>
       <div class="fr-label">Category</div>
-      <div class="fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
+      <div class="fr-value" id="cat-fr-value" style="color:${displayCat?'var(--text)':'var(--text4)'}">${displayCat?displayCat.name:'Tap to select'}</div>
       <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
 
@@ -4881,11 +4881,9 @@ function pickSubCat(catId, subCatId) {
   _addState.subCatId = subCatId;
   _addState.step = 2;
   closeCatPickerSheet();
-  if (_addState.type === 'shared') {
-    renderAddSheet();
-  } else {
-    _updateCatDisplay();
-  }
+  // In-place update for ALL types — full re-render would wipe in-progress Shared inputs
+  // (receipt total, split persons, notes). Category row is targeted by id.
+  _updateCatDisplay();
 }
 
 function _updateCatDisplay() {
@@ -4895,8 +4893,8 @@ function _updateCatDisplay() {
   const subCat = (cat && s.subCatId) ? cat.subcats?.find(sc=>sc.id===s.subCatId) : null;
   const displayCat = subCat || cat;
   // Update icon + name in the category field row (no full re-render)
-  const iconEl = document.querySelector('.field-row .fr-icon');
-  const valEl = document.querySelector('.field-row .fr-value');
+  const iconEl = document.getElementById('cat-fr-icon') || document.querySelector('.field-row .fr-icon');
+  const valEl = document.getElementById('cat-fr-value') || document.querySelector('.field-row .fr-value');
   if (iconEl && displayCat) {
     iconEl.style.background = 'var(--accent-bg)';
     iconEl.textContent = displayCat.icon;
@@ -11820,7 +11818,7 @@ function renderAnalytics() {
     <div class="analytics-picker-inner">
       <span class="analytics-picker-icon">${currTab.icon}</span>
       <span class="analytics-picker-label">${currTab.label}</span>
-      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;margin-left:6px;flex-shrink:0;text-transform:none;letter-spacing:0">i</span>
+      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;flex-shrink:0;text-transform:none">ⓘ</span>
       <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="margin-left:6px;opacity:0.6"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
   </div>`;
@@ -13715,19 +13713,19 @@ function buildPieChart(cats, total, prefix, period) {
         const sign = isExpense ? '−' : '+';
         const amtColor = isExpense ? 'var(--red)' : 'var(--green)';
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px 8px 22px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1">
-            <span style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</span>
-            ${tx.notes ? `<span style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(tx.notes)}</span>` : ''}
+          <div style="min-width:0;flex:1;overflow:hidden">
+            <div style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
+            ${tx.notes ? `<div style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">${_esc(tx.notes)}</div>` : ''}
           </div>
-          <span style="font-family:var(--mono);color:${amtColor};font-weight:500;font-size:11px;flex-shrink:0;margin-left:6px">${sign}${fmt(txAmt, tx.currency)}</span>
+          <span style="font-family:var(--mono);color:${amtColor};font-weight:500;font-size:11px;flex-shrink:0;margin-left:8px;white-space:nowrap">${sign}${fmt(txAmt, tx.currency)}</span>
         </div>`;
       }).join('') : '';
 
     return `<div style="border-bottom:1px solid var(--border)">
       <div ${canExpand?`onclick="toggleSpendingDrill('${drillId}')"`:''} style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;${canExpand?'cursor:pointer':''}">
-        <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1;overflow:hidden">
           <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 5px ${s.color}99"></div>
-          <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.icon} ${s.name}</span>
+          <span style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${s.icon} ${s.name}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">${fmt(s.total,disp)}</span>
@@ -13873,11 +13871,11 @@ function renderAnalyticsSpending() {
         const txAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
         const dateLabel = fmtD(tx.date);
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
-            <span style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</span>
-            ${tx.notes ? `<span style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(tx.notes)}</span>` : ''}
+          <div style="min-width:0;flex:1;overflow:hidden">
+            <div style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
+            ${tx.notes ? `<div style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(tx.notes)}</div>` : ''}
           </div>
-          <span style="font-family:var(--mono);color:var(--red);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px">−${fmt(txAmt, tx.currency)}</span>
+          <span style="font-family:var(--mono);color:var(--red);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px;white-space:nowrap">−${fmt(txAmt, tx.currency)}</span>
         </div>`;
       }).join('') : '';
 
@@ -15924,14 +15922,14 @@ function openBucketSheet(contractId, bucketId) {
       <input class="form-input" id="bk-name" type="text" placeholder="e.g., High-Yield Savings" value="${escapeAttr(b?.name||'')}">
     </div>
     <div class="form-group">
-      <label class="form-label">Annual rate % <span onclick="showBucketInfo('rate')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
+      <label class="form-label">Annual rate % <span onclick="showBucketInfo('rate')" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none">ⓘ</span></label>
       <input class="form-input numpad-input" id="bk-ratenum" type="number" step="0.1" min="0" placeholder="e.g., 10" value="${initRateNum}" inputmode="none">
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
         ${[10,6,5,3.5].map(r=>`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bk-ratenum').value=${r}">${r}%</button>`).join('')}
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Risk level <span onclick="showBucketInfo('risk')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
+      <label class="form-label">Risk level <span onclick="showBucketInfo('risk')" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none">ⓘ</span></label>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" id="bk-risk-insured" class="btn btn-sm ${initRisk==='insured'?'btn-primary':'btn-ghost'}" style="flex:1;min-width:calc(50% - 3px)" onclick="setBucketRisk('insured')">🛡️ Insured</button>
         <button type="button" id="bk-risk-low" class="btn btn-sm ${initRisk==='low'?'btn-primary':'btn-ghost'}" style="flex:1;min-width:calc(50% - 3px)" onclick="setBucketRisk('low')">🟢 Low</button>
@@ -15942,7 +15940,7 @@ function openBucketSheet(contractId, bucketId) {
       ${_riskSuggest ? `<div style="font-size:11px;color:var(--accent);margin-top:6px">💡 Linked ${_riskSuggest.cats.map(_esc).join(', ')} → suggests <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="setBucketRisk('${_riskSuggest.tier}')">${_riskSuggest.tier==='insured'?'🛡️ Insured':_riskSuggest.tier==='low'?'🟢 Low':_riskSuggest.tier==='high'?'🔴 High':'🟡 Medium'}</button></div>` : ''}
     </div>
     <div class="form-group">
-      <label class="form-label">Allocation type <span onclick="showBucketInfo('alloc')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
+      <label class="form-label">Allocation type <span onclick="showBucketInfo('alloc')" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none">ⓘ</span></label>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <button type="button" id="bk-mode-fix" class="btn btn-sm ${initMode==='fixed'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('fixed')">🔒 Fixed</button>
         <button type="button" id="bk-mode-pct" class="btn btn-sm ${initMode==='percent'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('percent')">🌊 Dynamic</button>
