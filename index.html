@@ -2518,6 +2518,24 @@ function openDlg(title, html, footer='') {
 }
 function closeDlg() { document.getElementById('dlg-overlay').classList.remove('open'); }
 
+// ── Reusable info popover (tappable ⓘ icons open this) ──
+function showInfo(title, htmlText) {
+  openDlg(title, `<div style="font-size:13px;color:var(--text2);line-height:1.7">${htmlText}</div>`, `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Got it</button>`);
+}
+function showBucketInfo(key) {
+  const m = {
+    rate: ['Annual rate %', 'The expected yearly return. It sets the displayed label and the auto-balance weight — a higher rate earns a bigger share, before the risk adjustment.'],
+    risk: ['Risk level', 'Conservative auto-balance gives a smaller share to riskier buckets, even at a higher rate.<br><br>🛡️ <b>Insured</b> — banks, time deposit, MP2, treasury bonds<br>🟢 <b>Low</b> — government bonds<br>🟡 <b>Medium</b> — REITs, mutual funds, real estate<br>🔴 <b>High</b> — crypto, stocks, VUL'],
+    alloc: ['Allocation type', '🔒 <b>Fixed</b> — a locked amount. Counted as its % of the target and excluded from auto-distribute.<br><br>🌊 <b>Dynamic</b> — fluid. Shares the remaining pool and rebalances to 100% with other Dynamic buckets.']
+  };
+  const e = m[key]; if (e) showInfo(e[0], e[1]);
+}
+function showAnalyticsTabInfo() {
+  const reg = window._TAB_REGISTRY || {};
+  const t = reg[_analyticsTab] || reg.overview;
+  if (t) showInfo(t.icon + ' ' + t.label, t.desc || 'No description.');
+}
+
 // ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap ⓘ icon shows plain-English definition
 const _WIDGET_INFO = {
   'velocity': {title:'Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.'},
@@ -11778,23 +11796,23 @@ function renderAnalytics() {
   // ── PERSONAL LOGIC SET #88 ── iOS Health-style picker header (replaces 17-tab horizontal scroll).
   // Tap the title to open a categorized bottom sheet for tab switching.
   const TAB_REGISTRY = {
-    overview:   {label:'Overview',       icon:'📊', section:'home'},
-    aisummary:  {label:'AI Summary',     icon:'🤖', section:'home'},
-    cashflow:   {label:'Cashflow',       icon:'💰', section:'cashflow'},
-    calendar:   {label:'Calendar',       icon:'📅', section:'cashflow'},
-    dayofweek:  {label:'By Day',         icon:'📅', section:'cashflow'},
-    spending:   {label:'Spending',       icon:'🛒', section:'spending'},
-    trends:     {label:'Trends',         icon:'📈', section:'spending'},
-    yoy:        {label:'Year-over-Year', icon:'🗓', section:'spending'},
-    budget:     {label:'Budget',         icon:'🎯', section:'spending'},
-    wealth:     {label:'Wealth',         icon:'💎', section:'wealth'},
-    investments:{label:'Investments',    icon:'📊', section:'wealth'},
-    accthealth: {label:'Account Health', icon:'🏦', section:'wealth'},
-    people:     {label:'People',         icon:'👥', section:'people'},
-    subs:       {label:'Subscriptions',  icon:'🔁', section:'people'},
-    forex:      {label:'Forex Rates',    icon:'💱', section:'currency'},
-    crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency'},
-    external:   {label:'External',       icon:'🔄', section:'currency'},
+    overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance — net worth, income vs expense, cashflow, and budget.'},
+    aisummary:  {label:'AI Summary',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
+    cashflow:   {label:'Cashflow',       icon:'💰', section:'cashflow', desc:'Money in vs money out over time, and what is left over each month.'},
+    calendar:   {label:'Calendar',       icon:'📅', section:'cashflow', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
+    dayofweek:  {label:'By Day',         icon:'📅', section:'cashflow', desc:'Which days of the week you tend to spend the most.'},
+    spending:   {label:'Spending',       icon:'🛒', section:'spending', desc:'Where your money goes, broken down by category.'},
+    trends:     {label:'Trends',         icon:'📈', section:'spending', desc:'How your spending shifts over the months, shown as a heatmap.'},
+    yoy:        {label:'Year-over-Year', icon:'🗓', section:'spending', desc:'This year vs last year, month by month.'},
+    budget:     {label:'Budget',         icon:'🎯', section:'spending', desc:'How your spending tracks against your monthly limit per category.'},
+    wealth:     {label:'Wealth',         icon:'💎', section:'wealth', desc:'Your net worth over time and how assets and debt stack up.'},
+    investments:{label:'Investments',    icon:'📊', section:'wealth', desc:'Your portfolio by type, cost vs current value, and gains.'},
+    accthealth: {label:'Account Health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
+    people:     {label:'People',         icon:'👥', section:'people', desc:'Who you send money to or receive from, with running balances.'},
+    subs:       {label:'Subscriptions',  icon:'🔁', section:'people', desc:'Your recurring payments and what they cost per month and per year.'},
+    forex:      {label:'Forex Rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
+    crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
+    external:   {label:'External',       icon:'🔄', section:'currency', desc:'Money moving in and out of accounts you do not fully track.'},
   };
   window._TAB_REGISTRY = TAB_REGISTRY;
   const currTab = TAB_REGISTRY[_analyticsTab] || TAB_REGISTRY.overview;
@@ -11802,6 +11820,7 @@ function renderAnalytics() {
     <div class="analytics-picker-inner">
       <span class="analytics-picker-icon">${currTab.icon}</span>
       <span class="analytics-picker-label">${currTab.label}</span>
+      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;margin-left:7px;flex-shrink:0">i</span>
       <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="margin-left:6px;opacity:0.6"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
   </div>`;
@@ -15546,12 +15565,14 @@ function renderContractTab() {
         <span>≈ <strong style="color:var(--text)">${fmt(monthly,goalCurr)}/mo</strong> over ${Math.round(totalMonths)}mo</span>
         <span>${fmt(_sliderMax,goalCurr)}</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;font-size:11px;border-top:1px solid var(--border);padding-top:10px">
-        <span style="color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;flex-shrink:0">Slider range</span>
-        <input class="form-input numpad-input" type="number" inputmode="none" step="1000" min="0" placeholder="min" value="${typeof active.sliderMin==='number'?active.sliderMin:''}" style="flex:1;padding:6px 8px;font-size:12px" onchange="saveSliderRange('${activeId}','min',this.value)">
-        <span style="color:var(--text4)">–</span>
-        <input class="form-input numpad-input" type="number" inputmode="none" step="1000" min="0" placeholder="max (auto)" value="${typeof active.sliderMax==='number'?active.sliderMax:''}" style="flex:1;padding:6px 8px;font-size:12px" onchange="saveSliderRange('${activeId}','max',this.value)">
-      </div>
+      <details style="border-top:1px solid var(--border);padding-top:10px">
+        <summary style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;list-style:none;user-select:none">⚙ Slider range <span style="text-transform:none;letter-spacing:0">(tap to set)</span></summary>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <input class="form-input numpad-input" type="number" inputmode="none" step="1000" min="0" placeholder="min" value="${typeof active.sliderMin==='number'?active.sliderMin:''}" style="flex:1;padding:6px 8px;font-size:12px" onchange="saveSliderRange('${activeId}','min',this.value)">
+          <span style="color:var(--text4)">–</span>
+          <input class="form-input numpad-input" type="number" inputmode="none" step="1000" min="0" placeholder="max (auto)" value="${typeof active.sliderMax==='number'?active.sliderMax:''}" style="flex:1;padding:6px 8px;font-size:12px" onchange="saveSliderRange('${activeId}','max',this.value)">
+        </div>
+      </details>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:8px">
@@ -15903,14 +15924,14 @@ function openBucketSheet(contractId, bucketId) {
       <input class="form-input" id="bk-name" type="text" placeholder="e.g., High-Yield Savings" value="${escapeAttr(b?.name||'')}">
     </div>
     <div class="form-group">
-      <label class="form-label">Annual rate % <span style="color:var(--text4);font-weight:400">— drives label & auto-balance weight</span></label>
+      <label class="form-label">Annual rate % <span onclick="showBucketInfo('rate')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
       <input class="form-input numpad-input" id="bk-ratenum" type="number" step="0.1" min="0" placeholder="e.g., 10" value="${initRateNum}" inputmode="none">
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
         ${[10,6,5,3.5].map(r=>`<button type="button" class="btn btn-ghost btn-sm" style="padding:3px 10px;font-size:11px" onclick="document.getElementById('bk-ratenum').value=${r}">${r}%</button>`).join('')}
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Risk level <span style="color:var(--text4);font-weight:400">— conservative auto-balance gives less to riskier buckets</span></label>
+      <label class="form-label">Risk level <span onclick="showBucketInfo('risk')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button type="button" id="bk-risk-insured" class="btn btn-sm ${initRisk==='insured'?'btn-primary':'btn-ghost'}" style="flex:1;min-width:calc(50% - 3px)" onclick="setBucketRisk('insured')">🛡️ Insured</button>
         <button type="button" id="bk-risk-low" class="btn btn-sm ${initRisk==='low'?'btn-primary':'btn-ghost'}" style="flex:1;min-width:calc(50% - 3px)" onclick="setBucketRisk('low')">🟢 Low</button>
@@ -15919,17 +15940,15 @@ function openBucketSheet(contractId, bucketId) {
       </div>
       <input type="hidden" id="bk-risk" value="${initRisk}">
       ${_riskSuggest ? `<div style="font-size:11px;color:var(--accent);margin-top:6px">💡 Linked ${_riskSuggest.cats.map(_esc).join(', ')} → suggests <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="setBucketRisk('${_riskSuggest.tier}')">${_riskSuggest.tier==='insured'?'🛡️ Insured':_riskSuggest.tier==='low'?'🟢 Low':_riskSuggest.tier==='high'?'🔴 High':'🟡 Medium'}</button></div>` : ''}
-      <div style="font-size:11px;color:var(--text4);margin-top:4px">🛡️ Banks / time deposit / MP2 / T-bonds · 🟢 govt bonds · 🟡 REITs / mutual funds · 🔴 crypto / stocks / VUL.</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Allocation type</label>
+      <label class="form-label">Allocation type <span onclick="showBucketInfo('alloc')" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;color:var(--text4);font-size:10px;font-weight:700;font-style:italic;vertical-align:middle;text-transform:none">i</span></label>
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <button type="button" id="bk-mode-fix" class="btn btn-sm ${initMode==='fixed'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('fixed')">🔒 Fixed</button>
         <button type="button" id="bk-mode-pct" class="btn btn-sm ${initMode==='percent'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('percent')">🌊 Dynamic</button>
       </div>
       <input type="hidden" id="bk-allocmode" value="${initMode}">
       <input class="form-input numpad-input" id="bk-allocval" type="number" step="${initMode==='percent'?'1':'1000'}" min="0" placeholder="${initMode==='percent'?'% (auto-balanced if blank)':sym(_homeBase())+' locked amount'}" value="${initVal}" inputmode="none">
-      <div id="bk-alloc-hint" style="font-size:11px;color:var(--text4);margin-top:4px">${initMode==='percent'?'🌊 Fluid — shares the pool & rebalances to 100% with other Dynamic buckets.':'🔒 Locked '+sym(_homeBase())+' amount — read as its % of target, excluded from auto-distribute.'}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Color</label>
@@ -16050,10 +16069,9 @@ function setBucketAllocMode(mode) {
     pct.className = 'btn btn-sm ' + (mode==='percent'?'btn-primary':'btn-ghost');
     fix.className = 'btn btn-sm ' + (mode==='fixed'?'btn-primary':'btn-ghost');
   }
-  const val = document.getElementById('bk-allocval'), hint = document.getElementById('bk-alloc-hint');
+  const val = document.getElementById('bk-allocval');
   const homeSym = (typeof sym==='function') ? sym(_homeBase()) : '';
   if (val) { val.step = mode==='percent'?'1':'1000'; val.placeholder = mode==='percent'?'% (auto-balanced if blank)':homeSym+' locked amount'; }
-  if (hint) hint.textContent = mode==='percent'?'🌊 Fluid — shares the pool & rebalances to 100% with other Dynamic buckets.':'🔒 Locked '+homeSym+' amount — read as its % of target, excluded from auto-distribute.';
 }
 
 // Toggle the bucket risk level in the bucket sheet.
@@ -16312,9 +16330,9 @@ function renderProfileTab() {
         <div class="sr-left"><div class="sr-icon">🏠</div><div><div class="sr-text">Home Base</div><div class="sr-sub">From nationality · drives FX math</div></div></div>
         <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())} ${_homeBase()}</div>
       </div>
-      <div class="settings-row" style="cursor:default">
+      <div class="settings-row" style="cursor:pointer" onclick="openDisplayCurrencyPicker()">
         <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">View totals in this currency · view-only</div></div></div>
-        <select class="form-input" style="width:auto;padding:5px 12px;font-size:12px" onchange="setDisplayCurrency(this.value)">${currOpts}</select>
+        <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--accent)">${sym(_displayCurrency())} ${_displayCurrency()}</div>
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
@@ -16465,6 +16483,18 @@ function saveProfile() {
   closeSheet('gen');
   renderSettings();
   if (oldNat === db.profile.nationality) showToast('Profile saved!');
+}
+
+// Tappable currency picker for the Display Currency setting (replaces the dropdown).
+function openDisplayCurrencyPicker() {
+  const cur = _displayCurrency();
+  const list = (db.trackedCurrencies && db.trackedCurrencies.length) ? db.trackedCurrencies : [_homeBase()];
+  const html = `<div style="display:flex;flex-direction:column;gap:6px">${list.map(c=>`
+    <button class="btn ${c===cur?'btn-primary':'btn-ghost'}" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 14px" onclick="setDisplayCurrency('${c}');closeDlg()">
+      <span style="font-family:var(--mono);font-weight:600">${sym(c)} ${c}</span>${c===cur?'<span>✓</span>':''}
+    </button>`).join('')}</div>
+    <div style="font-size:11px;color:var(--text4);margin-top:10px">View-only — totals shown in this currency. Doesn't change FX math or your home base.</div>`;
+  openDlg('Display Currency', html, `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`);
 }
 
 function setDisplayCurrency(curr) {
