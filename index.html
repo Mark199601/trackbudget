@@ -3682,12 +3682,18 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.0.5', date: 'June 2026', changes: [
+    '🔗 Cross-currency transfers now nest their forex gain/loss + fee as a tappable "Linked" card, like batch settlements',
+    '🧭 AI insights rewritten to be specific and actionable — real numbers, projections, and next steps instead of generic praise',
+    '📐 Hardened every grid against edge overflow on narrow screens; the mobile header no longer clips action buttons',
+    '🔬 New diagnostics: Build / Sync check + Linked-Transactions inspector (Settings → About → Diagnostics)',
+  ]},
   { ver: '1.0.4', date: 'June 2026', changes: [
     '➕ Add Capital — top up an existing investment from a source account (capital + value rise together, no phantom gain/loss)',
     '💵 Record Dividend — log a cash payout as income without touching your gain/loss %',
@@ -18214,7 +18220,9 @@ function openDiagnostics() {
       All tests run against your live data. No changes made.
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" onclick="runDiagFxMath()">🧮 Run FX Tests</button>
+      <button class="btn btn-primary btn-sm" onclick="runDiagBuild()">🏷️ Build / Sync</button>
+      <button class="btn btn-ghost btn-sm" onclick="runDiagLinkedTxns()">🔗 Linked Txns</button>
+      <button class="btn btn-ghost btn-sm" onclick="runDiagFxMath()">🧮 FX Tests</button>
       <button class="btn btn-ghost btn-sm" onclick="runDiagDbIntegrity()">📋 DB Health</button>
       <button class="btn btn-ghost btn-sm" onclick="runDiagFeatures()">✓ Features</button>
       <button class="btn btn-ghost btn-sm" onclick="runDiagAll()">▶ Run All</button>
@@ -18264,6 +18272,91 @@ function diagCopyResults() {
   }).catch(() => {
     showToast('Copy failed — long-press to select & copy manually');
   });
+}
+
+async function runDiagBuild() {
+  _diagBuffer = '';
+  _diagLog('🏷️ BUILD / SYNC — ' + new Date().toISOString().slice(0,19));
+  _diagSection('Loaded app (this page)');
+  _diagLog('  Version: v' + APP_VERSION + '   (' + APP_VERSION_DATE + ')');
+  _diagLog('  This is the index.html currently running in your browser.');
+  _diagSection('Service worker / cache');
+  try {
+    if (!('caches' in window)) {
+      _diagLog('  Cache API unavailable.');
+    } else {
+      const keys = await caches.keys();
+      const tb = keys.filter(k => /^trackbudget-v/.test(k));
+      _diagLog('  Cache(s): ' + (tb.length ? tb.join(', ') : '(none)'));
+      const expected = 'trackbudget-v' + APP_VERSION.replace(/\./g, '-');
+      if (tb.length) {
+        if (tb.includes(expected)) _diagLog('  ✅ SW cache matches loaded v' + APP_VERSION + ' — fully synced.');
+        else _diagLog('  ⚠️ SW cache (' + tb.join(', ') + ') ≠ loaded v' + APP_VERSION + ' [expected ' + expected + ']. Refresh again to sync.');
+      }
+    }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        const st = [];
+        if (reg.active) st.push('active');
+        if (reg.waiting) st.push('waiting (update pending)');
+        if (reg.installing) st.push('installing');
+        _diagLog('  Registration: ' + (st.join(', ') || '(none)'));
+        _diagLog('  Controlling this page: ' + (navigator.serviceWorker.controller ? 'yes' : 'no (hard-reload / first load)'));
+        if (reg.waiting) _diagLog('  ↻ A newer service worker is waiting — fully close & reopen the app to activate it.');
+      } else {
+        _diagLog('  No service worker registered for this origin.');
+      }
+    } else {
+      _diagLog('  serviceWorker API unavailable.');
+    }
+  } catch (e) {
+    _diagLog('  ⚠ ' + e.message);
+  }
+  _diagLog('');
+  _diagLog('Compare "Version" with the version Claude shipped (e.g. v1.0.5).');
+  _diagLog('If it is older, the new index.html has not loaded yet → deploy / refresh.');
+}
+
+function runDiagLinkedTxns() {
+  _diagBuffer = '';
+  _diagLog('🔗 LINKED TRANSACTIONS — ' + new Date().toISOString().slice(0,19));
+  _diagLog('Checks whether parent txns have linked children with the flags');
+  _diagLog('the nested-card renderer needs (isAutoForex / isAutoFee / settlement / return).');
+  const txns = db.transactions || [];
+  const NEST = c => !!(c.isAutoForex || c.isAutoFee || c.isLoanSettlementGain || c.isLoanSettlementLoss || c.isReimbSettlementGain || c.isReimbSettlementLoss || c.isInvestmentReturn) && !c.archived;
+  const parents = txns.filter(p => txns.some(c => c.parentId === p.id));
+  _diagLog('');
+  _diagLog('Renderer present: ' + (typeof buildLinkedChildrenHTML === 'function' ? 'YES ✅ (build has the fix)' : 'NO ⚠️ (old build — update needed)'));
+  if (!parents.length) { _diagLog(''); _diagLog('No transactions with linked children found.'); return; }
+  _diagLog('Found ' + parents.length + ' parent txn(s) with children. Showing up to 40:');
+  parents.slice(0, 40).forEach(p => {
+    _diagSection((p.type || '?') + ' · ' + String(p.notes || p.categoryId || p.id).slice(0, 42));
+    _diagLog('  parent id: ' + p.id + '   amount: ' + p.amount + ' ' + (p.currency || ''));
+    const kids = txns.filter(c => c.parentId === p.id);
+    _diagLog('  children: ' + kids.length);
+    kids.forEach(c => {
+      const flags = [];
+      if (c.isAutoForex) flags.push('isAutoForex');
+      if (c.isAutoFee) flags.push('isAutoFee');
+      if (c.isLoanSettlementGain) flags.push('isLoanSettlementGain');
+      if (c.isLoanSettlementLoss) flags.push('isLoanSettlementLoss');
+      if (c.isReimbSettlementGain) flags.push('isReimbSettlementGain');
+      if (c.isReimbSettlementLoss) flags.push('isReimbSettlementLoss');
+      if (c.isInvestmentReturn) flags.push('isInvestmentReturn');
+      if (c.archived) flags.push('ARCHIVED');
+      _diagLog('    ' + (NEST(c) ? '✅' : '⚠️') + ' ' + (c.categoryId || c.type) + ' | ' + c.amount + ' ' + (c.currency || '') + ' | ' + (flags.join(', ') || '(no nesting flags)'));
+    });
+    let renders = '(renderer missing)';
+    if (typeof buildLinkedChildrenHTML === 'function') {
+      try { renders = buildLinkedChildrenHTML(p).length > 0 ? 'YES ✅' : 'NO ⚠️'; }
+      catch (e) { renders = 'error: ' + e.message; }
+    }
+    _diagLog('  → nested card renders: ' + renders);
+  });
+  _diagLog('');
+  _diagLog('A ✅ child has the flags to nest. If a transfer shows children but');
+  _diagLog('"renders: NO", those children are missing isAutoForex/isAutoFee.');
 }
 
 function runDiagFxMath() {
