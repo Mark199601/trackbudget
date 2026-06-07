@@ -3080,10 +3080,13 @@ function generateInsights() {
 
   // Net positive (positive vibes — NOT urgent)
   if (curr.income > 0 && curr.expense > 0 && curr.net > 0) {
-    insights.push({icon:'✅',urgent:false,text:`You're <strong>${fmt(curr.net, _homeBase())}</strong> net positive this month. Great job!`});
+    const _sr = Math.round(curr.net / curr.income * 100);
+    const _mom = prev.income > 0 ? curr.net - prev.net : null;
+    const _momStr = _mom === null ? '' : (_mom >= 0 ? ` — ${fmt(_mom, _homeBase())} more than last month` : ` — ${fmt(Math.abs(_mom), _homeBase())} less than last month`);
+    insights.push({icon:'✅',urgent:false,text:`Saving <strong>${_sr}%</strong> of income this month (${fmt(curr.net, _homeBase())} net)${_momStr}.`});
   }
 
-  if (insights.length === 0) insights.push({icon:'✨',urgent:false,text:`All clear — your finances look healthy this month! Keep it up.`});
+  if (insights.length === 0) insights.push({icon:'✨',urgent:false,text:`No alerts this month — budgets, loan deadlines, and spending pace are all within range.`});
   return insights;
 }
 
@@ -15793,7 +15796,7 @@ function doCheckin(contractId, hit) {
   contract.checkinHistory.push({ month: mk, hit, ts: Date.now() });
   saveDB();
   renderPlanning();
-  showToast(hit ? '✅ Logged — nice work!' : 'Keep going next month! 💪');
+  showToast(hit ? '✅ Logged — counted as a hit this month.' : '✓ Logged — marked as missed this month.');
 }
 
 function openContractWizard() {
@@ -21110,10 +21113,10 @@ function aiBudgetIntelligence() {
         `Overshooting your ${bgt.location} budget`,
       ];
       const bodies = [
-        `You're ${sev} over — averaging ${fmtB(avgSpend)}/mo against your ${fmtB(bgt.limit)} limit. Try ${fmtB(newLimit)} as a more realistic target.`,
-        `${aiName()?aiName()+', y':'Y'}our ${bgt.location} spend is ${sev} above plan: ${fmtB(avgSpend)} vs ${fmtB(bgt.limit)}. Consider raising to ${fmtB(newLimit)}.`,
+        `You're ${sev} over — averaging ${fmtB(avgSpend)}/mo against your ${fmtB(bgt.limit)} limit. ${fmtB(newLimit)} would match your real spend.`,
+        `Your ${bgt.location} spend is ${sev} above plan: ${fmtB(avgSpend)} vs ${fmtB(bgt.limit)}. Consider raising to ${fmtB(newLimit)}.`,
         `Three-month average says ${fmtB(avgSpend)} — that's ${(ratio*100-100).toFixed(0)}% past your ${fmtB(bgt.limit)} cap. ${fmtB(newLimit)} would fit better.`,
-        `Spending ${fmtB(overshoot)} more than budgeted on average. ${fmtB(newLimit)} feels more honest.`,
+        `Spending ${fmtB(overshoot)} more than budgeted on average. ${fmtB(newLimit)} matches your actual pace.`,
       ];
       insights.push({id,type:'budget',priority:'high',icon:'📈',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review budget limit'});
     }
@@ -21130,8 +21133,8 @@ function aiBudgetIntelligence() {
       ];
       const bodies = [
         `Averaging ${fmtB(avgSpend)}/mo — that's ${pct}% under limit. ${fmtB(headroom)} could go to savings.`,
-        `You've got ${pct}% breathing room (${fmtB(headroom)}/mo unused). Worth redirecting to a goal.`,
-        `Only spending ${fmtB(avgSpend)} of your ${fmtB(bgt.limit)}. The extra ${fmtB(headroom)} is sitting idle.`,
+        `${pct}% under the cap — ${fmtB(headroom)}/mo unused, enough for a recurring transfer to savings.`,
+        `Only ${fmtB(avgSpend)} of ${fmtB(bgt.limit)} used — the extra ${fmtB(headroom)}/mo could be auto-saved.`,
         `Consistently ${pct}% below limit — could lower the cap or move ${fmtB(headroom)} to investments.`,
       ];
       insights.push({id,type:'budget',priority:'low',icon:'📉',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Consider reallocating'});
@@ -21236,9 +21239,9 @@ function aiPaydayPredictor() {
     } else if (daysUntil <= 3) {
       titles = [`Next income in ~${daysUntil} ${aiPlural(daysUntil,'day')}`, `Payday around ${dateStr}`, `Income coming soon`];
       bodies = [
-        `Right around the corner — your ${avgInterval}-day cycle points to ${dateStr}.`,
-        `Just ${daysUntil} ${aiPlural(daysUntil,'day')} out, based on your usual rhythm.`,
-        `Expected on ${dateStr}, give or take a day.`,
+        `Your ${avgInterval}-day cycle points to ${dateStr}.`,
+        `${daysUntil} ${aiPlural(daysUntil,'day')} out on your ${avgInterval}-day cycle.`,
+        `Expected on ${dateStr}.`,
       ];
     } else {
       titles = [`Next income in ~${daysUntil} ${aiPlural(daysUntil,'day')}`, `Payday in ${daysUntil} ${aiPlural(daysUntil,'day')}`, `~${daysUntil} ${aiPlural(daysUntil,'day')} to next deposit`];
@@ -21322,8 +21325,8 @@ function aiSavingsPace() {
       `Behind schedule by ${sym(_homeBase())}${fmtPHP(gap)}`,
     ];
     const status = onTrack
-      ? `Good news — projected ${sym(_homeBase())}${fmtPHP(projected)} still hits the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal.`
-      : `Heads up — at this pace, projected total is ${sym(_homeBase())}${fmtPHP(projected)}, short of ${sym(_homeBase())}${fmtPHP(targetAmount)}.`;
+      ? `Projected ${sym(_homeBase())}${fmtPHP(projected)} still reaches the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal if the monthly pace holds.`
+      : `At this pace the projected total is ${sym(_homeBase())}${fmtPHP(projected)} — ${sym(_homeBase())}${fmtPHP(targetAmount-projected)} short. Raising the monthly amount closes it.`;
     const bodies = [
       `${dayCounter}. ${paceLine} Expected: ${sym(_homeBase())}${fmtPHP(targetNow)} · Actual: ${sym(_homeBase())}${fmtPHP(actualTotal)}. ${status}`,
       `${dayCounter}. You're at ${actualPct.toFixed(1)}%, target says ${expectedPct.toFixed(1)}% by now. ${status}`,
@@ -21334,16 +21337,18 @@ function aiSavingsPace() {
     // Significantly ahead of pace
     const id = 'savings-ahead';
     const ahead = Math.abs(gap);
+    const monthsBuffer = monthlyGoal > 0 ? (ahead / monthlyGoal) : 0;
+    const overGoal = projected - targetAmount;
     const titles = [
       `${sym(_homeBase())}${fmtPHP(ahead)} ahead of savings pace`,
       `Savings ahead of plan`,
-      `${aiName()?aiName()+', y':'Y'}ou're crushing the savings target`,
+      `Built a ${sym(_homeBase())}${fmtPHP(ahead)} buffer`,
       `Running ahead by ${sym(_homeBase())}${fmtPHP(ahead)}`,
     ];
     const bodies = [
-      `${dayCounter}. ${paceLine} Projected: ${sym(_homeBase())}${fmtPHP(projected)}. Keep going!`,
-      `${dayCounter}. At ${actualPct.toFixed(1)}% vs target ${expectedPct.toFixed(1)}% — projected to land at ${sym(_homeBase())}${fmtPHP(projected)}.`,
-      `${dayCounter}. ${sym(_homeBase())}${fmtPHP(actualTotal)} already vs ${sym(_homeBase())}${fmtPHP(targetNow)} expected. Trajectory: ${sym(_homeBase())}${fmtPHP(projected)}.`,
+      `${dayCounter}. ${paceLine} Projected ${sym(_homeBase())}${fmtPHP(projected)} — about ${sym(_homeBase())}${fmtPHP(Math.abs(overGoal))} ${overGoal>=0?'over':'under'} the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal.`,
+      `${dayCounter}. The ${sym(_homeBase())}${fmtPHP(ahead)} surplus is roughly ${monthsBuffer.toFixed(1)} ${aiPlural(Math.round(monthsBuffer),'month')} of contributions — could move to investments or front-load another goal.`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}% vs ${expectedPct.toFixed(1)}% expected. Raising the monthly goal would finish the target early; otherwise the surplus compounds better in a yield bucket.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'🚀', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   } else {
@@ -21353,12 +21358,12 @@ function aiSavingsPace() {
       'Savings exactly on pace',
       'Right on track with savings',
       `Steady savings pace`,
-      `On schedule — savings on point`,
+      `On schedule with savings`,
     ];
     const bodies = [
       `${dayCounter}. ${paceLine} Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
       `${dayCounter}. At ${actualPct.toFixed(1)}% — exactly where you should be. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
-      `${dayCounter}. ${sym(_homeBase())}${fmtPHP(actualTotal)} saved, target ${sym(_homeBase())}${fmtPHP(targetNow)} — bullseye. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
+      `${dayCounter}. ${sym(_homeBase())}${fmtPHP(actualTotal)} saved, target ${sym(_homeBase())}${fmtPHP(targetNow)} — on pace. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'✅', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   }
@@ -21410,15 +21415,15 @@ function aiFxAdvisor() {
     const id = 'fx-good';
     const diffPct = ((current/last3Avg-1)*100).toFixed(1);
     const titles = [
-      'Good time to remit!',
+      'PGK rate above recent average',
       'Favorable FX window',
       'PGK rate trending up',
-      `${aiName()?aiName()+', t':'T'}his looks like a smart remit moment`,
+      `Rate ${diffPct}% above your recent average`,
     ];
     const bodies = [
-      `Current ${fmt(current, _homeBase())}/PGK is above recent avg ${fmt(last3Avg, _homeBase())} — +${diffPct}%.`,
-      `Rate's ${diffPct}% better than your 3-period average. Worth considering.`,
-      `Above your typical ${fmt(last3Avg, _homeBase())} by ${diffPct}% — small win on conversion.`,
+      `Current ${fmt(current, _homeBase())}/PGK is above the recent avg ${fmt(last3Avg, _homeBase())} — +${diffPct}%. Converting now stretches each PGK a little further.`,
+      `Rate is ${diffPct}% better than your 3-period average — a more efficient window if you have PGK to move.`,
+      `Above your typical ${fmt(last3Avg, _homeBase())} by ${diffPct}%. On a ~${fmt(10000,'PGK')} remit, that's about ${fmt((current-last3Avg)*10000, _homeBase())} more than average.`,
     ];
     insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
   }
@@ -21432,8 +21437,8 @@ function aiFxAdvisor() {
     ];
     const bodies = [
       `Current ${fmt(current, _homeBase())}/PGK below recent avg ${fmt(last3Avg, _homeBase())}. Consider waiting if not urgent.`,
-      `Rate's ${diffPct}% under your typical conversion. Worth a pause unless you need it now.`,
-      `${diffPct}% below your 3-period average. If timing flexible, holding might pay off.`,
+      `Rate is ${diffPct}% below your typical conversion — holding is more efficient if the remit isn't urgent.`,
+      `${diffPct}% below your 3-period average — waiting could recover ${fmt((last3Avg-current)*10000, _homeBase())} on a ~${fmt(10000,'PGK')} remit.`,
     ];
     insights.push({id,type:'fx',priority:'low',icon:'⏳',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
   }
@@ -21597,7 +21602,7 @@ function aiAccountBalanceAlert() {
         `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} ${aiPlural(daysLeft,'day')} remaining.`,
         `Burn rate ${fmt(avgDaily,acct.currency)}/day means ${fmt(bal,acct.currency)} runs out in ~${daysLeft} ${aiPlural(daysLeft,'day')}.`,
         `${daysLeft} ${aiPlural(daysLeft,'day')} of runway at current pace (${fmt(avgDaily,acct.currency)}/day, ${fmt(bal,acct.currency)} left).`,
-        daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left — ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days at ${fmt(avgDaily,acct.currency)}/day. Top up soon?`,
+        daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left — ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days of runway at ${fmt(avgDaily,acct.currency)}/day — plan a top-up.`,
       ];
       insights.push({
         id, type: 'balance',
@@ -21722,14 +21727,14 @@ function aiSpendingVelocity() {
       const id = 'velocity-down';
       const titles = [
         `Spending down ${Math.abs(change).toFixed(0)}% vs last month`,
-        `${aiName()?aiName()+'\'s s':'S'}pending easing up`,
+        `On track to spend less than last month`,
         `Lighter spending pace this month`,
         `Down ${Math.abs(change).toFixed(0)}% from last month`,
       ];
       const bodies = [
-        `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Keep it up!`,
-        `On track to spend ${fmt(projectedFullMonth, thisMonth.currency)} — that's ${Math.abs(change).toFixed(0)}% less than last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
-        `Trajectory shows ${Math.abs(change).toFixed(0)}% lighter spend. Nice work.`,
+        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month — about ${fmt(lastMonth.expense-projectedFullMonth, thisMonth.currency)} freed up if the pace holds.`,
+        `On track to spend ${fmt(projectedFullMonth, thisMonth.currency)} — ${Math.abs(change).toFixed(0)}% less than last month's ${fmt(lastMonth.expense, lastMonth.currency)}. Worth moving the difference to savings before it's reabsorbed.`,
+        `Trajectory shows ${Math.abs(change).toFixed(0)}% lighter spend. If it sticks, it's a candidate for a lower budget cap next month.`,
       ];
       insights.push({id, type: 'velocity', priority: 'low', icon: '📉', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
     } else if (change > 25) {
@@ -21742,9 +21747,9 @@ function aiSpendingVelocity() {
         `Heading for a bigger spend month`,
       ];
       const bodies = [
-        `Projected: ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. Watch your pace.`,
+        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month — about ${fmt(projectedFullMonth-lastMonth.expense, thisMonth.currency)} more if it holds.`,
         `At current rate, you'll close at ${fmt(projectedFullMonth, thisMonth.currency)} — ${change.toFixed(0)}% above last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
-        `${change.toFixed(0)}% faster pace than last month. Worth checking what changed.`,
+        `${change.toFixed(0)}% faster than last month — check which categories drove it.`,
       ];
       insights.push({id, type: 'velocity', priority: change > 50 ? 'high' : 'medium', icon: '📈', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
     }
@@ -21801,13 +21806,13 @@ function aiSavingRate() {
     const titles = [
       `Saving ${savingRate.toFixed(0)}% this month`,
       `Strong saving rate at ${savingRate.toFixed(0)}%`,
-      streak >= 2 ? `${streak+1}-month savings streak` : `Net positive month`,
-      `${aiName()?aiName()+', s':'S'}aving rate looking great`,
+      streak >= 2 ? `${streak+1}-month net-positive streak` : `Net positive month`,
+      `${savingRate.toFixed(0)}% of income kept this month`,
     ];
-    const streakMsg = streak >= 2 ? ` ${streak+1} ${aiPlural(streak+1,'month')} net positive — on a roll!` : '';
+    const streakMsg = streak >= 2 ? ` ${streak+1} ${aiPlural(streak+1,'month')} net positive in a row.` : '';
     const bodies = [
-      `Net: ${fmt(net, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streakMsg}`,
-      `Held onto ${fmt(net, totals.currency)} of your ${fmt(totals.income, totals.currency)} this month.${streakMsg}`,
+      `Net ${fmt(net, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streakMsg} Sustained, that's about ${fmt(net*12, totals.currency)} a year.`,
+      `Kept ${fmt(net, totals.currency)} of your ${fmt(totals.income, totals.currency)}.${streakMsg} Worth auto-moving it to a savings or investment bucket before it's spent.`,
       `${savingRate.toFixed(0)}% saved — ${fmt(net, totals.currency)} not spent.${streakMsg}`,
     ];
     insights.push({id, type: 'saverate', priority: 'low', icon: '💎', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
@@ -21822,7 +21827,7 @@ function aiSavingRate() {
     ];
     const bodies = [
       `Expenses ${fmt(overspend, totals.currency)} over income. Review categories.`,
-      `Spent ${fmt(overspend, totals.currency)} more than earned (${fmt(totals.expense, totals.currency)} vs ${fmt(totals.income, totals.currency)}). Worth a look.`,
+      `Spent ${fmt(overspend, totals.currency)} more than earned (${fmt(totals.expense, totals.currency)} vs ${fmt(totals.income, totals.currency)}) — review top categories to close the gap.`,
       `${fmt(overspend, totals.currency)} gap between expenses and income this month.`,
     ];
     insights.push({id, type: 'saverate', priority: 'high', icon: '⚠️', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
@@ -21887,7 +21892,7 @@ function aiTransferActivity() {
     ];
     const bodies = [
       `Frequent moves between accounts. Consider consolidating to reduce friction or fees.`,
-      `${transfers.length} transfers in 30 days — averaging ${(transfers.length/30).toFixed(1)}/day. Worth checking if any are avoidable.`,
+      `${transfers.length} transfers in 30 days (${(transfers.length/30).toFixed(1)}/day) — consolidating cuts any per-transfer fees.`,
       `That's ${transfers.length} transfers in a month. Could simplify your account structure.`,
     ];
     insights.push({
