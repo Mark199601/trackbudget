@@ -12998,16 +12998,19 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     const x = xAt(i).toFixed(1), yv = yAt(plotted[i].rate).toFixed(1);
     path += (path === '' ? 'M' : ' L') + x + ',' + yv;
   }
-  const dots = plotted.map((mo, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(mo.rate).toFixed(1)}" r="2.5" fill="var(--accent)"/>`).join('');
+  // Dots as HTML overlay so they stay round under preserveAspectRatio="none".
+  const dots = plotted.map((mo, i) => `<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>`).join('');
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
       <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:44px;display:block;margin-bottom:6px">
-      <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+    <div style="position:relative;margin-bottom:6px">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">
+        <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none" vector-effect="non-scaling-stroke"/>
+      </svg>
       ${dots}
-    </svg>
+    </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px;color:var(--text4)">
       ${plotted.map(mo => `<span>${mo.label}</span>`).join('')}
     </div>
@@ -13507,7 +13510,12 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   // Only the months with real history are plotted.
   const plotted = points.filter(p => p.hasHistory);
   if (plotted.length < 2) return '';
-  const dispVals = plotted.map(p => fromPhp(p.php, dispCurr));
+  // Net worth includes non-account holdings (investments, loans, receivables) that have no
+  // historical snapshot. Anchor the latest point to getNetWorth() (the hero-card value) so
+  // "Current" matches the dashboard exactly; earlier points shift by the same offset (treats
+  // non-account holdings as ~constant over the short window).
+  const nwOffset = getNetWorth().net - plotted[plotted.length-1].php;
+  const dispVals = plotted.map(p => fromPhp(p.php + nwOffset, dispCurr));
   const cur = dispVals[dispVals.length-1];
   const prev = dispVals[dispVals.length-2];
   const change = cur - prev;
@@ -13526,17 +13534,20 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   dispVals.forEach((v, i) => { path += (i===0?'M':' L') + xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1); });
   const zeroY = yAt(Math.max(minV, 0)).toFixed(1);
   const areaPath = path + ` L${xAt(n-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
-  const dots = dispVals.map((v,i)=>`<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(v).toFixed(1)}" r="2.5" fill="var(--accent)"/>`).join('');
+  // Dots as HTML overlay (positioned by %) so they stay round under preserveAspectRatio="none".
+  const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>`).join('');
   return `<div class="card" style="padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📈 Net Worth Trend</div>
       <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:52px;display:block;margin-bottom:6px">
-      <path d="${areaPath}" fill="var(--accent)" opacity="0.08"/>
-      <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
-      ${dots}
-    </svg>
+    <div style="position:relative;margin-bottom:6px">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
+        <path d="${areaPath}" fill="var(--accent)" opacity="0.08"/>
+        <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none" vector-effect="non-scaling-stroke"/>
+      </svg>
+      ${dotEls}
+    </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px;color:var(--text4)">
       ${plotted.map(p=>`<span>${p.label}</span>`).join('')}
     </div>
