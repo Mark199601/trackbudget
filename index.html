@@ -3983,6 +3983,55 @@ function invReturnNestedHTML(tx) {
     + '</div>';
 }
 
+// Builds the nested "Linked · N" accordion (forex gain/loss + fee + settlement children) for a
+// parent transaction. Reused by both the regular-transfer early-return row AND the fall-through
+// row, so cross-currency transfers nest their linked children just like batch settlements do.
+function buildLinkedChildrenHTML(tx) {
+  let genericChildrenHTML = '';
+  if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
+    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
+    if (directChildren.length > 0) {
+      const breakdownId = 'genbreak-' + tx.id;
+      const forexC = directChildren.find(c => c.isAutoForex);
+      const fxBadge = forexC
+        ? (forexC.type === 'income'
+            ? `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(forexC.amount, forexC.currency)} gain</span>`
+            : `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(forexC.amount, forexC.currency)} loss</span>`)
+        : '';
+      const childRows = directChildren.map(c => {
+        const cAmtD = txAmountDisplay(c);
+        const cCat = txCategoryDisplay(c);
+        let badge = '';
+        if (c.isLoanSettlementGain || c.isReimbSettlementGain) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Gain</span>`;
+        else if (c.isLoanSettlementLoss || c.isReimbSettlementLoss) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`;
+        else if (c.isAutoForex) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--accent-bg);color:var(--accent);font-weight:600">Forex</span>`;
+        else if (c.isAutoFee) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600">Fee</span>`;
+        else if (c.isInvestmentReturn) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Return</span>`;
+        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+            <div style="font-size:12px;color:var(--text2);min-width:0">${/^\p{L}/u.test(cCat.name) ? cCat.name : cCat.name.replace(/^[^ ]+ /,'')}</div>
+            ${badge}
+          </div>
+          <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0">${cAmtD.str}</span>
+        </div>`;
+      }).join('');
+      genericChildrenHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${directChildren.length}</span>
+            ${fxBadge}
+          </div>
+          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
+          ${childRows}
+        </div>
+      </div>`;
+    }
+  }
+  return genericChildrenHTML;
+}
+
 function renderTxRowBody(tx, showDate, acct, amtD) {
 
   // ── isLoanTx: parent loan transaction (Borrowed / Lent Out) ──
@@ -4126,7 +4175,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         <div class="tx-amount tx-neu">↔ ${fmt(tx.amount,tx.currency)}</div>
         ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
       </div>
-    </div>`;
+    </div>${buildLinkedChildrenHTML(tx)}`;
   } else if (tx.isInvestmentFund) {
     // Investment fund tx — use source account as detail, fall through to full rendering
     const from = getAccountDisplay(tx.fromAccountId);
@@ -4235,49 +4284,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // settlement, ipinapakita yung mga linked children sa baba ng row — para makita mo agad
   // anong nadagdag/nawala. Tap mo yung child → opens its detail (read-only).
   // ── PERSONAL LOGIC SET #31 ── generic parent children block: shows isLoanSettlementGain/Loss, isReimbSettlementGain/Loss, isAutoForex children directly nested under parent in tx log
-  let genericChildrenHTML = '';
-  if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
-    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
-    if (directChildren.length > 0) {
-      const breakdownId = 'genbreak-' + tx.id;
-      // Forex gain/loss header badge (so a cross-currency transfer reads like the batch-settlement card)
-      const forexC = directChildren.find(c => c.isAutoForex);
-      const fxBadge = forexC
-        ? (forexC.type === 'income'
-            ? `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(forexC.amount, forexC.currency)} gain</span>`
-            : `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(forexC.amount, forexC.currency)} loss</span>`)
-        : '';
-      const childRows = directChildren.map(c => {
-        const cAmtD = txAmountDisplay(c);
-        const cCat = txCategoryDisplay(c);
-        let badge = '';
-        if (c.isLoanSettlementGain || c.isReimbSettlementGain) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Gain</span>`;
-        else if (c.isLoanSettlementLoss || c.isReimbSettlementLoss) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">Loss</span>`;
-        else if (c.isAutoForex) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--accent-bg);color:var(--accent);font-weight:600">Forex</span>`;
-        else if (c.isAutoFee) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600">Fee</span>`;
-        else if (c.isInvestmentReturn) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Return</span>`;
-        return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-            <div style="font-size:12px;color:var(--text2);min-width:0">${/^\p{L}/u.test(cCat.name) ? cCat.name : cCat.name.replace(/^[^ ]+ /,'')}</div>
-            ${badge}
-          </div>
-          <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0">${cAmtD.str}</span>
-        </div>`;
-      }).join('');
-      genericChildrenHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
-        <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${directChildren.length}</span>
-            ${fxBadge}
-          </div>
-          <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
-          ${childRows}
-        </div>
-      </div>`;
-    }
-  }
+  const genericChildrenHTML = buildLinkedChildrenHTML(tx);
 
   // 📖 USER STORY: Yung batch settlement parent (isBatchSettlement) ay ipinapakita din ng
   // expandable card sa baba ng row, listing yung mga loans na nai-settle (kasama yung gain/loss
