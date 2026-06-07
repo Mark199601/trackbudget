@@ -4240,6 +4240,13 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
     if (directChildren.length > 0) {
       const breakdownId = 'genbreak-' + tx.id;
+      // Forex gain/loss header badge (so a cross-currency transfer reads like the batch-settlement card)
+      const forexC = directChildren.find(c => c.isAutoForex);
+      const fxBadge = forexC
+        ? (forexC.type === 'income'
+            ? `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(forexC.amount, forexC.currency)} gain</span>`
+            : `<span style="font-size:10px;padding:1px 8px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(forexC.amount, forexC.currency)} loss</span>`)
+        : '';
       const childRows = directChildren.map(c => {
         const cAmtD = txAmountDisplay(c);
         const cCat = txCategoryDisplay(c);
@@ -4259,7 +4266,10 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       }).join('');
       genericChildrenHTML = `<div style="margin:0 12px 8px 60px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
         <div onclick="event.stopPropagation();toggleSpendingDrill('${breakdownId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;user-select:none">
-          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${directChildren.length}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Linked · ${directChildren.length}</span>
+            ${fxBadge}
+          </div>
           <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
