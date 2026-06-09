@@ -3682,12 +3682,19 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.8';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.0.8', date: 'June 2026', changes: [
+    '🗓️ Standardized date-label parsing (day, month, and instalment views) to the app\u2019s timezone-safe method used elsewhere — prevents off-by-one-day labels in other timezones',
+  ]},
+  { ver: '1.0.7', date: 'June 2026', changes: [
+    '🐛 Fixed the Edit Transfer forex preview showing the wrong direction (e.g. "Forex Loss" when it was actually a gain) — it now matches what gets saved',
+    '🔁 The forex gain/loss preview now also appears when you enter only the actual received amount (no rate typed)',
+  ]},
   { ver: '1.0.6', date: 'June 2026', changes: [
     '⚖️ Balance corrections now always appear in the log under any type filter (All/Expense/Income/Transfer/Shared), so they no longer hide when you filter',
     '🕒 Transaction detail now shows a time even for older entries that were saved without one (derived from when they were created)',
@@ -5921,8 +5928,10 @@ function updateTransferPreview() {
       if (!useSnapshot && userRate > 0 && snapRate > 0) {
         let diff;
         if (txCurr === home) {
-          const toAmtPreview = amount / snapRate;
-          diff = Math.round((amount - (toAmtPreview * userRate)) * 100) / 100;
+          // home → foreign: diff = (actual foreign − snapshot foreign) × snapshot rate → home currency (mirrors submitTransfer)
+          const actualForeign = userToAmount > 0 ? userToAmount : amount / userRate;
+          const snapForeign = amount / snapRate;
+          diff = Math.round(((actualForeign - snapForeign) * snapRate) * 100) / 100;
         } else {
           const toAmtPreview = amount * snapRate;
           diff = Math.round(((userToAmount > 0 ? userToAmount : amount * userRate) - toAmtPreview) * 100) / 100;
@@ -7700,18 +7709,22 @@ function updateEditTransferPreview() {
   // Forex preview
   if (!useSnapshot && isCross && fxPrev) {
     const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
-    if (customRate > 0) {
-      let diff;
-      if (txCurr === home) {
-        const toAmtSnap = amount / snapRate;
-        diff = Math.round((amount - (toAmtSnap * customRate)) * 100) / 100;
-      } else {
-        const toAmtSnap = amount * snapRate;
-        diff = Math.round((toAmtSnap - (amount * customRate)) * 100) / 100;
-      }
+    // Actual received: prefer the explicit amount, else derive from the typed rate (mirrors submitTransfer)
+    const actualToAmt = userToAmount > 0
+      ? userToAmount
+      : (customRate > 0 ? (txCurr === home ? amount / customRate : amount * customRate) : 0);
+    if (actualToAmt > 0) {
+      // Mirror submitTransfer()/edit-save's forexDiff convention exactly so this preview matches
+      // what actually gets logged: diff = (actual − snapshot) in home currency (+gain / −loss).
+      const snapToAmt = txCurr === home ? amount / snapRate : amount * snapRate;
+      let diff = toCurr === home
+        ? (actualToAmt - snapToAmt)               // receiving home — diff already in home
+        : (actualToAmt - snapToAmt) * snapRate;   // receiving foreign — convert diff to home
+      diff = Math.round(diff * 100) / 100;
       const isLoss = diff < 0;
+      const effRate = customRate > 0 ? customRate : (txCurr === home ? amount / actualToAmt : actualToAmt / amount);
       fxPrev.style.display = 'block';
-      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${fmtRate(snapRate)} | Transaction rate: ${sym(_homeBase())}${fmtRate(customRate)}</div>
+      fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${fmtRate(snapRate)} | Transaction rate: ${sym(_homeBase())}${fmtRate(effRate)}</div>
         <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
     } else { fxPrev.style.display = 'none'; }
   } else if (fxPrev) { fxPrev.style.display = 'none'; }
@@ -11706,8 +11719,8 @@ function renderInstallments() {
     const isComplete = remainingMonths <= 0;
 
     const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
-    const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
-    const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
+    const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01T12:00':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
+    const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01T12:00':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
 
     return `<div class="card" style="margin-bottom:12px;cursor:pointer${isComplete ? ';opacity:0.65' : ''}" onclick="openInstallmentDetail('${inst.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
@@ -12203,7 +12216,7 @@ function openCalDay(dateStr) {
   const findAcct = id => accts.find(a => a.id === id)?.name || '';
   const findCat = (id, type) => (cats[type] || []).find(c => c.id === id)?.name || '';
 
-  const labelDate = new Date(dateStr).toLocaleDateString('en-PH',{weekday:'long', month:'long', day:'numeric'});
+  const labelDate = new Date(dateStr+'T12:00').toLocaleDateString('en-PH',{weekday:'long', month:'long', day:'numeric'});
 
   let body;
   if (dayTxs.length === 0) {
@@ -13900,7 +13913,7 @@ function renderAnalyticsSpending() {
 
   const periodLabel = period === 'ytd'
     ? `YTD ${now.getFullYear()}`
-    : new Date(period+'-01').toLocaleString('en',{month:'long',year:'numeric'});
+    : new Date(period+'-01T12:00').toLocaleString('en',{month:'long',year:'numeric'});
 
   // iOS-style segmented control — dynamic from user's budgets
   const _getCurrInfo = (code) => {
@@ -23389,8 +23402,8 @@ function openInstallmentDetail(instId) {
     </span>`
   ).join('');
 
-  const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.startDate.length>7?'numeric':undefined,year:'numeric'}) : '';
-  const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.endDate.length>7?'numeric':undefined,year:'numeric'}) : '';
+  const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01T12:00':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.startDate.length>7?'numeric':undefined,year:'numeric'}) : '';
+  const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01T12:00':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',day:inst.endDate.length>7?'numeric':undefined,year:'numeric'}) : '';
 
   openSheet('gen', `${inst.icon||'💳'} ${_esc(inst.name)}`, `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
