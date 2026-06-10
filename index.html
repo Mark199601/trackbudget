@@ -201,7 +201,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 #bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);z-index:100}
 .bn-items{display:flex}
-.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;gap:3px;border:none;background:none;color:var(--text4);font-size:10px;font-weight:500;letter-spacing:0.03em;text-transform:uppercase;transition:color var(--transition)}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;gap:3px;border:none;background:none;color:var(--text4);font-size:10px;font-weight:500;letter-spacing:0;transition:color var(--transition)}
 .bn-item.active{color:var(--accent)}
 .bn-item svg{width:20px;height:20px}
 .bn-add{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px 8px;gap:3px;border:none;background:none;font-size:10px;font-weight:500;color:var(--text2)}
@@ -464,7 +464,7 @@ option{background:var(--bg3);color:var(--text)}
 .month-hdr{padding:10px 20px 6px;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text4);font-weight:600;background:var(--bg);position:sticky;top:0;z-index:5;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 
 .tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;overflow:hidden;flex-shrink:0;touch-action:pan-y;overscroll-behavior:none;-webkit-overflow-scrolling:auto}
-/* iPhone-style scrollable segmented tabs for Analytics */
+/* ORPHANED (kept intentionally): .tab-bar/.tab-btn had 4 users (Transactions/Loans/Settings/Planning) — all converted to .seg segmented controls; Analytics uses the PLS #88 Health-style picker, never this. DEBUG-SCAN: do not flag as missing usage; safe to delete in a future cleanup pass. */
 .analytics-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid var(--border);scrollbar-width:none;-webkit-overflow-scrolling:touch;background:var(--bg);flex-wrap:nowrap}
 .analytics-tabs::-webkit-scrollbar{display:none}
 .analytics-picker{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);cursor:pointer;user-select:none}
@@ -749,6 +749,31 @@ option{background:var(--bg3);color:var(--text)}
     scroll-behavior: auto !important;
   }
 }
+/* ── PLS #132 family: iOS chrome refinements ──
+   icon-btn: borderless 44pt-target glyph buttons for the page header (no boxed pills).
+   btn-text: accent text button for contextual header actions (+ Account / + Loan ...).
+   seg: iOS segmented control (white pill on bg3 track) — same pattern as Budget's picker.
+   quiet-row: Reminders-style footer rows (Loans Settled/Archive) w/ desktop hover. */
+.icon-btn{background:none;border:none;width:36px;height:36px;min-width:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer;transition:all var(--transition);padding:0}
+.icon-btn:active{transform:scale(0.9);background:var(--bg3)}
+@media(hover:hover){.icon-btn:hover{background:var(--bg3);color:var(--text)}}
+.icon-btn svg{width:18px;height:18px}
+.btn-text{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;letter-spacing:-0.01em;transition:all var(--transition);white-space:nowrap}
+.btn-text:active{transform:scale(0.96);background:var(--accent-bg)}
+@media(hover:hover){.btn-text:hover{background:var(--accent-bg)}}
+.seg{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:3px}
+.seg-btn{flex:1;padding:8px 12px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--text3);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition);white-space:nowrap;display:flex;align-items:center;justify-content:center}
+.seg-btn.active{background:var(--bg2);color:var(--text);box-shadow:var(--shadow-sm)}
+.seg-btn:active{transform:scale(0.97)}
+.seg-badge{color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:var(--r-full);margin-left:6px;display:inline-block;line-height:1.5}
+@media(max-width:480px){.seg-btn{padding:8px 4px;font-size:11.5px}.seg-badge{margin-left:4px;padding:1px 5px}}
+.quiet-row{display:flex;justify-content:space-between;align-items:center;padding:12px 8px;cursor:pointer;color:var(--text3);font-size:13px;border-radius:var(--r-sm);transition:background var(--transition)}
+.quiet-row + .quiet-row{border-top:0.5px solid var(--border)}
+.quiet-row:active{background:var(--bg3)}
+@media(hover:hover){.quiet-row:hover{background:var(--bg3)}}
+@media(min-width:1024px){.hero-amount{font-size:46px;letter-spacing:-2.2px}}
+@keyframes tbspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.spin{animation:tbspin 1s linear infinite}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 </head>
@@ -1291,6 +1316,10 @@ function escapeAttr(s) {
 // DEBUG_SCANNER_NOTE: _esc is defined below as `const _esc = escapeAttr` (alias, not function).
 // If scanner flags "_esc missing" because it only checks `function _esc`, that's a FALSE POSITIVE.
 // 86+ call sites work correctly via const aliasing.
+// ── PERSONAL LOGIC SET #131 ── User-entered text must pass _esc() at every innerHTML render.
+// Covers: tx notes, person names, account names — including strings BUILT FROM them (alert
+// msgs, transfer detail lines, AI insight titles/bodies). HTML-bearing composites (e.g. the
+// acct-pill detail variants) escape the names INSIDE, never the whole composite.
 const _esc = escapeAttr;
 // ── PERSONAL LOGIC SET #122 ── Per-currency decimal precision (real-world accounting).
 // Fiat money is discrete to 2 decimals (₱1.20, never ₱1.1999...). Crypto/stablecoins use
@@ -2449,27 +2478,35 @@ function nav(page) {
   if (fn[page]) fn[page]();
 }
 
+// PLS #132 family: shared theme-glyph SVGs — used by renderPageHeader AND setThemeMode
+// (the toggle swaps the icon in place on tap; emoji textContent would clobber the SVG).
+const SVG_MOON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+const SVG_SUN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
 function renderPageHeader(page) {
   const r = document.getElementById('ph-right');
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const syncHTML = `<div id="sync-indicator" style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text4);padding:4px 8px;border-radius:var(--r-full);border:1px solid var(--border2);cursor:default;white-space:nowrap"><span id="sync-icon">☁️</span><span id="sync-label">–</span></div>`;
-  const themeHTML = `<button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme" style="background:none;border:1px solid var(--border2);border-radius:var(--r-full);width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all var(--transition)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">${isLight ? '🌙' : '☀️'}</button>`;
+  // PLS #132 family: header controls are borderless glyph buttons (iOS nav style) — no boxed
+  // pills. Contextual "+ X" actions are accent text buttons. Functional icons are SVG (not
+  // emoji) so they tint with the theme and render identically across platforms.
+  const svgArchive = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`;
+  const syncHTML = `<div id="sync-indicator" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text4);cursor:default;white-space:nowrap"><span id="sync-icon" style="display:flex;align-items:center"></span><span id="sync-label">–</span></div>`;
+  const themeHTML = `<button id="theme-toggle-btn" class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">${isLight ? SVG_MOON : SVG_SUN}</button>`;
   let pageHTML = '';
   if (page==='dashboard') {
     pageHTML = renderDeviceIndicator();
   } else if (page==='accounts') {
-    const archivedCount = db.accounts.filter(a=>a.archived).length;
-    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddAccount()">+ Account</button>`
-      + `<button aria-label="Archive" class="btn btn-ghost btn-sm" title="Archived accounts" style="padding:6px 8px;cursor:pointer" onclick="openArchivedAccountsSheet()">📦</button>`;
+    pageHTML = `<button class="btn-text" onclick="openAddAccount()">+ Account</button>`
+      + `<button aria-label="Archived accounts" class="icon-btn" title="Archived accounts" onclick="openArchivedAccountsSheet()">${svgArchive}</button>`;
   } else if (page==='targets') {
-    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddTarget()">+ Target</button>`;
+    pageHTML = `<button class="btn-text" onclick="openAddTarget()">+ Target</button>`;
   } else if (page==='loans') {
-    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddLoan()">+ Loan</button>`;
+    pageHTML = `<button class="btn-text" onclick="openAddLoan()">+ Loan</button>`;
   } else if (page==='investments') {
-    pageHTML = `<button class="btn btn-ghost btn-sm" onclick="openAddInv()">+ Investment</button>`;
+    pageHTML = `<button class="btn-text" onclick="openAddInv()">+ Investment</button>`;
   }
   // sync first, then page actions, then theme
   r.innerHTML = syncHTML + pageHTML + themeHTML;
+  updateSyncIndicator();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -3200,7 +3237,7 @@ function checkAlerts() {
 
   // Update analytics badge — show when any budget exceeded
   const budgetAlerts = db.budgets.filter(b=>b.active).filter(bgt=>{
-    const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
+    const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency) // PLS #95: canonical budget-spend exclusions
       .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
     return spent > (bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0));
   }).length;
@@ -3366,7 +3403,7 @@ function renderDashboard() {
       { id:'accounts', label:'Add your first account', done: db.accounts.filter(a=>!a.archived).length > 0, action: 'nav(\'accounts\')' },
       { id:'fx', label:'Set FX rates for tracked currencies', done: db.trackedCurrencies.filter(c=>c!==(_homeBase())).every(c=>(db.fxRates[c]||0)>0), action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'fx\'),50)' },
       { id:'firsttx', label:'Log your first transaction', done: db.transactions.filter(t=>!t.archived).length > 0, action: 'openAddSheet()' },
-      { id:'budget', label:'Set a monthly budget', done: db.budgets.filter(b=>b.active).length > 0, action: 'nav(\'settings\');setTimeout(()=>setSettingsTab(\'budgets\'),50)' },
+      { id:'budget', label:'Set a monthly budget', done: db.budgets.filter(b=>b.active).length > 0, action: 'nav(\'planning\');setTimeout(()=>setPlanTab(\'budgets\'),50)' },
       { id:'drive', label:'Connect Google Drive (optional)', done: !!db.settings?.googleDriveConnected, action: 'openDriveSheet()', optional: true }
     ];
     const doneCount = steps.filter(s=>s.done).length;
@@ -3421,7 +3458,7 @@ function renderDashboard() {
         : '';
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <span style="font-size:14px;flex-shrink:0">${icon}</span>
-        <span style="font-size:12px;color:var(--text2);flex:1">${a.msg}</span>
+        <span style="font-size:12px;color:var(--text2);flex:1">${_esc(a.msg)}</span>
         ${actionBtn}
       </div>`;
     }).join('');
@@ -3682,12 +3719,32 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0.8';
+const APP_VERSION = '1.0.11';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.0.11', date: 'June 2026', changes: [
+    '🗂️ Budgets now live in Planning — one home for all money planning: Payday · Recurring · Budgets · Contract · Wishlist (5-tab segmented control)',
+    '⚙️ Settings is now pure app configuration (Profile · Rates · Categories · Data), with a "Budgets — moved to Planning" shortcut at the bottom of Profile while you adjust',
+    '🔗 All budget links follow the move — AI insight actions and the onboarding checklist now open Planning → Budgets',
+    '🏷️ Cleaner Categories list — rows show just the icon, name, and expander; Edit and + Subcategory now live inside the expanded view where you manage them',
+  ]},
+  { ver: '1.0.10', date: 'June 2026', changes: [
+    '🎨 Cleaner iOS-style chrome — borderless header buttons, themed SVG icons for the theme toggle, archive, and sync states (cloud / dot / spinner / cloud-check), and regular-case bottom-nav labels',
+    '🧭 Segmented controls replace underline tabs on Loans and Settings; the lone "Log" tab strip on Transactions is gone',
+    '⚙️ Settings → Budgets is now configuration-only (limits, rollover, allocations) — live spend status lives on the dashboard, with a "View budget status" shortcut',
+    '🌗 Appearance picker is a clean Auto / Light / Dark segmented control',
+    '🖥️ Desktop polish — larger net-worth display, hover states on footer rows, tab edges aligned with content',
+  ]},
+  { ver: '1.0.9', date: 'June 2026', changes: [
+    '🎨 Loans page refresh — Settled and Archive are now quiet rows at the bottom of the list (iOS style), and the header "+ Loan" is the single add button',
+    '🔧 Editing or deleting a loan payment now recalculates correctly for multi-loan batch settlements — each loan\u2019s share of the payment is tracked exactly',
+    '📊 Budget alerts and AI insights now use the same spending rules as the Budget tab, so "budget exceeded" warnings always match what the tab shows',
+    '🔢 Amounts typed in settlement, loan-payment, and investment forms are now saved rounded to the currency\u2019s precision (fiat 2dp, crypto 8dp)',
+    '🛡️ Account names with special characters now render safely in alerts, transfer details, and AI insights',
+  ]},
   { ver: '1.0.8', date: 'June 2026', changes: [
     '🗓️ Standardized date-label parsing (day, month, and instalment views) to the app\u2019s timezone-safe method used elsewhere — prevents off-by-one-day labels in other timezones',
   ]},
@@ -4189,7 +4246,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     // isInvestmentFund transfers fall through to full custom rendering below
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
-    detail = `${from.name} → ${to.name}`;
+    detail = `${_esc(from.name)} → ${_esc(to.name)}`;
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
@@ -6313,12 +6370,9 @@ var _txLongPressFired = false;
 const TX_BULK_LONGPRESS_MS = 550;
 
 function renderTransactions() {
-  const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn active">Log</button>
-  </div>`;
-  let content = renderTxLog();
-
-  document.getElementById('page-content').innerHTML = tabsHTML + content;
+  // PLS #132 family: single-tab pages render NO tab strip — the page-header title suffices.
+  // (The old solo "Log" underline tab was pure visual noise.)
+  document.getElementById('page-content').innerHTML = renderTxLog();
 }
 
 
@@ -8734,7 +8788,7 @@ function updateReimbBatchPreview(person) {
   const targetCurr = document.getElementById('rsl-curr')?.value || (entries[0]?.tx.currency || _homeBase());
   const date = document.getElementById('rsl-date')?.value || today();
   const time = document.getElementById('rsl-time')?.value || nowTime();
-  const received = parseFloat(document.getElementById('rsl-amount')?.value) || 0;
+  const received = roundMoney(parseFloat(document.getElementById('rsl-amount')?.value) || 0, targetCurr); // PLS #122
   const grandTotal = computeReimbBatchTotal(entries, targetCurr, date, time);
   const preview = document.getElementById('rsl-preview');
   const fmtEl = document.getElementById('rsl-amount-fmt');
@@ -8907,7 +8961,7 @@ function confirmReimbSettlement(person) {
   const time = document.getElementById('rsl-time')?.value || nowTime();
   const notes = document.getElementById('rsl-notes')?.value?.trim() || '';
   const targetCurr = document.getElementById('rsl-curr')?.value || (entries[0].tx.currency || _homeBase());
-  const received = parseFloat(document.getElementById('rsl-amount')?.value) || 0;
+  const received = roundMoney(parseFloat(document.getElementById('rsl-amount')?.value) || 0, targetCurr); // PLS #122
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) { showToast('Pick an account'); return; }
   if (received <= 0) { showToast('Enter received amount'); return; }
@@ -9734,7 +9788,7 @@ function saveUpdateInvValue(invId) {
   if (!inv) return;
   const val = parseFloat(document.getElementById('uiv-val')?.value);
   if (!val||val<=0) { showToast('Enter valid amount'); return; }
-  inv.currentValue = val; inv.lastUpdated = today();
+  inv.currentValue = roundMoney(val, inv.currency); inv.lastUpdated = today();
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast('Value updated!');
 }
 
@@ -9763,7 +9817,7 @@ function openSellInv(invId) {
 function confirmSellInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const proceeds = parseFloat(document.getElementById('si-proceeds')?.value)||inv.currentValue||inv.amount;
+  const proceeds = roundMoney(parseFloat(document.getElementById('si-proceeds')?.value)||inv.currentValue||inv.amount, inv.currency); // PLS #122
   const acctId = document.getElementById('si-acct')?.value;
   const date = document.getElementById('si-date')?.value||today();
   const notes = document.getElementById('si-notes')?.value?.trim()||'';
@@ -9812,7 +9866,7 @@ function openAddCapital(invId) {
 function confirmAddCapital(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const add = parseFloat(document.getElementById('acap-amt')?.value);
+  const add = roundMoney(parseFloat(document.getElementById('acap-amt')?.value), inv.currency); // PLS #122
   if (!add || add<=0) { showToast('Enter valid amount'); return; }
   const acctId = document.getElementById('acap-acct')?.value;
   const date = document.getElementById('acap-date')?.value||today();
@@ -9863,7 +9917,7 @@ function openRecordDividend(invId) {
 function confirmRecordDividend(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const amt = parseFloat(document.getElementById('div-amt')?.value);
+  const amt = roundMoney(parseFloat(document.getElementById('div-amt')?.value), inv.currency); // PLS #122
   if (!amt || amt<=0) { showToast('Enter valid amount'); return; }
   const acctId = document.getElementById('div-acct')?.value;
   const date = document.getElementById('div-date')?.value||today();
@@ -9985,9 +10039,13 @@ function renderLoans() {
   const pendingBorrowed = db.loans.borrowed.filter(l=>!l.settled).length;
   // Migrate old archive tab state
   if (_loanTab==='archive') _loanTab='lent';
-  const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn ${_loanTab==='lent'?'active':''}" onclick="setLoanTab('lent')">Lent Out ${pendingLent>0?`<span style="background:var(--amber);color:#fff;font-size:10px;padding:1px 6px;border-radius:var(--r-full);margin-left:4px">${pendingLent}</span>`:''}</button>
-    <button class="tab-btn ${_loanTab==='borrowed'?'active':''}" onclick="setLoanTab('borrowed')">Borrowed ${pendingBorrowed>0?`<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:var(--r-full);margin-left:4px">${pendingBorrowed}</span>`:''}</button>
+  // PLS #132 family: two-option pages use the iOS segmented control (same pattern as the
+  // Budget period picker), not Material underline tabs.
+  const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
+    <div class="seg">
+      <button class="seg-btn ${_loanTab==='lent'?'active':''}" onclick="setLoanTab('lent')">Lent Out${pendingLent>0?` <span class="seg-badge" style="background:var(--amber)">${pendingLent}</span>`:''}</button>
+      <button class="seg-btn ${_loanTab==='borrowed'?'active':''}" onclick="setLoanTab('borrowed')">Borrowed${pendingBorrowed>0?` <span class="seg-badge" style="background:var(--red)">${pendingBorrowed}</span>`:''}</button>
+    </div>
   </div>`;
   let content = '';
   if (_loanTab==='lent') content = renderLoanList('lent');
@@ -9998,6 +10056,39 @@ function renderLoans() {
 function setLoanTab(t) { _loanTab=t; renderLoans(); }
 
 // Helper: get all payment transactions linked to a loan
+// ── PERSONAL LOGIC SET #130 ── Per-loan share of a payment, in the loan's currency.
+// A multi-loan batch parent's `amount` covers SEVERAL loans — naively summing p.amount per loan
+// over-counts (corrupts `remaining` on payment edit/delete) and breaks the timeline running
+// balance. Resolution order: stored batchBreakdown (exact) → FIFO apportion for legacy batch
+// parents (each member capped at its principal, converted via the payment's fxSnapshot; exact
+// for the common settle-in-full case) → plain snapshot-rate conversion for single-loan payments.
+function loanPaymentContribution(payment, loan) {
+  const loanCurr = loan.currency || _homeBase();
+  const snap = payment.fxSnapshot;
+  const conv = (amt, from, to) => from === to ? amt : fromPhp(toPhp(amt, from, snap), to, snap);
+  if (Array.isArray(payment.batchBreakdown)) {
+    const entry = payment.batchBreakdown.find(b => b.loanId === loan.id);
+    if (!entry) return 0;
+    return (entry.currency || loanCurr) === loanCurr ? entry.amount : conv(entry.amount, entry.currency, loanCurr);
+  }
+  const memberIds = payment.batchLoanIds || [];
+  if (payment.isBatchSettlement && memberIds.length > 1) {
+    const dir = payment.batchDirection || payment.loanDirection;
+    const findLoan = id => (db.loans[dir]||[]).find(l=>l.id===id) || (db.archivedLoans||[]).find(l=>l.id===id);
+    let pool = conv(payment.amount, payment.currency, loanCurr);
+    for (const id of memberIds) {
+      const m = findLoan(id);
+      const cap = m ? conv(m.amount, m.currency || _homeBase(), loanCurr) : 0;
+      const take = Math.min(pool, cap);
+      if (id === loan.id) return take;
+      pool -= take;
+      if (pool <= 0) return 0;
+    }
+    return 0;
+  }
+  return payment.currency === loanCurr ? payment.amount : conv(payment.amount, payment.currency, loanCurr);
+}
+
 function getLoanPayments(loanId) {
   // ── PERSONAL LOGIC SET #52 ── batch settlements may have parentId pointing to a different loan
   // (the "primary" in the batch). Include them if this loan is in their batchLoanIds array.
@@ -10016,11 +10107,7 @@ function renderLoanList(direction) {
   const totalPhp = active.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
   const archivedCount = (db.archivedLoans||[]).length;
 
-  let html = `<div class="page-pad">
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openSettledLoansSheet('${direction}')">✓ Settled${settled.length>0?` (${settled.length})`:''}</button>
-      <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openLoanArchiveSheet()">🗃️ Archive${archivedCount>0?` (${archivedCount})`:''}</button>
-    </div>`;
+  let html = `<div class="page-pad">`;
   if (active.length > 0) {
     html += `<div style="background:var(--bg3);border-radius:var(--r-md);padding:12px 15px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:12px;color:var(--text3)">${active.length} active ${direction==='lent'?'loans out':'debts'}</div>
@@ -10115,7 +10202,17 @@ function renderLoanList(direction) {
     </div>`;
   }
 
-  html += `<div style="margin-top:8px"><button class="pool-add-btn" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div></div>`;
+  // ── PERSONAL LOGIC SET #132 ── Loans page layout: Settled & Archive are QUIET FOOTER ROWS
+  // (iOS Reminders pattern) at the end of the list — never a top button pair. Single add entry
+  // point = header "+ Loan"; no in-list dashed add row (empty state keeps its own CTA).
+  html += `<div style="margin-top:14px">
+    <div class="quiet-row" onclick="openSettledLoansSheet('${direction}')">
+      <div>✓ Settled${settled.length>0?` <span style="color:var(--text4)">(${settled.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
+    </div>
+    <div class="quiet-row" onclick="openLoanArchiveSheet()">
+      <div>🗃️ Archive${archivedCount>0?` <span style="color:var(--text4)">(${archivedCount})</span>`:''}</div><div style="color:var(--text4)">›</div>
+    </div>
+  </div></div>`;
   return html;
 }
 
@@ -10187,7 +10284,7 @@ function openBatchSettleEdit(txId, direction) {
 function confirmBatchSettleEdit(txId, direction) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
-  const newAmount = parseFloat(document.getElementById('bse-amount')?.value) || tx.amount;
+  const newAmount = roundMoney(parseFloat(document.getElementById('bse-amount')?.value) || tx.amount, tx.currency); // PLS #122
   const newAcctId = document.getElementById('bse-acct')?.value || tx.accountId;
   const newDate = document.getElementById('bse-date')?.value || tx.date;
   const newTime = document.getElementById('bse-time')?.value || tx.time;
@@ -10301,7 +10398,7 @@ function openBatchReimbSettleEdit(txId) {
 function confirmBatchReimbSettleEdit(txId) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
-  const newAmount = parseFloat(document.getElementById('brse-amount')?.value) || tx.amount;
+  const newAmount = roundMoney(parseFloat(document.getElementById('brse-amount')?.value) || tx.amount, tx.currency); // PLS #122
   const newAcctId = document.getElementById('brse-acct')?.value || tx.accountId;
   const newDate = document.getElementById('brse-date')?.value || tx.date;
   const newTime = document.getElementById('brse-time')?.value || tx.time;
@@ -10467,7 +10564,7 @@ function updateBatchSettlePreview(direction, person) {
   const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0]?.currency || _homeBase());
   const date = document.getElementById('bsl-date')?.value || today();
   const time = document.getElementById('bsl-time')?.value || nowTime();
-  const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
+  const received = roundMoney(parseFloat(document.getElementById('bsl-amount')?.value) || 0, targetCurr); // PLS #122
   const grandTotal = computeBatchSettleTotal(loans, targetCurr, date, time);
   const preview = document.getElementById('bsl-preview');
   // Format display below input (comma separators)
@@ -10541,7 +10638,7 @@ function confirmBatchSettleLoans(direction, person) {
   const time = document.getElementById('bsl-time')?.value || nowTime();
   const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
   const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0].currency || _homeBase());
-  const received = parseFloat(document.getElementById('bsl-amount')?.value) || 0;
+  const received = roundMoney(parseFloat(document.getElementById('bsl-amount')?.value) || 0, targetCurr); // PLS #122
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) { showToast('Pick an account'); return; }
   if (received <= 0) { showToast('Enter received amount'); return; }
@@ -10615,6 +10712,8 @@ function confirmBatchSettleLoans(direction, person) {
     loanDirection: direction,
     parentId: primaryLoan.id,
     batchLoanIds: settledNow.map(s=>s.loan.id),
+    // PLS #130: persist per-loan split (in each loan's own currency) so edit/delete recomputes are exact
+    batchBreakdown: settledNow.map(s=>({loanId:s.loan.id, amount:s.paidInLoanCurr, currency:s.loan.currency||_homeBase()})),
     batchPerson: person,
     batchDirection: direction,
     categoryId: direction === 'lent' ? 'sc-investreturns' : 'sc-misc',
@@ -10686,7 +10785,7 @@ function openLoanDetail(loanId, direction) {
     // Compute running balance (chronological)
     const sortedAsc = [...payments].sort((a,b)=>a.date.localeCompare(b.date));
     let bal = loan.amount;
-    const timeline = sortedAsc.map((p)=>{ bal -= p.amount; return { ...p, balAfter: bal }; });
+    const timeline = sortedAsc.map((p)=>{ bal -= loanPaymentContribution(p, loan); return { ...p, balAfter: bal }; }); // PLS #130
     // Display newest first
     timeline.reverse();
     return `
@@ -10990,13 +11089,14 @@ function saveLoanPayment(paymentId, loanId, direction) {
   const oldAmt = payment.amount;
   payment.amount = parseFloat(document.getElementById('ep2-amount')?.value) || payment.amount;
   payment.currency = document.getElementById('ep2-currency')?.value || payment.currency;
+  payment.amount = roundMoney(payment.amount, payment.currency); // PLS #122
   payment.accountId = document.getElementById('ep2-acct')?.value || payment.accountId;
   payment.date = document.getElementById('ep2-date')?.value || payment.date;
   payment.time = document.getElementById('ep2-time')?.value || payment.time;
   payment.notes = document.getElementById('ep2-notes')?.value?.trim() || payment.notes;
   // Recalculate loan remaining
   const allPayments = getLoanPayments(loanId);
-  const totalPaid = allPayments.reduce((s,p) => s + (p.currency===loan.currency ? p.amount : convert(p.amount,p.currency,loan.currency)), 0);
+  const totalPaid = allPayments.reduce((s,p) => s + loanPaymentContribution(p, loan), 0); // PLS #130: batch-aware, snapshot-accurate
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (loan.settled) loan.settledDate = today();
@@ -11009,7 +11109,7 @@ function deleteLoanPayment(paymentId, loanId, direction) {
   db.transactions = db.transactions.filter(t => t.id !== paymentId);
   // Recalculate remaining
   const allPayments = getLoanPayments(loanId);
-  const totalPaid = allPayments.reduce((s,p) => s + (p.currency===loan.currency ? p.amount : convert(p.amount,p.currency,loan.currency)), 0);
+  const totalPaid = allPayments.reduce((s,p) => s + loanPaymentContribution(p, loan), 0); // PLS #130: batch-aware, snapshot-accurate
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (!loan.settled) loan.settledDate = null;
@@ -14845,16 +14945,22 @@ function renderAnalyticsForex() {
 _planTab = 'payday';
 
 function renderPlanning() {
-  // ── DEBUG-SCAN NOTE ── Targets are part of Contracts tab structure (planTab values: payday/recurring/contract). Naive scans for "renderTargets" are false positives — Targets live under Contracts.
-  const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn ${_planTab==='payday'?'active':''}" onclick="setPlanTab('payday')">Payday</button>
-    <button class="tab-btn ${_planTab==='recurring'?'active':''}" onclick="setPlanTab('recurring')">Recurring</button>
-    <button class="tab-btn ${_planTab==='contract'?'active':''}" onclick="setPlanTab('contract')">Contract</button>
-    <button class="tab-btn ${_planTab==='wishlist'?'active':''}" onclick="setPlanTab('wishlist')">Wishlist</button>
+  // ── DEBUG-SCAN NOTE ── Targets are part of Contracts tab structure (planTab values: payday/recurring/budgets/contract/wishlist). Naive scans for "renderTargets" are false positives — Targets live under Contracts.
+  // PLS #133: Budgets CONFIGURATION lives here in Planning (money-planning home: salary → fixed
+  // bills → discretionary caps → savings goals → wants). Settings keeps only a shortcut row.
+  const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
+    <div class="seg">
+    <button class="seg-btn ${_planTab==='payday'?'active':''}" onclick="setPlanTab('payday')">Payday</button>
+    <button class="seg-btn ${_planTab==='recurring'?'active':''}" onclick="setPlanTab('recurring')">Recurring</button>
+    <button class="seg-btn ${_planTab==='budgets'?'active':''}" onclick="setPlanTab('budgets')">Budgets</button>
+    <button class="seg-btn ${_planTab==='contract'?'active':''}" onclick="setPlanTab('contract')">Contract</button>
+    <button class="seg-btn ${_planTab==='wishlist'?'active':''}" onclick="setPlanTab('wishlist')">Wishlist</button>
+    </div>
   </div>`;
   let content = '';
   if (_planTab==='payday') content = renderPaydayTab();
   else if (_planTab==='recurring') content = renderRecurringTab();
+  else if (_planTab==='budgets') content = renderBudgetsTab();
   else if (_planTab==='wishlist') content = renderWishlistTab();
   else content = renderContractTab();
   document.getElementById('page-content').innerHTML = tabsHTML + content;
@@ -16389,19 +16495,22 @@ function renderSettings() {
     if (!db.categories) db.categories = { expense:[], income:[] };
     if (!db.budgets) db.budgets = [];
     if (!db.transactions) db.transactions = [];
+    if (_settingsTab==='budgets') _settingsTab='profile'; // PLS #133: budgets config moved to Planning
 
-    const tabsHTML = `<div class="tab-bar">
-    <button class="tab-btn ${_settingsTab==='profile'?'active':''}" onclick="setSettingsTab('profile')">Profile</button>
-    <button class="tab-btn ${_settingsTab==='fx'?'active':''}" onclick="setSettingsTab('fx')">FX Rates</button>
-    <button class="tab-btn ${_settingsTab==='budgets'?'active':''}" onclick="setSettingsTab('budgets')">Budgets</button>
-    <button class="tab-btn ${_settingsTab==='cats'?'active':''}" onclick="setSettingsTab('cats')">Categories</button>
-    <button class="tab-btn ${_settingsTab==='data'?'active':''}" onclick="setSettingsTab('data')">Data</button>
+    // PLS #132 family: Settings tabs use the iOS segmented control inside page-pad — aligned
+    // with the cards below at every breakpoint (the old underline strip ran full-bleed).
+    const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
+    <div class="seg">
+    <button class="seg-btn ${_settingsTab==='profile'?'active':''}" onclick="setSettingsTab('profile')">Profile</button>
+    <button class="seg-btn ${_settingsTab==='fx'?'active':''}" onclick="setSettingsTab('fx')">Rates</button>
+    <button class="seg-btn ${_settingsTab==='cats'?'active':''}" onclick="setSettingsTab('cats')">Categories</button>
+    <button class="seg-btn ${_settingsTab==='data'?'active':''}" onclick="setSettingsTab('data')">Data</button>
+    </div>
   </div>`;
     let content = '';
     try {
       if (_settingsTab==='profile') content = renderProfileTab();
       else if (_settingsTab==='fx') content = renderFXTab();
-      else if (_settingsTab==='budgets') content = renderBudgetsTab();
       else if (_settingsTab==='cats') content = renderCatsTab();
       else content = renderDataTab();
     } catch(tabErr) {
@@ -16443,17 +16552,14 @@ function renderProfileTab() {
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="section-title" style="margin-bottom:10px">Appearance</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div class="seg" style="max-width:340px">
         ${[
-          ['auto','🌗','Auto'],
-          ['light','☀️','Light'],
-          ['dark','🌙','Dark']
-        ].map(([val,icon,label])=>{
+          ['auto','Auto'],
+          ['light','Light'],
+          ['dark','Dark']
+        ].map(([val,label])=>{
           const active = (db.settings.themeMode==='auto'&&val==='auto') || (db.settings.themeMode!=='auto'&&db.settings.theme===val);
-          return `<div onclick="setThemeMode('${val}')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent-bg)':'var(--bg3)'};border-radius:var(--r-full);cursor:pointer;transition:all var(--transition)">
-            <span style="font-size:14px">${icon}</span>
-            <span style="font-size:12px;font-weight:${active?'600':'400'};color:${active?'var(--accent)':'var(--text2)'}">${label}</span>
-          </div>`;
+          return `<button class="seg-btn ${active?'active':''}" onclick="setThemeMode('${val}')">${label}</button>`;
         }).join('')}
       </div>
     </div>
@@ -16499,6 +16605,11 @@ function renderProfileTab() {
           <div style="font-size:11px;color:var(--text4);margin-top:6px">${u.pct >= 80 ? '⚠ Auto-saves to Drive when over 80%' : '~5 MB browser limit · safe headroom'}</div>
         </div>`;
       })()}
+    </div>
+    <div style="margin-top:14px">
+      <div class="quiet-row" onclick="nav('planning');setTimeout(()=>setPlanTab('budgets'),50)">
+        <div>Budgets — moved to Planning</div><div style="color:var(--text4)">›</div>
+      </div>
     </div>
   </div>`;
 }
@@ -17049,29 +17160,15 @@ function renderBudgetsTab() {
       const allocCount = Object.keys(allocs).length;
       const totalAllocated = Object.values(allocs).reduce((s,v)=>s+(parseFloat(v)||0),0);
       const allocPct = b.limit > 0 ? (totalAllocated/(b.limit + (b.rollover?(b.rolloverAmount||0):0))*100) : 0;
-      const mk = currMonthKey();
-
-      // Compute spending per allocated category for this month
+      // PLS #133: Settings → Budgets is CONFIGURATION-ONLY. Sub-budget rows show the allocation
+      // cap per category (a setting), never live spend/progress — budget STATUS lives on the
+      // dashboard Budget view alone, so the same number never has two homes.
       const subRows = allocCount > 0 ? Object.entries(allocs).map(([catId, limit])=>{
         const limAmt = parseFloat(limit) || 0;
         const cat = getCategoryDisplay(catId);
-        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===b.currency).reduce((s,t)=>{
-          // Match parent category
-          const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
-          if (!txCat || txCat.id !== catId) return s;
-          return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
-        },0);
-        const pct = limAmt > 0 ? Math.min(spent/limAmt*100, 100) : 0;
-        const overBgt = spent > limAmt;
-        const barColor = overBgt ? 'var(--red)' : pct > 80 ? 'var(--amber)' : 'var(--accent)';
-        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(cat.name)}</span>${overBgt?'<span style="color:var(--red);font-size:10px">⚠</span>':''}</div>
-            <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(b.currency)}${limAmt.toFixed(0)}</span></div>
-          </div>
-          <div style="height:5px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div>
-          </div>
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(cat.name)}</span></div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${limAmt.toFixed(0)}</div>
         </div>`;
       }).join('') : '';
 
@@ -17108,6 +17205,11 @@ function renderBudgetsTab() {
       </div>` : ''}
     </div>`;}).join('')}
     <button class="pool-add-btn" onclick="openAddBudget()">+ Add Budget</button>
+    <div style="margin-top:14px">
+      <div class="quiet-row" onclick="nav('dashboard')">
+        <div>View budget status</div><div style="color:var(--text4)">›</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -17481,8 +17583,6 @@ function renderCatsTab() {
             ${cat.archived?`<span class="pill pill-gray">Archived</span>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:6px">
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditCat('${cat.id}','${forType}')">Edit</button>
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openAddSubCat('${cat.id}','${forType}')">+Sub</button>
             <span style="color:var(--text4)">▾</span>
           </div>
         </div>
@@ -17495,6 +17595,10 @@ function renderCatsTab() {
             </div>
             <button class="btn btn-ghost btn-sm" onclick="openEditSubCat('${cat.id}','${sc.id}','${forType}')">Edit</button>
           </div>`).join('')}
+          <div style="display:flex;justify-content:flex-end;gap:4px;padding:8px 14px 4px;${subcats.length?'border-top:1px solid var(--border);margin-top:4px':''}">
+            <button class="btn-text" style="font-size:13px;padding:6px 10px" onclick="openEditCat('${cat.id}','${forType}')">Edit</button>
+            <button class="btn-text" style="font-size:13px;padding:6px 10px" onclick="openAddSubCat('${cat.id}','${forType}')">+ Subcategory</button>
+          </div>
         </div>
       </div>`;
     }
@@ -20339,30 +20443,42 @@ function updateSyncIndicator() {
   const icon = document.getElementById('sync-icon');
   const label = document.getElementById('sync-label');
   if (!icon || !label) return;
+  // PLS #132 family: sync states are themed SVGs (emoji render inconsistently across
+  // platforms and don't tint). Cloud = idle/no Drive, dot = unsaved, spinning arrows =
+  // saving, cloud-check = saved.
+  const svgCloud = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6 6 0 0 0-11.7 1.62A4 4 0 0 0 7 19z"/></svg>`;
+  const svgDot = `<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>`;
+  const svgSaving = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
+  const svgCloudCheck = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6 6 0 0 0-11.7 1.62A4 4 0 0 0 7 19z"/><path d="M9 13l2 2 4-4"/></svg>`;
 
   if (!db.settings.googleDriveConnected) {
-    icon.textContent = '☁️';
+    icon.innerHTML = svgCloud;
+    icon.style.color = 'var(--text4)';
     label.textContent = 'No Drive';
     label.style.color = 'var(--text4)';
     return;
   }
 
   if (_syncStatus === 'unsaved') {
-    icon.textContent = '🟡';
+    icon.innerHTML = svgDot;
+    icon.style.color = 'var(--amber)';
     label.textContent = 'Unsaved';
     label.style.color = 'var(--amber)';
   } else if (_syncStatus === 'saving') {
-    icon.textContent = '🔄';
+    icon.innerHTML = svgSaving;
+    icon.style.color = 'var(--accent)';
     label.textContent = 'Saving...';
     label.style.color = 'var(--accent)';
   } else if (_syncStatus === 'saved' && _lastSyncTime) {
     const mins = Math.floor((Date.now() - _lastSyncTime) / 60000);
     const timeStr = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`;
-    icon.textContent = '🟢';
+    icon.innerHTML = svgCloudCheck;
+    icon.style.color = 'var(--green)';
     label.textContent = `Saved ${timeStr}`;
     label.style.color = 'var(--green)';
   } else {
-    icon.textContent = '☁️';
+    icon.innerHTML = svgCloud;
+    icon.style.color = 'var(--text4)';
     label.textContent = '–';
     label.style.color = 'var(--text4)';
   }
@@ -20685,7 +20801,7 @@ function setThemeMode(mode) {
     document.documentElement.setAttribute('data-theme', mode);
     if (window._themeAutoInterval) { clearInterval(window._themeAutoInterval); window._themeAutoInterval = null; }
     const btn = document.getElementById('theme-toggle-btn');
-    if (btn) btn.textContent = mode === 'dark' ? '☀️' : '🌙';
+    if (btn) btn.innerHTML = mode === 'dark' ? SVG_SUN : SVG_MOON; // PLS #132: SVG swap, not emoji
   }
   saveDBWithSync();
   if (currentPage === 'settings') renderSettings();
@@ -20981,7 +21097,7 @@ function initApp() {
     setTimeout(() => {
       const mk = currMonthKey();
       const exceeded = db.budgets.filter(b=>b.active).filter(bgt=>{
-        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency)
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency) // PLS #95: canonical budget-spend exclusions
           .reduce((s,t)=>s+(t.type==='shared'?(t.myShare||t.amount):t.amount),0);
         return spent > (bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0));
       });
@@ -21265,7 +21381,7 @@ function aiBudgetIntelligence() {
         if (limAmt <= 0) continue;
         const cat = db.categories.expense.find(c=>c.id===catId);
         if (!cat) continue;
-        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{
+        const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{ // PLS #95: canonical budget-spend exclusions
           const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
           if (!txCat || txCat.id !== catId) return s;
           return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
@@ -22164,13 +22280,13 @@ function renderAIPage() {
     // openAddSheet, openDriveSheet, openInstArchiveSheet etc. are all defined functions (verified in debug)
     const actionNav = {
       'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('contract'),100); },
-      'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+      'Consider reallocating': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),100); },
       'Log remittance': ()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },
       'Go to Reimbursements': ()=>{ nav('reimbursements'); },
       'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>setPlanTab&&setPlanTab('recurring'),100); },
       'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),100); },
-      'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
-      'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),100); },
+      'Review budget limit': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),100); },
+      'Review allocation': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),100); },
       'View Accounts': ()=>{ nav('accounts'); },
       'View Installments': ()=>{ nav('installments'); },
       'View Analytics': ()=>{ nav('analytics'); },
@@ -22187,8 +22303,8 @@ function renderAIPage() {
       <div style="display:flex;align-items:flex-start;gap:10px">
         <span style="font-size:20px;flex-shrink:0">${ins.icon}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${ins.title}</div>
-          <div style="font-size:12px;color:var(--text3);line-height:1.5">${ins.body}</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${_esc(ins.title)}</div>
+          <div style="font-size:12px;color:var(--text3);line-height:1.5">${_esc(ins.body)}</div>
           ${ins.action?`<div style="margin-top:8px">
             <span id="${actionId}" style="font-size:11px;color:${col};font-weight:500;cursor:${navFn?'pointer':'default'};text-decoration:${navFn?'underline':'none'}" onclick="${navFn?`aiNavigate('${ins.id}')`:''}">
               ${ins.action} →
@@ -22236,13 +22352,13 @@ function aiNavigate(insId) {
   // All action strings here are verified wired to defined functions (confirmed in debug scans)
   const actionNav = {
     'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('contract'); },150); },
-    'Consider reallocating': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+    'Consider reallocating': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
     'Go to Reimbursements': ()=>{ nav('reimbursements'); },
     'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('recurring'); },150); },
     'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
-    'Review budget limit': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
-    'Review allocation': ()=>{ nav('settings'); setTimeout(()=>setSettingsTab('budgets'),150); },
+    'Review budget limit': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
+    'Review allocation': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'View Accounts': ()=>{ nav('accounts'); },
     'View Installments': ()=>{ nav('installments'); },
     'View Analytics': ()=>{ nav('analytics'); },
