@@ -762,16 +762,24 @@ option{background:var(--bg3);color:var(--text)}
 .btn-text:active{transform:scale(0.96);background:var(--accent-bg)}
 @media(hover:hover){.btn-text:hover{background:var(--accent-bg)}}
 .seg{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:3px}
-.seg-btn{flex:1;padding:8px 12px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--text3);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition);white-space:nowrap;display:flex;align-items:center;justify-content:center}
+.seg-btn{flex:1;min-width:0;overflow:hidden;padding:8px 12px;border:none;border-radius:var(--r-sm);background:transparent;color:var(--text3);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition);white-space:nowrap;display:flex;align-items:center;justify-content:center}
 .seg-btn.active{background:var(--bg2);color:var(--text);box-shadow:var(--shadow-sm)}
 .seg-btn:active{transform:scale(0.97)}
 .seg-badge{color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:var(--r-full);margin-left:6px;display:inline-block;line-height:1.5}
 @media(max-width:480px){.seg-btn{padding:8px 4px;font-size:11.5px}.seg-badge{margin-left:4px;padding:1px 5px}}
+/* ── PERSONAL LOGIC SET #135 ── Responsive conventions: .seg-btn carries min-width:0 +
+   overflow:hidden (flex-overflow guard, lalo sa 5-segment Planning @360px); <=400px segs drop to
+   11px/2px; <=768px touch targets = .icon-btn 40px + .btn-text 13px/8px; iPad portrait
+   (768-1023) hero-amount = 42px middle step between phone 38 and desktop 46. */
+@media(max-width:400px){.seg-btn{font-size:11px;padding:8px 2px}}
+@media(max-width:768px){.icon-btn{width:40px;height:40px;min-width:40px}.btn-text{font-size:13px;padding:8px 8px}}
+@media(min-width:768px) and (max-width:1023px){.hero-amount{font-size:42px;letter-spacing:-2px}}
 .quiet-row{display:flex;justify-content:space-between;align-items:center;padding:12px 8px;cursor:pointer;color:var(--text3);font-size:13px;border-radius:var(--r-sm);transition:background var(--transition)}
 .quiet-row + .quiet-row{border-top:0.5px solid var(--border)}
 .quiet-row:active{background:var(--bg3)}
 @media(hover:hover){.quiet-row:hover{background:var(--bg3)}}
 @media(min-width:1024px){.hero-amount{font-size:46px;letter-spacing:-2.2px}}
+.chart-tip{position:absolute;top:2px;transform:translate(-50%,-100%);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 8px;font-family:var(--mono);font-size:10.5px;color:var(--text);box-shadow:var(--shadow-sm);pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:5}
 @keyframes tbspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .spin{animation:tbspin 1s linear infinite}
 </style>
@@ -3719,12 +3727,19 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.0.11';
+const APP_VERSION = '1.1.0';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.0', date: 'June 2026', changes: [
+    '🔍 Interactive Analytics — tap any month in Cashflow or any category in Spending to jump straight to those transactions, pre-filtered',
+    '🏷️ New category filter on Transactions — drill-downs land as a visible, dismissible chip (includes subcategories), and Clear all resets it',
+    '👆 Tap-to-inspect Forex charts — touch or hover a rate line to scrub through months with a cursor, dot, and value tip (Stocks-style)',
+    '📊 Chart refresh — flat cards (no glows or gradients), slim rounded composition bars with labels outside, uniform bar caps, SVG nav arrows',
+    '📱 Mobile polish — segmented controls fit 360px screens, bigger touch targets (40px header buttons), iPad-sized net-worth display',
+  ]},
   { ver: '1.0.11', date: 'June 2026', changes: [
     '🗂️ Budgets now live in Planning — one home for all money planning: Payday · Recurring · Budgets · Contract · Wishlist (5-tab segmented control)',
     '⚙️ Settings is now pure app configuration (Profile · Rates · Categories · Data), with a "Budgets — moved to Planning" shortcut at the bottom of Profile while you adjust',
@@ -6434,6 +6449,7 @@ function renderTxLog() {
   const searchIsNumeric = !isNaN(searchAsNumber) && isFinite(searchAsNumber);
   const dateFrom = window._txDateFrom || null;
   const dateTo = window._txDateTo || null;
+  const catFilter = window._txCatFilter || null; // PLS #134: analytics drill-down
   const dateRangeActive = !!(dateFrom || dateTo);
 
   const txs = db.transactions.filter(t=> {
@@ -6443,6 +6459,11 @@ function renderTxLog() {
       if (!t.date) return false;
       if (dateFrom && t.date < dateFrom) return false;
       if (dateTo && t.date > dateTo) return false;
+    if (catFilter) {
+      const _cf = db.categories.expense.find(c=>c.id===catFilter) || db.categories.income.find(c=>c.id===catFilter);
+      const _cfSubs = _cf ? (_cf.subcats||[]).map(s=>s.id) : [];
+      if (!(t.categoryId===catFilter || _cfSubs.includes(t.categoryId))) return false;
+    }
     }
     // 📖 USER STORY: Yung batch settlement parent (loan or reimb) ay actual cash movement —
     // dapat lumalabas sa Transactions log. Yung individual loan payments at auto-reimb children
@@ -6580,6 +6601,7 @@ function renderTxLog() {
     !!_txQuickFilter, _txSort !== 'newest',
     _txBudgetFilter !== 'all',
     !!(window._txDateFrom||window._txDateTo),
+    !!window._txCatFilter,
   ].filter(Boolean).length;
 
   const filterBadge = activeFilterCount > 0
@@ -6612,6 +6634,11 @@ function renderTxLog() {
     const from = window._txDateFrom || '...';
     const to = window._txDateTo || '...';
     activePills.push({key:'date', label:`${from} → ${to}`, action:`clearTxDateRange()`});
+  }
+
+  if (window._txCatFilter) {
+    const _pc = db.categories.expense.find(c=>c.id===window._txCatFilter) || db.categories.income.find(c=>c.id===window._txCatFilter);
+    activePills.push(`<div class="chip active" onclick="window._txCatFilter=null;renderTransactions()">${_esc(_pc?_pc.name:'Category')} <span style="opacity:0.7;margin-left:2px">×</span></div>`);
   }
 
   const activePillsBar = activePills.length > 0 ? `
@@ -6709,6 +6736,43 @@ function renderTxLog() {
   return `${bulkToolbar}${mainToolbar}${activePillsBar}${filterPanel}<div style="background:var(--bg2);border-top:1px solid var(--border)">${txHTML}</div>`;
 }
 
+// ── PLS #134b ── Tap-to-inspect scrubbing for line charts (Apple Stocks-style).
+// Builders register {W, pts:[{x,y,lab,val}]} into window._tbCharts[id]; the SVG carries pointer
+// handlers; a vertical cursor + dot + floating tip follow the nearest data point. touch-action:
+// pan-y keeps vertical page scroll alive on mobile while horizontal drags scrub.
+window._tbCharts = window._tbCharts || {};
+function tbScrub(e, id) {
+  const c = window._tbCharts[id]; if (!c || !c.pts.length) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  const vx = (e.clientX - r.left) / r.width * c.W;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < c.pts.length; i++) { const d = Math.abs(c.pts[i].x - vx); if (d < bd) { bd = d; best = i; } }
+  const pt = c.pts[best];
+  const cur = document.getElementById(id+'-cursor'), dot = document.getElementById(id+'-dot'), tip = document.getElementById(id+'-tip');
+  if (cur) { cur.setAttribute('x1', pt.x); cur.setAttribute('x2', pt.x); cur.style.opacity = '1'; }
+  if (dot) { dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y); dot.style.opacity = '1'; }
+  if (tip) { tip.textContent = pt.lab + ' · ' + pt.val; tip.style.opacity = '1'; tip.style.left = Math.min(88, Math.max(12, pt.x / c.W * 100)) + '%'; }
+}
+function tbScrubEnd(id) { ['cursor','dot','tip'].forEach(s => { const el = document.getElementById(id+'-'+s); if (el) el.style.opacity = '0'; }); }
+
+// ── PERSONAL LOGIC SET #134 ── Analytics → Transactions drill-down ("Power BI brain, iOS skin").
+// Tapping a month bar / category row in Analytics opens the Transactions log pre-filtered to
+// that slice. Filters land in the SAME pills the user already knows (date range chip, category
+// chip with ×), so the drill state is visible and dismissible — no hidden magic.
+function openTxnsForMonth(mk) {
+  clearAllTxFilters();
+  const [_y,_m] = mk.split('-').map(Number);
+  window._txDateFrom = `${mk}-01`;
+  window._txDateTo = `${mk}-${String(new Date(_y, _m, 0).getDate()).padStart(2,'0')}`;
+  nav('transactions');
+}
+function openTxnsForCategory(name) {
+  const c = db.categories.expense.find(x=>x.name===name) || db.categories.income.find(x=>x.name===name);
+  if (!c) { showToast('Category not found'); return; }
+  clearAllTxFilters();
+  window._txCatFilter = c.id;
+  nav('transactions');
+}
 function clearAllTxFilters() {
   _txFilter = 'all';
   _txAcctFilter = 'all';
@@ -6717,6 +6781,7 @@ function clearAllTxFilters() {
   _txSort = 'newest';
   window._txDateFrom = null;
   window._txDateTo = null;
+  window._txCatFilter = null;
   renderTransactions();
 }
 
@@ -11971,6 +12036,13 @@ document.addEventListener('click', e => {
 // ════════════════════════════════════════════════════════════
 // _analyticsTab moved to top
 
+// ── PERSONAL LOGIC SET #136 ── Analytics chart design rules (minimalist/iOS):
+// (1) Composition/stacked bars are 10px slim, fully-rounded (r-full), 2px gaps, NEVER text
+//     inside segments — %/amounts live in legends/rows outside (Account Health keeps title
+//     tooltips). (2) Cards are FLAT: no gradient fills, no glow shadows; active = thin accent
+//     border + accent label. (3) Vertical bar caps = uniform 3px 3px 0 0. (4) In-chart nav
+//     controls are .icon-btn + SVG. (5) Line charts get tbScrub registration (PLS #134b);
+//     the PLS #88 Health-style picker and its emoji icons are deliberate — do not convert.
 function renderAnalytics() {
   // Refresh AI insights once per tab switch so inline insights stay current
   if (typeof runAIAnalysis === 'function') {
@@ -12201,9 +12273,9 @@ function renderAnalyticsCalendar() {
 
   // Month nav
   html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(-1)" style="padding:0" aria-label="Previous month">←</button>
+    <button class="icon-btn" onclick="navCalMonth(-1)" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <div style="font-size:16px;font-weight:600">${monthLabel}</div>
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="navCalMonth(1)" style="padding:0" aria-label="Next month">→</button>
+    <button class="icon-btn" onclick="navCalMonth(1)" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
   </div>`;
 
   // Month summary
@@ -12505,8 +12577,8 @@ function renderAnalyticsOverview() {
   const barChart = chartMonths.map(m=>`
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
       <div style="width:100%;display:flex;gap:2px;height:80px;align-items:flex-end">
-        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--green)'};border-radius:var(--r-sm) 3px 0 0;height:${m.isFuture?'8':(m.income/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.3':'0.8'}"></div>
-        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--red)'};border-radius:var(--r-sm) 3px 0 0;height:${m.isFuture?'4':(m.expense/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.2':'0.8'}"></div>
+        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--green)'};border-radius:3px 3px 0 0;height:${m.isFuture?'8':(m.income/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.3':'0.8'}"></div>
+        <div style="flex:1;background:${m.isFuture?'var(--border2)':'var(--red)'};border-radius:3px 3px 0 0;height:${m.isFuture?'4':(m.expense/maxVal*100).toFixed(1)}%;min-height:2px;opacity:${m.isFuture?'0.2':'0.8'}"></div>
       </div>
       <div style="font-size:10px;color:${m.key===metricMk?'var(--accent)':m.isFuture?'var(--border3)':'var(--text4)'};font-weight:${m.key===metricMk?'600':'400'}">${m.label}</div>
     </div>`).join('');
@@ -12775,10 +12847,10 @@ function renderAnalyticsOverview() {
         const segments = Array.from({length:10}, (_,i) => 
           `<div style="flex:1;height:4px;border-radius:var(--r-sm);background:${i < filled ? barColor : 'var(--border2)'};opacity:${i < filled ? '1' : '0.5'}"></div>`
         ).join('');
-        return `<div style="background:${isActive?'linear-gradient(135deg,rgba(124,109,240,0.12),rgba(124,109,240,0.04))':isPositive?'linear-gradient(135deg,rgba(45,217,138,0.05),transparent)':net<0?'linear-gradient(135deg,rgba(255,107,107,0.05),transparent)':'var(--bg2)'};border:1px solid ${isActive?'var(--accent)':'var(--border)'};border-radius:var(--r-md);padding:14px;${isActive?'box-shadow:0 0 16px var(--accent-glow), 0 0 0 1px var(--accent)':''};transition:all var(--transition);position:relative;overflow:hidden">
+        return `<div style="background:var(--bg2);border:1px solid ${isActive?'var(--accent)':'var(--border)'};border-radius:var(--r-md);padding:14px;;transition:all var(--transition);position:relative;overflow:hidden">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:${isActive?'var(--accent)':'var(--text4)'};text-transform:uppercase">${m.label}</div>
-            ${isActive ? '<div style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)"></div>' : ''}
+            
           </div>
           <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:${netColor};letter-spacing:-0.02em;margin-bottom:12px">${netDisplay}</div>
           <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
@@ -13094,7 +13166,7 @@ function buildSubscriptionPanel(dispCurr) {
     </div>
     ${items.slice(0, 5).map(({r, monthly}) => {
       const pct = totalMonthly > 0 ? (monthly / totalMonthly * 100) : 0;
-      return `<div style="margin-bottom:6px">
+      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat)" data-cat="${_esc(name)}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${_esc(r.name)}</span>
           <span style="font-family:var(--mono);color:var(--text3)">${fmt(monthly, dispCurr)}/mo</span>
@@ -13222,13 +13294,13 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${discPct.toFixed(0)}% controllable this month</div>
       </div>
     </div>
-    <div style="display:flex;height:32px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px">
-      <div style="width:${fixedPct}%;background:var(--text3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${fixedPct >= 15 ? fixedPct.toFixed(0)+'%' : ''}</div>
-      <div style="width:${discPct}%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600">${discPct >= 15 ? discPct.toFixed(0)+'%' : ''}</div>
+    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:8px">
+      <div style="width:${fixedPct}%;background:var(--text3);border-radius:var(--r-full)"></div>
+      <div style="width:${discPct}%;background:var(--accent);border-radius:var(--r-full)"></div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:11px">
-      <div><span style="color:var(--text3)">▢</span> Fixed: <span style="font-family:var(--mono);font-weight:600">${fmt(fixed, dispCurr)}</span></div>
-      <div><span style="color:var(--accent)">▢</span> Discretionary: <span style="font-family:var(--mono);font-weight:600">${fmt(discretionary, dispCurr)}</span></div>
+      <div><span style="color:var(--text3)">▢</span> Fixed: <span style="font-family:var(--mono);font-weight:600">${fmt(fixed, dispCurr)}</span> <span style="color:var(--text4)">${fixedPct.toFixed(0)}%</span></div>
+      <div><span style="color:var(--accent)">▢</span> Discretionary: <span style="font-family:var(--mono);font-weight:600">${fmt(discretionary, dispCurr)}</span> <span style="color:var(--text4)">${discPct.toFixed(0)}%</span></div>
     </div>
   </div>`;
 }
@@ -13266,7 +13338,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
     ${entries.slice(0, Math.min(5, topCount + 1)).map(([name, v], i) => {
       const pct = (v.total / total * 100);
       const isInTop = i <= eightyIdx;
-      return `<div style="margin-bottom:6px">
+      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat)" data-cat="${_esc(name)}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span><span style="opacity:0.7">${v.icon || '•'}</span> ${name}</span>
           <span style="font-family:var(--mono);color:${isInTop ? 'var(--text)' : 'var(--text4)'}">${pct.toFixed(0)}%</span>
@@ -13393,10 +13465,10 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}%)</div>
       </div>
     </div>
-    <div style="display:flex;height:24px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
+    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
       ${Object.entries(buckets).map(([k,v]) => {
         const pct = (v/total*100);
-        return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>` : '';
+        return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};border-radius:var(--r-full)"></div>` : '';
       }).join('')}
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;font-size:11px">
@@ -13429,7 +13501,7 @@ function buildYoYComparison(metricMk, dispCurr) {
   const maxVal = Math.max(curr.income, curr.expense, lastYear.income, lastYear.expense, 1);
   const bar = (val, color, label) => `<div style="flex:1;text-align:center">
     <div style="height:60px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px">
-      <div style="width:32px;background:${color};border-radius:var(--r-sm) 3px 0 0;height:${(val/maxVal*100).toFixed(1)}%;min-height:3px;opacity:0.85"></div>
+      <div style="width:32px;background:${color};border-radius:3px 3px 0 0;height:${(val/maxVal*100).toFixed(1)}%;min-height:3px;opacity:0.85"></div>
     </div>
     <div style="font-family:var(--mono);font-size:11px;font-weight:600">${fmt(val, dispCurr)}</div>
     <div style="font-size:10px;color:var(--text4);margin-top:1px">${label}</div>
@@ -13511,11 +13583,11 @@ function buildIncomeDiversification(metricMk, dispCurr) {
         <div style="font-size:10px;color:var(--text4)">${riskLabel}</div>
       </div>
     </div>
-    <div style="display:flex;height:24px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
+    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
       ${entries.map(([name, v], i) => {
         const pct = (v.total / total * 100);
         const color = colors[i % colors.length];
-        return `<div style="width:${pct}%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>`;
+        return `<div style="width:${pct}%;background:${color};border-radius:var(--r-full)"></div>`;
       }).join('')}
     </div>
     ${entries.slice(0, 4).map(([name, v], i) => {
@@ -13610,10 +13682,10 @@ function buildConcentrationRisk(dispCurr) {
         <div style="font-size:10px;color:var(--text4)">${riskLabel}</div>
       </div>
     </div>
-    <div style="display:flex;height:24px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
+    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
       ${balances.slice(0, 7).map((a, i) => {
         const pct = (a.balance / total * 100);
-        return `<div style="width:${pct}%;background:${colors[i % colors.length]};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600" title="${_esc(a.name)}: ${fmt(a.balance, dispCurr)}">${pct >= 12 ? pct.toFixed(0)+'%' : ''}</div>`;
+        return `<div style="width:${pct}%;background:${colors[i % colors.length]};border-radius:var(--r-full)" title="${_esc(a.name)}: ${fmt(a.balance, dispCurr)}"></div>`;
       }).join('')}
     </div>
     ${balances.slice(0, 4).map((a, i) => {
@@ -14881,6 +14953,9 @@ function renderAnalyticsForex() {
     const gridTop = (padT).toFixed(1);
     const gridBot = (padT + chartH).toFixed(1);
 
+    // PLS #134b: irehistro ang points para sa scrub
+    window._tbCharts['fx-'+curr] = { W, pts: pts.map((p,i)=>({ x:p.x, y:p.y, lab:`${p.m.label} '${String(p.m.year).slice(2)}`, val:`1 ${curr} = ${sym(_homeBase())}${(filledRates[i]!=null?filledRates[i]:0).toFixed(2)}` })) };
+
     html += `<div class="card" style="margin-bottom:0;padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px">
@@ -14897,7 +14972,7 @@ function renderAnalyticsForex() {
       </div>
 
       <div style="margin:0 -4px;max-width:100%;position:relative">
-        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block" preserveAspectRatio="none">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block;touch-action:pan-y" preserveAspectRatio="none" onpointermove="tbScrub(event,'fx-${curr}')" onpointerdown="tbScrub(event,'fx-${curr}')" onpointerup="tbScrubEnd('fx-${curr}')" onpointerleave="tbScrubEnd('fx-${curr}')" onpointercancel="tbScrubEnd('fx-${curr}')">
           <defs>
             <linearGradient id="fg-${curr}" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="rgb(${colorRgb})" stop-opacity="0.2"/>
@@ -14908,8 +14983,11 @@ function renderAnalyticsForex() {
           <line x1="${padL}" y1="${gridBot}" x2="${W-padR}" y2="${gridBot}" stroke="var(--border)" stroke-width="0.5" vector-effect="non-scaling-stroke"/>
           <path d="${areaPath}" fill="url(#fg-${curr})"/>
           <polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+          <line id="fx-${curr}-cursor" x1="0" x2="0" y1="${gridTop}" y2="${gridBot}" stroke="var(--text3)" stroke-width="1" opacity="0" style="transition:opacity .12s" vector-effect="non-scaling-stroke"/>
+          <circle id="fx-${curr}-dot" r="3.5" cx="-10" cy="-10" fill="${color}" stroke="var(--bg2)" stroke-width="1.5" opacity="0" style="transition:opacity .12s"/>
           <circle cx="${lastPt.x}" cy="${lastPt.y}" r="3.5" fill="${color}" stroke="var(--bg2)" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg>
+        <div id="fx-${curr}-tip" class="chart-tip"></div>
         <div style="position:relative;height:14px;margin-top:2px">${labelPositions}</div>
       </div>
 
@@ -17596,8 +17674,8 @@ function renderCatsTab() {
             <button class="btn btn-ghost btn-sm" onclick="openEditSubCat('${cat.id}','${sc.id}','${forType}')">Edit</button>
           </div>`).join('')}
           <div style="display:flex;justify-content:flex-end;gap:4px;padding:8px 14px 4px;${subcats.length?'border-top:1px solid var(--border);margin-top:4px':''}">
-            <button class="btn-text" style="font-size:13px;padding:6px 10px" onclick="openEditCat('${cat.id}','${forType}')">Edit</button>
-            <button class="btn-text" style="font-size:13px;padding:6px 10px" onclick="openAddSubCat('${cat.id}','${forType}')">+ Subcategory</button>
+            <button class="btn-text" style="font-size:13px;padding:8px 12px" onclick="openEditCat('${cat.id}','${forType}')">Edit</button>
+            <button class="btn-text" style="font-size:13px;padding:8px 12px" onclick="openAddSubCat('${cat.id}','${forType}')">+ Subcategory</button>
           </div>
         </div>
       </div>`;
@@ -22551,7 +22629,7 @@ function renderAnalyticsCashflow() {
     const pct = Math.abs(m.net) / maxAbs * 100;
     const color = m.net >= 0 ? 'var(--green)' : 'var(--red)';
     const emoji = m.net >= 0 ? '✅' : '❌';
-    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    html += `<div onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
       <div style="width:36px;font-size:11px;color:var(--text3)">${m.label}</div>
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
         <div style="width:${pct}%;height:100%;background:${color};border-radius:var(--r-sm)"></div>
