@@ -3727,12 +3727,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.1', date: 'June 2026', changes: [
+    '🔧 Tapping a subcategory in 80/20 Analysis or Spending now correctly opens its transactions (was showing "Category not found")',
+    '🏷️ Filter chip shows the subcategory\u2019s own name; top-level category labels no longer lose their first word in spending lists',
+  ]},
   { ver: '1.1.0', date: 'June 2026', changes: [
     '🔍 Interactive Analytics — tap any month in Cashflow or any category in Spending to jump straight to those transactions, pre-filtered',
     '🏷️ New category filter on Transactions — drill-downs land as a visible, dismissible chip (includes subcategories), and Clear all resets it',
@@ -6637,8 +6641,10 @@ function renderTxLog() {
   }
 
   if (window._txCatFilter) {
-    const _pc = db.categories.expense.find(c=>c.id===window._txCatFilter) || db.categories.income.find(c=>c.id===window._txCatFilter);
-    activePills.push(`<div class="chip active" onclick="window._txCatFilter=null;renderTransactions()">${_esc(_pc?_pc.name:'Category')} <span style="opacity:0.7;margin-left:2px">×</span></div>`);
+    const _tops = [...db.categories.expense, ...db.categories.income];
+    let _pn = (_tops.find(c=>c.id===window._txCatFilter)||{}).name || null;
+    if (!_pn) { for (const t of _tops) { const s=(t.subcats||[]).find(x=>x.id===window._txCatFilter); if (s) { _pn=s.name; break; } } }
+    activePills.push(`<div class="chip active" onclick="window._txCatFilter=null;renderTransactions()">${_esc(_pn||'Category')} <span style="opacity:0.7;margin-left:2px">×</span></div>`);
   }
 
   const activePillsBar = activePills.length > 0 ? `
@@ -6766,11 +6772,22 @@ function openTxnsForMonth(mk) {
   window._txDateTo = `${mk}-${String(new Date(_y, _m, 0).getDate()).padStart(2,'0')}`;
   nav('transactions');
 }
-function openTxnsForCategory(name) {
-  const c = db.categories.expense.find(x=>x.name===name) || db.categories.income.find(x=>x.name===name);
-  if (!c) { showToast('Category not found'); return; }
+function openTxnsForCategory(name, id) {
+  // PLS #134 fix: 80/20 & Spending rows aggregate at SUBCATEGORY level, so resolve by id first
+  // (passed via data-cat-id); fall back to name across top-level THEN subcats.
+  const tops = [...db.categories.expense, ...db.categories.income];
+  let targetId = null;
+  if (id && (tops.some(c=>c.id===id) || tops.some(c=>(c.subcats||[]).some(s=>s.id===id)))) targetId = id;
+  if (!targetId) {
+    const top = tops.find(x=>x.name===name);
+    if (top) targetId = top.id;
+  }
+  if (!targetId) {
+    for (const t of tops) { const s=(t.subcats||[]).find(x=>x.name===name); if (s) { targetId=s.id; break; } }
+  }
+  if (!targetId) { showToast('Category not found'); return; }
   clearAllTxFilters();
-  window._txCatFilter = c.id;
+  window._txCatFilter = targetId;
   nav('transactions');
 }
 function clearAllTxFilters() {
@@ -13166,7 +13183,7 @@ function buildSubscriptionPanel(dispCurr) {
     </div>
     ${items.slice(0, 5).map(({r, monthly}) => {
       const pct = totalMonthly > 0 ? (monthly / totalMonthly * 100) : 0;
-      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat)" data-cat="${_esc(name)}" title="View transactions">
+      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat, this.dataset.catId)" data-cat="${_esc(name)}" data-cat-id="${v.id||''}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${_esc(r.name)}</span>
           <span style="font-family:var(--mono);color:var(--text3)">${fmt(monthly, dispCurr)}/mo</span>
@@ -13312,8 +13329,11 @@ function buildParetoAnalysis(metricMk, dispCurr) {
   const cats = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    const name = cat.name.replace(/^[^ ]+ /,'');
-    if (!cats[name]) cats[name] = {total: 0, icon: cat.icon};
+    // PLS #134 fix: subcat display names carry the parent emoji prefix ("X Sub") — strip it ONLY
+    // for subcats; blanket-stripping mangled top-level names ("Food & Dining" → "& Dining").
+    const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId);
+    const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+    if (!cats[name]) cats[name] = {total: 0, icon: cat.icon, id: tx.categoryId};
     cats[name].total += _ovExpAmt(tx, dispCurr);
   }
   const entries = Object.entries(cats).sort((a,b) => b[1].total - a[1].total);
@@ -13338,7 +13358,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
     ${entries.slice(0, Math.min(5, topCount + 1)).map(([name, v], i) => {
       const pct = (v.total / total * 100);
       const isInTop = i <= eightyIdx;
-      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat)" data-cat="${_esc(name)}" title="View transactions">
+      return `<div style="margin-bottom:6px;cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat, this.dataset.catId)" data-cat="${_esc(name)}" data-cat-id="${v.id||''}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span><span style="opacity:0.7">${v.icon || '•'}</span> ${name}</span>
           <span style="font-family:var(--mono);color:${isInTop ? 'var(--text)' : 'var(--text4)'}">${pct.toFixed(0)}%</span>
