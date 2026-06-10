@@ -2628,7 +2628,7 @@ function _widgetInfo(key) {
 }
 // Reusable info button HTML — small ⓘ that taps to show definition (unified clean outlined style)
 function _infoBtn(key) {
-  return `<span onclick="_widgetInfo('${key}')" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none" title="What is this?">ⓘ</span>`;
+  return `<span onclick="_widgetInfo('${key}')" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);font-size:12px;opacity:0.45;margin-left:5px;line-height:1;vertical-align:middle;text-transform:none" title="What is this?">ⓘ</span>`;
 }
 
 // Wire up close buttons — use addEventListener for reliability
@@ -3727,12 +3727,17 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.2', date: 'June 2026', changes: [
+    '🧹 Overview polish — widget headers drop their emoji prefixes (typography does the work), info buttons are smaller and quieter, and every card follows one spacing rhythm',
+    '📅 Day-of-Week chart speaks iOS — your peak day is highlighted in accent (insight, not red alarm), other days stay neutral, and averages show in clear mono figures',
+    '🏷️ Category labels fixed app-wide — top-level names no longer lose their first word in Top Movers, Most Frequent, and other breakdowns (7 spots corrected)',
+  ]},
   { ver: '1.1.1', date: 'June 2026', changes: [
     '🔧 Tapping a subcategory in 80/20 Analysis or Spending now correctly opens its transactions (was showing "Category not found")',
     '🏷️ Filter chip shows the subcategory\u2019s own name; top-level category labels no longer lose their first word in spending lists',
@@ -12092,7 +12097,7 @@ function renderAnalytics() {
     <div class="analytics-picker-inner">
       <span class="analytics-picker-icon">${currTab.icon}</span>
       <span class="analytics-picker-label">${currTab.label}</span>
-      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);font-size:15px;margin-left:5px;line-height:1;vertical-align:middle;flex-shrink:0;text-transform:none">ⓘ</span>
+      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);font-size:12px;opacity:0.45;margin-left:5px;line-height:1;vertical-align:middle;flex-shrink:0;text-transform:none">ⓘ</span>
       <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="margin-left:6px;opacity:0.6"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
   </div>`;
@@ -12570,7 +12575,8 @@ function renderAnalyticsOverview() {
   for (const tx of allTxs) {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = getCategoryDisplay(tx.categoryId);
-      const name = cat.name.replace(/^[^ ]+ /,'');
+      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
       // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
       const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
@@ -12580,7 +12586,8 @@ function renderAnalyticsOverview() {
       expTotal += amt;
     } else if (tx.type === 'income' && !tx.isSettlement && !tx.isAutoReimb) {
       const cat = getCategoryDisplay(tx.categoryId);
-      const name = cat.name.replace(/^[^ ]+ /,'');
+      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       // Convert to display currency
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
@@ -12771,7 +12778,8 @@ function renderAnalyticsOverview() {
         const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(k) && (t.type === 'expense' || t.type === 'shared'));
         for (const tx of monthTxs) {
           const cat = getCategoryDisplay(tx.categoryId);
-          const name = cat.name.replace(/^[^ ]+ /,'');
+          const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+          const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
           const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
           const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
           if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
@@ -12794,7 +12802,7 @@ function renderAnalyticsOverview() {
       movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
       const top = movers.slice(0, 3);
       if (top.length === 0) return '';
-      return `<div class="card" style="padding:14px;margin-bottom:16px">
+      return `<div class="card" style="padding:16px;margin-bottom:16px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:10px">🚨 Notable Changes vs 3mo Avg</div>
         ${top.map(m => {
           const isUp = m.diff > 0;
@@ -12875,7 +12883,7 @@ function renderAnalyticsOverview() {
         </div>`;
       }).join('');
       const headerLabel = period === 'ytd' ? `YTD ${currentYear}` : 'Recent Months';
-      return `<div class="card" style="padding:16px">
+      return `<div class="card" style="padding:16px;margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">${headerLabel}</div>
           <div style="font-size:11px;color:var(--text4)">${activeMonths.length} mo</div>
@@ -12950,10 +12958,10 @@ function buildVelocityGauge(metricMk, dispCurr) {
                  {color:'var(--red)', label:'Overspending pace', icon:'⚠'};
   const fillPct = Math.min(100, (totalExp / Math.max(projection, avgMonthly) * 100));
 
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⏱ Spending Velocity${_infoBtn('velocity')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Spending Velocity${_infoBtn('velocity')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Day ${dayOfMonth}/${daysInMonth} · ${daysRemaining} ${daysRemaining===1?'day':'days'} left</div>
       </div>
       <div style="text-align:right">
@@ -13001,10 +13009,10 @@ function buildRunwayBar(dispCurr) {
   const segments = Array.from({length: cells}, (_, i) =>
     `<div style="flex:1;height:6px;border-radius:var(--r-sm);background:${i < filled ? color : 'var(--border2)'};opacity:${i < filled ? '1' : '0.4'}"></div>`
   ).join('');
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🛟 Cash Runway${_infoBtn('runway')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Cash Runway${_infoBtn('runway')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">All liquid cash at your 6-month avg burn</div>
       </div>
       <div style="text-align:right">
@@ -13054,7 +13062,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   outliers.sort((a,b) => b.z - a.z);
   const top = outliers.slice(0, 3);
   if (top.length === 0) return '';
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Unusual Transactions${_infoBtn('anomaly')}</div>
     ${top.map(o => {
       const catName = o.cat.name.replace(/^[^ ]+ /,'');
@@ -13130,10 +13138,10 @@ function buildForecastBand(metricMk, dispCurr) {
   const lowerPath = cumExpected.map((v,i) => `L${xAt(i+1).toFixed(1)},${yAt(v*0.85).toFixed(1)}`).reverse().join(' ');
   const bandPath = upperPath + ' ' + lowerPath + ' Z';
   const projColor = variance > 10 ? 'var(--red)' : variance < -10 ? 'var(--green)' : 'var(--accent)';
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔮 Month-End Forecast${_infoBtn('forecast')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Month-End Forecast${_infoBtn('forecast')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Based on ${histMonths}mo pattern · ±15% confidence</div>
       </div>
       <div style="text-align:right">
@@ -13170,10 +13178,10 @@ function buildSubscriptionPanel(dispCurr) {
     totalMonthly += monthly;
     return {r, monthly, amt};
   }).sort((a,b) => b.monthly - a.monthly);
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Recurring Commitments${_infoBtn('subscription')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Recurring Commitments${_infoBtn('subscription')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${items.length} active · ${fmt(totalMonthly*12, dispCurr)}/year</div>
       </div>
       <div style="text-align:right">
@@ -13244,9 +13252,9 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   }
   // Dots as HTML overlay so they stay round under preserveAspectRatio="none".
   const dots = plotted.map((mo, i) => `<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>`).join('');
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">💰 Savings Rate Trend${_infoBtn('savings')}</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Savings Rate Trend${_infoBtn('savings')}</div>
       <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
     <div style="position:relative;margin-bottom:6px">
@@ -13304,10 +13312,10 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
   if (total === 0) return '';
   const fixedPct = (fixed / total * 100);
   const discPct = 100 - fixedPct;
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">⚖️ Fixed vs Discretionary${_infoBtn('fixed')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Fixed vs Discretionary${_infoBtn('fixed')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${discPct.toFixed(0)}% controllable this month</div>
       </div>
     </div>
@@ -13348,10 +13356,10 @@ function buildParetoAnalysis(metricMk, dispCurr) {
   if (eightyIdx === -1) eightyIdx = entries.length - 1;
   const topCount = eightyIdx + 1;
   const topPct = ((topCount / entries.length) * 100).toFixed(0);
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 80/20 Analysis${_infoBtn('pareto')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">80/20 Analysis${_infoBtn('pareto')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px"><strong>${topCount} of ${entries.length}</strong> categories = 80% of spend</div>
       </div>
     </div>
@@ -13392,10 +13400,10 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
   const maxAvg = Math.max(...dowAvgs, 1);
   const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const peakIdx = dowAvgs.indexOf(maxAvg);
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📅 Day-of-Week Pattern${_infoBtn('dow')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Day-of-Week Pattern${_infoBtn('dow')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${labels[peakIdx]} is your highest spending day</div>
       </div>
     </div>
@@ -13403,9 +13411,9 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
       ${dowAvgs.map((avg, i) => {
         const h = avg > 0 ? Math.max(10, (avg / maxAvg) * 58) : 3;
         const isPeak = i === peakIdx;
-        const isWeekend = i === 0 || i === 6;
-        const bg = avg === 0 ? 'var(--border2)' : (isPeak ? 'var(--red)' : isWeekend ? 'var(--accent)' : 'var(--text3)');
-        const op = avg === 0 ? '0.5' : (isPeak ? '0.92' : isWeekend ? '0.7' : '0.55');
+        // PLS #136: peak day = ACCENT (insight, not alarm); others neutral — one encoding only.
+        const bg = avg === 0 ? 'var(--bg5)' : (isPeak ? 'var(--accent)' : 'var(--border2)');
+        const op = avg === 0 ? '0.6' : (isPeak ? '1' : '0.9');
         return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
           <div style="width:100%;height:${h}px;background:${bg};border-radius:var(--r-sm);opacity:${op};transition:height 0.3s"></div>
         </div>`;
@@ -13415,8 +13423,8 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
       ${labels.map((l, i) => `<div style="flex:1;text-align:center;font-weight:${i===peakIdx?'600':'400'};color:${i===peakIdx?'var(--text)':'var(--text4)'}">${l}</div>`).join('')}
     </div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-top:6px">
-      <span>${fmt(dowAvgs[peakIdx], dispCurr)} avg ${labels[peakIdx]}</span>
-      <span>${fmt(dowAvgs.reduce((s,v)=>s+v,0)/7, dispCurr)} daily avg</span>
+      <span><span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(dowAvgs[peakIdx], dispCurr)}</span> avg ${labels[peakIdx]}</span>
+      <span><span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(dowAvgs.reduce((s,v)=>s+v,0)/7, dispCurr)}</span> daily avg</span>
     </div>
   </div>`;
 }
@@ -13428,7 +13436,8 @@ function buildMostFrequent(metricMk, dispCurr) {
   const freq = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
-    const name = cat.name.replace(/^[^ ]+ /,'');
+    const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+    const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
     if (!freq[name]) freq[name] = {count: 0, total: 0, icon: cat.icon};
     freq[name].count++;
     freq[name].total += _ovExpAmt(tx, dispCurr);
@@ -13436,10 +13445,10 @@ function buildMostFrequent(metricMk, dispCurr) {
   const entries = Object.entries(freq).sort((a,b) => b[1].count - a[1].count);
   const top = entries.slice(0, 5);
   if (top.length === 0 || top[0][1].count < 3) return '';
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🔁 Most Frequent${_infoBtn('frequent')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Most Frequent${_infoBtn('frequent')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">By transaction count this month</div>
       </div>
     </div>
@@ -13478,10 +13487,10 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
   const colors = {Morning: '#fbbf24', Afternoon: '#60a5fa', Evening: '#f472b6', Night: '#818cf8'};
   const icons = {Morning: '🌅', Afternoon: '☀️', Evening: '🌆', Night: '🌙'};
   const peakBucket = Object.entries(buckets).sort((a,b) => b[1] - a[1])[0];
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🕐 Time-of-Day Pattern${_infoBtn('timeofday')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Time-of-Day Pattern${_infoBtn('timeofday')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}%)</div>
       </div>
     </div>
@@ -13527,7 +13536,7 @@ function buildYoYComparison(metricMk, dispCurr) {
     <div style="font-size:10px;color:var(--text4);margin-top:1px">${label}</div>
   </div>`;
   const chgBadge = (chg) => chg === null ? '' : `<span style="font-size:11px;font-weight:600;color:${chg>=0?'var(--green)':'var(--red)'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(0)}%</span>`;
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📆 vs ${monthLabel} ${y-1}${_infoBtn('yoy')}</div>
     <div style="display:flex;gap:6px">
       <div style="flex:1">
@@ -13566,7 +13575,8 @@ function buildIncomeDiversification(metricMk, dispCurr) {
     // Process regular income
     for (const tx of baseTxs) {
       const cat = getCategoryDisplay(tx.categoryId);
-      const name = cat.name.replace(/^[^ ]+ /,'');
+      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       if (!incomes[name]) incomes[name] = {total: 0, icon: cat.icon};
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
       incomes[name].total += amt;
@@ -13592,10 +13602,10 @@ function buildIncomeDiversification(metricMk, dispCurr) {
   else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Moderate concentration'; }
   else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-diversified'; }
   const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15'];
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🌐 Income Diversification${_infoBtn('income-div')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Income Diversification${_infoBtn('income-div')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'}</div>
       </div>
       <div style="text-align:right">
@@ -13649,10 +13659,10 @@ function buildGoalProgress(dispCurr) {
   // (Previously had a lenient 5-point buffer that mislabeled clearly-behind goals as "on track".)
   const onTrack = timeProgress === null || pct >= timeProgress;
   const statusColor = onTrack ? 'var(--green)' : 'var(--amber)';
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🎯 Savings Goal${_infoBtn('goal')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Savings Goal${_infoBtn('goal')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${activeContract.location || 'Contract'} target</div>
       </div>
       <div style="text-align:right">
@@ -13691,10 +13701,10 @@ function buildConcentrationRisk(dispCurr) {
   else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Consider diversifying'; }
   else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-distributed'; }
   const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15', '#e879f9'];
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">🏦 Account Concentration${_infoBtn('concentration')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Account Concentration${_infoBtn('concentration')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${topPct.toFixed(0)}% in ${_esc(topAcct.name)}</div>
       </div>
       <div style="text-align:right">
@@ -13783,9 +13793,9 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   const areaPath = path + ` L${xAt(n-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
   // Dots as HTML overlay (positioned by %) so they stay round under preserveAspectRatio="none".
   const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>`).join('');
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📈 Net Worth Trend</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Net Worth Trend</div>
       <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
     <div style="position:relative;margin-bottom:6px">
@@ -13834,9 +13844,9 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
     </div>
     <div style="font-size:10px;color:var(--text4)">${mo.label}</div>
   </div>`;
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 Income vs Expense</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Income vs Expense</div>
       <div style="display:flex;gap:10px;font-size:10px">
         <span style="color:var(--green)">● In</span><span style="color:var(--red)">● Out</span>
       </div>
@@ -13865,7 +13875,7 @@ function buildCashflowWaterfall(metricMk, dispCurr) {
     </div>`;
   };
   const netColor = net >= 0 ? 'var(--green)' : 'var(--red)';
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">🌊 ${monthLabel} Cashflow</div>
     <div style="display:flex;gap:8px;align-items:flex-end">
       ${bar('Income', income, 'var(--green)')}
@@ -13901,10 +13911,10 @@ function buildSpendingDistribution(metricMk, dispCurr) {
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
   // Find dominant bucket
   const dominant = buckets.reduce((best, b) => b.count > best.count ? b : best, buckets[0]);
-  return `<div class="card" style="padding:14px;margin-bottom:14px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">📊 Transaction Sizes${_infoBtn('distribution')}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em">Transaction Sizes${_infoBtn('distribution')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${(dominant.count/totalCount*100).toFixed(0)}% of txns are ${dominant.label}</div>
       </div>
       <div style="text-align:right">
@@ -22260,7 +22270,8 @@ function aiWeeklyRecap() {
     else if (t.type === 'expense' || t.type === 'shared') {
       expense += amt;
       const cat = getCategoryDisplay(t.categoryId);
-      const name = cat.name.replace(/^[^ ]+ /,'');
+      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === t.categoryId); // PLS #134 fix
+      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       catSpend[name] = (catSpend[name]||0) + amt;
     }
   }
