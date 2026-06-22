@@ -3727,12 +3727,15 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.1.7';
+const APP_VERSION = '1.1.8';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.8', date: 'June 2026', changes: [
+    '💵 New optional "Payment Amount" field on loans & debts — note what you expect to actually be paid (e.g. K200), shown on the card and summary without touching your balances or transactions',
+  ]},
   { ver: '1.1.7', date: 'June 2026', changes: [
     '📐 Restored the proper gap between the page header and the first card on Reimbursements',
   ]},
@@ -10234,6 +10237,10 @@ function renderLoanList(direction) {
       byCurr[c] = (byCurr[c]||0) + (loan.remaining||loan.amount);
     }
     const totalsHtml = Object.entries(byCurr).map(([c,amt])=>fmt(amt,c)).join(' · ');
+    // PLS #138: sum expected payment reminders per currency (display only)
+    const expByCurr = {};
+    for (const loan of personLoans) { if (loan.expectedPayment > 0) { const ec = loan.expectedCurrency || loan.currency; expByCurr[ec] = (expByCurr[ec]||0) + loan.expectedPayment; } }
+    const expectedHtml = Object.entries(expByCurr).map(([c,amt])=>fmt(amt,c)).join(' · ');
     const totalPersonPhp = personLoans.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
 
     // Earliest due date among active loans
@@ -10252,6 +10259,7 @@ function renderLoanList(direction) {
             <div style="font-size:14px;font-weight:600">${person}</div>
             <div style="font-size:11px;color:var(--text3)">${personLoans.length} ${direction==='lent'?'loan':'debt'}${personLoans.length>1?'s':''}${earliestDue?` · earliest due ${fmtD(earliestDue)}${urgent?` <span style="color:var(--amber)">(${dueDays===0?'today':dueDays+'d'})</span>`:''}`:''}</div>
             ${totalPayments>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${totalPayments} payment${totalPayments>1?'s':''} recorded</div>`:''}
+            ${expectedHtml?`<div style="font-size:10px;color:var(--accent);margin-top:2px">expecting ${expectedHtml}</div>`:''}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -11017,6 +11025,7 @@ function openLoanDetail(loanId, direction) {
       ${sourceAcct?`<div class="detail-row" style="padding:12px 14px"><div class="detail-label">${isLent?'From Account':'To Account'}</div><div class="detail-value">${_esc(sourceAcct.name)}</div></div>`:''}
       ${loan.dueDate?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Due Date</div><div class="detail-value">${fmtDFull(loan.dueDate)} ${daysUntil(loan.dueDate)!==null?`<span style="color:${daysUntil(loan.dueDate)<3?'var(--red)':'var(--text3)'}">(${daysUntil(loan.dueDate)}d)</span>`:''}</div></div>`:''}
       ${loan.notes?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Notes</div><div class="detail-value">${_esc(loan.notes)}</div></div>`:''}
+      ${loan.expectedPayment>0?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Payment Amount</div><div class="detail-value" style="color:var(--accent)">${fmt(loan.expectedPayment, loan.expectedCurrency||loan.currency)}</div></div>`:''}
     </div>
 
     ${payHistHTML}
@@ -11095,7 +11104,15 @@ function editLoanFull(loanId, direction) {
       <div class="form-group"><label class="form-label" for="lf-time">Time</label><input class="form-input" type="time" id="lf-time" value="${loanTime}"></div>
     </div>
     <div class="form-group"><label class="form-label" for="lf-due">Due Date</label><input class="form-input" type="date" id="lf-due" value="${loan.dueDate||''}"></div>
-    <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>`,
+    <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>
+    <div class="form-group">
+      <label class="form-label" for="lf-pay-amt">Payment Amount <span style="color:var(--text4);font-weight:400">(optional reminder)</span></label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input numpad-input" type="number" id="lf-pay-amt" value="${loan.expectedPayment||''}" placeholder="0.00" step="any" inputmode="none" style="flex:1">
+        <select class="form-input" id="lf-pay-cur" style="width:90px">${(db.trackedCurrencies||[_homeBase()]).map(c=>`<option value="${c}" ${(loan.expectedCurrency||loan.currency)===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div style="font-size:10px;color:var(--text4);margin-top:3px">Display only — doesn't affect balances.</div>
+    </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="saveLoanFull('${loanId}','${direction}')">Save</button>`
   );
@@ -11123,6 +11140,9 @@ function saveLoanFull(loanId, direction) {
   loan.time = newTime;
   loan.dueDate = parseInputDate(document.getElementById('lf-due')?.value) || null;
   loan.notes = document.getElementById('lf-notes')?.value?.trim() || '';
+  const _expPay = parseFloat(document.getElementById('lf-pay-amt')?.value) || 0; // PLS #138
+  if (_expPay > 0) { loan.expectedPayment = _expPay; loan.expectedCurrency = document.getElementById('lf-pay-cur')?.value || loan.currency; }
+  else { delete loan.expectedPayment; delete loan.expectedCurrency; }
   // agreedRate (only meaningful for cross-currency loans)
   const acct = db.accounts.find(a=>a.id===loan.accountId);
   const acctCurr = acct?.currency || _homeBase();
@@ -11674,6 +11694,14 @@ function openAddLoan(direction='lent') {
           <div class="form-group"><label class="form-label" for="nl-time">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
         </div>
         <div class="form-group"><label class="form-label" for="nl-due">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
+        <div class="form-group">
+          <label class="form-label" for="nl-pay-amt">Payment Amount <span style="color:var(--text4);font-weight:400">(optional reminder)</span></label>
+          <div style="display:flex;gap:8px">
+            <input class="form-input numpad-input" type="number" id="nl-pay-amt" placeholder="0.00" step="any" inputmode="none" style="flex:1">
+            <select class="form-input" id="nl-pay-cur" style="width:90px" onchange="this.dataset.touched=1">${(db.trackedCurrencies||[_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+          </div>
+          <div style="font-size:10px;color:var(--text4);margin-top:3px">Display only — what you expect to be paid. Doesn't affect balances.</div>
+        </div>
         <div class="form-group"><label class="form-label" for="nl-notes">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
       </div>
     </div>
@@ -11735,6 +11763,9 @@ function updateAddLoanFx() {
   const direction = personEl.dataset.direction || 'lent';
   const isLent = direction === 'lent';
   const loanCurr = document.getElementById('nl-currency')?.value || _homeBase();
+  // PLS #138: keep Payment Amount currency in sync with loan currency until user overrides
+  const _payCur = document.getElementById('nl-pay-cur');
+  if (_payCur && !_payCur.dataset.touched) _payCur.value = loanCurr;
   const acctSel = document.getElementById('nl-account');
   const acctOpt = acctSel?.options[acctSel.selectedIndex];
   const acctCurr = acctOpt?.dataset?.curr || _homeBase();
@@ -11816,6 +11847,8 @@ function saveAddLoan(direction) {
   const time = document.getElementById('nl-time')?.value || nowTime();
   const dueDate = parseInputDate(document.getElementById('nl-due')?.value) || null;
   const notes = document.getElementById('nl-notes')?.value?.trim() || '';
+  const expectedPayment = parseFloat(document.getElementById('nl-pay-amt')?.value) || 0; // PLS #138: display-only reminder
+  const expectedCurrency = document.getElementById('nl-pay-cur')?.value || currency;
   const loanId = genId();
   const isLent = direction === 'lent';
 
@@ -11854,6 +11887,7 @@ function saveAddLoan(direction) {
   const list = isLent ? db.loans.lent : db.loans.borrowed;
   // Store loan in commitment (loan) currency. Save agreedRate when custom used.
   const loanRecord = { id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, time, dueDate, notes, settled:false };
+  if (expectedPayment > 0) { loanRecord.expectedPayment = expectedPayment; loanRecord.expectedCurrency = expectedCurrency; } // PLS #138
   if (useCustom) loanRecord.agreedRate = customRate;
   list.push(loanRecord);
 
