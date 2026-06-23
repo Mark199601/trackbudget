@@ -3727,12 +3727,17 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.1.8';
+const APP_VERSION = '1.1.9';
 const APP_VERSION_DATE = 'June 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.9', date: 'June 2026', changes: [
+    '💱 Cross-currency loans reworked — you enter the "Loaned Amount" (what leaves your account) and the "Expected Receivable" (what they\'ll pay back, e.g. K200), and the agreed rate is worked out for you',
+    '📉 The amount you\'re owed now counts down in the payback currency as partial payments come in — no more static reminder',
+    '📈 When a cross-currency loan is fully settled, the FX gain versus your agreed rate is shown on the loan detail',
+  ]},
   { ver: '1.1.8', date: 'June 2026', changes: [
     '💵 New optional "Payment Amount" field on loans & debts — note what you expect to actually be paid (e.g. K200), shown on the card and summary without touching your balances or transactions',
   ]},
@@ -11025,7 +11030,7 @@ function openLoanDetail(loanId, direction) {
       ${sourceAcct?`<div class="detail-row" style="padding:12px 14px"><div class="detail-label">${isLent?'From Account':'To Account'}</div><div class="detail-value">${_esc(sourceAcct.name)}</div></div>`:''}
       ${loan.dueDate?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Due Date</div><div class="detail-value">${fmtDFull(loan.dueDate)} ${daysUntil(loan.dueDate)!==null?`<span style="color:${daysUntil(loan.dueDate)<3?'var(--red)':'var(--text3)'}">(${daysUntil(loan.dueDate)}d)</span>`:''}</div></div>`:''}
       ${loan.notes?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Notes</div><div class="detail-value">${_esc(loan.notes)}</div></div>`:''}
-      ${loan.expectedPayment>0?`<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Payment Amount</div><div class="detail-value" style="color:var(--accent)">${fmt(loan.expectedPayment, loan.expectedCurrency||loan.currency)}</div></div>`:''}
+      ${loanFxRow(loan, direction)}
     </div>
 
     ${payHistHTML}
@@ -11636,23 +11641,31 @@ function openAddLoan(direction='lent') {
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${acctLabel(a)}</option>`).join('');
   const isLent = direction === 'lent';
   const personLabel = isLent ? 'Lent To' : 'Borrowed From';
-  const amtLabel = isLent ? 'Expected Receivable' : 'Expected Payable';
+  const loanedLabel = isLent ? 'Loaned Amount' : 'Borrowed Amount';
   const acctLabelText = isLent ? 'Source Account (deducted from)' : 'Destination Account (deposited into)';
-  const amtHelp = isLent ? 'How much they\'ll pay you back' : 'How much you\'ll pay back';
-  const disburseLabel = isLent ? 'Deduct from source' : 'Deposit to destination';
+  const loanedHelp = isLent ? 'What leaves your account' : 'What lands in your account';
+  const expectHelp = isLent ? 'What they\'ll pay back — leave blank if same currency' : 'What you\'ll pay back — leave blank if same currency';
   openSheet('gen', isLent?'Add Loan Out':'Add Debt', `
     <div class="form-group"><label class="form-label" for="nl-person">${personLabel} *</label><input class="form-input" id="nl-person" placeholder="Person's name"></div>
     <div class="form-row fr2">
       <div class="form-group">
-        <label class="form-label" for="nl-amount">${amtLabel} *</label>
-        <input class="form-input numpad-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()" inputmode="none">
-        <div style="font-size:10px;color:var(--text4);margin-top:3px">${amtHelp}</div>
+        <label class="form-label" for="nl-loaned">${loanedLabel} *</label>
+        <input class="form-input numpad-input" type="number" id="nl-loaned" placeholder="0.00" step="any" oninput="updateAddLoanFx()" inputmode="none">
+        <div style="font-size:10px;color:var(--text4);margin-top:3px">${loanedHelp}</div>
       </div>
-      <div class="form-group"><label class="form-label" for="nl-currency">Currency</label><select class="form-input" id="nl-currency" onchange="updateAddLoanFx()">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label" for="nl-loaned-curr">Currency</label><input class="form-input" id="nl-loaned-curr" value="—" readonly style="background:var(--bg2);color:var(--text3);text-align:center;font-family:var(--mono)"></div>
     </div>
     <div class="form-group">
       <label class="form-label" for="nl-account">${acctLabelText} *</label>
       <select class="form-input" id="nl-account" onchange="updateAddLoanFx()">${acctOpts}</select>
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label class="form-label" for="nl-amount">Expected Receivable</label>
+        <input class="form-input numpad-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()" inputmode="none">
+        <div style="font-size:10px;color:var(--text4);margin-top:3px">${expectHelp}</div>
+      </div>
+      <div class="form-group"><label class="form-label" for="nl-currency">Currency</label><select class="form-input" id="nl-currency" onchange="updateAddLoanFx()">${currOpts}</select></div>
     </div>
 
     <!-- Cross-currency preview (display only) -->
@@ -11673,35 +11686,11 @@ function openAddLoan(direction='lent') {
       </div>
       <div id="nl-more-row" style="display:none">
 
-        <!-- Cross-currency override (only shown for cross-currency) -->
-        <div id="nl-rate-section" style="display:none;margin-top:8px;padding:12px 14px;background:var(--bg2);border-radius:var(--r-md);border:1px solid var(--border);margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Override rate or amount</div>
-          <div class="form-row fr2" style="margin-bottom:4px">
-            <div class="form-group" style="margin-bottom:0">
-              <label class="form-label" style="font-size:11px">${disburseLabel} <span id="nl-disburse-curr-label" style="color:var(--text4)">PHP</span></label>
-              <input class="form-input numpad-input" type="number" id="nl-disburse-amt" placeholder="0.00" step="any" oninput="onNlDisburseInput()" inputmode="none">
-            </div>
-            <div class="form-group" style="margin-bottom:0">
-              <label class="form-label" style="font-size:11px">Or rate <span id="nl-rate-pair-label" style="color:var(--text4);font-weight:400">(1 PGK)</span></label>
-              <input class="form-input numpad-input" type="number" id="nl-custom-rate" placeholder="0.0000" step="any" oninput="onNlRateInput()" inputmode="none">
-            </div>
-          </div>
-          <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either — auto-syncs. Leave blank to use snapshot.</div>
-        </div>
-
         <div class="form-row fr2">
           <div class="form-group"><label class="form-label" for="nl-date">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
           <div class="form-group"><label class="form-label" for="nl-time">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
         </div>
         <div class="form-group"><label class="form-label" for="nl-due">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
-        <div class="form-group">
-          <label class="form-label" for="nl-pay-amt">Payment Amount <span style="color:var(--text4);font-weight:400">(optional reminder)</span></label>
-          <div style="display:flex;gap:8px">
-            <input class="form-input numpad-input" type="number" id="nl-pay-amt" placeholder="0.00" step="any" inputmode="none" style="flex:1">
-            <select class="form-input" id="nl-pay-cur" style="width:90px" onchange="this.dataset.touched=1">${(db.trackedCurrencies||[_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
-          </div>
-          <div style="font-size:10px;color:var(--text4);margin-top:3px">Display only — what you expect to be paid. Doesn't affect balances.</div>
-        </div>
         <div class="form-group"><label class="form-label" for="nl-notes">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
       </div>
     </div>
@@ -11757,151 +11746,135 @@ function onNlRateInput() {
   updateAddLoanFx();
 }
 
+function loanFxRow(loan, direction) {
+  const home = _homeBase();
+  if (!loan.agreedRate) {
+    if (loan.expectedPayment > 0) {
+      return `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Payment Amount</div><div class="detail-value" style="color:var(--accent)">${fmt(loan.expectedPayment, loan.expectedCurrency||loan.currency)}</div></div>`;
+    }
+    return '';
+  }
+  const lc = loan.loanedCurrency || home;
+  let rows = '';
+  if (loan.loanedAmount != null) {
+    rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Loaned Amount</div><div class="detail-value">${fmt(loan.loanedAmount, lc)}</div></div>`;
+  }
+  rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Agreed Rate</div><div class="detail-value" style="font-family:var(--mono)">1 ${loan.currency} = ${fmtRate(loan.agreedRate)} ${lc}</div></div>`;
+  if (loan.settled && loan.loanedAmount != null) {
+    const nowPhp = toPhp(loan.amount, loan.currency);
+    const loanedPhp = toPhp(loan.loanedAmount, lc);
+    const fxDiff = nowPhp - loanedPhp;
+    const isGain = direction === 'lent' ? fxDiff > 0 : fxDiff < 0;
+    if (Math.abs(fxDiff) > 0.01) {
+      rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">FX ${isGain?'Gain':'Loss'} <span style="font-size:10px;color:var(--text4)">vs agreed</span></div><div class="detail-value" style="color:${isGain?'var(--green)':'var(--red)'};font-weight:600">${isGain?'+':'−'}${sym(home)}${Math.abs(fxDiff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+    }
+  }
+  return rows;
+}
+
 function updateAddLoanFx() {
   const personEl = document.getElementById('nl-person');
   if (!personEl) return;
-  const direction = personEl.dataset.direction || 'lent';
-  const isLent = direction === 'lent';
-  const loanCurr = document.getElementById('nl-currency')?.value || _homeBase();
-  // PLS #138: keep Payment Amount currency in sync with loan currency until user overrides
-  const _payCur = document.getElementById('nl-pay-cur');
-  if (_payCur && !_payCur.dataset.touched) _payCur.value = loanCurr;
+  const isLent = (personEl.dataset.direction || 'lent') === 'lent';
+  const loaned = parseFloat(document.getElementById('nl-loaned')?.value) || 0;
+  const expect = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const expectCur = document.getElementById('nl-currency')?.value || _homeBase();
   const acctSel = document.getElementById('nl-account');
   const acctOpt = acctSel?.options[acctSel.selectedIndex];
   const acctCurr = acctOpt?.dataset?.curr || _homeBase();
-  const rateSection = document.getElementById('nl-rate-section');
+  const curBox = document.getElementById('nl-loaned-curr');
+  if (curBox) curBox.value = acctCurr;
   const previewBox = document.getElementById('nl-fx-preview');
-  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
-  const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
+  if (!previewBox) return;
 
-  // Same currency = no FX consideration
-  if (loanCurr === acctCurr) {
-    if (rateSection) rateSection.style.display = 'none';
-    if (previewBox) previewBox.style.display = 'none';
+  // No FX consideration: same currency, or not enough entered yet
+  if (expectCur === acctCurr || expect <= 0 || loaned <= 0) {
+    previewBox.style.display = 'none';
     return;
   }
 
-  // Cross-currency: show rate override section
-  if (rateSection) rateSection.style.display = 'block';
-
-  // Compute snapshot rate (1 loanCurr = X acctCurr) — home-agnostic via home base bridge
+  // Derived agreed rate: "1 expectCur = X acctCurr"
+  const agreedRate = loaned / expect;
   const home = _homeBase();
-  const loanToHome = loanCurr === home ? 1 : (db.fxRates[loanCurr] || 1);
+  const expToHome = expectCur === home ? 1 : (db.fxRates[expectCur] || 1);
   const acctToHome = acctCurr === home ? 1 : (db.fxRates[acctCurr] || 1);
-  const snapshotRate = loanToHome / acctToHome; // 1 loanCurr = X acctCurr
+  const marketRate = expToHome / acctToHome; // 1 expectCur = X acctCurr at market
+  const marketValue = expect * marketRate;
+  const diff = marketValue - loaned; // +ve = receivable worth more than loaned
+  const isGain = isLent ? (diff > 0) : (diff < 0);
+  const absDiff = Math.abs(diff);
 
-  // Update labels
   const pairEl = document.getElementById('nl-fx-pair');
-  const verbEl = document.getElementById('nl-fx-verb');
   const rateLabel = document.getElementById('nl-fx-rate');
-  const disburseCurrLabel = document.getElementById('nl-disburse-curr-label');
-  const ratePairLabel = document.getElementById('nl-rate-pair-label');
-  if (pairEl) pairEl.textContent = `${loanCurr} → ${acctCurr}`;
-  if (verbEl) verbEl.textContent = isLent ? 'Will deduct' : 'Will deposit';
-  if (rateLabel) rateLabel.textContent = `1 ${loanCurr} = ${fmtRate(snapshotRate)} ${acctCurr}`;
-  if (disburseCurrLabel) disburseCurrLabel.textContent = acctCurr;
-  if (ratePairLabel) ratePairLabel.textContent = `(1 ${loanCurr})`;
-
-  if (amount <= 0) {
-    if (previewBox) previewBox.style.display = 'none';
-    return;
+  const verbEl = document.getElementById('nl-fx-verb');
+  const amountEl = document.getElementById('nl-fx-amount');
+  const extraEl = document.getElementById('nl-fx-extra');
+  if (pairEl) pairEl.textContent = `${expectCur} → ${acctCurr}`;
+  if (rateLabel) rateLabel.textContent = `1 ${expectCur} = ${fmtRate(agreedRate)} ${acctCurr}`;
+  if (verbEl) verbEl.textContent = isLent ? 'Leaves account' : 'Into account';
+  if (amountEl) amountEl.textContent = fmt(loaned, acctCurr);
+  if (extraEl) {
+    let extra = `Market now: 1 ${expectCur} = ${fmtRate(marketRate)} ${acctCurr} → worth ${fmt(marketValue, acctCurr)}`;
+    const verb = isGain ? '📈 Projected FX gain' : '📉 Projected FX loss';
+    const color = isGain ? 'var(--green)' : 'var(--red)';
+    extra += `<br><span style="color:${color};font-weight:600">${verb}: ${fmt(absDiff, acctCurr)}</span> <span style="color:var(--text4)">(shown when settled)</span>`;
+    extraEl.innerHTML = extra;
   }
-
-  // Determine effective rate (custom or snapshot)
-  const effectiveRate = customRate > 0 ? customRate : snapshotRate;
-  const effectiveAcctAmt = amount * effectiveRate;
-  const snapshotAcctAmt = amount * snapshotRate;
-  const using = customRate > 0 ? 'agreed rate' : 'snapshot rate';
-
-  // Show preview
-  if (previewBox) {
-    const amountEl = document.getElementById('nl-fx-amount');
-    const extraEl = document.getElementById('nl-fx-extra');
-    if (amountEl) amountEl.textContent = fmt(effectiveAcctAmt, acctCurr);
-    if (extraEl) {
-      let extra = `${amount} ${loanCurr} × ${fmtRate(effectiveRate)} (${using})`;
-      if (customRate > 0 && Math.abs(customRate - snapshotRate) > 0.0001) {
-        // Projected FX gain/loss at current market — to be realized on settlement
-        const diff = (snapshotAcctAmt - effectiveAcctAmt); // raw, no round
-        const isGain = isLent ? (diff > 0) : (diff < 0);
-        const absDiff = Math.abs(diff);
-        const verb = isGain ? '📈 Projected gain' : '📉 Projected loss';
-        const color = isGain ? 'var(--green)' : 'var(--red)';
-        extra += `<br>Market value: ${fmt(snapshotAcctAmt, acctCurr)}`;
-        extra += `<br><span style="color:${color};font-weight:600">${verb}: ${fmt(absDiff, acctCurr)}</span> <span style="color:var(--text4)">(realized on payment)</span>`;
-      }
-      extraEl.innerHTML = extra;
-    }
-    previewBox.style.display = 'block';
-  }
+  previewBox.style.display = 'block';
 }
 
 function saveAddLoan(direction) {
   const person = document.getElementById('nl-person')?.value?.trim();
-  const amount = parseFloat(document.getElementById('nl-amount')?.value);
+  const loaned = parseFloat(document.getElementById('nl-loaned')?.value);
   const accountId = document.getElementById('nl-account')?.value;
-  if (!person || !(amount > 0)) { showToast('Enter person and a valid amount'); return; }
+  if (!person || !(loaned > 0)) { showToast('Enter person and loaned amount'); return; }
   if (!accountId) { showToast('Select an account'); return; }
-  const currency = document.getElementById('nl-currency')?.value || _homeBase();
+  const acct = db.accounts.find(a=>a.id===accountId);
+  const acctCurr = acct?.currency || _homeBase();
+  const expectAmt = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const expectCur = document.getElementById('nl-currency')?.value || acctCurr;
   const date = parseInputDate(document.getElementById('nl-date')?.value) || today();
   const time = document.getElementById('nl-time')?.value || nowTime();
   const dueDate = parseInputDate(document.getElementById('nl-due')?.value) || null;
   const notes = document.getElementById('nl-notes')?.value?.trim() || '';
-  const expectedPayment = parseFloat(document.getElementById('nl-pay-amt')?.value) || 0; // PLS #138: display-only reminder
-  const expectedCurrency = document.getElementById('nl-pay-cur')?.value || currency;
   const loanId = genId();
   const isLent = direction === 'lent';
 
-  const acct = db.accounts.find(a=>a.id===accountId);
-  const acctCurr = acct?.currency || _homeBase();
-  const isCrossCurrency = currency !== acctCurr;
-  const customRate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
-  const useCustom = isCrossCurrency && customRate > 0;
-
-  // Rate semantics: "1 [loanCurr] = X [acctCurr]"
-  // Snapshot rate via home base bridge: db.fxRates[X] = 1 X in home (PLS #68: full precision, no rounding)
-  const home = _homeBase();
-  const loanToHome = currency === home ? 1 : (db.fxRates[currency] || 1);
-  const acctToHome = acctCurr === home ? 1 : (db.fxRates[acctCurr] || 1);
-  const snapshotRate = loanToHome / acctToHome; // 1 loanCurr = X acctCurr (full precision)
-
-  // ── PERSONAL LOGIC SET #97 ── Loan lend-time accounting model
-  // - Loan stored in commitment currency (e.g., K100 PGK) — what the borrower owes
-  // - Account deduction posts at AGREED value (e.g., ₱1,280 at custom rate 12.8), not snapshot
-  // - NO immediate forex gain/loss child tx at lend time (user requirement: realize on settle only)
-  // - Snapshot rate stored on tx for future comparison; agreedRate stored on loan
-  // - On settlement (PLS #55 batch flow), gain/loss is realized based on:
-  //   actual_received_in_PHP − (loan_amount × agreedRate)
-  // - toAmountIsActual=true flag set on parent tx so getAcctBalance skips isAutoForex (PLS #11)
-  let txAmount;
-  if (!isCrossCurrency) {
-    txAmount = amount;
-  } else if (useCustom) {
-    // Custom rate = agreed value posts to account
-    txAmount = amount * customRate;
+  // PERSONAL LOGIC SET #97 + #139: loan stored in the Expected-Receivable (commitment) currency.
+  // The account always moves exactly the Loaned Amount (agreed value). agreedRate derived = loaned / expected
+  // ("1 commitmentCurr = X acctCurr"). Cross-currency only when Expected Receivable is a different currency.
+  // FX gain is realized/displayed at settlement (PLS #139) so net worth is not double counted.
+  const isCross = expectAmt > 0 && expectCur !== acctCurr;
+  let loanAmount, loanCurr, agreedRate = 0;
+  if (isCross) {
+    loanAmount = expectAmt;
+    loanCurr = expectCur;
+    agreedRate = loaned / expectAmt;
   } else {
-    // No custom rate = snapshot value posts (user accepts current market)
-    txAmount = amount * snapshotRate;
+    loanAmount = loaned;
+    loanCurr = acctCurr;
   }
+  const txAmount = loaned;
 
   const list = isLent ? db.loans.lent : db.loans.borrowed;
-  // Store loan in commitment (loan) currency. Save agreedRate when custom used.
-  const loanRecord = { id:loanId, personName:person, amount, currency, accountId, remaining:amount, date, time, dueDate, notes, settled:false };
-  if (expectedPayment > 0) { loanRecord.expectedPayment = expectedPayment; loanRecord.expectedCurrency = expectedCurrency; } // PLS #138
-  if (useCustom) loanRecord.agreedRate = customRate;
+  const loanRecord = { id:loanId, personName:person, amount:loanAmount, currency:loanCurr, accountId, remaining:loanAmount, date, time, dueDate, notes, settled:false };
+  if (isCross) {
+    loanRecord.agreedRate = agreedRate;
+    loanRecord.loanedAmount = loaned;
+    loanRecord.loanedCurrency = acctCurr;
+  }
   list.push(loanRecord);
 
-  // Parent loan tx posts in account currency at agreed value (direct deduction)
   const parentTxId = genId();
   db.transactions.push({
     id: parentTxId,
-    type: isLent ? 'income' : 'expense', // placeholder for getAcctBalance routing
+    type: isLent ? 'income' : 'expense',
     amount: txAmount,
     currency: acctCurr,
     accountId,
     date, time,
-    notes: useCustom
-      ? `${isLent?'Lent to':'Borrowed from'} ${person} — ${amount} ${currency} @ ${customRate} ${acctCurr}/${currency}`
+    notes: isCross
+      ? `${isLent?'Lent to':'Borrowed from'} ${person} — ${expectAmt} ${loanCurr} @ ${fmtRate(agreedRate)} ${acctCurr}/${loanCurr}`
       : `${isLent?'Lent to':'Borrowed from'} ${person}`,
     fxSnapshot: buildFxSnapshot(date, time),
     parentId: null,
@@ -11909,7 +11882,7 @@ function saveAddLoan(direction) {
     loanId,
     loanDirection: direction,
     isSettlement: true,
-    toAmountIsActual: useCustom, // PLS #11: skip isAutoForex on this tx (we don't create one)
+    toAmountIsActual: isCross,
     createdAt: new Date().toISOString(),
   });
 
