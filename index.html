@@ -11086,98 +11086,101 @@ function editLoanFull(loanId, direction) {
   const acct = db.accounts.find(a=>a.id===loan.accountId);
   const acctCurr = acct?.currency || _homeBase();
   const isCross = loan.currency !== acctCurr;
+  const loanedDefault = loan.loanedAmount != null ? loan.loanedAmount
+    : (isCross && loan.agreedRate ? Math.round(loan.amount * loan.agreedRate * 100) / 100 : loan.amount);
+  const expectDefault = isCross ? loan.amount : '';
   const loanDate = loan.date || today();
   const loanTime = loan.time || nowTime();
   openDlg('Edit Loan',
     `<div class="form-group"><label class="form-label" for="lf-person">Person *</label><input class="form-input" id="lf-person" value="${escapeAttr(loan.personName||'')}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="lf-amount">Amount</label><input class="form-input numpad-input" type="number" id="lf-amount" value="${loan.amount}" step="any" inputmode="none"></div>
+      <div class="form-group"><label class="form-label" for="lf-loaned">Loaned Amount</label><input class="form-input numpad-input" type="number" id="lf-loaned" value="${loanedDefault}" step="any" inputmode="none"></div>
+      <div class="form-group"><label class="form-label" for="lf-loaned-curr">Currency</label><input class="form-input" id="lf-loaned-curr" value="${acctCurr}" readonly style="background:var(--bg2);color:var(--text3);text-align:center;font-family:var(--mono)"></div>
+    </div>
+    <div class="form-group"><label class="form-label" for="lf-account">${direction==='lent'?'From Account':'To Account'}</label><select class="form-input" id="lf-account" onchange="syncLfLoanedCurr()">${acctOpts}</select></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label" for="lf-amount">Expected Receivable</label><input class="form-input numpad-input" type="number" id="lf-amount" value="${expectDefault}" placeholder="0.00" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label" for="lf-currency">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label" for="lf-account">${direction==='lent'?'From Account':'To Account'}</label><select class="form-input" id="lf-account">${acctOpts}</select></div>
-    ${isCross ? `
-    <div style="background:var(--bg2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px;border:1px solid var(--border)">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label" style="font-size:11px">Agreed rate <span style="color:var(--text4);font-weight:400">(1 ${loan.currency} = ? ${acctCurr})</span></label>
-        <input class="form-input numpad-input" type="number" id="lf-rate" value="${loan.agreedRate||''}" placeholder="Leave blank for market rate" step="any" inputmode="none">
-        <div style="font-size:10px;color:var(--text4);margin-top:3px">💡 Used for FX gain/loss calc on settlement</div>
-      </div>
-    </div>
-    ` : ''}
+    <div style="font-size:10px;color:var(--text4);margin:-4px 0 10px">Leave Expected Receivable blank if same currency. If a different currency, the agreed rate is worked out from these two amounts.</div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="lf-date">Date</label><input class="form-input" type="date" id="lf-date" value="${loanDate}"></div>
       <div class="form-group"><label class="form-label" for="lf-time">Time</label><input class="form-input" type="time" id="lf-time" value="${loanTime}"></div>
     </div>
     <div class="form-group"><label class="form-label" for="lf-due">Due Date</label><input class="form-input" type="date" id="lf-due" value="${loan.dueDate||''}"></div>
-    <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>
-    <div class="form-group">
-      <label class="form-label" for="lf-pay-amt">Payment Amount <span style="color:var(--text4);font-weight:400">(optional reminder)</span></label>
-      <div style="display:flex;gap:8px">
-        <input class="form-input numpad-input" type="number" id="lf-pay-amt" value="${loan.expectedPayment||''}" placeholder="0.00" step="any" inputmode="none" style="flex:1">
-        <select class="form-input" id="lf-pay-cur" style="width:90px">${(db.trackedCurrencies||[_homeBase()]).map(c=>`<option value="${c}" ${(loan.expectedCurrency||loan.currency)===c?'selected':''}>${c}</option>`).join('')}</select>
-      </div>
-      <div style="font-size:10px;color:var(--text4);margin-top:3px">Display only — doesn't affect balances.</div>
-    </div>`,
+    <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="saveLoanFull('${loanId}','${direction}')">Save</button>`
   );
+}
+
+function syncLfLoanedCurr() {
+  const sel = document.getElementById('lf-account');
+  const acctCurr = sel?.options[sel.selectedIndex]?.dataset?.curr || _homeBase();
+  const box = document.getElementById('lf-loaned-curr');
+  if (box) box.value = acctCurr;
 }
 
 function saveLoanFull(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
   const newPerson = document.getElementById('lf-person')?.value?.trim();
-  const newAmount = parseFloat(document.getElementById('lf-amount')?.value);
-  const newCurr = document.getElementById('lf-currency')?.value;
-  const newAcct = document.getElementById('lf-account')?.value;
-  const newRate = parseFloat(document.getElementById('lf-rate')?.value);
+  const loaned = parseFloat(document.getElementById('lf-loaned')?.value);
+  const newAcct = document.getElementById('lf-account')?.value || loan.accountId;
+  const expectAmt = parseFloat(document.getElementById('lf-amount')?.value) || 0;
+  const expectCur = document.getElementById('lf-currency')?.value;
   const newDate = parseInputDate(document.getElementById('lf-date')?.value) || loan.date;
   const newTime = document.getElementById('lf-time')?.value || loan.time;
   if (!newPerson) { showToast('Enter person name'); return; }
-  if (!(newAmount > 0)) { showToast('Enter a valid amount'); return; }
+  if (!(loaned > 0)) { showToast('Enter loaned amount'); return; }
+
+  const acct = db.accounts.find(a=>a.id===newAcct);
+  const acctCurr = acct?.currency || _homeBase();
+  const isCross = expectAmt > 0 && expectCur !== acctCurr;
 
   loan.personName = newPerson;
-  loan.amount = newAmount || loan.amount;
-  loan.remaining = newAmount || loan.remaining;
-  loan.currency = newCurr || loan.currency;
-  loan.accountId = newAcct || loan.accountId;
+  loan.accountId = newAcct;
   loan.date = newDate;
   loan.time = newTime;
   loan.dueDate = parseInputDate(document.getElementById('lf-due')?.value) || null;
   loan.notes = document.getElementById('lf-notes')?.value?.trim() || '';
-  const _expPay = parseFloat(document.getElementById('lf-pay-amt')?.value) || 0; // PLS #138
-  if (_expPay > 0) { loan.expectedPayment = _expPay; loan.expectedCurrency = document.getElementById('lf-pay-cur')?.value || loan.currency; }
-  else { delete loan.expectedPayment; delete loan.expectedCurrency; }
-  // agreedRate (only meaningful for cross-currency loans)
-  const acct = db.accounts.find(a=>a.id===loan.accountId);
-  const acctCurr = acct?.currency || _homeBase();
-  if (loan.currency !== acctCurr && newRate > 0) {
-    loan.agreedRate = newRate;
-  } else if (loan.currency === acctCurr) {
-    delete loan.agreedRate; // no longer cross-currency
-  }
 
-  // Update the parent isLoanTx transaction to reflect new account/amount/date
+  // PLS #97 + #139: store loan in Expected-Receivable (commitment) currency; account moves the Loaned Amount.
+  if (isCross) {
+    loan.amount = expectAmt;
+    loan.currency = expectCur;
+    loan.remaining = expectAmt;
+    loan.agreedRate = loaned / expectAmt;
+    loan.loanedAmount = loaned;
+    loan.loanedCurrency = acctCurr;
+  } else {
+    loan.amount = loaned;
+    loan.currency = acctCurr;
+    loan.remaining = loaned;
+    delete loan.agreedRate;
+    delete loan.loanedAmount;
+    delete loan.loanedCurrency;
+  }
+  // Old display-only reminder fields are retired by the new model
+  delete loan.expectedPayment;
+  delete loan.expectedCurrency;
+
+  // Update the parent isLoanTx transaction (account always moves the Loaned Amount)
   const parentTx = db.transactions.find(t => t.isLoanTx && t.loanId === loanId);
   if (parentTx) {
+    const isLent = direction === 'lent';
     parentTx.accountId = loan.accountId;
-    // PLS #97: if has agreedRate, account-side amount = loan_amount × agreedRate (in acct currency)
-    //         otherwise post in loan currency at snapshot
-    if (loan.agreedRate && loan.currency !== acctCurr) {
-      parentTx.amount = loan.amount * loan.agreedRate;
-      parentTx.currency = acctCurr;
-      parentTx.toAmountIsActual = true;
-    } else {
-      parentTx.amount = loan.amount;
-      parentTx.currency = loan.currency;
-      delete parentTx.toAmountIsActual;
-    }
+    parentTx.amount = loaned;
+    parentTx.currency = acctCurr;
     parentTx.date = loan.date;
     parentTx.time = loan.time;
-    const isLent = direction === 'lent';
-    parentTx.notes = loan.agreedRate
-      ? `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${loan.amount} ${loan.currency} @ ${loan.agreedRate} ${acctCurr}/${loan.currency}`
-      : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+    if (isCross) {
+      parentTx.toAmountIsActual = true;
+      parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${expectAmt} ${expectCur} @ ${fmtRate(loan.agreedRate)} ${acctCurr}/${expectCur}`;
+    } else {
+      delete parentTx.toAmountIsActual;
+      parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+    }
   }
 
   saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Loan updated!');
