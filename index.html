@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -9851,7 +9851,8 @@ function openSellInv(invId) {
 function confirmSellInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const proceeds = roundMoney(parseFloat(document.getElementById('si-proceeds')?.value)||inv.currentValue||inv.amount, inv.currency); // PLS #122
+  const _sip = parseFloat(document.getElementById('si-proceeds')?.value); // PLS #141: 0 = total-loss sale
+  const proceeds = roundMoney(Number.isFinite(_sip) ? _sip : (inv.currentValue||inv.amount), inv.currency); // PLS #122
   const acctId = document.getElementById('si-acct')?.value;
   const date = document.getElementById('si-date')?.value||today();
   const notes = document.getElementById('si-notes')?.value?.trim()||'';
@@ -23547,10 +23548,12 @@ function saveNewInstallment() {
   }
 
   // Compute end date based on start date + total months
-  const startD = new Date(startDate + 'T00:00:00');
-  const endD = new Date(startD.getFullYear(), startD.getMonth() + totalMonths - 1, startD.getDate());
+  // ── PERSONAL LOGIC SET #141 ── Build the end date at UTC noon so toISOString() can't roll
+  // back a day in GMT+10 (PNG). Day-of-month comes from the string, never a local Date.
+  const [_sy, _sm, _sd] = startDate.split('-').map(Number);
+  const endD = new Date(Date.UTC(_sy, (_sm - 1) + totalMonths - 1, _sd, 12, 0, 0));
   const endDate = endD.toISOString().slice(0, 10);
-  const dueDay = startD.getDate(); // Day of month (1-31) for monthly due notifications
+  const dueDay = _sd; // Day of month (1-31) for monthly due notifications
 
   if (!db.installments) db.installments = [];
   db.installments.push({
@@ -23732,11 +23735,19 @@ function confirmLinkTransactions(instId) {
   const toLink = [...window._suggestSelected];
   if (toLink.length === 0) { showToast('No transactions selected'); return; }
   if (!inst.linkedTxIds) inst.linkedTxIds = [];
-  inst.linkedTxIds.push(...toLink);
+  // ── PERSONAL LOGIC SET #142 ── Dedup defensively: a tx can only count once even if it
+  // somehow slips through twice. The suggest list already excludes linked ones; this is belt-and-suspenders.
+  inst.linkedTxIds = [...new Set([...inst.linkedTxIds, ...toLink])];
   // Update paidMonths based on linked count
   inst.paidMonths = Math.max(inst.paidMonths || 0, inst.linkedTxIds.length);
+  // ── PLS #142 ── Soft overlap warning: alreadyPaid (other-app months) + linked months shouldn't
+  // exceed the plan. Flags the likely double-count of the SAME month without blocking the link.
+  const _projPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
+  if (_projPaid > inst.totalMonths) {
+    showToast('⚠ ' + _projPaid + ' of ' + inst.totalMonths + ' months marked paid — check for overlap with "already paid"');
+  }
   const totalPaid = (inst.alreadyPaid || 0) + inst.paidMonths;
-  if (totalPaid >= inst.totalMonths) inst.completed = true;
+  inst.completed = totalPaid >= inst.totalMonths; // PLS #141: two-way — un-complete if paid count drops
   saveDBWithSync();
   closeDlg();
   renderInstallments();
@@ -23840,13 +23851,13 @@ function saveEditInstallment(instId) {
   const newStartDate = document.getElementById('einst-start')?.value?.trim();
   if (newStartDate && /^\d{4}-\d{2}-\d{2}$/.test(newStartDate) && newStartDate !== inst.startDate) {
     inst.startDate = newStartDate;
-    const startD = new Date(newStartDate + 'T00:00:00');
-    const endD = new Date(startD.getFullYear(), startD.getMonth() + inst.totalMonths - 1, startD.getDate());
+    const [_sy, _sm, _sd] = newStartDate.split('-').map(Number); // PLS #141: UTC-safe end date
+    const endD = new Date(Date.UTC(_sy, (_sm - 1) + inst.totalMonths - 1, _sd, 12, 0, 0));
     inst.endDate = endD.toISOString().slice(0, 10);
-    inst.dueDay = startD.getDate();
+    inst.dueDay = _sd;
   }
   const totalPaid = inst.alreadyPaid + (inst.paidMonths || 0);
-  if (totalPaid >= inst.totalMonths) inst.completed = true;
+  inst.completed = totalPaid >= inst.totalMonths; // PLS #141: two-way — un-complete if paid count drops
   saveDBWithSync();
   closeSheet('gen');
   renderInstallments();
@@ -23942,12 +23953,12 @@ function openInstArchiveSheet() {
     <button class="np-btn" onclick="npKey('7')">7</button>
     <button class="np-btn" onclick="npKey('8')">8</button>
     <button class="np-btn" onclick="npKey('9')">9</button>
-    <button aria-label="Close" class="np-btn np-op" onclick="npKey('×')">×</button>
+    <button aria-label="multiply" class="np-btn np-op" onclick="npKey('×')">×</button>
     <!-- Row 3: 4, 5, 6, − -->
     <button class="np-btn" onclick="npKey('4')">4</button>
     <button class="np-btn" onclick="npKey('5')">5</button>
     <button class="np-btn" onclick="npKey('6')">6</button>
-    <button aria-label="Remove" class="np-btn np-op" onclick="npKey('-')">−</button>
+    <button aria-label="minus" class="np-btn np-op" onclick="npKey('-')">−</button>
     <!-- Row 4: 1, 2, 3, + -->
     <button class="np-btn" onclick="npKey('1')">1</button>
     <button class="np-btn" onclick="npKey('2')">2</button>
