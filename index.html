@@ -1945,6 +1945,7 @@ function showToast(msg, dur=2200) {
 }
 
 // iOS-style loading overlay for long async ops
+let _loadingRAF = null;
 function showLoading(msg='Loading...') {
   let el = document.getElementById('app-loading');
   if (!el) {
@@ -1954,9 +1955,14 @@ function showLoading(msg='Loading...') {
     document.body.appendChild(el);
   }
   el.querySelector('.app-loading-msg').textContent = msg;
-  requestAnimationFrame(()=>el.classList.add('show'));
+  // ── PERSONAL LOGIC SET #140 ── Guard against the rAF firing AFTER a synchronous hideLoading.
+  // Heavy synchronous exports (XLSX.writeFile / CSV build) block the thread, so the queued
+  // "add show" rAF would otherwise run after hideLoading and leave the overlay stuck on screen.
+  if (_loadingRAF) cancelAnimationFrame(_loadingRAF);
+  _loadingRAF = requestAnimationFrame(()=>{ _loadingRAF = null; el.classList.add('show'); });
 }
 function hideLoading() {
+  if (_loadingRAF) { cancelAnimationFrame(_loadingRAF); _loadingRAF = null; }
   const el = document.getElementById('app-loading');
   if (el) el.classList.remove('show');
 }
@@ -3764,98 +3770,6 @@ const APP_CHANGELOG = [
   { ver: '1.1.5', date: 'June 2026', changes: [
     '🧾 Reimbursements matches Loans — Settled and Archive are now quiet rows at the bottom of the list instead of buttons up top',
     '➕ The header "+ Loan" button now follows your active tab — on Borrowed it opens a new debt, on Lent Out a new loan (you can still switch inside the form)',
-  ]},
-  { ver: '1.1.4', date: 'June 2026', changes: [
-    '📱 The phone status bar (clock, signal, battery area) now follows your theme — light in Light mode, dark in Dark mode, on both iPhone and Android (relaunch the app after updating)',
-  ]},
-  { ver: '1.1.3', date: 'June 2026', changes: [
-    '🔘 Info buttons are now crisp SVG icons — a perfect circle with a centered i, instead of the font-dependent text glyph',
-  ]},
-  { ver: '1.1.2', date: 'June 2026', changes: [
-    '🧹 Overview polish — widget headers drop their emoji prefixes (typography does the work), info buttons are smaller and quieter, and every card follows one spacing rhythm',
-    '📅 Day-of-Week chart speaks iOS — your peak day is highlighted in accent (insight, not red alarm), other days stay neutral, and averages show in clear mono figures',
-    '🏷️ Category labels fixed app-wide — top-level names no longer lose their first word in Top Movers, Most Frequent, and other breakdowns (7 spots corrected)',
-  ]},
-  { ver: '1.1.1', date: 'June 2026', changes: [
-    '🔧 Tapping a subcategory in 80/20 Analysis or Spending now correctly opens its transactions (was showing "Category not found")',
-    '🏷️ Filter chip shows the subcategory\u2019s own name; top-level category labels no longer lose their first word in spending lists',
-  ]},
-  { ver: '1.1.0', date: 'June 2026', changes: [
-    '🔍 Interactive Analytics — tap any month in Cashflow or any category in Spending to jump straight to those transactions, pre-filtered',
-    '🏷️ New category filter on Transactions — drill-downs land as a visible, dismissible chip (includes subcategories), and Clear all resets it',
-    '👆 Tap-to-inspect Forex charts — touch or hover a rate line to scrub through months with a cursor, dot, and value tip (Stocks-style)',
-    '📊 Chart refresh — flat cards (no glows or gradients), slim rounded composition bars with labels outside, uniform bar caps, SVG nav arrows',
-    '📱 Mobile polish — segmented controls fit 360px screens, bigger touch targets (40px header buttons), iPad-sized net-worth display',
-  ]},
-  { ver: '1.0.11', date: 'June 2026', changes: [
-    '🗂️ Budgets now live in Planning — one home for all money planning: Payday · Recurring · Budgets · Contract · Wishlist (5-tab segmented control)',
-    '⚙️ Settings is now pure app configuration (Profile · Rates · Categories · Data), with a "Budgets — moved to Planning" shortcut at the bottom of Profile while you adjust',
-    '🔗 All budget links follow the move — AI insight actions and the onboarding checklist now open Planning → Budgets',
-    '🏷️ Cleaner Categories list — rows show just the icon, name, and expander; Edit and + Subcategory now live inside the expanded view where you manage them',
-  ]},
-  { ver: '1.0.10', date: 'June 2026', changes: [
-    '🎨 Cleaner iOS-style chrome — borderless header buttons, themed SVG icons for the theme toggle, archive, and sync states (cloud / dot / spinner / cloud-check), and regular-case bottom-nav labels',
-    '🧭 Segmented controls replace underline tabs on Loans and Settings; the lone "Log" tab strip on Transactions is gone',
-    '⚙️ Settings → Budgets is now configuration-only (limits, rollover, allocations) — live spend status lives on the dashboard, with a "View budget status" shortcut',
-    '🌗 Appearance picker is a clean Auto / Light / Dark segmented control',
-    '🖥️ Desktop polish — larger net-worth display, hover states on footer rows, tab edges aligned with content',
-  ]},
-  { ver: '1.0.9', date: 'June 2026', changes: [
-    '🎨 Loans page refresh — Settled and Archive are now quiet rows at the bottom of the list (iOS style), and the header "+ Loan" is the single add button',
-    '🔧 Editing or deleting a loan payment now recalculates correctly for multi-loan batch settlements — each loan\u2019s share of the payment is tracked exactly',
-    '📊 Budget alerts and AI insights now use the same spending rules as the Budget tab, so "budget exceeded" warnings always match what the tab shows',
-    '🔢 Amounts typed in settlement, loan-payment, and investment forms are now saved rounded to the currency\u2019s precision (fiat 2dp, crypto 8dp)',
-    '🛡️ Account names with special characters now render safely in alerts, transfer details, and AI insights',
-  ]},
-  { ver: '1.0.8', date: 'June 2026', changes: [
-    '🗓️ Standardized date-label parsing (day, month, and instalment views) to the app\u2019s timezone-safe method used elsewhere — prevents off-by-one-day labels in other timezones',
-  ]},
-  { ver: '1.0.7', date: 'June 2026', changes: [
-    '🐛 Fixed the Edit Transfer forex preview showing the wrong direction (e.g. "Forex Loss" when it was actually a gain) — it now matches what gets saved',
-    '🔁 The forex gain/loss preview now also appears when you enter only the actual received amount (no rate typed)',
-  ]},
-  { ver: '1.0.6', date: 'June 2026', changes: [
-    '⚖️ Balance corrections now always appear in the log under any type filter (All/Expense/Income/Transfer/Shared), so they no longer hide when you filter',
-    '🕒 Transaction detail now shows a time even for older entries that were saved without one (derived from when they were created)',
-  ]},
-  { ver: '1.0.5', date: 'June 2026', changes: [
-    '🔗 Cross-currency transfers now nest their forex gain/loss + fee as a tappable "Linked" card, like batch settlements',
-    '🧭 AI insights rewritten to be specific and actionable — real numbers, projections, and next steps instead of generic praise',
-    '📐 Hardened every grid against edge overflow on narrow screens; the mobile header no longer clips action buttons',
-    '🔬 New diagnostics: Build / Sync check + Linked-Transactions inspector (Settings → About → Diagnostics)',
-  ]},
-  { ver: '1.0.4', date: 'June 2026', changes: [
-    '➕ Add Capital — top up an existing investment from a source account (capital + value rise together, no phantom gain/loss)',
-    '💵 Record Dividend — log a cash payout as income without touching your gain/loss %',
-    '🛡️ Backup safety — the loader now warns before replacing more complete data with a backup that has fewer transactions',
-    '☁️ Backup picker now shows the transaction count per backup, not just file size',
-    '🎨 Cleaner, more minimal interface — softer section headers, lighter separators',
-  ]},
-  { ver: '1.0.3', date: 'May 2026', changes: [
-    '🔢 Per-currency precision: fiat rounds to 2 decimals, crypto to 8 (Bitcoin standard)',
-    '🐛 Fixed floating-point noise in amounts (1.1999... now shows 1.20)',
-    '🔢 FX rates keep full precision — only money amounts are rounded',
-    '🪙 Recognizes stablecoins & crypto: USDT, USDC, BNB, BFUSD, USD1, FDUSD + more',
-  ]},
-  { ver: '1.0.2', date: 'May 2026', changes: [
-    '🎨 iOS polish — radii via CSS vars, softer shadows, hairline borders, cubic-bezier easing',
-    '🎨 Analytics tabs reorganized into 6 clearer groups (Home / Cashflow / Spending / Wealth / People / Currency)',
-    '🎨 Overview tab consolidated — top section always visible, 4 cleaner accordions',
-    '🎨 New iOS-style sidebar logo + app icon (rising bars + TB)',
-  ]},
-  { ver: '1.0.1', date: 'May 2026', changes: [
-    '🐛 Diagnostics: tests only tracked currencies (not stale fxRates)',
-    '🐛 Diagnostics: snapshot test expects history value if present',
-    '🎨 Cleaner sidebar — hidden scrollbar + tighter spacing (no scroll needed)',
-    '🎨 New iOS-style logo (rising bars SVG, replaces "T" text)',
-  ]},
-  { ver: '1.0', date: 'May 2026', changes: [
-    '🚀 First public release of TrackBudget',
-    '💰 Multi-currency support with time-sensitive FX history',
-    '📤 Remittance, transfers, shared expenses, loans, reimbursements',
-    '📊 17 analytics tabs + AI insights',
-    '☁️ Google Drive sync + Excel export',
-    '📱 Installable as PWA on iOS, Android, desktop',
   ]},
 ];
 
@@ -18471,7 +18385,7 @@ function openWhatsNew() {
       <div style="font-size:18px;font-weight:700;margin-top:6px">TrackBudget v${APP_VERSION}</div>
       <div style="font-size:11px;color:var(--text3)">${APP_VERSION_DATE}</div>
     </div>
-    ${APP_CHANGELOG.map((entry, idx) => `
+    ${APP_CHANGELOG.slice(0,5).map((entry, idx) => `
       <div class="card" style="margin-bottom:12px;${idx === 0 ? 'border-left:3px solid var(--accent)' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div style="font-size:14px;font-weight:700">v${entry.ver}</div>
