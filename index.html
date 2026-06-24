@@ -2078,6 +2078,20 @@ function getAcctBalance(acctId) {
   return bal;
 }
 
+function loanHomeValue(loan) {
+  const home = _homeBase();
+  const remain = (loan.remaining != null) ? loan.remaining : loan.amount;
+  // ── PERSONAL LOGIC SET #139 ── Cross-currency loans are valued at COST BASIS — what actually
+  // left/entered the account — proportional to the unpaid portion, NOT today's market value.
+  // This keeps projected FX gain OUT of net worth; the gain is realized only when real funds arrive on settlement.
+  if (loan.agreedRate && loan.loanedAmount != null && loan.amount > 0) {
+    const lc = loan.loanedCurrency || home;
+    const ratio = Math.max(0, remain / loan.amount);
+    return toPhp(loan.loanedAmount * ratio, lc);
+  }
+  return toPhp(remain, loan.currency);
+}
+
 function getNetWorth() {
   // Single source of truth — returns { assets, liabs, net, assetRows, liabRows }
   // Used by: hero card, analytics wealth, alerts, AI insights, Excel export
@@ -2125,14 +2139,14 @@ function getNetWorth() {
   }
   for (const l of db.loans.lent) {
     if (!l.settled) {
-      const phpVal = toPhp(l.remaining || l.amount, l.currency);
+      const phpVal = loanHomeValue(l);
       assets += phpVal;
       assetRows.push({ name: l.personName, type: 'Receivable', bal: l.remaining || l.amount, currency: l.currency, phpBal: phpVal });
     }
   }
   for (const l of db.loans.borrowed) {
     if (!l.settled) {
-      const phpVal = toPhp(l.remaining || l.amount, l.currency);
+      const phpVal = loanHomeValue(l);
       liabs += phpVal;
       liabRows.push({ name: l.personName, type: 'Loan', bal: l.remaining || l.amount, currency: l.currency, phpBal: phpVal });
     }
@@ -3502,10 +3516,10 @@ function renderDashboard() {
     .reduce((s,a)=>{ const b=toPhp(getAcctBalance(a.id),a.currency); return s+b; },0);
   const cashAcctCount = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type)).length;
   const loansOutTotal = db.loans.lent.filter(l=>!l.settled)
-    .reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+    .reduce((s,l)=>s+loanHomeValue(l),0);
   const loansOutCount = db.loans.lent.filter(l=>!l.settled).length;
   const debtsTotal = db.loans.borrowed.filter(l=>!l.settled)
-    .reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+    .reduce((s,l)=>s+loanHomeValue(l),0);
   const debtsCount = db.loans.borrowed.filter(l=>!l.settled).length;
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
   const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.5vw,20px);margin-bottom:16px">
@@ -10210,7 +10224,7 @@ function renderLoanList(direction) {
   const loans = db.loans[direction];
   const active = loans.filter(l=>!l.settled);
   const settled = loans.filter(l=>l.settled);
-  const totalPhp = active.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+  const totalPhp = active.reduce((s,l)=>s+loanHomeValue(l),0);
   const archivedCount = (db.archivedLoans||[]).length;
 
   let html = `<div class="page-pad">`;
@@ -10246,7 +10260,7 @@ function renderLoanList(direction) {
     const expByCurr = {};
     for (const loan of personLoans) { if (loan.expectedPayment > 0) { const ec = loan.expectedCurrency || loan.currency; expByCurr[ec] = (expByCurr[ec]||0) + loan.expectedPayment; } }
     const expectedHtml = Object.entries(expByCurr).map(([c,amt])=>fmt(amt,c)).join(' · ');
-    const totalPersonPhp = personLoans.reduce((s,l)=>s+toPhp(l.remaining||l.amount,l.currency),0);
+    const totalPersonPhp = personLoans.reduce((s,l)=>s+loanHomeValue(l),0);
 
     // Earliest due date among active loans
     const dueDates = personLoans.map(l=>l.dueDate).filter(Boolean).sort();
@@ -11012,7 +11026,7 @@ function openLoanDetail(loanId, direction) {
       <div style="text-align:center;padding:8px 0 12px">
         <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Remaining</div>
         <div style="font-size:36px;font-family:var(--mono);font-weight:700;color:${accentColor}">${fmt(remaining,loan.currency)}</div>
-        ${loan.currency!==_displayCurrency()?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_displayCurrency())}${_inDisplay(toPhp(remaining,loan.currency)).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
+        ${loan.currency!==_displayCurrency()?`<div style="font-size:12px;color:var(--text4);font-family:var(--mono);margin-top:2px">≈ ${sym(_displayCurrency())}${_inDisplay(loanHomeValue(loan)).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>`:''}
       </div>
 
       <!-- Progress bar -->
@@ -11758,18 +11772,31 @@ function loanFxRow(loan, direction) {
     return '';
   }
   const lc = loan.loanedCurrency || home;
+  const ptx = db.transactions.find(t => t.isLoanTx && t.loanId === loan.id);
+  const snap = ptx?.fxSnapshot;
+  const rowOpen = '<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)">';
   let rows = '';
   if (loan.loanedAmount != null) {
-    rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Loaned Amount</div><div class="detail-value">${fmt(loan.loanedAmount, lc)}</div></div>`;
+    rows += `${rowOpen}<div class="detail-label">Loaned Amount</div><div class="detail-value">${fmt(loan.loanedAmount, lc)}</div></div>`;
   }
-  rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">Agreed Rate</div><div class="detail-value" style="font-family:var(--mono)">1 ${loan.currency} = ${fmtRate(loan.agreedRate)} ${lc}</div></div>`;
-  if (loan.settled && loan.loanedAmount != null) {
-    const nowPhp = toPhp(loan.amount, loan.currency);
-    const loanedPhp = toPhp(loan.loanedAmount, lc);
-    const fxDiff = nowPhp - loanedPhp;
-    const isGain = direction === 'lent' ? fxDiff > 0 : fxDiff < 0;
-    if (Math.abs(fxDiff) > 0.01) {
-      rows += `<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)"><div class="detail-label">FX ${isGain?'Gain':'Loss'} <span style="font-size:10px;color:var(--text4)">vs agreed</span></div><div class="detail-value" style="color:${isGain?'var(--green)':'var(--red)'};font-weight:600">${isGain?'+':'−'}${sym(home)}${Math.abs(fxDiff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>`;
+  // ── PLS #139 ── FX gain uses the SNAPSHOT (market) rate from the loan period, NOT the
+  // derived loaned/expected ratio. fxGain = expected − (loaned ÷ snapshotRate), in commitment currency.
+  const cHome = toPhp(1, loan.currency, snap); // 1 commitmentCurr in home @ snapshot
+  const lHome = toPhp(1, lc, snap);            // 1 loanedCurr in home @ snapshot
+  const snapRate = lHome ? cHome / lHome : 0;  // 1 commitmentCurr = snapRate loanedCurr
+  if (snapRate > 0) {
+    const rShow = Math.round(snapRate * 1e4) / 1e4;
+    rows += `${rowOpen}<div class="detail-label">Market rate at loan</div><div class="detail-value" style="font-family:var(--mono)">1 ${loan.currency} = ${rShow} ${lc}</div></div>`;
+  }
+  if (loan.loanedAmount != null && snapRate > 0) {
+    const fxCommit = loan.amount - (loan.loanedAmount / snapRate);          // expected − loaned÷snapshot (Kina)
+    const fxHome = toPhp(loan.amount, loan.currency, snap) - toPhp(loan.loanedAmount, lc, snap);
+    const isGain = direction === 'lent' ? fxCommit > 0 : fxCommit < 0;
+    if (Math.abs(fxCommit) > 0.005) {
+      const label = (loan.settled ? '' : 'Projected ') + 'FX ' + (isGain ? 'Gain' : 'Loss');
+      const col = isGain ? 'var(--green)' : 'var(--red)';
+      const sign = isGain ? '+' : '−';
+      rows += `${rowOpen}<div class="detail-label">${label} <span style="font-size:10px;color:var(--text4)">vs market at loan</span></div><div class="detail-value" style="color:${col};font-weight:600">${sign}${fmt(Math.abs(fxCommit), loan.currency)} <span style="font-size:11px;font-weight:normal;color:var(--text4)">≈ ${sym(home)}${Math.abs(fxHome).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div></div>`;
     }
   }
   return rows;
