@@ -17295,7 +17295,7 @@ function toggleBudgetRollover(bgtId, enabled) {
     computeBudgetRollover();
   }
   saveDBWithSync();
-  renderSettings();
+  if (currentPage === 'analytics') renderAnalytics(); else renderPlanning();
   showToast(enabled ? '✅ Rollover enabled' : 'Rollover disabled');
 }
 
@@ -17328,7 +17328,7 @@ function confirmClearAllocations(bgtId) {
   if (b) {
     b.allocations = {}; saveDBWithSync(); closeDlg();
     if (currentPage === 'analytics') renderAnalytics();
-    else renderSettings();
+    else renderPlanning();
     showToast('Sub-budgets cleared');
   }
 }
@@ -17595,9 +17595,9 @@ function confirmAiAllocate(bgtId) {
   bgt.allocations = finalAlloc;
   saveDBWithSync();
   closeDlg();
-  // Re-render whichever page is active (Settings → Budgets, or Analytics → Budget tab)
+  // Re-render whichever page is active (Planning → Budgets, or Analytics → Budget tab)
   if (currentPage === 'analytics') renderAnalytics();
-  else renderSettings();
+  else renderPlanning();
   showToast(`✅ ${Object.keys(finalAlloc).length} categories allocated`);
 }
 
@@ -17622,7 +17622,7 @@ function saveAddBudget() {
   const limit = parseFloat(document.getElementById('nb-limit')?.value);
   if (!loc || !(limit > 0)) { showToast('Enter location and a valid limit'); return; }
   db.budgets.push({ id:'bgt-'+genId(), location:loc, currency:document.getElementById('nb-curr')?.value||_homeBase(), limit, active:true });
-  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Budget added!');
+  saveDBWithSync(); closeDlg(); if (currentPage === 'analytics') renderAnalytics(); else renderPlanning(); showToast('Budget added!');
 }
 
 // ── CATEGORIES MANAGER ──
