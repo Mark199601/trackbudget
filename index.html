@@ -12524,9 +12524,10 @@ function renderAnalyticsOverview() {
   // isAutoForex INCLUDED: real FX gain/loss from cross-currency transfers (intentional — not a bug)
   // isAutoFee INCLUDED: real remittance fee expense
   const allTxs = db.transactions.filter(t =>
-    !t.archived && !t.isSettlement &&
+    !t.archived &&
+    (!t.isSettlement || t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) &&  // PLS #47: gain/loss children are real FX arbitrage income/expense
     !t.isLoanTx && !t.isLoanPayment &&
-    !t.isAutoReimb &&
+    (!t.isAutoReimb || t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) &&
     t.date &&
     (period === 'ytd'
       ? t.date.startsWith(String(currentYear))
@@ -12547,7 +12548,7 @@ function renderAnalyticsOverview() {
       expCats[name].total += amt;
       expCats[name].txs.push(tx);
       expTotal += amt;
-    } else if (tx.type === 'income' && !tx.isSettlement && !tx.isAutoReimb) {
+    } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)) {
       const cat = getCategoryDisplay(tx.categoryId);
       const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
       const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
