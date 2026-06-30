@@ -17669,18 +17669,26 @@ function openAiAllocate(bgtId) {
       const results = aiAnalyzeSpending(bgt.currency);
       hideLoading();
 
-      if (results.length === 0) {
-        openDlg('Not enough data',
-          `<div style="font-size:13px;color:var(--text2);line-height:1.6">AI needs at least 2 months of ${bgt.currency} expense data per category to allocate. Log more transactions and try again.</div>`,
+      // PLS #143: cover ALL active expense categories. AI auto-fills the ones with history;
+      // the rest appear at 0 (editable) so no category is hidden from the allocation editor.
+      const _coveredIds = new Set(results.map(r => r.catId));
+      const _extraCats = db.categories.expense
+        .filter(c => !c.archived && !_coveredIds.has(c.id))
+        .map(c => ({ catId: c.id, name: c.name, icon: c.icon, avg: 0, median: 0, predicted: 0, cv: 0, frequency: 0, trendPct: 0, isNeed: false, reason: 'no recent data', usedMonths: 0, lookbackLabel: '—', monthsActive: 0, _noData: true }));
+      const allRows = [...results, ..._extraCats];
+
+      if (allRows.length === 0) {
+        openDlg('No categories',
+          `<div style="font-size:13px;color:var(--text2);line-height:1.6">You have no expense categories to allocate. Add categories first, then try again.</div>`,
           `<button class="btn btn-primary btn-sm" onclick="closeDlg()">OK</button>`
         );
         return;
       }
 
       const { allocations, warning, needsTotal, wantsTotal, usableBudget } = aiAllocateBudget(bgtId, results, bgt.limit);
-      window._pendingAllocations = { bgtId, allocations, results };
+      window._pendingAllocations = { bgtId, allocations, results: allRows };
 
-      const rows = results.map(r => {
+      const rows = allRows.map(r => {
         const allocated = allocations[r.catId] || 0;
         const flag = r.isNeed ? '🛡️' : '🎯';
         const flagLabel = r.isNeed ? 'Need' : 'Want';
@@ -17698,8 +17706,7 @@ function openAiAllocate(bgtId) {
             </div>
           </div>
           <div style="font-size:10px;color:var(--text4);margin-left:24px;line-height:1.4">
-            Past avg: ${sym(bgt.currency)}${r.avg.toFixed(0)} · median: ${sym(bgt.currency)}${r.median.toFixed(0)} · ${r.lookbackLabel} · ${r.reason}
-            ${Math.abs(r.trendPct)>15?` · ${r.trendPct>0?'↑':'↓'} ${Math.abs(r.trendPct).toFixed(0)}%`:''}
+            ${r._noData ? 'No recent spending — set manually' : `Past avg: ${sym(bgt.currency)}${r.avg.toFixed(0)} · median: ${sym(bgt.currency)}${r.median.toFixed(0)} · ${r.lookbackLabel} · ${r.reason}${Math.abs(r.trendPct)>15?` · ${r.trendPct>0?'↑':'↓'} ${Math.abs(r.trendPct).toFixed(0)}%`:''}`}
           </div>
         </div>`;
       }).join('');
