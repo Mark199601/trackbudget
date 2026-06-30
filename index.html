@@ -12042,6 +12042,7 @@ function renderAnalytics() {
     calendar:   {label:'Calendar',       icon:'📅', section:'cashflow', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
     dayofweek:  {label:'By Day',         icon:'📅', section:'cashflow', desc:'Which days of the week you tend to spend the most.'},
     spending:   {label:'Spending',       icon:'🛒', section:'spending', desc:'Where your money goes, broken down by category.'},
+    income:     {label:'Income',         icon:'💵', section:'spending', desc:'Where your money comes from, broken down by source.'},
     trends:     {label:'Trends',         icon:'📈', section:'spending', desc:'How your spending shifts over the months, shown as a heatmap.'},
     yoy:        {label:'Year-over-Year', icon:'🗓', section:'spending', desc:'This year vs last year, month by month.'},
     budget:     {label:'Budget',         icon:'🎯', section:'spending', desc:'How your spending tracks against your monthly limit per category.'},
@@ -12069,6 +12070,7 @@ function renderAnalytics() {
   else if (_analyticsTab==='calendar') content = renderAnalyticsCalendar();
   else if (_analyticsTab==='cashflow') content = renderAnalyticsCashflow();
   else if (_analyticsTab==='spending') content = renderAnalyticsSpending();
+  else if (_analyticsTab==='income') content = renderAnalyticsIncome();
   else if (_analyticsTab==='budget') content = renderAnalyticsBudget();
   else if (_analyticsTab==='trends') content = renderAnalyticsTrends();
   else if (_analyticsTab==='dayofweek') content = renderAnalyticsDayOfWeek();
@@ -12121,7 +12123,7 @@ function openAnalyticsPicker() {
   const sections = [
     { id:'home',     title:'',                   keys:['overview','aisummary'] },
     { id:'cashflow', title:'Cashflow',         keys:['cashflow','calendar','dayofweek'] },
-    { id:'spending', title:'Spending',         keys:['spending','trends','yoy','budget'] },
+    { id:'spending', title:'Spending',         keys:['spending','income','trends','yoy','budget'] },
     { id:'wealth',   title:'Wealth',           keys:['wealth','investments','accthealth'] },
     { id:'people',   title:'People',           keys:['people','subs'] },
     { id:'currency', title:'Currency',         keys:['forex','crosscurr','external'] },
@@ -14198,6 +14200,165 @@ function toggleSpendingDrill(id) {
   }
 }
 
+
+function renderAnalyticsIncome() {
+  const period = window._analyticsOverviewPeriod || 'ytd';
+  // Mirror of renderAnalyticsSpending (PLS #65/#66) for the income side.
+  const _disp = _displayCurrency();
+  const budgetCurrs = [...new Set((db.budgets||[]).filter(b=>!b.archived).map(b=>b.currency))];
+  const viewOptions = budgetCurrs.length >= 2 ? budgetCurrs.slice(0,2) : [_disp];
+  const defaultView = viewOptions[0] || _disp;
+  const view = (window._incomeView && viewOptions.includes(window._incomeView)) ? window._incomeView : defaultView;
+  const now = new Date();
+
+  let mks = [];
+  if (period === 'ytd') {
+    for (let i = 0; i <= now.getMonth(); i++) mks.push(`${now.getFullYear()}-${String(i+1).padStart(2,'0')}`);
+  } else {
+    mks = [period];
+  }
+
+  // Income inclusion mirrors getMonthTotals: real income + FX arbitrage GAINS (PLS #47).
+  // Excludes loan/borrow balance movement, external in/out, batch settlement parents
+  // (accounts receivable, not income), reimbursement receivables, and investment fund moves.
+  const _isIncGain = t => t.isLoanSettlementGain || t.isReimbSettlementGain;
+  const txs = db.transactions.filter(t => {
+    if (t.archived) return false;
+    if (t.isLoanTx || t.isLoanPayment) return false;
+    if (t.type === 'external-in' || t.type === 'external-out') return false;
+    if (t.isSettlement && !_isIncGain(t)) return false;
+    if (t.isAutoReimb && !_isIncGain(t)) return false;
+    if (t.isFeeReimbursable) return false;
+    if (t.isInvestmentFund) return false;
+    if (t.currency !== view) return false;
+    if (!mks.some(mk => t.date?.startsWith(mk))) return false;
+    if (t.type !== 'income') return false;
+    return true;
+  });
+
+  const catTotals = {};
+  for (const tx of txs) {
+    const cat = getCategoryDisplay(tx.categoryId);
+    const amt = tx.amount;
+    const parentName = cat.name.replace(/^[^ ]+ /,'');
+    const parentIcon = cat.icon;
+    const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
+    if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{}, txs:[] };
+    catTotals[parentName].total += amt;
+    catTotals[parentName].txs.push(tx);
+    if (!catTotals[parentName].subs[subName]) catTotals[parentName].subs[subName] = { total:0, icon:cat.icon };
+    catTotals[parentName].subs[subName].total += amt;
+  }
+
+  const sorted = Object.entries(catTotals).sort((a,b)=>b[1].total-a[1].total);
+  const total = sorted.reduce((s,[,v])=>s+v.total,0);
+  const colors = ['var(--green)','var(--teal)','var(--accent)','var(--blue)','var(--amber)','var(--purple)','var(--red)'];
+  const dispCurr = _displayCurrency();
+  const totalInDisp = view === dispCurr ? total : convert(total, view, dispCurr);
+  const isYTD = period === 'ytd';
+  const periodLabel = period === 'ytd'
+    ? `YTD ${now.getFullYear()}`
+    : new Date(period+'-01T12:00').toLocaleString('en',{month:'long',year:'numeric'});
+
+  const _getCurrInfo = (code) => {
+    const c = (typeof CURRENCIES !== 'undefined' ? CURRENCIES : []).find(c => c.code === code);
+    return { flag: c?.flag || '💱', label: c?.country || code, code };
+  };
+  const segmentedHTML = viewOptions.length >= 2 ? `
+    <div style="display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;margin-bottom:16px;gap:3px">
+      ${viewOptions.map(opt => { const info = _getCurrInfo(opt); return `
+      <button onclick="setIncomeView('${opt}')" style="flex:1;padding:8px 12px;border:none;border-radius:var(--r-sm);background:${view===opt?'var(--bg)':'transparent'};color:${view===opt?'var(--text)':'var(--text3)'};font-size:13px;font-weight:${view===opt?'600':'500'};cursor:pointer;transition:all 0.2s;box-shadow:${view===opt?'0 1px 3px rgba(0,0,0,0.1)':'none'};display:flex;align-items:center;justify-content:center;gap:6px">
+        <span style="font-size:14px">${info.flag}</span> ${info.label} <span style="font-size:11px;color:var(--text4);font-weight:500">${info.code}</span>
+      </button>`; }).join('')}
+    </div>` : '';
+
+  if (sorted.length === 0) {
+    const emptyInfo = _getCurrInfo(view);
+    return `<div class="page-pad">
+      ${segmentedHTML}
+      <div class="empty-state" style="padding:48px 16px;text-align:center">
+        <div class="empty-icon" style="font-size:48px;margin-bottom:12px">${emptyInfo.flag}</div>
+        <div class="empty-text" style="color:var(--text3);font-size:14px">No ${view} income for ${periodLabel}</div>
+      </div>
+    </div>`;
+  }
+
+  const bars = sorted.map(([name,v],gi) => {
+    const i = gi;
+    const pct = total > 0 ? (v.total/total*100) : 0;
+    const color = colors[i % colors.length];
+    const subEntries = Object.entries(v.subs).sort((a,b)=>b[1].total-a[1].total);
+    const hasSubs = subEntries.length > 1;
+    const showTxBreakdown = !isYTD && v.txs.length > 0;
+    const expandable = hasSubs || showTxBreakdown;
+
+    const subRows = hasSubs ? subEntries.map(([sName, sv]) => {
+      const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text3);padding:8px 16px 8px 32px;border-top:1px solid var(--border)">
+        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${sName}</span></span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:var(--mono);color:var(--text2)">${fmt(sv.total,view)}</span>
+          <span style="color:var(--text4);font-size:10px;min-width:28px;text-align:right">${sPct.toFixed(0)}%</span>
+        </span>
+      </div>`;
+    }).join('') : '';
+
+    const txRows = showTxBreakdown ? [...v.txs]
+      .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
+      .map(tx => {
+        const acct = db.accounts.find(a => a.id === tx.accountId);
+        const acctName = acct?.name || '—';
+        const txAmt = tx.amount;
+        const dateLabel = fmtD(tx.date);
+        return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <div style="min-width:0;flex:1;overflow:hidden">
+            <div style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
+            ${tx.notes ? `<div style="color:var(--text4);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(tx.notes)}</div>` : ''}
+          </div>
+          <span style="font-family:var(--mono);color:var(--green);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px;white-space:nowrap">+${fmt(txAmt, tx.currency)}</span>
+        </div>`;
+      }).join('') : '';
+
+    const expandedContent = (hasSubs ? subRows : '') + (showTxBreakdown ? txRows : '');
+
+    return `<div style="${gi===0?'':'border-top:0.33px solid var(--border)'}">
+      <div style="padding:8px 14px;cursor:${expandable?'pointer':'default'};-webkit-tap-highlight-color:transparent" ${expandable?`onclick="toggleSpendingDrill('idrill-${i}')"`:''}>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:24px;height:24px;border-radius:var(--r-sm);background:linear-gradient(180deg,${color},${color}cc);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,0.15)">
+            <span style="filter:saturate(1.2)">${v.icon}</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} tx</div>
+          </div>
+          <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${color};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div>
+          ${expandable?`<svg width="7" height="11" viewBox="0 0 8 13" fill="none" id="idrill-${i}-arrow" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);flex-shrink:0;opacity:0.45"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+        </div>
+        <div style="height:3px;background:var(--bg4);border-radius:var(--r-full);overflow:hidden;margin-top:8px;margin-left:34px">
+          <div style="height:100%;border-radius:var(--r-full);background:${color};width:${pct.toFixed(1)}%;transition:width 0.3s"></div>
+        </div>
+      </div>
+      ${expandable?`<div id="idrill-${i}" style="display:none;background:var(--bg3);border-top:0.33px solid var(--border)">${expandedContent}</div>`:''}
+    </div>`;
+  });
+
+  return `<div class="page-pad">
+    ${segmentedHTML}
+    <div style="background:var(--bg2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;border:1px solid var(--border)">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} INCOME — ${periodLabel.toUpperCase()}</div>
+      <div style="font-size:22px;font-weight:600;color:var(--green);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
+      ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
+      <div style="font-size:10px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
+    </div>
+    <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Source · ${sorted.length}</div>
+    <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">${bars.join('')}</div>
+  </div>`;
+}
+
+function setIncomeView(view) {
+  window._incomeView = view;
+  if (typeof renderAnalytics === 'function') renderAnalytics();
+}
 
 function dismissMigrationBanner() {
   localStorage.setItem('tb_migration_banner_dismissed', '1');
