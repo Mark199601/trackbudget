@@ -17496,6 +17496,29 @@ function confirmClearAllocations(bgtId) {
 }
 
 // ─── OFFLINE AI BUDGET ALLOCATION ───
+// ── PERSONAL LOGIC SET #144 ── Subcategory-aware budget allocation matching.
+// tx.categoryId stores the LEAF (subcat id when one was chosen, else the parent id).
+// allocKey may be a parent OR subcat id. Most-specific-wins: a parent allocation catches
+// only the subcat spend that isn't separately allocated, so mixing levels never double-counts.
+function _isAutoOnlyCat(catId) {
+  for (const c of [...(db.categories.expense||[]), ...(db.categories.income||[])]) {
+    if (c.id === catId) return !!c.autoOnly;
+    const sc = (c.subcats||[]).find(s => s.id === catId);
+    if (sc) return !!sc.autoOnly;
+  }
+  return false;
+}
+function _txMatchesAlloc(tx, allocKey, allocKeys) {
+  const txCatId = tx.categoryId;
+  if (txCatId === allocKey) return true;
+  const parent = db.categories.expense.find(c => c.id === allocKey);
+  if (parent && (parent.subcats || []).some(sc => sc.id === txCatId)) {
+    if (allocKeys && allocKeys.has(txCatId)) return false;
+    return true;
+  }
+  return false;
+}
+
 function aiAnalyzeSpending(currency) {
   // ── DEBUG-SCAN NOTE ── Division operations in this function are either by safe constants (100, 12, 30) or inside comments. Naive regex scans flagging "/ varname" without zero-check are false positives.
   // Look back up to 12 months, but use 3 or 6 per category based on data quality
@@ -17515,19 +17538,18 @@ function aiAnalyzeSpending(currency) {
     t.date && lookbackMonths.includes(t.date.slice(0,7))
   );
 
-  // Group by parent category, per month
-  const catData = {}; // { catId: { monthly: {mk: total}, name, icon, occurrences } }
+  // Group by LEAF category (subcat when chosen, else parent), per month.
+  const catData = {}; // { leafId: { monthly: {mk: total}, name, icon, occurrences } }
   for (const tx of allTxs) {
-    const parentCat = db.categories.expense.find(c =>
-      c.id === tx.categoryId || (c.subcats||[]).some(sc => sc.id === tx.categoryId)
-    );
-    if (!parentCat) continue;
-    const catId = parentCat.id;
+    const leafId = tx.categoryId;
+    if (!leafId || _isAutoOnlyCat(leafId)) continue;
+    const disp = getCategoryDisplay(leafId);
+    if (!disp || disp.name === 'Deleted Category') continue;
     const mk = tx.date.slice(0,7);
     const amt = tx.type === 'shared' ? (tx.myShare || tx.amount) : tx.amount;
-    if (!catData[catId]) catData[catId] = { monthly: {}, name: parentCat.name, icon: parentCat.icon, occurrences: 0 };
-    catData[catId].monthly[mk] = (catData[catId].monthly[mk] || 0) + amt;
-    catData[catId].occurrences++;
+    if (!catData[leafId]) catData[leafId] = { monthly: {}, name: disp.name, icon: disp.icon, occurrences: 0 };
+    catData[leafId].monthly[mk] = (catData[leafId].monthly[mk] || 0) + amt;
+    catData[leafId].occurrences++;
   }
 
   // For each category, compute statistics + decide allocation
@@ -17672,9 +17694,16 @@ function openAiAllocate(bgtId) {
       // PLS #143: cover ALL active expense categories. AI auto-fills the ones with history;
       // the rest appear at 0 (editable) so no category is hidden from the allocation editor.
       const _coveredIds = new Set(results.map(r => r.catId));
-      const _extraCats = db.categories.expense
-        .filter(c => !c.archived && !_coveredIds.has(c.id))
-        .map(c => ({ catId: c.id, name: c.name, icon: c.icon, avg: 0, median: 0, predicted: 0, cv: 0, frequency: 0, trendPct: 0, isNeed: false, reason: 'no recent data', usedMonths: 0, lookbackLabel: '—', monthsActive: 0, _noData: true }));
+      const _leaves = [];
+      for (const c of db.categories.expense) {
+        if (c.archived) continue;
+        const subs = (c.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
+        if (subs.length > 0) { for (const sc of subs) _leaves.push({ catId: sc.id, name: `${c.icon} ${sc.name}`, icon: sc.icon }); }
+        else if (!c.autoOnly) { _leaves.push({ catId: c.id, name: c.name, icon: c.icon }); }
+      }
+      const _extraCats = _leaves
+        .filter(l => !_coveredIds.has(l.catId))
+        .map(l => ({ catId: l.catId, name: l.name, icon: l.icon, avg: 0, median: 0, predicted: 0, cv: 0, frequency: 0, trendPct: 0, isNeed: false, reason: 'no recent data', usedMonths: 0, lookbackLabel: '—', monthsActive: 0, _noData: true }));
       const allRows = [...results, ..._extraCats];
 
       if (allRows.length === 0) {
@@ -21631,14 +21660,14 @@ function aiBudgetIntelligence() {
     // Sub-budget allocations (per category)
     if (bgt.allocations && Object.keys(bgt.allocations).length > 0) {
       const mk = currMonthKey();
+      const _allocKeys = new Set(Object.keys(bgt.allocations));
       for (const [catId, limit] of Object.entries(bgt.allocations)) {
         const limAmt = parseFloat(limit) || 0;
         if (limAmt <= 0) continue;
-        const cat = db.categories.expense.find(c=>c.id===catId);
-        if (!cat) continue;
+        const cat = getCategoryDisplay(catId);
+        if (!cat || cat.name === 'Deleted Category') continue;
         const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{ // PLS #95: canonical budget-spend exclusions
-          const txCat = db.categories.expense.find(c=>c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
-          if (!txCat || txCat.id !== catId) return s;
+          if (!_txMatchesAlloc(t, catId, _allocKeys)) return s;
           return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
         },0);
         const subRatio = spent / limAmt;
@@ -23081,13 +23110,13 @@ function renderAnalyticsBudget() {
     const totalSpent = allCurrTxs.reduce((s,t)=>s+(t.type==='shared' ? (t.myShare || t.amount) : t.amount), 0);
 
     if (allocCount > 0) {
+      const _allocKeys = new Set(Object.keys(allocs));
       Object.entries(allocs).forEach(([catId, allocLim]) => {
         const limAmt = parseFloat(allocLim) || 0;
         const cat = getCategoryDisplay(catId);
         let spentInCat = 0;
         allCurrTxs.forEach(t => {
-          const txCat = db.categories.expense.find(c => c.id===t.categoryId || (c.subcats||[]).some(sc=>sc.id===t.categoryId));
-          if (txCat && txCat.id === catId) {
+          if (_txMatchesAlloc(t, catId, _allocKeys)) {
             spentInCat += t.type==='shared' ? (t.myShare || t.amount) : t.amount;
           }
         });
