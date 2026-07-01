@@ -12028,6 +12028,48 @@ document.addEventListener('click', e => {
 //     border + accent label. (3) Vertical bar caps = uniform 3px 3px 0 0. (4) In-chart nav
 //     controls are .icon-btn + SVG. (5) Line charts get tbScrub registration (PLS #134b);
 //     the PLS #88 Health-style picker and its emoji icons are deliberate — do not convert.
+// ── PERSONAL LOGIC SET #145 ── Shared month navigation for period-based Analytics tabs.
+// Renders ‹ [month] › arrows + dropdown once at the top of Overview, Spending, Income and
+// Budget (the only tabs that read window._analyticsOverviewPeriod), so month context can be
+// changed from any of them. Non-period tabs return '' (no nav).
+function _analyticsMonthNav() {
+  const PERIOD_TABS = ['overview','spending','income','budget'];
+  if (!PERIOD_TABS.includes(_analyticsTab)) return '';
+  const sharedPeriod = window._analyticsOverviewPeriod || 'ytd';
+  const now = new Date();
+  const curMk = currMonthKey();
+  const isYtd = sharedPeriod === 'ytd';
+  const baseMk = isYtd ? curMk : sharedPeriod;
+  const [by, bm] = baseMk.split('-').map(Number);
+  const prevMk = (() => { const d = new Date(by, bm-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const nextMkRaw = (() => { const d = new Date(by, bm, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const nextDisabled = isYtd || nextMkRaw > curMk;
+  const nextVal = nextMkRaw === curMk ? 'ytd' : nextMkRaw;
+  // Only Overview offers a true year-to-date view; the others treat 'ytd' as the current month.
+  const ovYtd = _analyticsTab === 'overview';
+  const label = isYtd ? (ovYtd ? `Year to Date · ${now.getFullYear()}` : fmtMonth(curMk+'-01')) : fmtMonth(baseMk+'-01');
+
+  const txDates = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
+  const uniq = [...new Set(txDates)].sort().reverse();
+  if (!uniq.includes(curMk)) uniq.unshift(curMk);
+  const opts = [
+    `<option value="ytd" ${isYtd?'selected':''}>${ovYtd?'Year to Date':'This month'}</option>`,
+    ...uniq.filter(m=>m!==curMk).map(m=>{ const [y,mo]=m.split('-').map(Number); const lbl=new Date(y,mo-1,1).toLocaleString('en',{month:'long',year:'numeric'}); return `<option value="${m}" ${sharedPeriod===m?'selected':''}>${lbl}</option>`; })
+  ].join('');
+
+  const navBtn = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:17px;line-height:1;flex-shrink:0';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;margin:2px 0 12px">
+    <div style="display:flex;align-items:center;gap:6px;min-width:0">
+      <button style="${navBtn}" onclick="window._analyticsOverviewPeriod='${prevMk}';setAnalyticsTab('${_analyticsTab}')" aria-label="Previous month">‹</button>
+      <div style="font-size:14px;font-weight:600;text-align:center;min-width:104px">${label}</div>
+      <button style="${navBtn};${nextDisabled?'opacity:0.35;pointer-events:none':''}" ${nextDisabled?'disabled':''} onclick="window._analyticsOverviewPeriod='${nextVal}';setAnalyticsTab('${_analyticsTab}')" aria-label="Next month">›</button>
+    </div>
+    <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('${_analyticsTab}')">
+      ${opts}
+    </select>
+  </div>`;
+}
+
 function renderAnalytics() {
   // Refresh AI insights once per tab switch so inline insights stay current
   if (typeof runAIAnalysis === 'function') {
@@ -12088,7 +12130,8 @@ function renderAnalytics() {
   // Use swipe direction to decide animation class
   const dir = window._analyticsSwipeDir || 'none';
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
-  document.getElementById('page-content').innerHTML = tabsHTML + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
+  const monthNav = _analyticsMonthNav();
+  document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
   // (Swipe handler is currently disabled — kept as no-op for safety)
@@ -12585,13 +12628,6 @@ function renderAnalyticsOverview() {
     </span>`;
 
   return `<div class="page-pad">
-    <!-- Period selector -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;color:var(--text2)">${period==='ytd'?'Year to Date — '+currentYear:metricLabel}</div>
-      <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('overview')">
-        ${selectorOpts}
-      </select>
-    </div>
     <!-- Pie Charts (smart layout: full-width if one is empty) -->
     ${(() => {
       const hasExp = expTotal > 0;
@@ -23162,22 +23198,7 @@ function renderAnalyticsBudget() {
     ..._bAllMonths.filter(m=>m.key!==currMonthKey()).map(m=>`<option value="${m.key}" ${sharedPeriod===m.key?'selected':''}>${m.label}</option>`)
   ].join('');
 
-  const _prevMk = (() => { const d = new Date(vy, vm-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
-  const _nextMkRaw = (() => { const d = new Date(vy, vm, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
-  const _nextDisabled = _nextMkRaw > currMonthKey();
-  const _nextVal = _nextMkRaw === currMonthKey() ? 'ytd' : _nextMkRaw;
-  const _navBtnCss = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:17px;line-height:1;flex-shrink:0';
   let html = `<div class="page-pad">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px">
-      <div style="display:flex;align-items:center;gap:6px;min-width:0">
-        <button style="${_navBtnCss}" onclick="window._analyticsOverviewPeriod='${_prevMk}';setAnalyticsTab('budget')" aria-label="Previous month">‹</button>
-        <div style="text-align:center;min-width:92px"><div style="font-size:14px;font-weight:600">${fmtMonth(mk + '-01')}</div>${isCurrentMonth?`<div style="font-size:10px;color:var(--text4);font-weight:400">${daysLeft} ${aiPlural(daysLeft,'day')} left</div>`:''}</div>
-        <button style="${_navBtnCss};${_nextDisabled?'opacity:0.35;pointer-events:none':''}" ${_nextDisabled?'disabled':''} onclick="window._analyticsOverviewPeriod='${_nextVal}';setAnalyticsTab('budget')" aria-label="Next month">›</button>
-      </div>
-      <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('budget')">
-        ${_bSelOpts}
-      </select>
-    </div>
     <div class="metric-grid fr2-always" style="margin-bottom:14px">
       <div class="metric-card">
         <div class="metric-label">Budget Total</div>
