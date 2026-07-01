@@ -23162,9 +23162,18 @@ function renderAnalyticsBudget() {
     ..._bAllMonths.filter(m=>m.key!==currMonthKey()).map(m=>`<option value="${m.key}" ${sharedPeriod===m.key?'selected':''}>${m.label}</option>`)
   ].join('');
 
+  const _prevMk = (() => { const d = new Date(vy, vm-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const _nextMkRaw = (() => { const d = new Date(vy, vm, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const _nextDisabled = _nextMkRaw > currMonthKey();
+  const _nextVal = _nextMkRaw === currMonthKey() ? 'ytd' : _nextMkRaw;
+  const _navBtnCss = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:17px;line-height:1;flex-shrink:0';
   let html = `<div class="page-pad">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:600">${fmtMonth(mk + '-01')}${isCurrentMonth?` <span style="font-size:11px;color:var(--text4);font-weight:400">· ${daysLeft} ${aiPlural(daysLeft,'day')} left</span>`:''}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px">
+      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+        <button style="${_navBtnCss}" onclick="window._analyticsOverviewPeriod='${_prevMk}';setAnalyticsTab('budget')" aria-label="Previous month">‹</button>
+        <div style="text-align:center;min-width:92px"><div style="font-size:14px;font-weight:600">${fmtMonth(mk + '-01')}</div>${isCurrentMonth?`<div style="font-size:10px;color:var(--text4);font-weight:400">${daysLeft} ${aiPlural(daysLeft,'day')} left</div>`:''}</div>
+        <button style="${_navBtnCss};${_nextDisabled?'opacity:0.35;pointer-events:none':''}" ${_nextDisabled?'disabled':''} onclick="window._analyticsOverviewPeriod='${_nextVal}';setAnalyticsTab('budget')" aria-label="Next month">›</button>
+      </div>
       <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('budget')">
         ${_bSelOpts}
       </select>
@@ -23196,26 +23205,33 @@ function renderAnalyticsBudget() {
   rows.forEach((r, idx) => {
     const barColor = r.pct > 100 ? 'var(--red)' : r.pct > 80 ? 'var(--amber)' : 'var(--green)';
     const barWidth = Math.min(r.pct, 100);
+    const _overSubs = r.breakdown.filter(b=>b.over).length;
+    const _nearSubs = r.breakdown.filter(b=>!b.over && b.pct>=80).length;
     const name = r.name || (r.location ? `${r.location} (${r.currency})` : `${r.currency} budget`);
     const accId = `bgt-acc-${idx}`;
     const breakdownHTML = r.breakdown.length > 0 ? r.breakdown.map(br => {
-      const brBarColor = br.over ? 'var(--red)' : br.pct > 80 ? 'var(--amber)' : 'var(--accent)';
+      const brOver = br.over;
+      const brNear = !brOver && br.pct >= 80;
+      const brBarColor = brOver ? 'var(--red)' : brNear ? 'var(--amber)' : 'var(--green)';
       const brBarWidth = Math.min(br.pct, 100);
       const brRem = br.allocLim - br.spent;
+      const brBadge = brOver ? '<span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(255,69,58,0.12);padding:1px 6px;border-radius:var(--r-full)">OVER</span>'
+        : brNear ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(255,159,10,0.14);padding:1px 6px;border-radius:var(--r-full)">NEAR LIMIT</span>' : '';
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;flex:1">
+            <span style="width:8px;height:8px;border-radius:50%;background:${brBarColor};flex-shrink:0;box-shadow:0 0 5px ${brBarColor}99"></span>
             <span style="font-size:14px">${br.catIcon||'💸'}</span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(br.catName)}</span>
-            ${br.over?'<span style="color:var(--red);font-size:10px">⚠</span>':''}
+            ${brBadge}
           </div>
           <div style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${sym(r.currency)}${br.spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(r.currency)}${br.allocLim.toFixed(0)}</span></div>
         </div>
-        <div style="height:4px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden">
-          <div style="height:100%;width:${brBarWidth}%;background:${brBarColor};transition:width 0.3s"></div>
+        <div style="height:6px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
+          <div style="height:100%;width:${brBarWidth}%;background:${brBarColor};border-radius:var(--r-full);transition:width 0.3s"></div>
         </div>
         <div style="display:flex;justify-content:space-between;margin-top:3px">
-          <span style="font-size:10px;color:var(--text4)">${br.pct.toFixed(0)}% used</span>
+          <span style="font-size:10px;color:${brOver?'var(--red)':brNear?'var(--amber)':'var(--text4)'};font-weight:${brOver||brNear?'600':'400'}">${br.pct.toFixed(0)}% used</span>
           <span style="font-size:10px;color:${brRem>=0?'var(--text4)':'var(--red)'};font-family:var(--mono)">${brRem>=0?fmt(brRem,r.currency)+' left':'-'+fmt(Math.abs(brRem),r.currency)+' over'}</span>
         </div>
       </div>`;
@@ -23242,6 +23258,10 @@ function renderAnalyticsBudget() {
               r.willExceed ? `⚠ At pace: ${fmt(r.projectedEnd, r.currency)} by month-end · tap ▾` :
               `${daysLeft} ${aiPlural(daysLeft,'day')} left · ${r.allocCount} ${aiPlural(r.allocCount,'category','categories')} · tap ▾`}
           </div>
+          ${(_overSubs+_nearSubs)>0 ? `<div style="display:flex;gap:6px;margin-top:6px">
+            ${_overSubs>0?`<span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(255,69,58,0.12);padding:2px 8px;border-radius:var(--r-full)">🔴 ${_overSubs} over</span>`:''}
+            ${_nearSubs>0?`<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(255,159,10,0.14);padding:2px 8px;border-radius:var(--r-full)">🟡 ${_nearSubs} near limit</span>`:''}
+          </div>`:''}
         </div>
       </div>
       <div class="ov-acc-body" style="padding-top:6px">
