@@ -91,7 +91,8 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .field-row .fr-label{flex:1;min-width:0;font-size:14px;color:var(--text2);font-weight:400}
 .field-row .fr-value{font-size:14px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;text-align:right}
 .field-row-wrap{position:relative}
-.field-row-split{display:flex;gap:10px;margin-bottom:0}
+.field-row-wrap>.field-row{margin-bottom:0}
+.field-row-split{display:flex;gap:10px;margin-bottom:10px}
 .field-row-split .field-row-wrap{flex:1;min-width:0}
 .field-row-split .field-row-wrap.fw-date{flex:1.7}
 .field-row-split .field-row-wrap.fw-time{flex:1}
@@ -12044,9 +12045,9 @@ function _analyticsMonthNav() {
   const prevMk = (() => { const d = new Date(by, bm-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
   const nextMkRaw = (() => { const d = new Date(by, bm, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
   const nextDisabled = isYtd || nextMkRaw > curMk;
-  const nextVal = nextMkRaw === curMk ? 'ytd' : nextMkRaw;
-  // Only Overview offers a true year-to-date view; the others treat 'ytd' as the current month.
-  const ovYtd = _analyticsTab === 'overview';
+  const nextVal = nextMkRaw;
+  // Overview/Spending/Income genuinely aggregate Jan→now on 'ytd'; only Budget treats 'ytd' as the current month.
+  const ovYtd = ['overview','spending','income'].includes(_analyticsTab);
   const label = isYtd ? (ovYtd ? `Year to Date · ${now.getFullYear()}` : fmtMonth(curMk+'-01')) : fmtMonth(baseMk+'-01');
 
   const txDates = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
@@ -12505,21 +12506,7 @@ function renderAnalyticsOverview() {
     ytdMonths.push({ key, label: d.toLocaleString('en',{month:'short'}), year: currentYear, isFuture, ...t });
   }
 
-  // Get all months that have data (for selector)
-  const allMonthsWithData = [];
-  const txDates = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
-  const uniqueMonths = [...new Set(txDates)].sort().reverse();
-  for (const mk of uniqueMonths) {
-    const [y, mo] = mk.split('-').map(Number);
-    const d = new Date(y, mo-1, 1);
-    allMonthsWithData.push({ key: mk, label: d.toLocaleString('en',{month:'long',year:'numeric'}) });
-  }
-  // Also add current month even if no data
   const currentMk = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`;
-  if (!allMonthsWithData.find(m=>m.key===currentMk)) {
-    allMonthsWithData.unshift({ key: currentMk, label: now.toLocaleString('en',{month:'long',year:'numeric'}) });
-  }
-
   // Determine what data to show in metric cards
   let metricMk, metricLabel;
   if (period === 'ytd') {
@@ -12582,9 +12569,10 @@ function renderAnalyticsOverview() {
   let expTotal = 0, incTotal = 0;
   const dispCurr = _displayCurrency();
   for (const tx of allTxs) {
+    const _glFlag = tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain || tx.isReimbSettlementLoss;
     if (tx.type === 'expense' || tx.type === 'shared') {
-      const cat = getCategoryDisplay(tx.categoryId);
-      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+      const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
+      const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
       const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
       // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
@@ -12594,8 +12582,8 @@ function renderAnalyticsOverview() {
       expCats[name].txs.push(tx);
       expTotal += amt;
     } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)) {
-      const cat = getCategoryDisplay(tx.categoryId);
-      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+      const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
+      const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
       const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
       // Convert to display currency
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
@@ -12616,11 +12604,6 @@ function renderAnalyticsOverview() {
       <div style="font-size:10px;color:${m.key===metricMk?'var(--accent)':m.isFuture?'var(--border3)':'var(--text4)'};font-weight:${m.key===metricMk?'600':'400'}">${m.label}</div>
     </div>`).join('');
 
-  // Month/year selector options
-  const selectorOpts = [
-    `<option value="ytd" ${period==='ytd'?'selected':''}>YTD (${currentYear})</option>`,
-    ...allMonthsWithData.map(m=>`<option value="${m.key}" ${period===m.key?'selected':''}>${m.label}</option>`)
-  ].join('');
 
   const chgBadge = (chg) => chg===null ? '' :
     `<span style="font-size:11px;color:${chg>=0?'var(--green)':'var(--red)'}">
@@ -14274,11 +14257,13 @@ function renderAnalyticsIncome() {
 
   const catTotals = {};
   for (const tx of txs) {
-    const cat = getCategoryDisplay(tx.categoryId);
+    const _glFlag = tx.isLoanSettlementGain || tx.isReimbSettlementGain;
+    const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
+    const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134
     const amt = tx.amount;
-    const parentName = cat.name.replace(/^[^ ]+ /,'');
+    const parentName = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
     const parentIcon = cat.icon;
-    const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
+    const subName = parentName;
     if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{}, txs:[] };
     catTotals[parentName].total += amt;
     catTotals[parentName].txs.push(tx);
@@ -17435,8 +17420,9 @@ function renderBudgetsTab() {
       const subRows = allocCount > 0 ? Object.entries(allocs).map(([catId, limit])=>{
         const limAmt = parseFloat(limit) || 0;
         const cat = getCategoryDisplay(catId);
+        const _isTopP = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId); // PLS #134
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(cat.name)}</span></div>
+          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(_isTopP ? cat.name : cat.name.replace(/^[^ ]+ /,''))}</span></div>
           <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${limAmt.toFixed(0)}</div>
         </div>`;
       }).join('') : '';
@@ -17581,9 +17567,10 @@ function aiAnalyzeSpending(currency) {
     if (!leafId || _isAutoOnlyCat(leafId)) continue;
     const disp = getCategoryDisplay(leafId);
     if (!disp || disp.name === 'Deleted Category') continue;
+    const _isTopL = [...db.categories.expense, ...db.categories.income].some(c => c.id === leafId); // PLS #134
     const mk = tx.date.slice(0,7);
     const amt = tx.type === 'shared' ? (tx.myShare || tx.amount) : tx.amount;
-    if (!catData[leafId]) catData[leafId] = { monthly: {}, name: disp.name, icon: disp.icon, occurrences: 0 };
+    if (!catData[leafId]) catData[leafId] = { monthly: {}, name: _isTopL ? disp.name : disp.name.replace(/^[^ ]+ /,''), icon: disp.icon, occurrences: 0 };
     catData[leafId].monthly[mk] = (catData[leafId].monthly[mk] || 0) + amt;
     catData[leafId].occurrences++;
   }
@@ -17734,7 +17721,7 @@ function openAiAllocate(bgtId) {
       for (const c of db.categories.expense) {
         if (c.archived) continue;
         const subs = (c.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
-        if (subs.length > 0) { for (const sc of subs) _leaves.push({ catId: sc.id, name: `${c.icon} ${sc.name}`, icon: sc.icon }); }
+        if (subs.length > 0) { for (const sc of subs) _leaves.push({ catId: sc.id, name: sc.name, icon: sc.icon }); }
         else if (!c.autoOnly) { _leaves.push({ catId: c.id, name: c.name, icon: c.icon }); }
       }
       const _extraCats = _leaves
@@ -17762,8 +17749,8 @@ function openAiAllocate(bgtId) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
               <span style="font-size:16px">${r.icon}</span>
-              <span style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${r.name.replace(/^[^ ]+ /,'')}</span>
-              <span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:${r.isNeed?'var(--accent-bg)':'var(--bg4)'};color:${flagColor};font-weight:600">${flag} ${flagLabel}</span>
+              <span style="font-size:13px;font-weight:600;letter-spacing:-0.2px">${r.name}</span>
+              ${r._noData?'':`<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:${r.isNeed?'var(--accent-bg)':'var(--bg4)'};color:${flagColor};font-weight:600">${flag} ${flagLabel}</span>`}
             </div>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="color:var(--text3);font-size:12px">${sym(bgt.currency)}</span>
@@ -23150,6 +23137,7 @@ function renderAnalyticsBudget() {
       Object.entries(allocs).forEach(([catId, allocLim]) => {
         const limAmt = parseFloat(allocLim) || 0;
         const cat = getCategoryDisplay(catId);
+        const _isTopA = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId); // PLS #134
         let spentInCat = 0;
         allCurrTxs.forEach(t => {
           if (_txMatchesAlloc(t, catId, _allocKeys)) {
@@ -23157,7 +23145,7 @@ function renderAnalyticsBudget() {
           }
         });
         breakdown.push({
-          catId, catName: cat.name.replace(/^[^ ]+ /,''), catIcon: cat.icon,
+          catId, catName: _isTopA ? cat.name : cat.name.replace(/^[^ ]+ /,''), catIcon: cat.icon,
           allocLim: limAmt, spent: spentInCat,
           pct: limAmt > 0 ? (spentInCat/limAmt*100) : 0,
           over: spentInCat > limAmt
@@ -23181,22 +23169,6 @@ function renderAnalyticsBudget() {
   const overCount = rows.filter(r => r.pct > 100).length;
   const warnCount = rows.filter(r => r.pct > 80 && r.pct <= 100).length;
 
-  // Period selector — same picker as Overview, drives the shared _analyticsOverviewPeriod.
-  const _bAllMonths = [];
-  {
-    const _txd = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
-    const _uniq = [...new Set(_txd)].sort().reverse();
-    for (const _mk of _uniq) {
-      const [_y,_mo] = _mk.split('-').map(Number);
-      _bAllMonths.push({ key:_mk, label:new Date(_y,_mo-1,1).toLocaleString('en',{month:'long',year:'numeric'}) });
-    }
-    const _curMk = currMonthKey();
-    if (!_bAllMonths.find(m=>m.key===_curMk)) _bAllMonths.unshift({ key:_curMk, label:new Date().toLocaleString('en',{month:'long',year:'numeric'}) });
-  }
-  const _bSelOpts = [
-    `<option value="ytd" ${sharedPeriod==='ytd'?'selected':''}>This month</option>`,
-    ..._bAllMonths.filter(m=>m.key!==currMonthKey()).map(m=>`<option value="${m.key}" ${sharedPeriod===m.key?'selected':''}>${m.label}</option>`)
-  ].join('');
 
   let html = `<div class="page-pad">
     <div class="metric-grid fr2-always" style="margin-bottom:14px">
