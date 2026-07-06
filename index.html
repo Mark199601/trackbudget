@@ -1771,12 +1771,51 @@ let db = (() => {
     try {
       const financialCat = (parsed.categories?.expense || []).find(c => c.id === 'c-financial');
       if (financialCat && financialCat.subcats) {
-        const hasFee = financialCat.subcats.some(s => s.id === 'sc-remittancefee');
-        if (!hasFee) {
-          financialCat.subcats.splice(1, 0, {id:'sc-remittancefee', name:'Remittance Fee', icon:'💸', archived:false, autoOnly:true});
+        // ── PERSONAL LOGIC SET #146 ── Seed ALL missing system (autoOnly) subcats, not just the fee.
+        // Older databases predate several of these; txs referencing them showed "Deleted Category"
+        // (e.g. every remittance parent, which is created with categoryId:'sc-remittance').
+        const SEED_DEFS = [
+          {id:'sc-remittancefee', name:'Remittance Fee', icon:'💸'},
+          {id:'sc-remittance',    name:'Remittance',     icon:'📤'},
+          {id:'sc-externalin',    name:'External In',    icon:'⬇️'},
+          {id:'sc-externalout',   name:'External Out',   icon:'⬆️'},
+          {id:'sc-forexloss',     name:'Forex Loss',     icon:'📉'},
+          {id:'sc-forexgain',     name:'Forex Gain',     icon:'📈'}
+        ];
+        for (const def of SEED_DEFS) {
+          if (!financialCat.subcats.some(s => s.id === def.id)) {
+            financialCat.subcats.splice(1, 0, {...def, archived:false, autoOnly:true});
+          }
         }
       }
     } catch(e) { /* defensive */ }
+    // ── PERSONAL LOGIC SET #148 ── Dedupe accidental double-created isAutoForex children
+    // (same parent transfer, same category, same amount, same date) — keep the first.
+    if (parsed.transactions) {
+      const _fxSeen = new Set();
+      parsed.transactions = parsed.transactions.filter(t => {
+        if (!t.isAutoForex || !t.parentId) return true;
+        const k = t.parentId+'|'+t.categoryId+'|'+t.amount+'|'+(t.date||'');
+        if (_fxSeen.has(k)) return false;
+        _fxSeen.add(k); return true;
+      });
+    }
+    // ── PERSONAL LOGIC SET #149 ── Re-point isAutoForex children to the parent transfer's
+    // PHP-side account. Older builds attributed them to the first home-currency account
+    // (e.g. Beep Card) regardless of which accounts the transfer actually touched.
+    // Cosmetic/attribution only — balances skip isAutoForex, so no amounts change.
+    if (parsed.transactions) {
+      const _homePHP = 'PHP'; // home base is immutable PHP
+      const _accOf = id => (parsed.accounts||[]).find(a=>a.id===id);
+      for (const t of parsed.transactions) {
+        if (!t.isAutoForex || !t.parentId) continue;
+        const par = parsed.transactions.find(x=>x.id===t.parentId);
+        if (!par || par.type!=='transfer') continue;
+        const f=_accOf(par.fromAccountId), to=_accOf(par.toAccountId);
+        const side = (f?.currency===_homePHP ? f : null) || (to?.currency===_homePHP ? to : null);
+        if (side && t.accountId !== side.id) t.accountId = side.id;
+      }
+    }
     if (!parsed.investments) parsed.investments = [];
     // Migration: fix any isInvestmentFund txs that were saved as type:'expense' → should be type:'transfer'
     if (parsed.transactions) {
@@ -2303,6 +2342,11 @@ function buildFxSnapshot(date, time) {
   return snap;
 }
 
+
+// ── PERSONAL LOGIC SET #147 ── Safe icon-prefix strip: only strip the first word when the
+// name does NOT start with a letter (i.e. it's an emoji prefix like "🍽️ Groceries").
+// Guards "Deleted Category", "Food & Dining", "Uncategorized" etc. from losing their first word.
+function _stripIcon(n) { return /^\p{L}/u.test(n) ? n : _stripIcon(n); }
 
 function getCategoryDisplay(catId) {
   if (!catId) return {icon:'📌',name:'Uncategorized'};
@@ -4068,7 +4112,7 @@ function buildLinkedChildrenHTML(tx) {
         else if (c.isInvestmentReturn) badge = `<span style="font-size:10px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Return</span>`;
         return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-            <div style="font-size:12px;color:var(--text2);min-width:0">${/^\p{L}/u.test(cCat.name) ? cCat.name : cCat.name.replace(/^[^ ]+ /,'')}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${/^\p{L}/u.test(cCat.name) ? cCat.name : _stripIcon(cCat.name)}</div>
             ${badge}
           </div>
           <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0">${cAmtD.str}</span>
@@ -4414,7 +4458,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         return `<div onclick="event.stopPropagation();openTxDetail('${lx.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <span style="font-size:14px">${cat.icon}</span>
-            <div style="font-size:12px;color:var(--text2);min-width:0">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))} · ${fmtD(lx.date)}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))} · ${fmtD(lx.date)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(lx.totalBill||lx.amount, lx.currency)}</span>
@@ -4444,7 +4488,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
-      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : cat.name.replace(/^[^ ]+ /,''))}</div>
+      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))}</div>
       <div class="tx-detail">${detail}</div>
     </div>
     <div class="tx-right">
@@ -6112,6 +6156,8 @@ function savePaydayFx(currency) {
 }
 
 function submitTransfer() {
+  if (window._tfSaving) return; // PLS #148: double-tap guard — a second tap within 800ms is ignored
+  window._tfSaving = true; setTimeout(()=>{ window._tfSaving = false; }, 800);
   const fromId = document.getElementById('tf-from')?.value;
   const toId = document.getElementById('tf-to')?.value;
   const amount = parseFloat(document.getElementById('tf-amount')?.value);
@@ -6949,7 +6995,9 @@ function openTxDetail(txId) {
     // PLS #116: write-off tx has no account (analytics-only, no real cash moved)
     rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value" style="color:var(--text4);font-style:italic">— (no cash account)</div></div>`;
   } else {
-    rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acct?.name||'—'}</div></div>`;
+    rows += tx.type==='remittance'
+      ? `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(getAccountDisplay(tx.fromAccountId).name)} → ${_esc(getAccountDisplay(tx.toAccountId).name)}</div></div>`
+      : `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acct?.name||'—'}</div></div>`;
   }
   if (tx.personName) rows += `<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(tx.personName)}</div></div>`;
   rows += `<div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>`;
@@ -7126,7 +7174,7 @@ function openTxDetail(txId) {
   } else {
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${dispCat.icon}</div>
-      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':dispCat.name.replace(/^[^ ]+ /,'')}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
+      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':_stripIcon(dispCat.name)}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
     </div>`;
   }
 
@@ -7214,10 +7262,10 @@ function openTxReceipt(txId) {
     heroLabel = `${fromAcct.name} → ${toAcct.name}${tx.currency !== toCurr ? ` · ${fmt(toAmt, toCurr)}` : ''}`;
   } else if (isShared) {
     heroAmount = fmt(tx.myShare || tx.amount, tx.currency);
-    heroLabel = cat.name.replace(/^[^ ]+ /, '') + ' · my share';
+    heroLabel = _stripIcon(cat.name) + ' · my share';
   } else {
     heroAmount = fmt(tx.amount, tx.currency);
-    heroLabel = cat.name.replace(/^[^ ]+ /, '');
+    heroLabel = _stripIcon(cat.name);
   }
 
   // Build detail rows
@@ -7244,7 +7292,7 @@ function openTxReceipt(txId) {
   } else {
     const acct = getAccountDisplay(tx.accountId);
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Account</div><div class="rcpt-row-value">${_esc(acct.name)}</div></div>`;
-    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Category</div><div class="rcpt-row-value">${cat.icon} ${cat.name.replace(/^[^ ]+ /, '')}</div></div>`;
+    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Category</div><div class="rcpt-row-value">${cat.icon} ${_stripIcon(cat.name)}</div></div>`;
     if (tx.personName) {
       rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Person</div><div class="rcpt-row-value">${_esc(tx.personName)}</div></div>`;
     }
@@ -7375,7 +7423,7 @@ function buildTxReceiptText(txId) {
   } else {
     const amt = isShared ? (tx.myShare || tx.amount) : tx.amount;
     lines.push(`${fmt(amt, tx.currency)}`);
-    lines.push(`${cat.name.replace(/^[^ ]+ /, '')}`);
+    lines.push(`${_stripIcon(cat.name)}`);
   }
   lines.push('');
   lines.push(`Date: ${fmtDFull(tx.date)}${tx.time?` ${tx.time}`:''}`);
@@ -8522,7 +8570,7 @@ function renderReimbTab() {
       return `<div class="tx-item" style="cursor:pointer" onclick="openTxDetail('${tx.id}')">
         <div class="tx-icon tx-icon-shared">${catDisp.icon}</div>
         <div class="tx-meta">
-          <div class="tx-name">${catDisp.name.replace(/^[^ ]+ /,'')}</div>
+          <div class="tx-name">${_stripIcon(catDisp.name)}</div>
           <div class="tx-detail">${fmtD(tx.date)} · Total ${fmt(tx.totalBill||tx.amount, tx.currency)}${paidLabel}</div>
         </div>
         <div class="tx-right">
@@ -8631,7 +8679,7 @@ function openSettledReimbSheet() {
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
             <div style="width:28px;height:28px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${cat.icon}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
+              <div style="font-size:12px;font-weight:500">${_stripIcon(cat.name)}</div>
               <div style="font-size:10px;color:var(--text4)">${fmtD(tx.date)}</div>
             </div>
             <div style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0">${fmt(tx.totalBill||tx.amount, tx.currency)}</div>
@@ -8668,7 +8716,7 @@ function openSettledReimbSheet() {
         body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
           <div style="width:34px;height:34px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cat.icon}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:500">${cat.name.replace(/^[^ ]+ /,'')}</div>
+            <div style="font-size:14px;font-weight:500">${_stripIcon(cat.name)}</div>
             <div style="font-size:11px;color:var(--text4)">${fmtD(tx.date)} · ${personLabel}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -8740,7 +8788,7 @@ function openReimbDialog(person) {
     const cat = getCategoryDisplay(tx.categoryId);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="flex:1;min-width:0">
-        <div style="color:var(--text2)">${cat.icon} ${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(tx.date)}</div>
+        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtD(tx.date)}</div>
         ${e.paid>0?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
       </div>
       <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
@@ -10395,7 +10443,7 @@ function openBatchReimbSettleEdit(txId) {
   const txRowsHTML = settledTxs.map(st => {
     const cat = getCategoryDisplay(st.categoryId);
     return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
-      <div style="color:var(--text2)">${cat.icon} ${cat.name.replace(/^[^ ]+ /,'')} · ${fmtD(st.date)}</div>
+      <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtD(st.date)}</div>
       <div style="font-family:var(--mono);color:var(--green)">${fmt(st.totalBill||st.amount,st.currency)}</div>
     </div>`;
   }).join('');
@@ -10911,7 +10959,7 @@ function openLoanDetail(loanId, direction) {
           return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;${isLast?'':'border-bottom:0.5px solid var(--border)'}" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${t.id}'),200)">
             <div style="font-size:18px;flex-shrink:0">${cat.icon}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">${cat.name.replace(/^[^ ]+ /,'')} ${badge}</div>
+              <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">${_stripIcon(cat.name)} ${badge}</div>
               <div style="font-size:11px;color:var(--text4)">${fmtD(t.date)} · ${acctName}${t.notes?' · '+t.notes:''}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -12575,7 +12623,7 @@ function renderAnalyticsOverview() {
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
       const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
-      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+      const name = _isTop ? cat.name : _stripIcon(cat.name);
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
       // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
       const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
@@ -12586,7 +12634,7 @@ function renderAnalyticsOverview() {
     } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)) {
       const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
       const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
-      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+      const name = _isTop ? cat.name : _stripIcon(cat.name);
       // Convert to display currency
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
@@ -12766,7 +12814,7 @@ function renderAnalyticsOverview() {
         for (const tx of monthTxs) {
           const cat = getCategoryDisplay(tx.categoryId);
           const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
-          const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+          const name = _isTop ? cat.name : _stripIcon(cat.name);
           const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
           const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
           if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
@@ -13052,7 +13100,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Unusual Transactions${_infoBtn('anomaly')}</div>
     ${top.map(o => {
-      const catName = o.cat.name.replace(/^[^ ]+ /,'');
+      const catName = _stripIcon(o.cat.name);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
           <div style="font-size:16px">${o.cat.icon || '💸'}</div>
@@ -13327,7 +13375,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
     // PLS #134 fix: subcat display names carry the parent emoji prefix ("X Sub") — strip it ONLY
     // for subcats; blanket-stripping mangled top-level names ("Food & Dining" → "& Dining").
     const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId);
-    const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+    const name = _isTop ? cat.name : _stripIcon(cat.name);
     if (!cats[name]) cats[name] = {total: 0, icon: cat.icon, id: tx.categoryId};
     cats[name].total += _ovExpAmt(tx, dispCurr);
   }
@@ -13424,7 +13472,7 @@ function buildMostFrequent(metricMk, dispCurr) {
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
     const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
-    const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+    const name = _isTop ? cat.name : _stripIcon(cat.name);
     if (!freq[name]) freq[name] = {count: 0, total: 0, icon: cat.icon};
     freq[name].count++;
     freq[name].total += _ovExpAmt(tx, dispCurr);
@@ -13563,7 +13611,7 @@ function buildIncomeDiversification(metricMk, dispCurr) {
     for (const tx of baseTxs) {
       const cat = getCategoryDisplay(tx.categoryId);
       const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
-      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+      const name = _isTop ? cat.name : _stripIcon(cat.name);
       if (!incomes[name]) incomes[name] = {total: 0, icon: cat.icon};
       const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
       incomes[name].total += amt;
@@ -14081,9 +14129,9 @@ function renderAnalyticsSpending() {
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
     const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    const parentName = cat.name.replace(/^[^ ]+ /,'');
+    const parentName = _stripIcon(cat.name);
     const parentIcon = cat.icon;
-    const subName = cat.subName || cat.name.replace(/^[^ ]+ /,'');
+    const subName = cat.subName || _stripIcon(cat.name);
     if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{}, txs:[] };
     catTotals[parentName].total += amt;
     catTotals[parentName].txs.push(tx);
@@ -14263,7 +14311,7 @@ function renderAnalyticsIncome() {
     const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
     const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134
     const amt = tx.amount;
-    const parentName = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+    const parentName = _isTop ? cat.name : _stripIcon(cat.name);
     const parentIcon = cat.icon;
     const subName = parentName;
     if (!catTotals[parentName]) catTotals[parentName] = { total:0, icon:parentIcon, subs:{}, txs:[] };
@@ -17424,7 +17472,7 @@ function renderBudgetsTab() {
         const cat = getCategoryDisplay(catId);
         const _isTopP = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId); // PLS #134
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(_isTopP ? cat.name : cat.name.replace(/^[^ ]+ /,''))}</span></div>
+          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(_isTopP ? cat.name : _stripIcon(cat.name))}</span></div>
           <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${limAmt.toFixed(0)}</div>
         </div>`;
       }).join('') : '';
@@ -17572,7 +17620,7 @@ function aiAnalyzeSpending(currency) {
     const _isTopL = [...db.categories.expense, ...db.categories.income].some(c => c.id === leafId); // PLS #134
     const mk = tx.date.slice(0,7);
     const amt = tx.type === 'shared' ? (tx.myShare || tx.amount) : tx.amount;
-    if (!catData[leafId]) catData[leafId] = { monthly: {}, name: _isTopL ? disp.name : disp.name.replace(/^[^ ]+ /,''), icon: disp.icon, occurrences: 0 };
+    if (!catData[leafId]) catData[leafId] = { monthly: {}, name: _isTopL ? disp.name : _stripIcon(disp.name), icon: disp.icon, occurrences: 0 };
     catData[leafId].monthly[mk] = (catData[leafId].monthly[mk] || 0) + amt;
     catData[leafId].occurrences++;
   }
@@ -21696,7 +21744,7 @@ function aiBudgetIntelligence() {
           return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
         },0);
         const subRatio = spent / limAmt;
-        const catName = cat.name.replace(/^[^ ]+ /,'');
+        const catName = _stripIcon(cat.name);
         if (subRatio > 1) {
           const id = 'sub-bgt-over-'+bgt.id+'-'+catId;
           const titles = [
@@ -22472,7 +22520,7 @@ function aiWeeklyRecap() {
       expense += amt;
       const cat = getCategoryDisplay(t.categoryId);
       const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === t.categoryId); // PLS #134 fix
-      const name = _isTop ? cat.name : cat.name.replace(/^[^ ]+ /,'');
+      const name = _isTop ? cat.name : _stripIcon(cat.name);
       catSpend[name] = (catSpend[name]||0) + amt;
     }
   }
@@ -23147,7 +23195,7 @@ function renderAnalyticsBudget() {
           }
         });
         breakdown.push({
-          catId, catName: _isTopA ? cat.name : cat.name.replace(/^[^ ]+ /,''), catIcon: cat.icon,
+          catId, catName: _isTopA ? cat.name : _stripIcon(cat.name), catIcon: cat.icon,
           allocLim: limAmt, spent: spentInCat,
           pct: limAmt > 0 ? (spentInCat/limAmt*100) : 0,
           over: spentInCat > limAmt
@@ -23455,7 +23503,7 @@ function renderAnalyticsYoY() {
     db.transactions.filter(t => !t.archived && t.type === 'expense' && t.date >= yrStart && t.date <= yrEndMonth &&
       !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
       const disp = getCategoryDisplay(t.categoryId);
-      const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : disp.name.replace(/^[^ ]+ /, '');
+      const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : _stripIcon(disp.name);
       const amt = toPhp(t.amount||0, t.currency||dc);
       totals.byCat[cat] = (totals.byCat[cat] || 0) + amt;
     });
@@ -23634,7 +23682,7 @@ function renderAnalyticsAISummary() {
     !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
     // Use getCategoryDisplay which properly resolves subcat IDs to readable names (PLS #5)
     const disp = getCategoryDisplay(t.categoryId);
-    const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : disp.name.replace(/^[^ ]+ /, '');
+    const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : _stripIcon(disp.name);
     expByCat[cat] = (expByCat[cat] || 0) + toPhp(t.amount||0, t.currency||dc);
   });
   // Skip "Uncategorized" from "Biggest spend" — show next ranked instead
