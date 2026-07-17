@@ -7899,6 +7899,20 @@ function openEditRemittance(txId) {
   const acctOpts = (selId) => accts.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const fromAcct = accts.find(a=>a.id===tx.fromAccountId);
   const toAcct = accts.find(a=>a.id===tx.toAccountId);
+  // PLS #155: surface the linked remittance fee (amount + which account it's deducted from) —
+  // it's a separate child transaction the generic edit form never showed.
+  const feeChild = db.transactions.find(t => t.parentId === tx.id && t.isAutoFee);
+  const feeSection = feeChild ? `
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label class="form-label" style="margin:0">Remittance Fee</label>
+        <span style="font-size:11px;color:var(--accent);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${feeChild.id}'),50)">View →</span>
+      </div>
+      <div class="form-row fr2">
+        <input class="form-input numpad-input" type="number" id="erm-fee-amount" value="${feeChild.amount}" step="any" inputmode="none">
+        <select class="form-input" id="erm-fee-account">${acctOpts(feeChild.accountId)}</select>
+      </div>
+    </div>` : '';
   openSheet('gen','Edit Remittance',`
     <div class="form-group"><label class="form-label" for="erm-from">From Account</label><select class="form-input" id="erm-from" onchange="updateEditRemittancePreview()">${acctOpts(tx.fromAccountId)}</select></div>
     <div class="form-group"><label class="form-label" for="erm-to">To Account</label><select class="form-input" id="erm-to" onchange="updateEditRemittancePreview()">${acctOpts(tx.toAccountId)}</select></div>
@@ -7907,6 +7921,7 @@ function openEditRemittance(txId) {
       <div class="form-group"><label class="form-label" for="erm-rate">Rate (1 <span id="erm-rate-label">${fromAcct?.currency||tx.currency}</span> = ?)</label><input class="form-input numpad-input" type="number" id="erm-rate" value="${tx.rate||''}" step="any" oninput="updateEditRemittancePreview()" inputmode="none"></div>
     </div>
     <div id="erm-preview" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px"></div>
+    ${feeSection}
     <div class="form-group">
       <label class="form-label">Date &amp; Time</label>
       <div class="dt-row">
@@ -7976,6 +7991,24 @@ function saveEditRemittance(txId) {
   // PLS #154: rebuild the FX snapshot when the date moves — mirrors saveEditTransfer,
   // so the snapshot rate anchor always matches the transaction's actual date.
   if (isCross && tx.date && tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
+
+  // PLS #155: linked remittance fee (amount + which account it's deducted from) is editable
+  // right here instead of being a dead end — the generic edit form refuses isAutoFee children.
+  const feeChild = db.transactions.find(t => t.parentId === tx.id && t.isAutoFee);
+  if (feeChild) {
+    const feeAmountEl = document.getElementById('erm-fee-amount');
+    const feeAcctEl = document.getElementById('erm-fee-account');
+    if (feeAmountEl && feeAcctEl) {
+      const feeAmount = parseFloat(feeAmountEl.value);
+      const feeAcct = db.accounts.find(a=>a.id===feeAcctEl.value);
+      if (!feeAmount || feeAmount <= 0) { showToast('Enter valid fee amount'); return; }
+      if (!feeAcct) { showToast('Select fee account'); return; }
+      feeChild.amount = roundMoney(feeAmount, feeAcct.currency);
+      feeChild.currency = feeAcct.currency;
+      feeChild.accountId = feeAcct.id;
+      if (tx.date && tx.date !== oldDate) feeChild.date = tx.date;
+    }
+  }
 
   saveDBWithSync(); closeSheet('gen');
   if (currentPage==='transactions') renderTransactions();
@@ -20113,7 +20146,7 @@ function openDriveSheet() {
       <div>
         <div style="font-size:14px;font-weight:600;color:var(--green)">Drive Connected</div>
         ${email?`<div style="font-size:11px;color:var(--text3)">${email}</div>`:''}
-        <div style="font-size:11px;color:var(--text3)">${db.settings.lastDriveSync?'Last sync: '+fmtDFull(db.settings.lastDriveSync.split('T')[0]):'Never synced'}</div>
+        <div style="font-size:11px;color:${db.settings.lastDriveSyncDevice && db.settings.lastDriveSyncDevice!==getDeviceName()?'var(--amber)':'var(--text3)'}">${db.settings.lastDriveSync?'Last sync: '+fmtDFull(db.settings.lastDriveSync.split('T')[0]):'Never synced'}${db.settings.lastDriveSyncDevice?` · from ${getDeviceIcon(db.settings.lastDriveSyncDevice)} ${_esc(db.settings.lastDriveSyncDevice)}${db.settings.lastDriveSyncDevice!==getDeviceName()?' (different device)':''}`:''}</div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
@@ -21136,21 +21169,23 @@ function relativeTime(iso) {
 }
 
 function renderDeviceIndicator() {
+  // PLS #156: last device ACTIVE/used (per user correction) — lastActiveDevice, stamped
+  // on every app open. Device name + time shown directly (not buried in a hover tooltip,
+  // which is invisible on mobile anyway).
   const last = db.settings?.lastActiveDevice;
   const device = last?.device || getDeviceName();
   const browser = last?.browser || getBrowserName();
   const when = last?.at ? relativeTime(last.at) : 'now';
   const icon = getDeviceIcon(device);
   const connected = db.settings?.googleDriveConnected;
-  const cloudIcon = connected ? '☁️' : '☁︎';
   const tooltip = connected
-    ? `Drive: synced ${when} · tap for backups · ${device} · ${browser}`
-    : `Drive: not connected · tap to connect · ${device} · ${browser}`;
+    ? `Last active: ${device} · ${browser} · ${when} · tap for backups`
+    : `Last active: ${device} · ${browser} · ${when} · Drive not connected`;
   return `<button class="btn btn-ghost btn-sm" onclick="openSyncShortcuts()" title="${tooltip}"
     style="padding:6px 10px;font-size:14px;display:flex;align-items:center;gap:6px"
     aria-label="${tooltip}">
-    <span style="opacity:${connected?'1':'0.5'}">${cloudIcon}</span>
-    <span style="font-size:11px;color:var(--text3);font-weight:500">${when}</span>
+    <span style="opacity:${connected?'1':'0.5'};display:flex">${icon}</span>
+    <span style="font-size:11px;font-weight:500;color:var(--text3)">${_esc(device)} · ${when}</span>
   </button>`;
 }
 
