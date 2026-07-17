@@ -1800,6 +1800,14 @@ let db = (() => {
         _fxSeen.add(k); return true;
       });
     }
+    // ── PERSONAL LOGIC SET #150 ── Remove stray accountId from remittance transactions.
+    // The old generic edit form wrote a spurious tx.accountId to remittances (which only use
+    // fromAccountId/toAccountId); balances never read it, but it's dead/misleading data.
+    if (parsed.transactions) {
+      for (const t of parsed.transactions) {
+        if (t.type === 'remittance' && 'accountId' in t) delete t.accountId;
+      }
+    }
     // ── PERSONAL LOGIC SET #149 ── Re-point isAutoForex children to the parent transfer's
     // PHP-side account. Older builds attributed them to the first home-currency account
     // (e.g. Beep Card) regardless of which accounts the transfer actually touched.
@@ -3787,6 +3795,7 @@ const UX_TOAST_DUR_LONG = 4000;         // ms — important warnings (budget exc
 const UX_SHEET_OPEN_DELAY = 150;        // ms — delay before opening sheet after closing another (animation buffer)
 const UX_NAV_TRANSITION_DELAY = 200;    // ms — delay before opening sheet after page navigation
 const UX_AUTOSAVE_DEBOUNCE = 1500;      // ms — debounce for auto-save to Drive
+const UX_EDIT_AUTOSAVE_DEBOUNCE = 6000; // ms — PLS #152: debounce after edits, shortened from 30s for snappier cross-device sync
 const UX_RECENT_TX_DAYS = 7;            // days — window for "recent transactions" in reconciliation
 const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Drive history
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
@@ -7519,6 +7528,7 @@ function openEditTx(txId) {
     return;
   }
   if (tx.type==='transfer') { openEditTransfer(txId); return; }
+  if (tx.type==='remittance') { openEditRemittance(txId); return; }
   const accts = db.accounts.filter(a=>!a.archived);
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
   const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
@@ -7880,6 +7890,97 @@ function syncEditTransferCurrency() {
   document.getElementById('etf-custom-rate') && (document.getElementById('etf-custom-rate').value = '');
   document.getElementById('etf-toamount') && (document.getElementById('etf-toamount').value = '');
   updateEditTransferPreview();
+}
+
+function openEditRemittance(txId) {
+  const tx = db.transactions.find(t=>t.id===txId);
+  if (!tx) return;
+  const accts = db.accounts.filter(a=>!a.archived);
+  const acctOpts = (selId) => accts.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${acctLabel(a)}</option>`).join('');
+  const fromAcct = accts.find(a=>a.id===tx.fromAccountId);
+  const toAcct = accts.find(a=>a.id===tx.toAccountId);
+  openSheet('gen','Edit Remittance',`
+    <div class="form-group"><label class="form-label" for="erm-from">From Account</label><select class="form-input" id="erm-from" onchange="updateEditRemittancePreview()">${acctOpts(tx.fromAccountId)}</select></div>
+    <div class="form-group"><label class="form-label" for="erm-to">To Account</label><select class="form-input" id="erm-to" onchange="updateEditRemittancePreview()">${acctOpts(tx.toAccountId)}</select></div>
+    <div class="form-row fr2">
+      <div class="form-group"><label class="form-label" for="erm-amount">Amount</label><input class="form-input numpad-input" type="number" id="erm-amount" value="${tx.amount}" step="any" oninput="updateEditRemittancePreview()" inputmode="none"></div>
+      <div class="form-group"><label class="form-label" for="erm-rate">Rate (1 <span id="erm-rate-label">${fromAcct?.currency||tx.currency}</span> = ?)</label><input class="form-input numpad-input" type="number" id="erm-rate" value="${tx.rate||''}" step="any" oninput="updateEditRemittancePreview()" inputmode="none"></div>
+    </div>
+    <div id="erm-preview" style="font-size:12px;color:var(--text3);padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px"></div>
+    <div class="form-group">
+      <label class="form-label">Date &amp; Time</label>
+      <div class="dt-row">
+        ${dtField('erm-date','date','Date',tx.date)}
+        ${dtField('erm-time','time','Time',tx.time)}
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label" for="erm-notes">Notes</label><textarea class="form-input" id="erm-notes" rows="2" style="resize:none">${_esc(tx.notes||'')}</textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="saveEditRemittance('${txId}')">Save Changes</button>
+      <button class="btn btn-danger" onclick="archiveTx('${txId}');closeSheet('gen')">Archive</button>
+    </div>
+  `);
+  setTimeout(updateEditRemittancePreview, 0);
+}
+
+function updateEditRemittancePreview() {
+  const fromId = document.getElementById('erm-from')?.value;
+  const toId = document.getElementById('erm-to')?.value;
+  const amount = parseFloat(document.getElementById('erm-amount')?.value) || 0;
+  const rate = parseFloat(document.getElementById('erm-rate')?.value) || 0;
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const lbl = document.getElementById('erm-rate-label');
+  if (lbl && fromAcct) lbl.textContent = fromAcct.currency;
+  const prev = document.getElementById('erm-preview');
+  if (!prev) return;
+  if (!fromAcct || !toAcct) { prev.textContent = 'Select both accounts.'; return; }
+  if (fromId === toId) { prev.innerHTML = `<span style="color:var(--red)">From and To must differ.</span>`; return; }
+  if (amount > 0 && rate > 0) {
+    const received = roundMoney(amount * rate, toAcct.currency);
+    prev.innerHTML = `${toAcct.name} receives: <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toAcct.currency)}</strong>`;
+  } else {
+    prev.textContent = 'Enter amount and rate.';
+  }
+}
+
+function saveEditRemittance(txId) {
+  const tx = db.transactions.find(t=>t.id===txId);
+  if (!tx) { showToast('TX not found'); return; }
+  const fromId = document.getElementById('erm-from')?.value;
+  const toId = document.getElementById('erm-to')?.value;
+  const amount = parseFloat(document.getElementById('erm-amount')?.value);
+  const rate = parseFloat(document.getElementById('erm-rate')?.value);
+  const newDate = parseInputDate(document.getElementById('erm-date')?.value);
+  const oldDate = tx.date;
+
+  if (!fromId) { showToast('Select source account'); return; }
+  if (!toId) { showToast('Select destination account'); return; }
+  if (fromId === toId) { showToast('From and To must differ'); return; }
+  if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
+  if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
+
+  const fromAcct = db.accounts.find(a=>a.id===fromId);
+  const toAcct = db.accounts.find(a=>a.id===toId);
+  const isCross = fromAcct.currency !== toAcct.currency;
+  tx.fromAccountId = fromId;
+  tx.toAccountId = toId;
+  tx.currency = fromAcct.currency;
+  tx.amount = roundMoney(amount, fromAcct.currency);
+  tx.rate = rate;
+  tx.toAmount = roundMoney(amount * rate, toAcct.currency);
+  if (newDate) tx.date = newDate;
+  tx.time = document.getElementById('erm-time')?.value || tx.time;
+  tx.notes = document.getElementById('erm-notes')?.value?.trim() || '';
+  delete tx.accountId; // PLS #150: remittances never carry a single accountId — from/to only
+  // PLS #154: rebuild the FX snapshot when the date moves — mirrors saveEditTransfer,
+  // so the snapshot rate anchor always matches the transaction's actual date.
+  if (isCross && tx.date && tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
+
+  saveDBWithSync(); closeSheet('gen');
+  if (currentPage==='transactions') renderTransactions();
+  else if (currentPage==='dashboard') renderDashboard();
+  showToast('Remittance updated');
 }
 
 function openEditTransfer(txId) {
@@ -20281,6 +20382,7 @@ async function saveToDrive() {
     if (!uploadRes.ok) throw new Error('Upload failed: ' + await uploadRes.text());
     db.settings.lastDriveSync = now.toISOString();
     db.settings.lastDriveBackupFile = filename;
+    db.settings.lastDriveSyncDevice = getDeviceName(); // PLS #151: which device pushed this sync
     saveDB();
     closeSheet('gen');
     if (currentPage === 'dashboard') renderDashboard();
@@ -20582,6 +20684,51 @@ async function checkDriveForBackup() {
   }
 }
 
+// ── PERSONAL LOGIC SET #152 ── Snappier cross-device sync, minimal-UI nudge.
+// Push side: autoSaveTrigger debounce shortened (see UX_EDIT_AUTOSAVE_DEBOUNCE).
+// Pull side: silently check if Drive has something newer from ANOTHER device, and if so
+// show a small dismissible pill (same visual language as the offline badge — PLS #94:
+// user wants subtle status indicators, not floating banners/modals popping up unasked).
+// Throttled so it never hits the Drive API more than once every 2 minutes.
+var _lastAutoBackupCheck = 0;
+async function autoCheckNewerBackup() {
+  if (!db.settings.googleDriveConnected || !_gdriveAccessToken || _isSavingToDrive) return;
+  const now = Date.now();
+  if (now - _lastAutoBackupCheck < 120000) return; // at most once per 2 min
+  _lastAutoBackupCheck = now;
+  try {
+    const folderId = await getOrCreateFolder();
+    const files = await driveRequest('GET',
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'trackbudget' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime)&pageSize=1`
+    );
+    const latest = files.files?.[0];
+    if (!latest) return;
+    const backupTime = new Date(latest.createdTime).getTime();
+    const localTime = db.settings.lastDriveSync ? new Date(db.settings.lastDriveSync).getTime() : 0;
+    if (backupTime <= localTime + 5000) { _renderSyncNudge(null); return; } // not newer — clear any stale badge
+    const backupContent = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${latest.id}?alt=media`);
+    const meta = backupContent._backupMeta || {};
+    if (meta.deviceName === getDeviceName()) { _renderSyncNudge(null); return; } // our own push landing
+    _renderSyncNudge({ fileId: latest.id, deviceName: meta.deviceName || 'another device' });
+  } catch(e) { console.warn('Auto backup check failed:', e); }
+}
+
+function _renderSyncNudge(info) {
+  let badge = document.getElementById('sync-nudge-badge');
+  if (!info) { if (badge) badge.style.display = 'none'; return; }
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'sync-nudge-badge';
+    badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:4px 9px;background:rgba(124,109,240,0.15);color:var(--accent);border:1px solid rgba(124,109,240,0.4);border-radius:var(--r-full);font-size:11px;font-weight:600;cursor:pointer;user-select:none';
+    const target = document.querySelector('#page-header .ph-right') || document.body;
+    target.insertBefore(badge, target.firstChild);
+  }
+  badge.innerHTML = `<span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;box-shadow:0 0 4px var(--accent)"></span>Newer on ${_esc(info.deviceName)}`;
+  badge.title = 'Tap to review and load';
+  badge.onclick = () => { badge.style.display='none'; checkDriveForBackup(); };
+  badge.style.display = 'inline-flex';
+}
+
 async function showBackupPicker() {
   if (!_gdriveAccessToken) {
     showToast('No Drive token — tap Load again');
@@ -20759,6 +20906,7 @@ async function saveToDriveSilent() {
     if (!res.ok) throw new Error(await res.text());
     db.settings.lastDriveSync = now.toISOString();
     db.settings.lastDriveBackupFile = filename;
+    db.settings.lastDriveSyncDevice = getDeviceName(); // PLS #151: which device pushed this sync
     saveDB();
     _lastSyncTime = Date.now();
     _hasUnsavedChanges = false;
@@ -20836,14 +20984,14 @@ setInterval(() => {
 function autoSaveTrigger() {
   if (!db.settings.googleDriveConnected) return;
   clearTimeout(_autoSaveTimer);
-  // 30-second debounce — saves once after 30s of inactivity
+  // PLS #152: shortened debounce — saves once after a brief pause in edits (was 30s)
   // IMPORTANT: Only saves if token already in memory — never triggers popup
   _autoSaveTimer = setTimeout(async () => {
     if (_gdriveAccessToken) {
       await saveToDriveSilent();
     }
     // No token = skip silently. User must do a manual save to re-auth.
-  }, 30 * 1000);
+  }, UX_EDIT_AUTOSAVE_DEBOUNCE);
 }
 
 // ── CUSTOM DATE/TIME PICKER ──
@@ -21035,13 +21183,18 @@ function openSyncShortcuts() {
     const lastSync = db.settings.lastDriveSync
       ? relativeTime(db.settings.lastDriveSync)
       : 'never';
+    // PLS #151: surface which device pushed the last sync, so switching between PC/iPhone
+    // doesn't leave you guessing which one has the freshest data.
+    const _syncDevice = db.settings.lastDriveSyncDevice;
+    const _thisDevice = getDeviceName();
+    const _deviceMismatch = _syncDevice && _syncDevice !== _thisDevice;
     driveBlock = `
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(45,217,138,0.08);border:1px solid rgba(45,217,138,0.2);border-radius:var(--r-md);margin-bottom:14px">
         <span style="font-size:22px">☁️</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--green)">Drive Connected</div>
           <div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${email}</div>
-          <div style="font-size:11px;color:var(--text4)">Last sync: ${lastSync}</div>
+          <div style="font-size:11px;color:${_deviceMismatch?'var(--amber)':'var(--text4)'}">Last sync: ${lastSync}${_syncDevice?` · from ${getDeviceIcon(_syncDevice)} ${_esc(_syncDevice)}${_deviceMismatch?' (different device)':''}`:''}</div>
         </div>
       </div>
       <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">Backups · TrackBudget/Backups</div>
@@ -21471,6 +21624,7 @@ function initApp() {
       ensureDriveToken(() => {
         // Token refreshed silently — update indicator
         if (_lastSyncTime) setSyncStatus('saved');
+        autoCheckNewerBackup(); // PLS #152: silent check, only nudges if genuinely newer elsewhere
       }, true); // silent = no popup
     }
   }
@@ -21506,6 +21660,21 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     // App came back to foreground — update sync time display
     updateSyncIndicator();
+    autoCheckNewerBackup(); // PLS #152: throttled internally to 1 check / 2 min
+  }
+});
+
+// ── PERSONAL LOGIC SET #153 ── Redundant flush on pagehide (instant close / force-quit).
+// visibilitychange normally fires first and already covers this, but pagehide is the
+// platform-recommended fallback for abrupt close/navigate-away — it doesn't block the
+// back-forward cache the way beforeunload does, so it's safe to always attach.
+// Local data is never at risk either way: saveDB() already wrote to localStorage
+// synchronously the moment the change was made — this only affects how fast the OTHER
+// device sees it. If the OS kills the process before this fetch resolves, the push simply
+// completes next time the app opens (autoSaveTrigger/autoCheckNewerBackup pick it up).
+window.addEventListener('pagehide', () => {
+  if (_hasUnsavedChanges && db.settings.googleDriveConnected && _gdriveAccessToken && !_isSavingToDrive) {
+    saveToDriveSilent();
   }
 });
 
