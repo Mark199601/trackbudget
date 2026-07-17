@@ -20858,6 +20858,12 @@ async function confirmLoadDriveBackup(fileId, force) {
       return;
     }
     showLoading('Loading backup...');
+    // Capture the loaded backup's own save time/device BEFORE stripping _backupMeta — this is
+    // what lastDriveSync must become, otherwise it stays pinned to whatever it was before the
+    // load and autoCheckNewerBackup keeps thinking Drive has something newer forever (the
+    // "New backup" badge never clears even right after loading the latest one).
+    const loadedSavedAt = backup._backupMeta?.savedAt || new Date().toISOString();
+    const loadedDevice = backup._backupMeta?.deviceName || null;
     delete backup._backupMeta;
     // ── PERSONAL LOGIC SET #72 ── full replace instead of Object.assign shallow merge.
     // Object.assign(db, backup) leaves any keys present in the OLD db that are absent in the
@@ -20866,7 +20872,8 @@ async function confirmLoadDriveBackup(fileId, force) {
     const preservedDriveSettings = {
       googleDriveConnected: true,
       googleDriveEmail: db.settings?.googleDriveEmail,
-      lastDriveSync: db.settings?.lastDriveSync
+      lastDriveSync: loadedSavedAt,
+      lastDriveSyncDevice: loadedDevice
     };
     db = backup;
     if (!db.settings) db.settings = {};
