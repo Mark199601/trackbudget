@@ -20757,8 +20757,8 @@ function _renderSyncNudge(info) {
     const target = document.querySelector('#page-header .ph-right') || document.body;
     target.insertBefore(badge, target.firstChild);
   }
-  badge.innerHTML = `<span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;box-shadow:0 0 4px var(--accent)"></span>Newer on ${_esc(info.deviceName)}`;
-  badge.title = 'Tap to review and load';
+  badge.innerHTML = `<span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block;box-shadow:0 0 4px var(--accent)"></span>New backup`;
+  badge.title = `Newer backup on ${_esc(info.deviceName)} — tap to review and load`;
   badge.onclick = () => { badge.style.display='none'; checkDriveForBackup(); };
   badge.style.display = 'inline-flex';
 }
@@ -21169,24 +21169,21 @@ function relativeTime(iso) {
   return fmtDFull(iso.split('T')[0]);
 }
 
+const SVG_DISKETTE = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>`;
 function renderDeviceIndicator() {
-  // PLS #156: last device ACTIVE/used (per user correction) — lastActiveDevice, stamped
-  // on every app open. Device name + time shown directly (not buried in a hover tooltip,
-  // which is invisible on mobile anyway).
+  // PLS #156: last device ACTIVE/used — icon-only pill (device/time moved to tooltip,
+  // keeps the header from getting crowded/overlapping on narrow screens). Tap opens the
+  // manual save/load sheet.
   const last = db.settings?.lastActiveDevice;
   const device = last?.device || getDeviceName();
   const browser = last?.browser || getBrowserName();
   const when = last?.at ? relativeTime(last.at) : 'now';
-  const icon = getDeviceIcon(device);
   const connected = db.settings?.googleDriveConnected;
   const tooltip = connected
     ? `Last active: ${device} · ${browser} · ${when} · tap for backups`
     : `Last active: ${device} · ${browser} · ${when} · Drive not connected`;
-  return `<button class="btn btn-ghost btn-sm" onclick="openSyncShortcuts()" title="${tooltip}"
-    style="padding:6px 10px;font-size:14px;display:flex;align-items:center;gap:6px"
-    aria-label="${tooltip}">
-    <span style="opacity:${connected?'1':'0.5'};display:flex">${icon}</span>
-    <span style="font-size:11px;font-weight:500;color:var(--text3)">${_esc(device)} · ${when}</span>
+  return `<button class="icon-btn" onclick="openSyncShortcuts()" title="${tooltip}" aria-label="${tooltip}">
+    <span style="opacity:${connected?'1':'0.5'};display:flex">${SVG_DISKETTE}</span>
   </button>`;
 }
 
