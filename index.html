@@ -324,6 +324,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .last-no-border:last-child{border-bottom:none !important}
 .list-card{background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)}
 .list-card + .list-card{margin-top:10px}
+.qa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.qa-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 6px 12px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;transition:background var(--transition),transform var(--transition);text-align:center}
+.qa-item:active{background:var(--bg3);transform:scale(0.97)}
+.qa-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--accent-bg)}
+.qa-label{font-size:10.5px;font-weight:600;color:var(--text2);line-height:1.2}
 .list-row{padding:14px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background 0.12s cubic-bezier(0.32,0.72,0,1);display:flex;align-items:center;gap:12px}
 .list-row:last-child{border-bottom:none}
 .list-row:active,.list-row.active{background:var(--bg3)}
@@ -935,6 +940,20 @@ option{background:var(--bg3);color:var(--text)}
     <div class="dlg-header"><span class="dlg-title" id="dlg-title"></span><button class="sheet-close" onclick="closeDlg()" aria-label="Close dialog">✕</button></div>
     <div class="dlg-body" id="dlg-body"></div>
     <div class="dlg-footer" id="dlg-footer"></div>
+  </div>
+</div>
+
+<!-- PLS #158: unsynced-edit block gate. Separate from dlg-overlay on purpose — no backdrop
+     click-to-close, no ✕ button. Only JS (hideSyncBlockModal) closes it, either on confirmed
+     sync or via the explicit "Continue anyway" escape hatch once retry has failed. -->
+<div class="dlg-overlay" id="sync-block-overlay" role="dialog" aria-modal="true" aria-labelledby="syncblock-title" style="z-index:400">
+  <div class="dlg" style="max-width:320px;text-align:center;padding:32px 24px 24px">
+    <div id="syncblock-icon" style="width:36px;height:36px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--accent)">
+      <svg class="spin" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </div>
+    <div id="syncblock-title" style="font-size:16px;font-weight:600;margin-bottom:6px">Syncing your last edit...</div>
+    <div id="syncblock-sub" style="font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:4px">Please wait before switching devices.</div>
+    <div id="syncblock-actions" style="display:none;gap:8px;justify-content:center;margin-top:16px"></div>
   </div>
 </div>
 
@@ -1975,6 +1994,10 @@ function saveDB() {
 
 function saveDBWithSync() {
   // Local save + trigger Drive sync (for actual data changes only)
+  // PLS #157: stamp the edit time INTO db itself (persisted by saveDB below, synchronous,
+  // survives force-close) — this is what lets the app detect on next open whether the last
+  // edit made it to Drive or got interrupted before it could sync.
+  db.settings.lastLocalEditAt = new Date().toISOString();
   saveDB();
   _hasUnsavedChanges = true;
   if (db.settings.googleDriveConnected) setSyncStatus('unsaved');
@@ -3680,10 +3703,31 @@ function renderDashboard() {
       </div>`;
     })()}` : '';
 
-  const orderedSectionsHTML = _dashReorderMode ? '' : order.map(id => {
-    if (id.startsWith('w_')) return _dashWidgetHTML(id, mk, disp);
-    return sectionMap[id] || '';
-  }).join('');
+  const orderedSectionsHTML = _dashReorderMode ? '' : (() => {
+    // PLS #159: only the first 2 analytics widgets (w_*) render inline — the rest (of up to
+    // 16) collapse under "See more insights" so the dashboard reads clean at a glance instead
+    // of a long stack of widgets. Core sections (metrics/budget/recent/etc) are never affected.
+    let visible = '';
+    let hidden = '';
+    let widgetCount = 0;
+    order.forEach(id => {
+      if (id.startsWith('w_')) {
+        const html = _dashWidgetHTML(id, mk, disp);
+        if (!html) return;
+        widgetCount++;
+        if (widgetCount <= 2) visible += html; else hidden += html;
+      } else {
+        visible += sectionMap[id] || '';
+      }
+    });
+    const moreHTML = hidden ? `<details style="margin-bottom:16px">
+      <summary style="list-style:none;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:center;gap:6px;padding:13px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;font-weight:600;color:var(--text2)">
+        <span>▸ See more insights</span>
+      </summary>
+      <div style="margin-top:12px">${hidden}</div>
+    </details>` : '';
+    return visible + moreHTML;
+  })();
 
   // Customize button (small, below hero card)
   const customizeBtn = !_dashReorderMode ? `<div style="text-align:right;margin:-8px 0 12px">
@@ -3707,7 +3751,7 @@ function renderDashboard() {
         return `<div class="hero-trend ${cls}">${arrow} ${fmt(Math.abs(mNet), disp)} this month</div>`;
       })()}
       <div style="height:1px;background:rgba(255,255,255,0.07);margin:14px 0 12px"></div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px">
         <div style="background:rgba(45,217,138,0.08);border:1px solid rgba(45,217,138,0.15);border-radius:var(--r-md);padding:10px">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(45,217,138,0.6);margin-bottom:3px">Assets</div>
           <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
@@ -3717,26 +3761,18 @@ function renderDashboard() {
           <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--red)">${fmt(fromPhp(totalLiab,disp),disp)}</div>
         </div>
       </div>
-      ${(topAssets.length>0||topLiabs.length>0)?`
-      <details>
-        <summary style="font-size:11px;color:rgba(255,255,255,0.35);cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:4px">
-          <span>▸ Breakdown</span>
-        </summary>
-        <div style="margin-top:10px">
-          ${topAssets.length>0?`
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.2);margin-bottom:6px">Top Assets</div>
-          ${topAssets.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-            <div style="font-size:12px;color:rgba(255,255,255,0.5)">${_esc(a.name)} <span style="color:rgba(255,255,255,0.2);font-size:10px">${a.type}</span></div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${fmt(fromPhp(a.phpBal,disp),disp)}</div>
-          </div>`).join('')}`:''}
-          ${topLiabs.length>0?`
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.2);margin-top:10px;margin-bottom:6px">Top Liabilities</div>
-          ${topLiabs.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-            <div style="font-size:12px;color:rgba(255,255,255,0.5)">${_esc(a.name)} <span style="color:rgba(255,255,255,0.2);font-size:10px">${a.type}</span></div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--red)">${fmt(fromPhp(a.phpBal,disp),disp)}</div>
-          </div>`).join('')}`:''}
-        </div>
-      </details>`:''}
+      <div style="display:flex;margin:16px -24px -24px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div onclick="nav('transactions')" style="flex:1;text-align:center;padding:14px 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);cursor:pointer;border-right:1px solid rgba(255,255,255,0.08);transition:background var(--transition)" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">Transactions</div>
+        <div onclick="nav('accounts')" style="flex:1;text-align:center;padding:14px 8px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);cursor:pointer;transition:background var(--transition)" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">Accounts</div>
+      </div>
+    </div>
+    <div class="qa-grid">
+      <div class="qa-item" onclick="openAddSheet({type:'expense'})"><div class="qa-icon">💸</div><div class="qa-label">Add Expense</div></div>
+      <div class="qa-item" onclick="openAddSheet({type:'income'})"><div class="qa-icon">💰</div><div class="qa-label">Add Income</div></div>
+      <div class="qa-item" onclick="openAddSheet({type:'transfer'})"><div class="qa-icon">↔️</div><div class="qa-label">Transfer</div></div>
+      <div class="qa-item" onclick="nav('analytics')"><div class="qa-icon">📊</div><div class="qa-label">Analytics</div></div>
+      <div class="qa-item" onclick="nav('planning')"><div class="qa-icon">📅</div><div class="qa-label">Planning</div></div>
+      <div class="qa-item" onclick="nav('reimbursements')"><div class="qa-icon">🔄</div><div class="qa-label">Reimburse</div></div>
     </div>
     ${customizeBtn}
     ${reorderToolbarHTML}
@@ -20725,6 +20761,82 @@ async function checkDriveForBackup() {
 // user wants subtle status indicators, not floating banners/modals popping up unasked).
 // Throttled so it never hits the Drive API more than once every 2 minutes.
 var _lastAutoBackupCheck = 0;
+// PLS #157/#158: on app open (Drive verified), check whether the last local edit happened
+// AFTER the last successful push. If so, a previous close/switch interrupted the sync — this
+// can only ever be detected on the device where the edit actually lives (no server, pull-based
+// only). Instead of a toast that's easy to miss right before switching devices, this puts up a
+// hard block: the app won't let you proceed until the retry confirms synced, or you explicitly
+// choose the escape hatch (needed for genuinely offline use — the app must stay usable then).
+function checkUnsyncedEditWarning() {
+  if (!db.settings.googleDriveConnected || !_gdriveAccessToken) return;
+  const editAt = db.settings.lastLocalEditAt;
+  if (!editAt) return;
+  const syncAt = db.settings.lastDriveSync;
+  if (syncAt && new Date(editAt).getTime() <= new Date(syncAt).getTime()) return; // already synced
+  showSyncBlockModal();
+  retrySyncBlock();
+}
+
+function showSyncBlockModal() {
+  _setSyncBlockState('syncing');
+  document.getElementById('sync-block-overlay').classList.add('open');
+}
+function hideSyncBlockModal() {
+  document.getElementById('sync-block-overlay').classList.remove('open');
+}
+
+function _setSyncBlockState(state, opts={}) {
+  const icon = document.getElementById('syncblock-icon');
+  const title = document.getElementById('syncblock-title');
+  const sub = document.getElementById('syncblock-sub');
+  const actions = document.getElementById('syncblock-actions');
+  if (!icon || !title || !sub || !actions) return;
+  const svgSpin = `<svg class="spin" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
+  const svgCheck = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+  const svgWarn = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>`;
+  if (state === 'syncing') {
+    icon.style.color = 'var(--accent)'; icon.innerHTML = svgSpin;
+    title.textContent = 'Syncing your last edit...';
+    sub.textContent = 'Please wait before switching devices.';
+    actions.style.display = 'none'; actions.innerHTML = '';
+  } else if (state === 'saved') {
+    icon.style.color = 'var(--green)'; icon.innerHTML = svgCheck;
+    title.textContent = 'Synced!';
+    sub.textContent = 'Safe to switch devices now.';
+    actions.style.display = 'none'; actions.innerHTML = '';
+  } else if (state === 'failed') {
+    icon.style.color = 'var(--amber)'; icon.innerHTML = svgWarn;
+    title.textContent = "Couldn't sync";
+    sub.textContent = opts.reason || 'Check your connection and try again.';
+    actions.style.display = 'flex';
+    actions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="retrySyncBlock()">Retry</button>
+      <button class="btn btn-ghost btn-sm" onclick="hideSyncBlockModal()">Continue anyway</button>`;
+  }
+}
+
+async function retrySyncBlock() {
+  _setSyncBlockState('syncing');
+  if (!navigator.onLine) {
+    _setSyncBlockState('failed', { reason: "You're offline — connect to the internet and retry." });
+    return;
+  }
+  clearTimeout(_autoSaveTimer);
+  try {
+    // PLS #158: hard timeout so a hung request can't trap the user behind the modal forever —
+    // 15s is generous for a small JSON upload; past that, surface the escape hatch instead.
+    await Promise.race([
+      saveToDriveSilent(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+    ]);
+  } catch(e) { /* fall through to state check below */ }
+  if (_syncStatus === 'saved' && !_hasUnsavedChanges) {
+    _setSyncBlockState('saved');
+    setTimeout(hideSyncBlockModal, 1100);
+  } else {
+    _setSyncBlockState('failed', { reason: 'The last edit could not be pushed to Drive.' });
+  }
+}
+
 async function autoCheckNewerBackup() {
   if (!db.settings.googleDriveConnected || !_gdriveAccessToken || _isSavingToDrive) return;
   const now = Date.now();
@@ -21664,6 +21776,7 @@ function initApp() {
       ensureDriveToken(() => {
         // Token refreshed silently — update indicator
         if (_lastSyncTime) setSyncStatus('saved');
+        checkUnsyncedEditWarning(); // PLS #157: interrupted-save warning, checked first
         autoCheckNewerBackup(); // PLS #152: silent check, only nudges if genuinely newer elsewhere
       }, true); // silent = no popup
     }
