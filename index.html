@@ -12853,17 +12853,17 @@ function renderAnalyticsOverview() {
         <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${period==='ytd'?'YTD':metricLabel.split(' ')[0]}</div>
       </div>
       <div class="fr4-resp">
-        <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
+        <div class="metric-card" style="cursor:pointer;background:rgba(45,217,138,0.12);border-color:rgba(45,217,138,0.25)" onclick="setAnalyticsTab('spending')">
           <div class="metric-label">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           <div class="metric-value tx-pos">${fmt(curr.income, disp)}</div>
           ${chgBadge(incomeChg)}
         </div>
-        <div class="metric-card" style="cursor:pointer" onclick="setAnalyticsTab('spending')">
+        <div class="metric-card" style="cursor:pointer;background:rgba(240,86,90,0.12);border-color:rgba(240,86,90,0.25)" onclick="setAnalyticsTab('spending')">
           <div class="metric-label">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           <div class="metric-value tx-neg">${fmt(curr.expense, disp)}</div>
           ${chgBadge(expChg)}
         </div>
-        <div class="metric-card">
+        <div class="metric-card" style="background:rgba(127,119,221,0.12);border-color:rgba(127,119,221,0.25)">
           <div class="metric-label">SAVINGS RATE</div>
           ${(() => {
             if (curr.income <= 0) {
@@ -12881,7 +12881,7 @@ function renderAnalyticsOverview() {
                     <div style="font-size:11px;color:var(--text4)">of income saved</div>`;
           })()}
         </div>
-        <div class="metric-card" style="cursor:pointer" onclick="nav('transactions')">
+        <div class="metric-card" style="cursor:pointer;background:rgba(29,158,117,0.12);border-color:rgba(29,158,117,0.25)" onclick="nav('transactions')">
           <div class="metric-label">VS 6MO AVG</div>
           ${(() => {
             let totalExp = 0, count = 0;
@@ -12904,58 +12904,31 @@ function renderAnalyticsOverview() {
       </div>
     </div>
 
-    <!-- ── Trends & Forecast ── -->
-    <div class="ov-acc" id="ov-acc-sprint1">
-      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-sprint1')">
-        <div class="ov-acc-icon">📈</div>
-        <div class="ov-acc-title">Trends & Forecast</div>
-        <div class="ov-acc-preview">Burn · Runway · Subs</div>
-        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="ov-acc-body" style="padding-top:14px">
-        ${buildNetWorthTrend(metricMk, dispCurr)}
-        ${buildIncomeExpenseBars(metricMk, dispCurr)}
-        ${buildCashflowWaterfall(metricMk, dispCurr)}
-        ${buildVelocityGauge(metricMk, dispCurr)}
-        ${buildForecastBand(metricMk, dispCurr)}
-        ${buildRunwayBar(dispCurr)}
-        ${buildAnomalyHighlights(metricMk, dispCurr)}
-        ${buildSavingsSparkline(metricMk, dispCurr)}
-        ${buildSubscriptionPanel(dispCurr)}
-      </div>
-    </div>
-
-    <!-- ── Spending Behavior ── -->
-    <div class="ov-acc" id="ov-acc-sprint2">
-      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-sprint2')">
-        <div class="ov-acc-icon">🛒</div>
-        <div class="ov-acc-title">Spending Behavior</div>
-        <div class="ov-acc-preview">Fixed/Disc · Pareto · Habits</div>
-        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="ov-acc-body" style="padding-top:14px">
-        ${buildFixedVsDiscretionary(metricMk, dispCurr)}
-        ${buildParetoAnalysis(metricMk, dispCurr)}
-        ${buildDayOfWeekHeatmap(metricMk, dispCurr)}
-        ${buildMostFrequent(metricMk, dispCurr)}
-        ${buildTimeOfDayPattern(metricMk, dispCurr)}
-        ${buildSpendingDistribution(metricMk, dispCurr)}
-      </div>
-    </div>
-
-    <!-- ── Goals, Health & Alerts (merged) ── -->
-    <div class="ov-acc" id="ov-acc-goals">
-      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-goals')">
-        <div class="ov-acc-icon">🎯</div>
-        <div class="ov-acc-title">Goals, Health & Alerts</div>
-        <div class="ov-acc-preview">YoY · Risk · AI</div>
-        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="ov-acc-body" style="padding-top:14px">
-        ${buildYoYComparison(metricMk, dispCurr)}
-        ${buildIncomeDiversification(metricMk, dispCurr)}
-        ${buildGoalProgress(dispCurr)}
-        ${buildConcentrationRisk(dispCurr)}
+    <!-- ── PLS #158: Overview grid — all widgets always visible, no accordion.
+         Chart/heatmap-shaped widgets span full width (grid-column:1/-1); compact
+         gauge/list/panel widgets sit as regular auto-fit grid cells. ov-acc/toggleOvAcc
+         itself is untouched (still used elsewhere) — Overview just stops using that pattern. ── -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:10px">
+      <div style="grid-column:1/-1">${buildNetWorthTrend(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildCashflowWaterfall(metricMk, dispCurr)}</div>
+      <div>${buildVelocityGauge(metricMk, dispCurr)}</div>
+      <div>${buildBudgetRanking(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildForecastBand(metricMk, dispCurr)}</div>
+      <div>${buildRunwayBar(dispCurr)}</div>
+      <div>${buildAnomalyHighlights(metricMk, dispCurr)}</div>
+      <div>${buildSavingsSparkline(metricMk, dispCurr)}</div>
+      <div>${buildSubscriptionPanel(dispCurr)}</div>
+      <div>${buildFixedVsDiscretionary(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildParetoAnalysis(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildDayOfWeekHeatmap(metricMk, dispCurr)}</div>
+      <div>${buildMostFrequent(metricMk, dispCurr)}</div>
+      <div>${buildTimeOfDayPattern(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildSpendingDistribution(metricMk, dispCurr)}</div>
+      <div style="grid-column:1/-1">${buildYoYComparison(metricMk, dispCurr)}</div>
+      <div>${buildIncomeDiversification(metricMk, dispCurr)}</div>
+      <div>${buildGoalProgress(dispCurr)}</div>
+      <div>${buildConcentrationRisk(dispCurr)}</div>
     ${(() => {
       // Top movers: categories where current month spending is significantly higher than 3-month average
       if (period === 'ytd' || curr.expense === 0) return '';
@@ -12991,7 +12964,7 @@ function renderAnalyticsOverview() {
       movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
       const top = movers.slice(0, 3);
       if (top.length === 0) return '';
-      return `<div class="card" style="padding:16px;margin-bottom:16px">
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:16px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:10px">🚨 Notable Changes vs 3mo Avg</div>
         ${top.map(m => {
           const isUp = m.diff > 0;
@@ -13006,20 +12979,9 @@ function renderAnalyticsOverview() {
           </div>`;
         }).join('')}
       </div>`;
-    })()}
-    ${renderInlineInsights(['saverate','cashflow','recap'])}
-      </div>
-    </div>
-
-    <!-- Monthly stat cards -->
-    <div class="ov-acc" id="ov-acc-monthly">
-      <div class="ov-acc-hdr" onclick="toggleOvAcc('ov-acc-monthly')">
-        <div class="ov-acc-icon">📅</div>
-        <div class="ov-acc-title">Monthly Summary</div>
-        <div class="ov-acc-preview">Per-month cards</div>
-        <svg class="ov-acc-chev" viewBox="0 0 12 8" fill="none"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="ov-acc-body" style="padding-top:14px">
+    })()}</div>
+      <div style="grid-column:1/-1">${renderInlineInsights(['saverate','cashflow','recap'])}</div>
+      <div style="grid-column:1/-1">
     ${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
@@ -14045,32 +14007,108 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
 }
 
 // ─── 19. Cashflow Waterfall (current month: income → expenses → net) ───
+
+// ── PERSONAL LOGIC SET #161 ── Budget categories ranked by % used, across ALL active
+// budgets combined. Reuses the exact same canonical spend filter + _txMatchesAlloc as
+// renderAnalyticsBudget (PLS #95/#144), so numbers always match the Budget tab —
+// this is just a cross-budget ranked view, not a separate calculation.
+function buildBudgetRanking(metricMk, dispCurr) {
+  const budgets = (db.budgets || []).filter(b => b.active !== false && !b.archived);
+  if (budgets.length === 0) return '';
+  const rows = [];
+  for (const b of budgets) {
+    const allocs = b.allocations || {};
+    if (Object.keys(allocs).length === 0) continue;
+    const allCurrTxs = db.transactions.filter(t =>
+      !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
+      t.date && t.date.startsWith(metricMk) &&
+      (t.type==='expense' || t.type==='shared') && t.currency === b.currency
+    );
+    const _allocKeys = new Set(Object.keys(allocs));
+    for (const [catId, allocLim] of Object.entries(allocs)) {
+      const limAmt = parseFloat(allocLim) || 0;
+      if (limAmt <= 0) continue;
+      const cat = getCategoryDisplay(catId);
+      const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId);
+      let spentInCat = 0;
+      allCurrTxs.forEach(t => { if (_txMatchesAlloc(t, catId, _allocKeys)) spentInCat += (t.type==='shared' ? (t.myShare || t.amount) : t.amount); });
+      const pct = spentInCat / limAmt * 100;
+      rows.push({
+        name: _isTop ? cat.name : _stripIcon(cat.name), icon: cat.icon,
+        spent: spentInCat, limAmt, currency: b.currency, pct,
+        over: spentInCat > limAmt
+      });
+    }
+  }
+  if (rows.length === 0) return '';
+  rows.sort((a,b) => b.pct - a.pct);
+  const top = rows.slice(0, 8);
+  const maxPct = Math.max(...top.map(r=>r.pct), 100);
+  const bars = top.map(r => {
+    const color = r.over ? 'var(--red)' : r.pct >= 80 ? 'var(--amber)' : 'var(--green)';
+    const width = Math.min((r.pct / maxPct) * 100, 100);
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:12px">
+        <span style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span>${r.icon}</span><span>${_esc(r.name)}</span></span>
+        <span style="font-family:var(--mono);color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${r.pct.toFixed(0)}%</span>
+      </div>
+      <div style="height:8px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
+        <div style="height:100%;width:${width.toFixed(1)}%;background:${color};border-radius:var(--r-full)"></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card" style="padding:16px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">🎯 Budgets — % used</div>
+    ${bars}
+  </div>`;
+}
+
 function buildCashflowWaterfall(metricMk, dispCurr) {
   const t = getMonthTotals(metricMk);
   if (t.income === 0 && t.expense === 0) return '';
   const income = t.income, expense = t.expense, net = income - expense;
   const maxV = Math.max(income, expense, Math.abs(net), 1);
   const monthLabel = (()=>{ const [y,m]=metricMk.split('-').map(Number); return new Date(y,m-1,1).toLocaleString('en',{month:'long'}); })();
-  // Clean grounded bars: all sit on a common baseline, height ∝ value. No floating offsets.
-  const barH = 72;
-  const bar = (label, val, color) => {
-    const h = Math.max(4, (Math.abs(val) / maxV) * barH);
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;min-width:0">
-      <div style="height:${barH}px;display:flex;align-items:flex-end;width:100%;justify-content:center">
-        <div style="width:34px;background:${color};border-radius:var(--r-sm);height:${h.toFixed(1)}px;opacity:0.9"></div>
-      </div>
-      <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color};margin-top:6px">${fmt(val,dispCurr)}</div>
-      <div style="font-size:10px;color:var(--text4);margin-top:1px">${label}</div>
-    </div>`;
-  };
+  // PLS #160: true floating waterfall — Income lands, Expense drops FROM that height,
+  // Net lands exactly where Expense left off. The connection between the three is the
+  // whole point (vs the old three-independent-bars version, which just re-stated numbers
+  // already shown in Key Metrics above it).
+  const barH = 90;
+  const incomeH = (income / maxV) * barH;
+  const expenseH = (expense / maxV) * barH;
+  const netH = (Math.abs(net) / maxV) * barH;
+  const baseline = barH; // y-position (px from container top) representing value = 0
+  const incomeTop = baseline - incomeH;
+  const expenseTop = incomeTop; // connector starts exactly where Income lands
+  const netTop = net >= 0 ? (baseline - netH) : baseline;
+  const belowBaseline = net < 0 ? netH : 0;
+  const containerH = barH + belowBaseline;
   const netColor = net >= 0 ? 'var(--green)' : 'var(--red)';
+  const seg = (top, h, color, opacity=1) => `position:absolute;left:50%;transform:translateX(-50%);top:${top.toFixed(1)}px;width:38px;height:${Math.max(2,h).toFixed(1)}px;background:${color};border-radius:var(--r-sm);opacity:${opacity}`;
+  const valueLabel = (top, h, val, color, above) => `<div style="position:absolute;left:50%;transform:translateX(-50%);top:${(above ? top - 16 : top + h + 4).toFixed(1)}px;font-family:var(--mono);font-size:11px;font-weight:600;color:${color};white-space:nowrap">${fmt(val,dispCurr)}</div>`;
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="font-size:11px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">🌊 ${monthLabel} Cashflow</div>
-    <div style="display:flex;gap:8px;align-items:flex-end">
-      ${bar('Income', income, 'var(--green)')}
-      ${bar('Expenses', expense, 'var(--red)')}
-      ${bar(net>=0?'Saved':'Deficit', Math.abs(net), netColor)}
+    <div style="display:flex;gap:0;align-items:flex-start">
+      <div style="flex:1;position:relative;height:${containerH}px">
+        <div style="${seg(incomeTop, incomeH, 'var(--green)')}"></div>
+        ${valueLabel(incomeTop, incomeH, income, 'var(--green)', true)}
+        <div style="position:absolute;left:100%;top:${incomeTop.toFixed(1)}px;width:100%;border-top:1px dashed var(--border3)"></div>
+        <div style="position:absolute;left:50%;bottom:${(containerH-baseline).toFixed(1)}px;width:100%;border-top:1px solid var(--border2)"></div>
+        <div style="position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--text4)">Income</div>
+      </div>
+      <div style="flex:1;position:relative;height:${containerH}px">
+        <div style="${seg(expenseTop, expenseH, 'var(--red)')}"></div>
+        ${valueLabel(expenseTop, expenseH, expense, 'var(--red)', false)}
+        <div style="position:absolute;left:100%;top:${(expenseTop+expenseH).toFixed(1)}px;width:100%;border-top:1px dashed var(--border3)"></div>
+        <div style="position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--text4)">Expenses</div>
+      </div>
+      <div style="flex:1;position:relative;height:${containerH}px">
+        <div style="${seg(netTop, netH, netColor)}"></div>
+        ${valueLabel(netTop, netH, net, netColor, net>=0)}
+        <div style="position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--text4)">${net>=0?'Saved':'Deficit'}</div>
+      </div>
     </div>
+    <div style="height:20px"></div>
   </div>`;
 }
 
