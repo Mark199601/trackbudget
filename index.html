@@ -476,6 +476,8 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker-label{letter-spacing:-0.2px}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
+.ov-mas{columns:340px;column-gap:10px}
+.ov-mas>div{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
 .ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
 .ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
 .ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
@@ -12914,18 +12916,15 @@ function renderAnalyticsOverview() {
          their own self-contained grid means that grid always fills its own rows correctly,
          regardless of what surrounds it. AI Insights (renderInlineInsights) removed from
          Overview per request — still used elsewhere (Spending/Budget tabs), untouched there. ── -->
-    <div style="max-width:900px;margin:0 auto">
-      ${buildNetWorthTrend(metricMk, dispCurr)}
-      ${buildIncomeExpenseBars(metricMk, dispCurr)}
-      ${buildCashflowWaterfall(metricMk, dispCurr)}
-      ${buildForecastBand(metricMk, dispCurr)}
-      ${buildParetoAnalysis(metricMk, dispCurr)}
-      ${buildDayOfWeekHeatmap(metricMk, dispCurr)}
-      ${buildSpendingDistribution(metricMk, dispCurr)}
-      ${buildYoYComparison(metricMk, dispCurr)}
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:10px">
+    <!-- ── PLS #163: masonry dashboard — ALL widgets (charts included) are card-sized cells
+         packed into vertical columns (FIQ/PowerBI-style). columns:340px → 1 col on mobile,
+         3-4 cols on desktop, varying heights pack naturally. Each widget's own card
+         margin-bottom provides the vertical gap. ── -->
+    <div class="ov-mas">
+      <div>${buildNetWorthTrend(metricMk, dispCurr)}</div>
+      <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
+      <div>${buildCashflowWaterfall(metricMk, dispCurr)}</div>
+      <div>${buildForecastBand(metricMk, dispCurr)}</div>
       <div>${buildVelocityGauge(metricMk, dispCurr)}</div>
       <div>${buildBudgetRanking(metricMk, dispCurr)}</div>
       <div>${buildRunwayBar(dispCurr)}</div>
@@ -12933,12 +12932,16 @@ function renderAnalyticsOverview() {
       <div>${buildSavingsSparkline(metricMk, dispCurr)}</div>
       <div>${buildSubscriptionPanel(dispCurr)}</div>
       <div>${buildFixedVsDiscretionary(metricMk, dispCurr)}</div>
+      <div>${buildParetoAnalysis(metricMk, dispCurr)}</div>
+      <div>${buildDayOfWeekHeatmap(metricMk, dispCurr)}</div>
       <div>${buildMostFrequent(metricMk, dispCurr)}</div>
       <div>${buildTimeOfDayPattern(metricMk, dispCurr)}</div>
+      <div>${buildSpendingDistribution(metricMk, dispCurr)}</div>
+      <div>${buildYoYComparison(metricMk, dispCurr)}</div>
       <div>${buildIncomeDiversification(metricMk, dispCurr)}</div>
       <div>${buildGoalProgress(dispCurr)}</div>
       <div>${buildConcentrationRisk(dispCurr)}</div>
-    ${(() => {
+      <div>${(() => {
       // Top movers: categories where current month spending is significantly higher than 3-month average
       if (period === 'ytd' || curr.expense === 0) return '';
       // Build 3-month rolling baseline per category (excluding current)
@@ -12973,7 +12976,7 @@ function renderAnalyticsOverview() {
       movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
       const top = movers.slice(0, 3);
       if (top.length === 0) return '';
-      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:16px">
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:16px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:10px">🚨 Notable Changes vs 3mo Avg</div>
         ${top.map(m => {
           const isUp = m.diff > 0;
@@ -12989,8 +12992,7 @@ function renderAnalyticsOverview() {
         }).join('')}
       </div>`;
     })()}</div>
-
-    ${(()=>{
+      <div>${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
@@ -13049,7 +13051,8 @@ function renderAnalyticsOverview() {
         </div>
         <div class="stat-month-grid">${cards}</div>
       </div>`;
-    })()}
+    })()}</div>
+    </div>
   </div>`;
 }
 
