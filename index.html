@@ -480,6 +480,13 @@ option{background:var(--bg3);color:var(--text)}
 .ov-mas>div{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:480px){.ov-mas .card{padding:12px}.ov-mas{column-gap:8px}}
+.ov-hero{display:grid;gap:10px;margin-bottom:10px;grid-template-columns:minmax(270px,330px) 1fr;grid-template-areas:"kpi bars" "kpi pies";align-items:stretch}
+.ov-hero .oh-kpi{grid-area:kpi;min-width:0}
+.ov-hero .oh-bars{grid-area:bars;min-width:0}
+.ov-hero .oh-pies{grid-area:pies;min-width:0}
+.oh-kpi .fr4-resp{grid-template-columns:1fr 1fr!important;gap:8px!important}
+.oh-kpi>div,.oh-bars>div,.oh-pies>div{height:100%;margin-bottom:0!important;box-sizing:border-box}
+@media(max-width:760px){.ov-hero{grid-template-columns:1fr;grid-template-areas:"kpi" "bars" "pies"}.oh-kpi>div,.oh-bars>div,.oh-pies>div{height:auto}}
 .ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
 .ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
 .ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
@@ -12819,7 +12826,9 @@ function renderAnalyticsOverview() {
     </span>`;
 
   return `<div class="page-pad">
-    <!-- Pie Charts (smart layout: full-width if one is empty) -->
+    <!-- ── PLS #164: Power BI-style hero — KPI stack (left) + Income/Expense bars & Category pies (right), placed via grid areas; DOM order unchanged. ── -->
+    <div class="ov-hero">
+      <div class="oh-pies">
     ${(() => {
       const hasExp = expTotal > 0;
       const hasInc = incTotal > 0;
@@ -12847,10 +12856,9 @@ function renderAnalyticsOverview() {
         </div>
         ${inner}
       </div>`;
-    })()}
-
-    <!-- Metric cards — always visible -->
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;padding:14px">
+    })()}</div>
+      <div class="oh-kpi">
+    <div style="background:linear-gradient(150deg,rgba(127,119,221,0.14),rgba(45,217,138,0.05) 60%,var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:10px;padding:14px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <div style="font-size:18px">📊</div>
         <div style="flex:1;font-size:13px;font-weight:600;letter-spacing:-0.1px">Key Metrics</div>
@@ -12907,6 +12915,9 @@ function renderAnalyticsOverview() {
         </div>
       </div>
     </div>
+      </div>
+      <div class="oh-bars">${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
+    </div>
 
     <!-- ── PLS #162: Overview layout v2 — full-width chart/heatmap widgets stack in normal
          flow (one per row, always fills the whole row on any screen width); ALL compact
@@ -12924,7 +12935,6 @@ function renderAnalyticsOverview() {
          margin-bottom provides the vertical gap. ── -->
     <div class="ov-mas">
       <div>${buildNetWorthTrend(metricMk, dispCurr)}</div>
-      <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
       <div>${buildCashflowWaterfall(metricMk, dispCurr)}</div>
       <div>${buildForecastBand(metricMk, dispCurr)}</div>
       <div>${buildVelocityGauge(metricMk, dispCurr)}</div>
