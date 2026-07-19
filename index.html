@@ -481,7 +481,7 @@ option{background:var(--bg3);color:var(--text)}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:480px){.ov-mas .card{padding:12px}.ov-mas{column-gap:8px}}
 /* ── PLS #168: dense PC overview — one masonry for everything; KPI strip on top ── */
-.ov-mas .card{border-radius:18px!important;background:linear-gradient(165deg,var(--bg2) 40%,rgba(127,119,221,0.07))!important;border:1px solid rgba(127,119,221,0.16)!important;box-shadow:0 2px 12px rgba(0,0,0,0.18)}
+.ov-mas .card{border-radius:14px!important;background:var(--bg2)!important;border:1px solid var(--border)!important;box-shadow:none}
 .ov-kpis{margin-bottom:10px}
 .ov-kpis .fr4-resp{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}
 @media(max-width:700px){.ov-kpis .fr4-resp{grid-template-columns:1fr 1fr!important}}
@@ -12444,7 +12444,7 @@ function renderInlineInsights(types, opts = {}) {
   
   return `<div style="margin-bottom:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">💡 Insights</div>
+      <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Insights</div>
       <button onclick="nav('ai')" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:500;cursor:pointer;padding:0">View in AI Insights →</button>
     </div>
     ${cards}
@@ -12823,6 +12823,23 @@ function renderAnalyticsOverview() {
       ${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% vs prev
     </span>`;
 
+  // ── PLS #169: minimalist-informative pass — 6-mo sparklines under Income/Expenses KPIs
+  const _spark = (vals, color) => {
+    if (vals.length < 2 || vals.every(v => !v)) return '';
+    const mx = Math.max(...vals, 1);
+    const pts = vals.map((v,i)=>`${(i/(vals.length-1)*64).toFixed(1)},${(16-(v/mx*14)).toFixed(1)}`).join(' ');
+    return `<svg width="64" height="18" viewBox="0 0 64 18" style="display:block;margin-top:6px;opacity:0.75"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  };
+  const _spark6 = (() => {
+    const inc = [], exp = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(mY, mM-1-i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const t = getMonthTotals(k);
+      inc.push(t.income); exp.push(t.expense);
+    }
+    return {inc, exp};
+  })();
   return `<div class="page-pad">
     <!-- ── PLS #168: dense PC overview — KPI strip on top, then ONE multi-column masonry
          (columns:300px → 4-6 cols on wide screens) holding everything; expense & income
@@ -12833,11 +12850,13 @@ function renderAnalyticsOverview() {
           <div class="metric-label" style="min-height:auto;margin-bottom:4px">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           <div class="metric-value tx-pos" style="font-size:18px">${fmt(curr.income, disp)}</div>
           ${chgBadge(incomeChg)}
+          ${_spark(_spark6.inc, 'var(--green)')}
         </div>
         <div class="metric-card" style="cursor:pointer;padding:10px 12px;background:rgba(240,86,90,0.12);border-color:rgba(240,86,90,0.25)" onclick="setAnalyticsTab('spending')">
           <div class="metric-label" style="min-height:auto;margin-bottom:4px">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           <div class="metric-value tx-neg" style="font-size:18px">${fmt(curr.expense, disp)}</div>
           ${chgBadge(expChg)}
+          ${_spark(_spark6.exp, 'var(--red)')}
         </div>
         <div class="metric-card" style="padding:10px 12px;background:rgba(127,119,221,0.12);border-color:rgba(127,119,221,0.25)">
           <div class="metric-label" style="min-height:auto;margin-bottom:4px">SAVINGS RATE</div>
@@ -12881,11 +12900,11 @@ function renderAnalyticsOverview() {
     </div>
     <div class="ov-mas">
       ${expTotal > 0 ? `<div><div class="card" style="padding:14px;margin-bottom:16px">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">💸 Expenses by Category</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Expenses by Category</div>
         ${buildPieChart(expCats, expTotal, 'exp', period)}
       </div></div>` : ''}
       ${incTotal > 0 ? `<div><div class="card" style="padding:14px;margin-bottom:16px">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">💰 Income by Category</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Income by Category</div>
         ${buildPieChart(incCats, incTotal, 'inc', period)}
       </div></div>` : ''}
       <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
@@ -12945,7 +12964,7 @@ function renderAnalyticsOverview() {
       const top = movers.slice(0, 3);
       if (top.length === 0) return '';
       return `<div class="card" style="padding:16px;margin-bottom:16px">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">🚨 Notable Changes vs 3mo Avg</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Notable Changes vs 3mo Avg</div>
         ${top.map(m => {
           const isUp = m.diff > 0;
           const cls = isUp ? 'tx-neg' : 'tx-pos';
@@ -13191,7 +13210,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   const top = outliers.slice(0, 3);
   if (top.length === 0) return '';
   return `<div class="card" style="padding:16px;margin-bottom:16px">
-    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">⚡ Unusual Transactions${_infoBtn('anomaly')}</div>
+    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Unusual Transactions${_infoBtn('anomaly')}</div>
     ${top.map(o => {
       const catName = _stripIcon(o.cat.name);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
@@ -13665,7 +13684,7 @@ function buildYoYComparison(metricMk, dispCurr) {
   </div>`;
   const chgBadge = (chg) => chg === null ? '' : `<span style="font-size:11px;font-weight:600;color:${chg>=0?'var(--green)':'var(--red)'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(0)}%</span>`;
   return `<div class="card" style="padding:16px;margin-bottom:16px">
-    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">📆 vs ${monthLabel} ${y-1}${_infoBtn('yoy')}</div>
+    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">vs ${monthLabel} ${y-1}${_infoBtn('yoy')}</div>
     <div style="display:flex;gap:6px">
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:4px;text-align:center">Income ${chgBadge(incChg)}</div>
@@ -14035,7 +14054,7 @@ function buildBudgetRanking(metricMk, dispCurr) {
     </div>`;
   }).join('');
   return `<div class="card" style="padding:16px;margin-bottom:16px">
-    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:12px">🎯 Budgets — % used</div>
+    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:12px">Budgets — % used</div>
     ${bars}
   </div>`;
 }
@@ -14064,7 +14083,7 @@ function buildCashflowWaterfall(metricMk, dispCurr) {
   const seg = (top, h, color, opacity=1) => `position:absolute;left:50%;transform:translateX(-50%);top:${top.toFixed(1)}px;width:38px;height:${Math.max(2,h).toFixed(1)}px;background:${color};border-radius:var(--r-sm);opacity:${opacity}`;
   const valueLabel = (top, h, val, color, above) => `<div style="position:absolute;left:50%;transform:translateX(-50%);top:${(above ? top - 16 : top + h + 4).toFixed(1)}px;font-family:var(--mono);font-size:11px;font-weight:600;color:${color};white-space:nowrap">${fmt(val,dispCurr)}</div>`;
   return `<div class="card" style="padding:16px;margin-bottom:16px">
-    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:14px">🌊 ${monthLabel} Cashflow</div>
+    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:14px">${monthLabel} Cashflow</div>
     <div style="display:flex;gap:0;align-items:flex-start">
       <div style="flex:1;position:relative;height:${containerH}px">
         <div style="${seg(incomeTop, incomeH, 'var(--green)')}"></div>
@@ -15234,11 +15253,11 @@ function renderAnalyticsInvestments() {
     ${(topGainers.length > 0 || topLosers.length > 0) ? `
     <div class="form-row fr2">
       ${topGainers.length > 0 ? `<div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">📈 Top Gainers</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Top Gainers</div>
         <div class="list-card">${topGainers.map(perfRow).join('')}</div>
       </div>` : ''}
       ${topLosers.length > 0 ? `<div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">📉 Top Losers</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Top Losers</div>
         <div class="list-card">${topLosers.map(perfRow).join('')}</div>
       </div>` : ''}
     </div>` : ''}
