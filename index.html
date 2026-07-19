@@ -12831,14 +12831,15 @@ function renderAnalyticsOverview() {
     return `<svg width="64" height="18" viewBox="0 0 64 18" style="display:block;margin-top:6px;opacity:0.75"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   };
   const _spark6 = (() => {
-    const inc = [], exp = [];
+    const inc = [], exp = [], rate = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(mY, mM-1-i, 1);
       const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const t = getMonthTotals(k);
       inc.push(t.income); exp.push(t.expense);
+      rate.push(t.income > 0 ? Math.max(0, (1 - t.expense / t.income) * 100) : 0);
     }
-    return {inc, exp};
+    return {inc, exp, rate};
   })();
   return `<div class="page-pad">
     <!-- ── PLS #168: dense PC overview — KPI strip on top, then ONE multi-column masonry
@@ -12875,6 +12876,7 @@ function renderAnalyticsOverview() {
             return `<div class="metric-value" style="font-size:18px">${savedPct}%</div>
                     <div style="font-size:11px;color:var(--text4)">of income saved</div>`;
           })()}
+          ${_spark(_spark6.rate, 'var(--accent)')}
         </div>
         <div class="metric-card" style="cursor:pointer;padding:10px 12px;background:rgba(29,158,117,0.12);border-color:rgba(29,158,117,0.25)" onclick="nav('transactions')">
           <div class="metric-label" style="min-height:auto;margin-bottom:4px">VS 6MO AVG</div>
@@ -12895,6 +12897,7 @@ function renderAnalyticsOverview() {
             return `<div class="metric-value ${cls}" style="font-size:18px">${sign}${Math.abs(pct).toFixed(0)}%</div>
                     <div style="font-size:11px;color:var(--text4)">${diff > 0 ? 'above' : diff < 0 ? 'below' : 'equal to'} ${count}mo avg</div>`;
           })()}
+          ${_spark(_spark6.exp, 'var(--teal)')}
         </div>
       </div>
     </div>
