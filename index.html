@@ -476,15 +476,18 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker-label{letter-spacing:-0.2px}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
-.ov-mas{columns:300px;column-gap:8px}
-.ov-mas>div{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
+/* ── PLS #176: asymmetric grid — featured charts span 2 cols; dense packing fills gaps ── */
+.ov-mas{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;align-items:start;grid-auto-flow:dense}
+.ov-mas>div{min-width:0}
+.ov-mas .card{margin-bottom:0!important}
+.ov-mas .metric-card{margin-bottom:0!important}
+.ov-sp2{grid-column:span 2}
+@media(max-width:640px){.ov-sp2{grid-column:auto}}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(max-width:480px){.ov-mas .card{padding:12px}.ov-mas{column-gap:8px}}
+.ov-sp2 .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:480px){.ov-mas .card{padding:12px}.ov-sp2 .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* ── PLS #168: dense PC overview — one masonry for everything; KPI strip on top ── */
 .ov-mas .card{border-radius:14px!important;background:var(--bg2)!important;border:1px solid var(--border)!important;box-shadow:none}
-.ov-kpis{margin-bottom:10px}
-.ov-kpis .fr4-resp{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}
-@media(max-width:700px){.ov-kpis .fr4-resp{grid-template-columns:1fr 1fr!important}}
 .ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
 .ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
 .ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
@@ -12847,8 +12850,7 @@ function renderAnalyticsOverview() {
     <!-- ── PLS #168: dense PC overview — KPI strip on top, then ONE multi-column masonry
          (columns:300px → 4-6 cols on wide screens) holding everything; expense & income
          pies are separate cards so neither hogs a wide slot. Order = relevance. ── -->
-    <div class="ov-kpis">
-      <div class="fr4-resp">
+    <div class="ov-mas">
         <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(45,217,138,0.12);border-color:rgba(45,217,138,0.25)" onclick="setAnalyticsTab('spending')">
           <div class="metric-value tx-pos" style="font-size:22px">${fmt(curr.income, disp)}</div>
           <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
@@ -12900,27 +12902,25 @@ function renderAnalyticsOverview() {
           <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">VS 6MO AVG</div>
           ${_spark(_spark6.exp, '#a78bfa')}
         </div>
-      </div>
-    </div>
-    <div class="ov-mas">
-      ${expTotal > 0 ? `<div><div class="card" style="padding:14px;margin-bottom:16px">
+
+      ${expTotal > 0 ? `<div class="ov-sp2"><div class="card" style="padding:14px">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Expenses by Category</div>
         ${buildPieChart(expCats, expTotal, 'exp', period)}
       </div></div>` : ''}
-      ${incTotal > 0 ? `<div><div class="card" style="padding:14px;margin-bottom:16px">
+      ${incTotal > 0 ? `<div class="ov-sp2"><div class="card" style="padding:14px">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Income by Category</div>
         ${buildPieChart(incCats, incTotal, 'inc', period)}
       </div></div>` : ''}
-      <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
-      <div>${buildCashflowWaterfall(metricMk, dispCurr)}</div>
 
+      <div class="ov-sp2">${buildNetWorthTrend(metricMk, dispCurr)}</div>
+      <div class="ov-sp2">${buildForecastBand(metricMk, dispCurr)}</div>
+      <div class="ov-sp2">${buildSavingsSparkline(metricMk, dispCurr)}</div>
       <div>${buildBudgetRanking(metricMk, dispCurr)}</div>
-      <div>${buildNetWorthTrend(metricMk, dispCurr)}</div>
-      <div>${buildForecastBand(metricMk, dispCurr)}</div>
+      <div>${buildCashflowWaterfall(metricMk, dispCurr)}</div>
+      <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
       <div>${buildRunwayBar(dispCurr)}</div>
       <div>${buildVelocityGauge(metricMk, dispCurr)}</div>
       <div>${buildAnomalyHighlights(metricMk, dispCurr)}</div>
-      <div>${buildSavingsSparkline(metricMk, dispCurr)}</div>
       <div>${buildSubscriptionPanel(dispCurr)}</div>
       <div>${buildFixedVsDiscretionary(metricMk, dispCurr)}</div>
       <div>${buildParetoAnalysis(metricMk, dispCurr)}</div>
@@ -12983,7 +12983,7 @@ function renderAnalyticsOverview() {
         }).join('')}
       </div>`;
     })()}</div>
-      <div>${(()=>{
+      <div class="ov-sp2">${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
