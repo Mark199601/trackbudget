@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-1-9-44';
+const CACHE = 'trackbudget-v1-1-9-45';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {
