@@ -12830,7 +12830,7 @@ function renderAnalyticsOverview() {
     const pts = vals.map((v,i)=>[i/(vals.length-1)*64, 16-(v/mx*14)]);
     const d = _smoothD(pts);
     const area = d + ` L${pts[pts.length-1][0].toFixed(1)},18 L${pts[0][0].toFixed(1)},18 Z`;
-    return `<svg width="64" height="18" viewBox="0 0 64 18" style="display:block;margin-top:6px"><path d="${area}" fill="${color}" opacity="0.14"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" style="filter:drop-shadow(0 0 2px ${color}99)"/></svg>`;
+    return `<svg width="64" height="18" viewBox="0 0 64 18" style="display:block;margin:6px auto 0"><path d="${area}" fill="${color}" opacity="0.14"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" style="filter:drop-shadow(0 0 2px ${color}99)"/></svg>`;
   };
   const _spark6 = (() => {
     const inc = [], exp = [], rate = [];
@@ -12849,39 +12849,37 @@ function renderAnalyticsOverview() {
          pies are separate cards so neither hogs a wide slot. Order = relevance. ── -->
     <div class="ov-kpis">
       <div class="fr4-resp">
-        <div class="metric-card" style="cursor:pointer;padding:10px 12px;background:rgba(45,217,138,0.12);border-color:rgba(45,217,138,0.25)" onclick="setAnalyticsTab('spending')">
-          <div class="metric-label" style="min-height:auto;margin-bottom:4px">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-          <div class="metric-value tx-pos" style="font-size:18px">${fmt(curr.income, disp)}</div>
+        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(45,217,138,0.12);border-color:rgba(45,217,138,0.25)" onclick="setAnalyticsTab('spending')">
+          <div class="metric-value tx-pos" style="font-size:22px">${fmt(curr.income, disp)}</div>
+          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           ${chgBadge(incomeChg)}
           ${_spark(_spark6.inc, '#2dd4bf')}
         </div>
-        <div class="metric-card" style="cursor:pointer;padding:10px 12px;background:rgba(240,86,90,0.12);border-color:rgba(240,86,90,0.25)" onclick="setAnalyticsTab('spending')">
-          <div class="metric-label" style="min-height:auto;margin-bottom:4px">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-          <div class="metric-value tx-neg" style="font-size:18px">${fmt(curr.expense, disp)}</div>
+        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(240,86,90,0.12);border-color:rgba(240,86,90,0.25)" onclick="setAnalyticsTab('spending')">
+          <div class="metric-value tx-neg" style="font-size:22px">${fmt(curr.expense, disp)}</div>
+          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
           ${chgBadge(expChg)}
           ${_spark(_spark6.exp, '#f472b6')}
         </div>
-        <div class="metric-card" style="padding:10px 12px;background:rgba(127,119,221,0.12);border-color:rgba(127,119,221,0.25)">
-          <div class="metric-label" style="min-height:auto;margin-bottom:4px">SAVINGS RATE</div>
+        <div class="metric-card" style="padding:12px;text-align:center;background:rgba(127,119,221,0.12);border-color:rgba(127,119,221,0.25)">
           ${(() => {
             if (curr.income <= 0) {
-              return `<div class="metric-value" style="font-size:18px;color:var(--text3)">—</div>
+              return `<div class="metric-value" style="font-size:22px;color:var(--text3)">—</div>
                       <div style="font-size:11px;color:var(--text4)">no income yet</div>`;
             }
             if (curr.expense > curr.income) {
               const overPct = Math.round((curr.expense / curr.income - 1) * 100);
               const display = overPct > 999 ? '>999%' : overPct + '%';
-              return `<div class="metric-value" style="font-size:18px;color:var(--red)">−${display}</div>
+              return `<div class="metric-value" style="font-size:22px;color:var(--red)">−${display}</div>
                       <div style="font-size:11px;color:var(--text4)">overspending</div>`;
             }
             const savedPct = Math.round((1 - curr.expense / curr.income) * 100);
-            return `<div class="metric-value" style="font-size:18px">${savedPct}%</div>
-                    <div style="font-size:11px;color:var(--text4)">of income saved</div>`;
+            return `<div class="metric-value" style="font-size:22px">${savedPct}%</div>`;
           })()}
+          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">SAVINGS RATE</div>
           ${_spark(_spark6.rate, '#38bdf8')}
         </div>
-        <div class="metric-card" style="cursor:pointer;padding:10px 12px;background:rgba(29,158,117,0.12);border-color:rgba(29,158,117,0.25)" onclick="nav('transactions')">
-          <div class="metric-label" style="min-height:auto;margin-bottom:4px">VS 6MO AVG</div>
+        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(29,158,117,0.12);border-color:rgba(29,158,117,0.25)" onclick="nav('transactions')">
           ${(() => {
             let totalExp = 0, count = 0;
             for (let i = 1; i <= 6; i++) {
@@ -12890,15 +12888,16 @@ function renderAnalyticsOverview() {
               const t = getMonthTotals(k);
               if (t.expense > 0) { totalExp += t.expense; count++; }
             }
-            if (count === 0) return `<div class="metric-value tx-neu" style="font-size:18px">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
+            if (count === 0) return `<div class="metric-value tx-neu" style="font-size:22px">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
             const avg = totalExp / count;
             const diff = curr.expense - avg;
             const pct = avg > 0 ? (diff / avg * 100) : 0;
             const cls = diff > 0 ? 'tx-neg' : diff < 0 ? 'tx-pos' : 'tx-neu';
             const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
-            return `<div class="metric-value ${cls}" style="font-size:18px">${sign}${Math.abs(pct).toFixed(0)}%</div>
+            return `<div class="metric-value ${cls}" style="font-size:22px">${sign}${Math.abs(pct).toFixed(0)}%</div>
                     <div style="font-size:11px;color:var(--text4)">${diff > 0 ? 'above' : diff < 0 ? 'below' : 'equal to'} ${count}mo avg</div>`;
           })()}
+          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">VS 6MO AVG</div>
           ${_spark(_spark6.exp, '#a78bfa')}
         </div>
       </div>
@@ -13128,7 +13127,7 @@ function buildVelocityGauge(metricMk, dispCurr) {
       <div style="width:${fillPct}%;height:100%;background:${status.color};transition:width 0.3s"></div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
-      <span>${fmt(totalExp, dispCurr)} spent</span>
+      <span>${fmt(totalExp, dispCurr)} spent <span style="font-size:10px;opacity:0.75">· excl. FX losses</span></span>
       <span>Projected: ${fmt(projection, dispCurr)}</span>
     </div>
   </div>`;
@@ -13165,7 +13164,6 @@ function buildRunwayBar(dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Cash Runway${_infoBtn('runway')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">All liquid cash at your 6-month avg burn</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${color}">${monthsRunway}mo</div>
@@ -13226,7 +13224,10 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
             <div style="font-size:11px;color:var(--text4)">${fmtD(o.tx.date)} · usually ${fmt(o.avg, dispCurr)}</div>
           </div>
         </div>
-        <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red);flex-shrink:0">${fmt(o.amt, dispCurr)}</div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(o.amt, dispCurr)}</div>
+          <div style="font-size:10px;color:var(--red);opacity:0.75">${(o.amt/o.avg).toFixed(1)}× usual</div>
+        </div>
       </div>`;
     }).join('')}
   </div>`;
@@ -13295,19 +13296,23 @@ function buildForecastBand(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Month-End Forecast${_infoBtn('forecast')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Based on ${histMonths}mo pattern · ±15% confidence</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${histMonths}mo pattern · ±15%</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${projColor}">${fmt(projection, dispCurr)}</div>
         <div style="font-size:11px;color:var(--text4)">${variance >= 0 ? '+' : ''}${variance.toFixed(0)}% vs avg</div>
       </div>
     </div>
+    <div style="position:relative">
+    <span style="position:absolute;left:2px;top:0;font-size:9px;color:var(--text4)">${_fmtK(maxY, dispCurr)}</span>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      <line x1="${xAt(dayOfMonth).toFixed(1)}" y1="${padT}" x2="${xAt(dayOfMonth).toFixed(1)}" y2="${H-padB}" stroke="var(--text4)" stroke-width="1" stroke-dasharray="2,3" opacity="0.4"/>
       <path d="${bandPath}" fill="${lineColor}" opacity="0.10"/>
       <path d="${expPath}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3" fill="none" opacity="0.75"/>
       <path d="${actPath}" stroke="${lineColor}" stroke-width="2.2" fill="none" style="filter:drop-shadow(0 0 3px ${lineColor}88)"/>
       <circle cx="${xAt(dayOfMonth).toFixed(1)}" cy="${yAt(cumActual[cumActual.length-1]).toFixed(1)}" r="3.5" fill="${lineColor}" style="filter:drop-shadow(0 0 4px ${lineColor})"/>
     </svg>
+    </div>
     <div style="display:flex;gap:14px;font-size:11px;color:var(--text4);margin-top:6px">
       <span><span style="color:${projColor}">━</span> Actual</span>
       <span><span style="color:var(--text4)">┄</span> Expected</span>
@@ -13408,7 +13413,6 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Savings Rate Trend${_infoBtn('savings')}</div>
-      <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
     <div style="position:relative;margin-bottom:6px">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">
@@ -13598,24 +13602,29 @@ function buildMostFrequent(metricMk, dispCurr) {
   const entries = Object.entries(freq).sort((a,b) => b[1].count - a[1].count);
   const top = entries.slice(0, 5);
   if (top.length === 0 || top[0][1].count < 3) return '';
+  const maxTot = Math.max(...top.map(([,v]) => v.total), 1);
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Most Frequent${_infoBtn('frequent')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">By transaction count this month</div>
       </div>
     </div>
     ${top.map(([name, v]) => {
       const avg = v.total / v.count;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">
-          <div style="font-size:16px">${v.icon || '•'}</div>
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:500">${name}</div>
-            <div style="font-size:11px;color:var(--text4)">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <div style="font-size:16px">${v.icon || '•'}</div>
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:500">${name}</div>
+              <div style="font-size:11px;color:var(--text4)">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
+            </div>
           </div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;flex-shrink:0">${fmt(v.total, dispCurr)}</div>
         </div>
-        <div style="font-family:var(--mono);font-size:13px;font-weight:600;flex-shrink:0">${fmt(v.total, dispCurr)}</div>
+        <div style="height:3px;background:var(--bg3);border-radius:var(--r-full);margin-top:5px;overflow:hidden">
+          <div style="height:100%;width:${(v.total/maxTot*100).toFixed(1)}%;background:var(--accent);border-radius:var(--r-full);opacity:0.7"></div>
+        </div>
       </div>`;
     }).join('')}
   </div>`;
@@ -13898,6 +13907,11 @@ function _smoothD(pts){
   }
   return d;
 }
+function _fmtK(v, curr){
+  const a = Math.abs(v); const sy = sym(curr) || '';
+  const nm = a >= 1e6 ? (a/1e6).toFixed(1)+'M' : a >= 1e3 ? (a/1e3).toFixed(a >= 1e5 ? 0 : 1)+'k' : a.toFixed(0);
+  return (v < 0 ? '−' : '') + sy + nm;
+}
 
 function buildNetWorthTrend(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
@@ -13960,9 +13974,10 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Net Worth Trend</div>
-      <div style="font-size:11px;color:var(--text3)">Last ${n} month${n>1?'s':''}</div>
     </div>
-    <div style="position:relative;margin-bottom:6px">
+    <div style="position:relative;margin-bottom:6px;padding-left:2px">
+      <span style="position:absolute;left:0;top:-3px;font-size:9px;color:var(--text4)">${_fmtK(maxV, dispCurr)}</span>
+      <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(minV, dispCurr)}</span>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
         <path d="${areaPath}" fill="#38bdf8" opacity="0.10"/>
         <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 3px rgba(56,189,248,0.55))"/>
@@ -14001,21 +14016,22 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
   const displayMonths = months.filter(mo => mo.income > 0 || mo.expense > 0);
   if (displayMonths.length === 0) return '';
   const maxV = Math.max(...displayMonths.flatMap(mo => [mo.income, mo.expense]), 1);
-  const col = (mo) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+  const col = (mo, isLast) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
     <div style="height:70px;display:flex;align-items:flex-end;gap:2px">
       <div style="width:9px;background:var(--green);border-radius:2px 2px 0 0;height:${(mo.income/maxV*100).toFixed(1)}%;min-height:2px;opacity:0.85" title="In ${fmt(mo.income,dispCurr)}"></div>
       <div style="width:9px;background:var(--red);border-radius:2px 2px 0 0;height:${(mo.expense/maxV*100).toFixed(1)}%;min-height:2px;opacity:0.85" title="Out ${fmt(mo.expense,dispCurr)}"></div>
     </div>
-    <div style="font-size:10px;color:var(--text4)">${mo.label}</div>
+    <div style="font-size:10px;color:${isLast?'var(--text2)':'var(--text4)'};font-weight:${isLast?'600':'400'}">${mo.label}</div>
   </div>`;
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Income vs Expense</div>
-      <div style="display:flex;gap:10px;font-size:10px">
+      <div style="display:flex;gap:10px;font-size:10px;align-items:center">
+        <span style="color:var(--text4)">max ${_fmtK(maxV, dispCurr)}</span>
         <span style="color:var(--green)">● In</span><span style="color:var(--red)">● Out</span>
       </div>
     </div>
-    <div style="display:flex;gap:4px;align-items:flex-end">${displayMonths.map(col).join('')}</div>
+    <div style="display:flex;gap:4px;align-items:flex-end">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1)).join('')}</div>
   </div>`;
 }
 
@@ -14056,18 +14072,15 @@ function buildBudgetRanking(metricMk, dispCurr) {
   if (rows.length === 0) return '';
   rows.sort((a,b) => b.pct - a.pct);
   const top = rows.slice(0, 8);
-  const maxPct = Math.max(...top.map(r=>r.pct), 100);
-  const bars = top.map(r => {
+  const bars = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;padding-bottom:5px;border-bottom:1px solid var(--border)">
+      <span>Category</span><span style="text-align:right">Spent / Limit</span><span style="text-align:right">Used</span>
+    </div>` + top.map(r => {
     const color = r.over ? 'var(--red)' : r.pct >= 80 ? 'var(--amber)' : 'var(--green)';
-    const width = Math.min((r.pct / maxPct) * 100, 100);
-    return `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:12px">
-        <span style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span>${r.icon}</span><span>${_esc(r.name)}</span></span>
-        <span style="font-family:var(--mono);color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${r.pct.toFixed(0)}%</span>
-      </div>
-      <div style="height:8px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
-        <div style="height:100%;width:${width.toFixed(1)}%;background:${color};border-radius:var(--r-full)"></div>
-      </div>
+    const mark = r.over ? '⚠' : r.pct >= 80 ? '!' : '✓';
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+      <span style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px"><span>${r.icon}</span><span style="overflow:hidden;text-overflow:ellipsis">${_esc(r.name)}</span></span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3);text-align:right;white-space:nowrap">${_fmtK(r.spent, r.currency)} / ${_fmtK(r.limAmt, r.currency)}</span>
+      <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};text-align:right;white-space:nowrap">${r.pct.toFixed(0)}% ${mark}</span>
     </div>`;
   }).join('');
   return `<div class="card" style="padding:16px;margin-bottom:16px">
