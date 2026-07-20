@@ -476,18 +476,21 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker-label{letter-spacing:-0.2px}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
-/* ── PLS #176: asymmetric grid — featured charts span 2 cols; dense packing fills gaps ── */
-.ov-mas{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;align-items:start;grid-auto-flow:dense}
-.ov-mas>div{min-width:0}
+/* ── PLS #177: preview 12-col composition — KPI c3 row, main panels c4, small cards c3 ── */
+.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:start;grid-auto-flow:dense}
+.ov-mas>div{min-width:0;grid-column:span 12}
 .ov-mas .card{margin-bottom:0!important}
 .ov-mas .metric-card{margin-bottom:0!important}
-.ov-sp2{grid-column:span 2}
-@media(max-width:640px){.ov-sp2{grid-column:auto}}
+@media(min-width:760px){.ov-mas>div{grid-column:span 6}}
+@media(min-width:1120px){.ov-mas>div{grid-column:span 6}.ov-mas>div.ov-c4{grid-column:span 4}.ov-mas>div.ov-c3{grid-column:span 3}}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-.ov-sp2 .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:480px){.ov-mas .card{padding:12px}.ov-sp2 .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:760px){.ov-mas .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:480px){.ov-mas .card{padding:12px}}
 /* ── PLS #168: dense PC overview — one masonry for everything; KPI strip on top ── */
-.ov-mas .card{border-radius:14px!important;background:var(--bg2)!important;border:1px solid var(--border)!important;box-shadow:none}
+.ov-mas .card,.ov-mas .metric-card{border-radius:16px!important;background:#15151f!important;border:1px solid #232334!important;box-shadow:inset 0 1px 0 0 rgba(255,255,255,0.04)!important;transition:border-color .15s,background .15s}
+.ov-mas .card:hover,.ov-mas .metric-card:hover{border-color:#2d2d4a!important;background:#1a1a24!important}
+[data-theme="light"] .ov-mas .card,[data-theme="light"] .ov-mas .metric-card{background:var(--bg2)!important;border:1px solid var(--border)!important;box-shadow:none!important}
+[data-theme="light"] .ov-mas .card:hover,[data-theme="light"] .ov-mas .metric-card:hover{background:var(--bg2)!important;border-color:var(--border2)!important}
 .ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
 .ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
 .ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
@@ -12822,18 +12825,23 @@ function renderAnalyticsOverview() {
 
 
   const chgBadge = (chg) => chg===null ? '' :
-    `<span style="font-size:11px;color:${chg>=0?'var(--green)':'var(--red)'}">
-      ${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(1)}% vs prev
-    </span>`;
+    `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:6px;font-family:var(--mono);font-size:11px;flex-shrink:0;background:${chg>=0?'rgba(16,185,129,0.1)':'rgba(113,113,122,0.14)'};border:1px solid ${chg>=0?'rgba(16,185,129,0.22)':'rgba(113,113,122,0.28)'};color:${chg>=0?'#34d399':'var(--text3)'}">${chg>=0?'↑':'↓'} ${Math.abs(chg).toFixed(1)}%</span>`;
+  const _kIco = (k) => ({
+    up:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+    card:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
+    zap:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
+    layers:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/></svg>'
+  }[k] || '');
 
   // ── PLS #169: minimalist-informative pass — 6-mo sparklines under Income/Expenses KPIs
   const _spark = (vals, color) => {
     if (vals.length < 2 || vals.every(v => !v)) return '';
-    const mx = Math.max(...vals, 1);
-    const pts = vals.map((v,i)=>[i/(vals.length-1)*64, 16-(v/mx*14)]);
+    const mx = Math.max(...vals), mn = Math.min(...vals, 0);
+    const rg = (mx - mn) || 1;
+    const pts = vals.map((v,i)=>[4 + i/(vals.length-1)*76, 24 - (v-mn)/rg*20]);
     const d = _smoothD(pts);
-    const area = d + ` L${pts[pts.length-1][0].toFixed(1)},18 L${pts[0][0].toFixed(1)},18 Z`;
-    return `<svg width="64" height="18" viewBox="0 0 64 18" style="display:block;margin:6px auto 0"><path d="${area}" fill="${color}" opacity="0.14"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" style="filter:drop-shadow(0 0 2px ${color}99)"/></svg>`;
+    const gid = 'sg' + color.replace(/[^a-z0-9]/gi,'');
+    return `<svg width="84" height="28" viewBox="0 0 84 28" style="display:block"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.18"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${d} L${pts[pts.length-1][0].toFixed(1)},24 L${pts[0][0].toFixed(1)},24 Z" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   };
   const _spark6 = (() => {
     const inc = [], exp = [], rate = [];
@@ -12851,37 +12859,55 @@ function renderAnalyticsOverview() {
          (columns:300px → 4-6 cols on wide screens) holding everything; expense & income
          pies are separate cards so neither hogs a wide slot. Order = relevance. ── -->
     <div class="ov-mas">
-        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(45,217,138,0.12);border-color:rgba(45,217,138,0.25)" onclick="setAnalyticsTab('spending')">
-          <div class="metric-value tx-pos" style="font-size:22px">${fmt(curr.income, disp)}</div>
-          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-          ${chgBadge(incomeChg)}
-          ${_spark(_spark6.inc, '#2dd4bf')}
+        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            ${chgBadge(incomeChg)}
+          </div>
+          <div style="position:relative;z-index:1;padding-right:88px">
+            <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(curr.income, disp)}</div>
+          </div>
+          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.inc, '#7c5cff')}</div>
         </div>
-        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(240,86,90,0.12);border-color:rgba(240,86,90,0.25)" onclick="setAnalyticsTab('spending')">
-          <div class="metric-value tx-neg" style="font-size:22px">${fmt(curr.expense, disp)}</div>
-          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</div>
-          ${chgBadge(expChg)}
-          ${_spark(_spark6.exp, '#f472b6')}
+        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            ${chgBadge(expChg)}
+          </div>
+          <div style="position:relative;z-index:1;padding-right:88px">
+            <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(curr.expense, disp)}</div>
+          </div>
+          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#f43f5e')}</div>
         </div>
-        <div class="metric-card" style="padding:12px;text-align:center;background:rgba(127,119,221,0.12);border-color:rgba(127,119,221,0.25)">
+        <div class="metric-card ov-c3" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SAVINGS RATE</span></div>
+            
+          </div>
+          <div style="position:relative;z-index:1;padding-right:88px">
           ${(() => {
             if (curr.income <= 0) {
-              return `<div class="metric-value" style="font-size:22px;color:var(--text3)">—</div>
+              return `<div class="metric-value" style="font-size:18px;color:var(--text3)">—</div>
                       <div style="font-size:11px;color:var(--text4)">no income yet</div>`;
             }
             if (curr.expense > curr.income) {
               const overPct = Math.round((curr.expense / curr.income - 1) * 100);
               const display = overPct > 999 ? '>999%' : overPct + '%';
-              return `<div class="metric-value" style="font-size:22px;color:var(--red)">−${display}</div>
+              return `<div class="metric-value" style="font-size:18px;color:var(--red)">−${display}</div>
                       <div style="font-size:11px;color:var(--text4)">overspending</div>`;
             }
             const savedPct = Math.round((1 - curr.expense / curr.income) * 100);
-            return `<div class="metric-value" style="font-size:22px">${savedPct}%</div>`;
+            return `<div class="metric-value" style="font-size:18px">${savedPct}%</div>`;
           })()}
-          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">SAVINGS RATE</div>
-          ${_spark(_spark6.rate, '#38bdf8')}
+          </div>
+          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.rate, '#2dd4bf')}</div>
         </div>
-        <div class="metric-card" style="cursor:pointer;padding:12px;text-align:center;background:rgba(29,158,117,0.12);border-color:rgba(29,158,117,0.25)" onclick="nav('transactions')">
+        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('transactions')">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">VS 6MO AVG</span></div>
+            
+          </div>
+          <div style="position:relative;z-index:1;padding-right:88px">
           ${(() => {
             let totalExp = 0, count = 0;
             for (let i = 1; i <= 6; i++) {
@@ -12890,48 +12916,48 @@ function renderAnalyticsOverview() {
               const t = getMonthTotals(k);
               if (t.expense > 0) { totalExp += t.expense; count++; }
             }
-            if (count === 0) return `<div class="metric-value tx-neu" style="font-size:22px">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
+            if (count === 0) return `<div class="metric-value" style="font-size:18px">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
             const avg = totalExp / count;
             const diff = curr.expense - avg;
             const pct = avg > 0 ? (diff / avg * 100) : 0;
             const cls = diff > 0 ? 'tx-neg' : diff < 0 ? 'tx-pos' : 'tx-neu';
             const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
-            return `<div class="metric-value ${cls}" style="font-size:22px">${sign}${Math.abs(pct).toFixed(0)}%</div>
+            return `<div class="metric-value" style="font-size:18px">${sign}${Math.abs(pct).toFixed(0)}%</div>
                     <div style="font-size:11px;color:var(--text4)">${diff > 0 ? 'above' : diff < 0 ? 'below' : 'equal to'} ${count}mo avg</div>`;
           })()}
-          <div class="metric-label" style="min-height:auto;margin:3px 0 0;justify-content:center">VS 6MO AVG</div>
-          ${_spark(_spark6.exp, '#a78bfa')}
+          </div>
+          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#a78bfa')}</div>
         </div>
 
-      ${expTotal > 0 ? `<div class="ov-sp2"><div class="card" style="padding:14px">
+      ${expTotal > 0 ? `<div class="ov-c4"><div class="card" style="padding:14px">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Expenses by Category</div>
         ${buildPieChart(expCats, expTotal, 'exp', period)}
       </div></div>` : ''}
-      ${incTotal > 0 ? `<div class="ov-sp2"><div class="card" style="padding:14px">
+      ${incTotal > 0 ? `<div class="ov-c4"><div class="card" style="padding:14px">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Income by Category</div>
         ${buildPieChart(incCats, incTotal, 'inc', period)}
       </div></div>` : ''}
 
-      <div class="ov-sp2">${buildNetWorthTrend(metricMk, dispCurr)}</div>
-      <div class="ov-sp2">${buildForecastBand(metricMk, dispCurr)}</div>
-      <div class="ov-sp2">${buildSavingsSparkline(metricMk, dispCurr)}</div>
-      <div>${buildBudgetRanking(metricMk, dispCurr)}</div>
-      <div>${buildCashflowWaterfall(metricMk, dispCurr)}</div>
-      <div>${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
-      <div>${buildRunwayBar(dispCurr)}</div>
-      <div>${buildVelocityGauge(metricMk, dispCurr)}</div>
-      <div>${buildAnomalyHighlights(metricMk, dispCurr)}</div>
-      <div>${buildSubscriptionPanel(dispCurr)}</div>
-      <div>${buildFixedVsDiscretionary(metricMk, dispCurr)}</div>
-      <div>${buildParetoAnalysis(metricMk, dispCurr)}</div>
-      <div>${buildDayOfWeekHeatmap(metricMk, dispCurr)}</div>
-      <div>${buildMostFrequent(metricMk, dispCurr)}</div>
-      <div>${buildTimeOfDayPattern(metricMk, dispCurr)}</div>
-      <div>${buildSpendingDistribution(metricMk, dispCurr)}</div>
-      <div>${buildYoYComparison(metricMk, dispCurr)}</div>
-      <div>${buildIncomeDiversification(metricMk, dispCurr)}</div>
-      <div>${buildGoalProgress(dispCurr)}</div>
-      <div>${buildConcentrationRisk(dispCurr)}</div>
+      <div class="ov-c4">${buildNetWorthTrend(metricMk, dispCurr)}</div>
+      <div class="ov-c4">${buildForecastBand(metricMk, dispCurr)}</div>
+      <div class="ov-c4">${buildSavingsSparkline(metricMk, dispCurr)}</div>
+      <div class="ov-c4">${buildBudgetRanking(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildCashflowWaterfall(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildIncomeExpenseBars(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildRunwayBar(dispCurr)}</div>
+      <div class="ov-c3">${buildVelocityGauge(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildAnomalyHighlights(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildSubscriptionPanel(dispCurr)}</div>
+      <div class="ov-c3">${buildFixedVsDiscretionary(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildParetoAnalysis(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildDayOfWeekHeatmap(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildMostFrequent(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildTimeOfDayPattern(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildSpendingDistribution(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildYoYComparison(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildIncomeDiversification(metricMk, dispCurr)}</div>
+      <div class="ov-c3">${buildGoalProgress(dispCurr)}</div>
+      <div class="ov-c3">${buildConcentrationRisk(dispCurr)}</div>
       <div>${(() => {
       // Top movers: categories where current month spending is significantly higher than 3-month average
       if (period === 'ytd' || curr.expense === 0) return '';
@@ -12983,7 +13009,7 @@ function renderAnalyticsOverview() {
         }).join('')}
       </div>`;
     })()}</div>
-      <div class="ov-sp2">${(()=>{
+      <div>${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
@@ -13309,8 +13335,8 @@ function buildForecastBand(metricMk, dispCurr) {
       <line x1="${xAt(dayOfMonth).toFixed(1)}" y1="${padT}" x2="${xAt(dayOfMonth).toFixed(1)}" y2="${H-padB}" stroke="var(--text4)" stroke-width="1" stroke-dasharray="2,3" opacity="0.4"/>
       <path d="${bandPath}" fill="${lineColor}" opacity="0.10"/>
       <path d="${expPath}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,3" fill="none" opacity="0.75"/>
-      <path d="${actPath}" stroke="${lineColor}" stroke-width="2.2" fill="none" style="filter:drop-shadow(0 0 3px ${lineColor}88)"/>
-      <circle cx="${xAt(dayOfMonth).toFixed(1)}" cy="${yAt(cumActual[cumActual.length-1]).toFixed(1)}" r="3.5" fill="${lineColor}" style="filter:drop-shadow(0 0 4px ${lineColor})"/>
+      <path d="${actPath}" stroke="${lineColor}" stroke-width="2.2" fill="none"/>
+      <circle cx="${xAt(dayOfMonth).toFixed(1)}" cy="${yAt(cumActual[cumActual.length-1]).toFixed(1)}" r="3" fill="${lineColor}"/>
     </svg>
     </div>
     <div style="display:flex;gap:14px;font-size:11px;color:var(--text4);margin-top:6px">
@@ -13416,7 +13442,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     </div>
     <div style="position:relative;margin-bottom:6px">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">
-        <path d="${_smoothD(_slPts)}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 3px rgba(45,212,191,0.55))"/>
+        <path d="${_smoothD(_slPts)}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
       ${dots}
     </div>
@@ -13970,7 +13996,7 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   const zeroY = yAt(Math.max(minV, 0)).toFixed(1);
   const areaPath = path + ` L${xAt(n-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
   // Dots as HTML overlay (positioned by %) so they stay round under preserveAspectRatio="none".
-  const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:#38bdf8;box-shadow:0 0 6px rgba(56,189,248,0.7);transform:translate(-50%,-50%)"></div>`).join('');
+  const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:#38bdf8;transform:translate(-50%,-50%)"></div>`).join('');
   return `<div class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Net Worth Trend</div>
@@ -13980,7 +14006,7 @@ function buildNetWorthTrend(metricMk, dispCurr) {
       <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(minV, dispCurr)}</span>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
         <path d="${areaPath}" fill="#38bdf8" opacity="0.10"/>
-        <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 3px rgba(56,189,248,0.55))"/>
+        <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
       ${dotEls}
     </div>
@@ -14243,7 +14269,7 @@ function buildPieChart(cats, total, prefix, period) {
   });
 
   const svgSlices = slices.map((s,i) =>
-    `<path d="${s.path}" fill="${s.color}" opacity="0.92" style="filter:drop-shadow(0 1px 3px ${s.color}44)"/>`
+    `<path d="${s.path}" fill="${s.color}" opacity="0.92"/>`
   ).join('');
 
   // Center: icon of biggest slice + amount
