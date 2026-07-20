@@ -477,9 +477,9 @@ option{background:var(--bg3);color:var(--text)}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
 /* ── PLS #177: preview 12-col composition — KPI c3 row, main panels c4, small cards c3 ── */
-.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense}
+.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start}
 .ov-mas>div{min-width:0;grid-column:span 12}
-.ov-mas>div>.card{height:100%;box-sizing:border-box}
+.ov-mas>div>.card{box-sizing:border-box}
 .ov-mas>div.ov-c12{grid-column:span 12!important}
 .ov-mas .card{margin-bottom:0!important}
 .ov-mas .metric-card{margin-bottom:0!important}
@@ -13022,9 +13022,9 @@ function renderAnalyticsOverview() {
           {cls:'ov-c3', html: buildTimeOfDayPattern(metricMk, dispCurr)},
           {cls:'ov-c3', html: buildSpendingDistribution(metricMk, dispCurr)},
           {cls:'ov-c3', html: buildYoYComparison(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildIncomeDiversification(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildGoalProgress(dispCurr)},
-          {cls:'ov-c3', html: buildConcentrationRisk(dispCurr)},
+          {cls:'ov-c4', html: buildIncomeDiversification(metricMk, dispCurr)},
+          {cls:'ov-c4', html: buildGoalProgress(dispCurr)},
+          {cls:'ov-c4', html: buildConcentrationRisk(dispCurr)},
           {cls:'ov-c3', html: notableChangesHtml},
         ];
         return cells.filter(c => c.html).map(c => `<div class="${c.cls}">${c.html}</div>`).join('');
@@ -13496,7 +13496,8 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
     'phone bill', 'cable', 'streaming', 'netflix', 'spotify', 'tax', 'association due', 'hoa'];
   const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
   if (txs.length === 0) return '';
-  let fixed = 0, discretionary = 0;
+  let fixed = 0, discretionary = 0, fixedCount = 0, discCount = 0;
+  const fixedCats = {}, discCats = {};
   for (const tx of txs) {
     const cat = getCategoryDisplay(tx.categoryId);
     const catName = (cat.name || '').toLowerCase();
@@ -13508,27 +13509,45 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
       FIXED_KW.some(kw => catName.includes(kw) || txNotes.includes(kw)) || // (3) keyword
       [...recurringNames].some(rn => rn && txNotes.includes(rn));
     const amt = _ovExpAmt(tx, dispCurr);
-    if (isFixed) fixed += amt;
-    else discretionary += amt;
+    if (isFixed) {
+      fixed += amt; fixedCount++;
+      fixedCats[cat.name] = (fixedCats[cat.name] || 0) + amt;
+    } else {
+      discretionary += amt; discCount++;
+      discCats[cat.name] = (discCats[cat.name] || 0) + amt;
+    }
   }
   const total = fixed + discretionary;
   if (total === 0) return '';
   const fixedPct = (fixed / total * 100);
   const discPct = 100 - fixedPct;
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  const topOf = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1])[0];
+  const topFixed = topOf(fixedCats);
+  const topDisc = topOf(discCats);
+  return `<div class="card" style="padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Fixed vs Discretionary${_infoBtn('fixed')}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${discPct.toFixed(0)}% controllable this month</div>
       </div>
     </div>
-    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:8px">
+    <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:12px">
       <div style="width:${fixedPct}%;background:var(--text3);border-radius:var(--r-full)"></div>
       <div style="width:${discPct}%;background:var(--accent);border-radius:var(--r-full)"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px">
-      <div><span style="color:var(--text3)">▢</span> Fixed: <span style="font-family:var(--mono);font-weight:600">${fmt(fixed, dispCurr)}</span> <span style="color:var(--text4)">${fixedPct.toFixed(0)}%</span></div>
-      <div><span style="color:var(--accent)">▢</span> Discretionary: <span style="font-family:var(--mono);font-weight:600">${fmt(discretionary, dispCurr)}</span> <span style="color:var(--text4)">${discPct.toFixed(0)}%</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px">
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:5px"><span style="color:var(--text3)">▢</span> Fixed</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(fixed, dispCurr)}</div>
+        <div style="font-size:10.5px;color:var(--text4);margin-top:2px">${fixedPct.toFixed(0)}% · ${fixedCount} txn${fixedCount!==1?'s':''}</div>
+        ${topFixed ? `<div style="font-size:10px;color:var(--text4);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Top: ${_esc(topFixed[0])} · ${fmt(topFixed[1], dispCurr)}</div>` : ''}
+      </div>
+      <div style="background:var(--accent-bg);border-radius:var(--r-md);padding:10px">
+        <div style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent3);margin-bottom:5px"><span style="color:var(--accent)">▢</span> Discretionary</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(discretionary, dispCurr)}</div>
+        <div style="font-size:10.5px;color:var(--text4);margin-top:2px">${discPct.toFixed(0)}% · ${discCount} txn${discCount!==1?'s':''}</div>
+        ${topDisc ? `<div style="font-size:10px;color:var(--text4);margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Top: ${_esc(topDisc[0])} · ${fmt(topDisc[1], dispCurr)}</div>` : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -13629,6 +13648,20 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
       <span><span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(dowAvgs[peakIdx], dispCurr)}</span> avg ${labels[peakIdx]}</span>
       <span><span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(dowAvgs.reduce((s,v)=>s+v,0)/7, dispCurr)}</span> daily avg</span>
     </div>
+    ${(() => {
+      const weekendAvg = (dowAvgs[0] + dowAvgs[6]) / 2;
+      const weekdayAvg = (dowAvgs[1]+dowAvgs[2]+dowAvgs[3]+dowAvgs[4]+dowAvgs[5]) / 5;
+      if (weekdayAvg === 0 && weekendAvg === 0) return '';
+      const higher = weekendAvg > weekdayAvg ? 'Weekends' : 'Weekdays';
+      const diff = weekdayAvg > 0 ? Math.abs((weekendAvg - weekdayAvg) / weekdayAvg * 100) : 0;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text4);border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+        <span>${higher} spend ${diff.toFixed(0)}% more on average</span>
+        <span style="display:flex;gap:10px">
+          <span style="color:var(--text3)">Wkday <span style="font-family:var(--mono);color:var(--text2);font-weight:600">${_fmtK(weekdayAvg,dispCurr)}</span></span>
+          <span style="color:var(--text3)">Wkend <span style="font-family:var(--mono);color:var(--text2);font-weight:600">${_fmtK(weekendAvg,dispCurr)}</span></span>
+        </span>
+      </div>`;
+    })()}
   </div>`;
 }
 
@@ -13657,19 +13690,19 @@ function buildMostFrequent(metricMk, dispCurr) {
     </div>
     ${top.map(([name, v]) => {
       const avg = v.total / v.count;
-      return `<div style="padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+      return `<div style="padding:11px 0;border-bottom:1px solid var(--border)" class="last-no-border">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <div style="font-size:16px">${v.icon || '•'}</div>
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <div style="font-size:19px">${v.icon || '•'}</div>
             <div style="min-width:0">
-              <div style="font-size:13px;font-weight:500">${name}</div>
-              <div style="font-size:11px;color:var(--text4)">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
+              <div style="font-size:13.5px;font-weight:600">${name}</div>
+              <div style="font-size:11px;color:var(--text4);margin-top:1px">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
             </div>
           </div>
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;flex-shrink:0">${fmt(v.total, dispCurr)}</div>
+          <div style="font-family:var(--mono);font-size:13.5px;font-weight:700;flex-shrink:0">${fmt(v.total, dispCurr)}</div>
         </div>
-        <div style="height:3px;background:var(--bg3);border-radius:var(--r-full);margin-top:5px;overflow:hidden">
-          <div style="height:100%;width:${(v.total/maxTot*100).toFixed(1)}%;background:var(--accent);border-radius:var(--r-full);opacity:0.7"></div>
+        <div style="height:4px;background:var(--bg3);border-radius:var(--r-full);margin-top:7px;overflow:hidden">
+          <div style="height:100%;width:${(v.total/maxTot*100).toFixed(1)}%;background:var(--accent);border-radius:var(--r-full);opacity:0.75"></div>
         </div>
       </div>`;
     }).join('')}
@@ -13682,20 +13715,24 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
   if (txs.length < 5) return '';
   // Buckets: Morning 6-12, Afternoon 12-18, Evening 18-22, Night 22-6
   const buckets = {Morning: 0, Afternoon: 0, Evening: 0, Night: 0};
+  const bucketCounts = {Morning: 0, Afternoon: 0, Evening: 0, Night: 0};
   for (const tx of txs) {
     const h = parseInt((tx.time || '12:00').slice(0, 2));
     const amt = _ovExpAmt(tx, dispCurr);
-    if (h >= 6 && h < 12) buckets.Morning += amt;
-    else if (h >= 12 && h < 18) buckets.Afternoon += amt;
-    else if (h >= 18 && h < 22) buckets.Evening += amt;
-    else buckets.Night += amt;
+    let bk;
+    if (h >= 6 && h < 12) bk = 'Morning';
+    else if (h >= 12 && h < 18) bk = 'Afternoon';
+    else if (h >= 18 && h < 22) bk = 'Evening';
+    else bk = 'Night';
+    buckets[bk] += amt;
+    bucketCounts[bk]++;
   }
   const total = Object.values(buckets).reduce((s,v) => s+v, 0);
   if (total === 0) return '';
   const colors = {Morning: '#fbbf24', Afternoon: '#60a5fa', Evening: '#f472b6', Night: '#818cf8'};
   const icons = {Morning: '🌅', Afternoon: '☀️', Evening: '🌆', Night: '🌙'};
   const peakBucket = Object.entries(buckets).sort((a,b) => b[1] - a[1])[0];
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  return `<div class="card" style="padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Time-of-Day Pattern${_infoBtn('timeofday')}</div>
@@ -13710,10 +13747,11 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;font-size:11px">
       ${Object.entries(buckets).map(([k,v]) => `
-        <div style="text-align:center">
-          <div style="font-size:14px">${icons[k]}</div>
-          <div style="color:var(--text3);font-size:10px">${k}</div>
-          <div style="font-family:var(--mono);font-weight:600;font-size:11px">${fmt(v, dispCurr)}</div>
+        <div style="text-align:center;background:var(--bg3);border-radius:var(--r-md);padding:8px 4px">
+          <div style="font-size:16px">${icons[k]}</div>
+          <div style="color:var(--text3);font-size:10px;margin-top:2px">${k}</div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:11px;margin-top:2px">${fmt(v, dispCurr)}</div>
+          <div style="color:var(--text4);font-size:9.5px;margin-top:1px">${bucketCounts[k]}× · avg ${_fmtK(bucketCounts[k]?v/bucketCounts[k]:0, dispCurr)}</div>
         </div>
       `).join('')}
     </div>
@@ -14029,6 +14067,12 @@ function buildCashflowRunway(metricMk, dispCurr) {
     </div>`;
     }
   }
+  const depletionLabel = (monthsExact > 0 && monthsExact < 36) ? (() => {
+    const dd = new Date();
+    dd.setMonth(dd.getMonth() + Math.floor(monthsExact));
+    dd.setDate(dd.getDate() + Math.round((monthsExact % 1) * 30));
+    return dd.toLocaleString('en', {month:'short', year:'numeric'});
+  })() : null;
   const runwayBarHtml = monthsExact > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
     <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-bottom:5px">
       <span>Liquid assets</span>
@@ -14042,6 +14086,10 @@ function buildCashflowRunway(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text4);margin-top:3px">
       <span>0mo</span><span>3mo</span><span>6mo · healthy</span><span>12mo+</span>
     </div>
+    ${depletionLabel ? `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-top:10px">
+      <span>At this burn rate, lasts until</span>
+      <span style="font-family:var(--mono);font-weight:600;color:${rColor}">${depletionLabel}</span>
+    </div>` : ''}
   </div>` : '';
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column">
     <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:12px">Cashflow & Runway${_infoBtn('runway')}</div>
@@ -14164,7 +14212,9 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
     </div>
     <div style="font-size:10px;color:${isLast?'var(--text2)':'var(--text4)'};font-weight:${isLast?'600':'400'}">${mo.label}</div>
   </div>`;
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  const lastMo = displayMonths[displayMonths.length-1];
+  const lastNet = lastMo.income - lastMo.expense;
+  return `<div class="card" style="padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Income vs Expense</div>
       <div style="display:flex;gap:10px;font-size:10px;align-items:center">
@@ -14173,6 +14223,10 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
       </div>
     </div>
     <div style="display:flex;gap:4px;align-items:flex-end">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1)).join('')}</div>
+    <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
+      <span>${lastMo.label} net</span>
+      <span style="font-family:var(--mono);font-weight:600;color:${lastNet>=0?'var(--green)':'var(--red)'}">${lastNet>=0?'+':''}${fmt(lastNet, dispCurr)}</span>
+    </div>
   </div>`;
 }
 
@@ -14220,8 +14274,8 @@ function buildBudgetRanking(metricMk, dispCurr) {
     const mark = r.over ? '⚠' : r.pct >= 80 ? '!' : '✓';
     const fillPct = Math.min(r.pct, 100).toFixed(1);
     return `<div style="position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)" class="last-no-border">
-      <div style="position:absolute;left:-16px;right:-16px;bottom:0;height:2.5px;background:var(--bg3)"></div>
-      <div style="position:absolute;left:-16px;bottom:0;height:2.5px;width:calc(${fillPct}% + 16px);background:${color}"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:2.5px;background:var(--bg3);border-radius:2px"></div>
+      <div style="position:absolute;left:0;bottom:0;height:2.5px;width:${fillPct}%;background:${color};border-radius:2px"></div>
       <span style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px"><span>${r.icon}</span><span style="overflow:hidden;text-overflow:ellipsis">${_esc(r.name)}</span></span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--text3);text-align:right;white-space:nowrap">${_fmtK(r.spent, r.currency)} / ${_fmtK(r.limAmt, r.currency)}</span>
       <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};text-align:right;white-space:nowrap">${r.pct.toFixed(0)}% ${mark}</span>
@@ -14335,6 +14389,10 @@ function buildSpendingDistribution(metricMk, dispCurr) {
     </div>
     <div style="display:flex;gap:4px;font-size:10px;color:var(--text4)">
       ${buckets.map(b => `<div style="flex:1;text-align:center">${b.label}</div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:9px">
+      <span>Avg txn <span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(totalSpent/totalCount, dispCurr)}</span></span>
+      <span>Total <span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${_fmtK(totalSpent, dispCurr)}</span></span>
     </div>
   </div>`;
 }
