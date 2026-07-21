@@ -12722,22 +12722,29 @@ function packOverview(){
   if (!cells.length) return;
   const hostW = host.clientWidth;
   const gap = 10;
-  // Responsive base column count matching the CSS breakpoints
-  let cols = hostW >= 1120 ? 12 : hostW >= 760 ? 12 : 1;
-  if (cols === 1){
-    // Mobile: single column, natural flow — clear packing
+  // Mobile: single column, natural flow — clear packing entirely
+  if (hostW < 700){
     host.classList.remove('ov-packed');
     cells.forEach(c => { c.style.position=''; c.style.top=''; c.style.left=''; c.style.width=''; });
     host.style.height='';
     return;
   }
+  // Base is a 12-unit track. Below 1120 we halve the resolution (KPI 3→6, panels 4→6, small 3→6)
+  // so the row still fills but with fewer columns; at/above 1120 the full preview spans apply.
+  const wide = hostW >= 1120;
+  const cols = 12;
   const unit = (hostW - gap*(cols-1)) / cols;
   const spanOf = (el) => {
-    if (hostW < 1120){ return el.classList.contains('ov-c12') ? 12 : 6; }
     if (el.classList.contains('ov-c12')) return 12;
-    if (el.classList.contains('ov-c4')) return 4;
-    if (el.classList.contains('ov-c3')) return 3;
-    return 6;
+    if (wide){
+      if (el.classList.contains('ov-c4')) return 4;   // 3 across
+      if (el.classList.contains('ov-c3')) return 3;   // 4 across (KPIs + small cards)
+      return 6;                                        // 2 across (default)
+    } else {
+      if (el.classList.contains('ov-c4')) return 6;   // 2 across
+      if (el.classList.contains('ov-c3')) return 6;   // 2 across
+      return 12;                                       // full width
+    }
   };
   // First set widths so heights measure correctly, then read heights
   cells.forEach(el => { el.style.width = (unit*spanOf(el) + gap*(spanOf(el)-1)) + 'px'; });
