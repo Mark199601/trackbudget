@@ -476,15 +476,19 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker-label{letter-spacing:-0.2px}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
-/* ── PLS #177: preview 12-col composition — KPI c3 row, main panels c4, small cards c3 ── */
-.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start}
+/* ── PLS #179: JS masonry — zero voids. Container is relative; cells absolutely placed by packOverview(). Fallback (no JS / pre-pack) = simple grid. ── */
+.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start;position:relative}
 .ov-mas>div{min-width:0;grid-column:span 12}
 .ov-mas>div>.card{box-sizing:border-box}
 .ov-mas>div.ov-c12{grid-column:span 12!important}
-.ov-mas .card{margin-bottom:0!important}
+.ov-mas .card{margin-bottom:0!important;height:100%;box-sizing:border-box}
 .ov-mas .metric-card{margin-bottom:0!important}
 @media(min-width:760px){.ov-mas>div{grid-column:span 6}}
 @media(min-width:1120px){.ov-mas>div{grid-column:span 6}.ov-mas>div.ov-c4{grid-column:span 4}.ov-mas>div.ov-c3{grid-column:span 3}}
+/* Packed mode: JS sets explicit top/left/width; disable grid so absolute positioning wins */
+.ov-mas.ov-packed{display:block}
+.ov-mas.ov-packed>div{position:absolute;grid-column:auto!important;margin:0}
+.ov-mas.ov-packed>div>.card{height:100%}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(min-width:760px){.ov-mas .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:480px){.ov-mas .card{padding:12px}}
@@ -12354,6 +12358,7 @@ function renderAnalytics() {
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
   const monthNav = _analyticsMonthNav();
   document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
+  if (_analyticsTab==='overview') { requestAnimationFrame(packOverview); }
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
   // (Swipe handler is currently disabled — kept as no-op for safety)
@@ -12705,6 +12710,60 @@ function openCalDay(dateStr) {
 
   openSheet('gen', `📅 ${labelDate}`, body);
 }
+
+// ── PLS #179: masonry packer — measures every .ov-mas cell and drops it into the column
+// track with the smallest running height, eliminating the vertical voids that grid-auto-flow
+// leaves when neighbouring cards differ in height. Re-runs on resize (debounced).
+let _packRO = null;
+function packOverview(){
+  const host = document.querySelector('.ov-mas');
+  if (!host) return;
+  const cells = Array.from(host.children);
+  if (!cells.length) return;
+  const hostW = host.clientWidth;
+  const gap = 10;
+  // Responsive base column count matching the CSS breakpoints
+  let cols = hostW >= 1120 ? 12 : hostW >= 760 ? 12 : 1;
+  if (cols === 1){
+    // Mobile: single column, natural flow — clear packing
+    host.classList.remove('ov-packed');
+    cells.forEach(c => { c.style.position=''; c.style.top=''; c.style.left=''; c.style.width=''; });
+    host.style.height='';
+    return;
+  }
+  const unit = (hostW - gap*(cols-1)) / cols;
+  const spanOf = (el) => {
+    if (hostW < 1120){ return el.classList.contains('ov-c12') ? 12 : 6; }
+    if (el.classList.contains('ov-c12')) return 12;
+    if (el.classList.contains('ov-c4')) return 4;
+    if (el.classList.contains('ov-c3')) return 3;
+    return 6;
+  };
+  // First set widths so heights measure correctly, then read heights
+  cells.forEach(el => { el.style.width = (unit*spanOf(el) + gap*(spanOf(el)-1)) + 'px'; });
+  const colH = new Array(cols).fill(0);
+  host.classList.add('ov-packed');
+  cells.forEach(el => {
+    const sp = Math.min(spanOf(el), cols);
+    // find start column minimizing the max height across the sp-wide window
+    let best = 0, bestTop = Infinity;
+    for (let c = 0; c + sp <= cols; c++){
+      let top = 0;
+      for (let k = c; k < c+sp; k++) top = Math.max(top, colH[k]);
+      if (top < bestTop - 0.5){ bestTop = top; best = c; }
+    }
+    const left = best*(unit+gap);
+    el.style.left = left + 'px';
+    el.style.top = bestTop + 'px';
+    const h = el.getBoundingClientRect().height;
+    for (let k = best; k < best+sp; k++) colH[k] = bestTop + h + gap;
+  });
+  host.style.height = Math.max(...colH) + 'px';
+}
+window.addEventListener('resize', () => {
+  clearTimeout(window._packT);
+  window._packT = setTimeout(() => { if (_analyticsTab==='overview') packOverview(); }, 120);
+});
 
 function renderAnalyticsOverview() {
   // ── DEBUG-SCAN NOTE ── Empty state + NaN guards exist deeper in this function (uses `|| 0` fallbacks and "No data" empty UI). Naive regex scans may flag as missing — they are present.
@@ -13536,13 +13595,13 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
       <div style="width:${discPct}%;background:var(--accent);border-radius:var(--r-full)"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px">
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px;min-width:0">
         <div style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:5px"><span style="color:var(--text3)">▢</span> Fixed</div>
         <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(fixed, dispCurr)}</div>
         <div style="font-size:10.5px;color:var(--text4);margin-top:2px">${fixedPct.toFixed(0)}% · ${fixedCount} txn${fixedCount!==1?'s':''}</div>
         ${topFixed ? `<div style="font-size:10px;color:var(--text4);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Top: ${_esc(topFixed[0])} · ${fmt(topFixed[1], dispCurr)}</div>` : ''}
       </div>
-      <div style="background:var(--accent-bg);border-radius:var(--r-md);padding:10px">
+      <div style="background:var(--accent-bg);border-radius:var(--r-md);padding:10px;min-width:0">
         <div style="display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent3);margin-bottom:5px"><span style="color:var(--accent)">▢</span> Discretionary</div>
         <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(discretionary, dispCurr)}</div>
         <div style="font-size:10.5px;color:var(--text4);margin-top:2px">${discPct.toFixed(0)}% · ${discCount} txn${discCount!==1?'s':''}</div>
