@@ -516,7 +516,8 @@ option{background:var(--bg3);color:var(--text)}
 @media(min-width:900px){.ov-mas>div{grid-column:span 6}.ov-mas>div.ov-c4{grid-column:span 4}.ov-mas>div.ov-c3{grid-column:span 3}}
 .ov-mas.ov-packed{display:block}
 .ov-mas.ov-packed>div{position:absolute!important;margin:0!important}
-.ov-mas.ov-packed>div>.card{height:100%}
+/* cards hug their own content — no height:100% stretch, so a short card can never show an
+   internal void; masonry packs the next card tight beneath it instead. */
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(min-width:760px){.ov-mas .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:480px){.ov-mas .card{padding:12px}}
@@ -13789,16 +13790,31 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
       const peakHour = hourly.indexOf(maxH);
       const fmtHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`;
       const bucketOf = (h) => (h >= 6 && h < 12) ? 'Morning' : (h >= 12 && h < 18) ? 'Afternoon' : (h >= 18 && h < 22) ? 'Evening' : 'Night';
+      // Best contiguous 3-hour window (for a plain-language insight)
+      let winBest = 0, winStart = 0;
+      for (let h = 0; h < 24; h++){ const sum = hourly[h]+hourly[(h+1)%24]+hourly[(h+2)%24]; if (sum > winBest){ winBest = sum; winStart = h; } }
+      const winShare = total > 0 ? (winBest/total*100) : 0;
+      const activeHrs = hourly.filter(v => v > 0).length;
       return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-bottom:6px">
-          <span>By hour</span>
-          <span>Peak <span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmtHour(peakHour)}</span> · ${fmt(maxH, dispCurr)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;color:var(--text4);margin-bottom:8px">
+          <span style="font-weight:600;color:var(--text3)">Spending by hour</span>
+          <span>${activeHrs} active hours</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:2px;height:56px">
-          ${hourly.map((v,h) => `<div style="flex:1;height:${v>0?Math.max(6,(v/maxH*100)):2}%;background:${colors[bucketOf(h)]};opacity:${v>0?0.85:0.15};border-radius:2px 2px 0 0"></div>`).join('')}
+        <div style="position:relative;display:flex;align-items:flex-end;gap:1.5px;height:60px">
+          ${hourly.map((v,h) => {
+            const isPeak = h === peakHour;
+            const hPct = v > 0 ? Math.max(8, (v/maxH*100)) : 3;
+            return `<div style="position:relative;flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${fmtHour(h)} · ${fmt(v, dispCurr)}">
+              ${isPeak ? `<div style="position:absolute;top:-2px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:8.5px;font-weight:700;color:${colors[bucketOf(h)]}">${_fmtK(maxH, dispCurr)}</div>` : ''}
+              <div style="width:100%;height:${hPct}%;background:${colors[bucketOf(h)]};opacity:${v>0?(isPeak?1:0.7):0.12};border-radius:2px 2px 0 0"></div>
+            </div>`;
+          }).join('')}
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:8.5px;color:var(--text4);margin-top:4px">
-          <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span>
+        <div style="display:flex;justify-content:space-between;font-size:8.5px;color:var(--text4);margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)">
+          <span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span>
+        </div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:8px;text-align:center">
+          Busiest ${fmtHour(winStart)}–${fmtHour((winStart+3)%24)} · <span style="color:var(--text2);font-weight:600">${winShare.toFixed(0)}% of spend</span>
         </div>
       </div>`;
     })()}
@@ -14100,7 +14116,9 @@ function packMasonry(){
     return 6;                          // default 2-across
   };
   // Measure natural heights BEFORE going absolute (widths already set by CSS grid spans)
-  const items = cells.map(el => ({ el, span: Math.min(spanOf(el), units), h: el.getBoundingClientRect().height }));
+  let items;
+  try { items = cells.map(el => ({ el, span: Math.min(spanOf(el), units), h: el.getBoundingClientRect().height })); }
+  catch(e){ return; }
   // Switch to packed (absolute) mode and place each into the shortest sp-wide window
   host.classList.add('ov-packed');
   const colTop = new Array(units).fill(0);
