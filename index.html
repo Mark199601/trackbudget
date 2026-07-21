@@ -490,6 +490,22 @@ option{background:var(--bg3);color:var(--text)}
    card into the shortest column window. Because heights are read BEFORE going absolute and the
    packed width equals the grid span width, heights stay correct and nothing overlaps. If JS
    never runs, the grid fallback below still renders correctly (just with minor voids). ── */
+/* ── PLS #184: hand-grouped stretch grid — replaces the JS masonry packer for the Analytics
+   Overview page. Native CSS Grid align-items:stretch guarantees matching heights within a row
+   (no voids) using zero JS — a row's shorter card simply stretches to match its tallest sibling,
+   which is exactly what "no gaps, like a puzzle" needs. .ov-heroA additionally lets one card
+   span 2 rows so it lines up with a stacked pair beside it. ── */
+.ov-row3,.ov-row4{display:grid;gap:10px;align-items:stretch;margin-bottom:10px}
+.ov-row4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ov-row3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ov-row3>div,.ov-row4>div,.ov-heroA>div{min-width:0}
+.ov-row3>div>.card,.ov-row4>div>.card,.ov-row3>div>.metric-card,.ov-row4>div>.metric-card,.ov-heroA>div>.card{height:100%;box-sizing:border-box;margin-bottom:0!important}
+.ov-heroA{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:10px;align-items:stretch;margin-bottom:10px}
+.ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}
+@media(max-width:900px){.ov-row4{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-row3{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}}
+@media(max-width:640px){.ov-row4,.ov-row3,.ov-heroA{grid-template-columns:1fr}.ov-heroA>.ov-tall{grid-column:auto;grid-row:auto}}
+.ov-row3 .stat-month-grid,.ov-heroA .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:480px){.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card{padding:12px}}
 .ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start;position:relative}
 .ov-mas>div{min-width:0;grid-column:span 12}
 .ov-mas>div>.card{box-sizing:border-box}
@@ -12873,12 +12889,18 @@ function renderAnalyticsOverview() {
     }
     return {inc, exp, rate};
   })();
+  const _ovRow = (items, cls='ov-row3') => {
+    const filled = items.filter(h => h);
+    if (!filled.length) return '';
+    return `<div class="${cls}">${filled.map(h=>`<div>${h}</div>`).join('')}</div>`;
+  };
   return `<div class="page-pad">
-    <!-- ── PLS #168: dense PC overview — KPI strip on top, then ONE multi-column masonry
-         (columns:300px → 4-6 cols on wide screens) holding everything; expense & income
-         pies are separate cards so neither hogs a wide slot. Order = relevance. ── -->
-    <div class="ov-mas">
-        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
+    <!-- ── PLS #184: hand-grouped stretch rows (no JS packer) — KPI strip (4-col), then a
+         "hero" group pairing the pie chart (tall) against Budgets/Cashflow stacked with
+         Savings/NetWorth beneath, then trios of related widgets. align-items:stretch means
+         every row's shorter card grows to match its tallest sibling — no voids, ever. ── -->
+    <div class="ov-row4">
+        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(incomeChg)}
@@ -12888,7 +12910,7 @@ function renderAnalyticsOverview() {
           </div>
           <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.inc, '#7c5cff')}</div>
         </div>
-        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
+        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(expChg)}
@@ -12898,7 +12920,7 @@ function renderAnalyticsOverview() {
           </div>
           <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#f43f5e')}</div>
         </div>
-        <div class="metric-card ov-c3" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
+        <div class="metric-card" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SAVINGS RATE</span></div>
             
@@ -12921,7 +12943,7 @@ function renderAnalyticsOverview() {
           </div>
           <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.rate, '#2dd4bf')}</div>
         </div>
-        <div class="metric-card ov-c3" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('transactions')">
+        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('transactions')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">VS 6MO AVG</span></div>
             
@@ -12947,8 +12969,10 @@ function renderAnalyticsOverview() {
           </div>
           <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#a78bfa')}</div>
         </div>
+    </div>
 
-      ${(expTotal > 0 || incTotal > 0) ? `<div class="ov-c4"><div class="card" style="padding:16px;display:flex;flex-direction:column">
+    ${(() => {
+      const pieHtml = (expTotal > 0 || incTotal > 0) ? `<div class="card" style="padding:16px;display:flex;flex-direction:column">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <div style="display:inline-flex;background:var(--bg3);border-radius:var(--r-full);padding:2px;gap:2px">
             <button type="button" data-ovcat-btn="exp" onclick="ovCatTog('exp')" style="border:0;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;padding:4px 12px;border-radius:var(--r-full);background:var(--bg);color:var(--text)">Expenses</button>
@@ -12963,90 +12987,74 @@ function renderAnalyticsOverview() {
           <span><span data-ovcat="exp">Category Breakdown</span><span data-ovcat="inc" style="display:none">Income Sources</span></span>
           <span><span data-ovcat="exp" style="cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('spending')">View all →</span><span data-ovcat="inc" style="display:none;cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('income')">View all →</span></span>
         </div>
-      </div></div>` : ''}
+      </div>` : '';
+      const budgetHtml = buildBudgetRanking(metricMk, dispCurr);
+      const cashflowHtml = buildCashflowRunway(metricMk, dispCurr);
+      const savingsRTHtml = buildSavingsSparkline(metricMk, dispCurr);
+      const netWorthHtml = buildNetWorthTrend(metricMk, dispCurr);
+      const heroItems = [budgetHtml, cashflowHtml, savingsRTHtml, netWorthHtml].filter(h => h);
+      if (!pieHtml && !heroItems.length) return '';
+      if (!pieHtml) return _ovRow(heroItems, 'ov-row3'); // fall back to a plain trio row if pie is empty
+      return `<div class="ov-heroA"><div class="ov-tall">${pieHtml}</div>${heroItems.map(h=>`<div>${h}</div>`).join('')}</div>`;
+    })()}
 
-      ${(() => {
-        // PLS #180: build all cells first, then drop any whose builder returned '' — previously
-        // every builder always got a wrapping <div class="ov-c3/c4">, so an empty result (no
-        // subscriptions, no notable movers, etc) still reserved a grid cell and left a visible
-        // gap in the masonry layout. Also gives the two previously classless cards (Income
-        // Diversification, Notable Changes) the same ov-c3 sizing as their neighbors instead of
-        // defaulting to a wider span that broke the row rhythm.
-        const notableChangesHtml = (() => {
-          // Top movers: categories where current month spending is significantly higher than 3-month average
-          if (period === 'ytd' || curr.expense === 0) return '';
-          // Build 3-month rolling baseline per category (excluding current)
-          const catBaseline = {}; // {catName: {total, count}}
-          for (let i = 1; i <= 3; i++) {
-            const d = new Date(mY, mM-1-i, 1);
-            const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-            const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(k) && (t.type === 'expense' || t.type === 'shared'));
-            for (const tx of monthTxs) {
-              const cat = getCategoryDisplay(tx.categoryId);
-              const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
-              const name = _isTop ? cat.name : _stripIcon(cat.name);
-              const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-              const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
-              if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
-              catBaseline[name].total += amt;
-            }
-          }
-          // Compute movers: current vs avg
-          const movers = [];
-          for (const [name, c] of Object.entries(expCats)) {
-            const baseline = catBaseline[name];
-            if (!baseline || baseline.total === 0) continue; // no baseline = new category, skip
-            const avg = baseline.total / 3;
-            const diff = c.total - avg;
-            const pct = avg > 0 ? (diff / avg * 100) : 0;
-            if (Math.abs(pct) >= 30 && Math.abs(diff) >= 100) {
-              movers.push({name, icon: c.icon || baseline.icon, current: c.total, avg, diff, pct});
-            }
-          }
-          // Sort by absolute % change, top 3
-          movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
-          const top = movers.slice(0, 3);
-          if (top.length === 0) return '';
-          return `<div class="card" style="padding:16px;display:flex;flex-direction:column">
-            <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Notable Changes vs 3mo Avg</div>
-            ${top.map(m => {
-              const isUp = m.diff > 0;
-              const cls = isUp ? 'tx-neg' : 'tx-pos';
-              const icon = isUp ? '▲' : '▼';
-              return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px" class="last-no-border">
-                <div style="display:flex;align-items:center;gap:8px;min-width:0">
-                  <div style="font-size:16px;flex-shrink:0">${m.icon || '💸'}</div>
-                  <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.name)}</div>
-                </div>
-                <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
-              </div>`;
-            }).join('')}
+    ${_ovRow([buildForecastBand(metricMk, dispCurr), buildAnomalyHighlights(metricMk, dispCurr), buildIncomeExpenseBars(metricMk, dispCurr)])}
+    ${_ovRow([buildFixedVsDiscretionary(metricMk, dispCurr), buildDayOfWeekHeatmap(metricMk, dispCurr), buildParetoAnalysis(metricMk, dispCurr)])}
+    ${_ovRow([buildMostFrequent(metricMk, dispCurr), buildTimeOfDayPattern(metricMk, dispCurr), buildSpendingDistribution(metricMk, dispCurr)])}
+    ${_ovRow([buildIncomeDiversification(metricMk, dispCurr), buildGoalProgress(dispCurr), buildConcentrationRisk(dispCurr)])}
+    ${_ovRow([buildSubscriptionPanel(dispCurr), buildYoYComparison(metricMk, dispCurr), (() => {
+      // Top movers: categories where current month spending is significantly higher than 3-month average
+      if (period === 'ytd' || curr.expense === 0) return '';
+      // Build 3-month rolling baseline per category (excluding current)
+      const catBaseline = {}; // {catName: {total, count}}
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(mY, mM-1-i, 1);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(k) && (t.type === 'expense' || t.type === 'shared'));
+        for (const tx of monthTxs) {
+          const cat = getCategoryDisplay(tx.categoryId);
+          const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
+          const name = _isTop ? cat.name : _stripIcon(cat.name);
+          const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+          const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
+          if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
+          catBaseline[name].total += amt;
+        }
+      }
+      // Compute movers: current vs avg
+      const movers = [];
+      for (const [name, c] of Object.entries(expCats)) {
+        const baseline = catBaseline[name];
+        if (!baseline || baseline.total === 0) continue; // no baseline = new category, skip
+        const avg = baseline.total / 3;
+        const diff = c.total - avg;
+        const pct = avg > 0 ? (diff / avg * 100) : 0;
+        if (Math.abs(pct) >= 30 && Math.abs(diff) >= 100) {
+          movers.push({name, icon: c.icon || baseline.icon, current: c.total, avg, diff, pct});
+        }
+      }
+      // Sort by absolute % change, top 3
+      movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
+      const top = movers.slice(0, 3);
+      if (top.length === 0) return '';
+      return `<div class="card" style="padding:16px;display:flex;flex-direction:column">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Notable Changes vs 3mo Avg</div>
+        ${top.map(m => {
+          const isUp = m.diff > 0;
+          const cls = isUp ? 'tx-neg' : 'tx-pos';
+          const icon = isUp ? '▲' : '▼';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px" class="last-no-border">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+              <div style="font-size:16px;flex-shrink:0">${m.icon || '💸'}</div>
+              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.name)}</div>
+            </div>
+            <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
           </div>`;
-        })();
-        const cells = [
-          {cls:'ov-c4', html: buildBudgetRanking(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildCashflowRunway(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildNetWorthTrend(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildSavingsSparkline(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildForecastBand(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildIncomeExpenseBars(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildAnomalyHighlights(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildSubscriptionPanel(dispCurr)},
-          {cls:'ov-c3', html: buildFixedVsDiscretionary(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildParetoAnalysis(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildDayOfWeekHeatmap(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildMostFrequent(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildTimeOfDayPattern(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildSpendingDistribution(metricMk, dispCurr)},
-          {cls:'ov-c3', html: buildYoYComparison(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildIncomeDiversification(metricMk, dispCurr)},
-          {cls:'ov-c4', html: buildGoalProgress(dispCurr)},
-          {cls:'ov-c4', html: buildConcentrationRisk(dispCurr)},
-          {cls:'ov-c3', html: notableChangesHtml},
-        ];
-        return cells.filter(c => c.html).map(c => `<div class="${c.cls}">${c.html}</div>`).join('');
-      })()}
-      <div class="ov-c12">${(()=>{
+        }).join('')}
+      </div>`;
+    })()])}
+
+    ${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
@@ -13070,7 +13078,6 @@ function renderAnalyticsOverview() {
             bottomLabel = `Saved ${savedPct}%`;
             progressPct = savedPct;
           } else {
-            // Cap overspend display — avoid "Spent 4837%" eyesore
             const overPct = Math.round((m.expense/m.income) * 100);
             const overDisp = overPct > 999 ? '>999%' : overPct + '%';
             bottomLabel = `Spent ${overDisp}`;
@@ -13105,8 +13112,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="stat-month-grid">${cards}</div>
       </div>`;
-    })()}</div>
-    </div>
+    })()}
   </div>`;
 }
 
