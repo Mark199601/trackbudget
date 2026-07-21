@@ -484,7 +484,13 @@ option{background:var(--bg3);color:var(--text)}
    it's gone. Columns are 100% CSS-driven and rows auto-size to content — no overlap is
    possible, ever, but a short card next to a tall one in the same row can still leave a gap
    beside it (grid-auto-flow:dense fills the NEXT row's gaps, not mid-row height mismatches). ── */
-.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start}
+/* ── PLS #182: embedded masonry. First paint uses this CSS grid (dense flow, align-items:start)
+   — safe, no squish, no overlap. Then packMasonry() measures each card's NATURAL height in
+   this grid, switches the container to .ov-packed (block + absolute children) and drops each
+   card into the shortest column window. Because heights are read BEFORE going absolute and the
+   packed width equals the grid span width, heights stay correct and nothing overlaps. If JS
+   never runs, the grid fallback below still renders correctly (just with minor voids). ── */
+.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start;position:relative}
 .ov-mas>div{min-width:0;grid-column:span 12}
 .ov-mas>div>.card{box-sizing:border-box}
 .ov-mas>div.ov-c12{grid-column:span 12!important}
@@ -492,6 +498,10 @@ option{background:var(--bg3);color:var(--text)}
 .ov-mas .metric-card{margin-bottom:0!important}
 @media(min-width:640px){.ov-mas>div{grid-column:span 6}}
 @media(min-width:900px){.ov-mas>div{grid-column:span 6}.ov-mas>div.ov-c4{grid-column:span 4}.ov-mas>div.ov-c3{grid-column:span 3}}
+.ov-mas.ov-packed{display:block}
+.ov-mas.ov-packed>div{position:absolute;margin:0}
+.ov-mas.ov-packed>div>.card{height:100%}
+.ov-mas.ov-packed>div.metric-card{height:100%}
 .ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(min-width:760px){.ov-mas .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:480px){.ov-mas .card{padding:12px}}
@@ -12361,6 +12371,7 @@ function renderAnalytics() {
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
   const monthNav = _analyticsMonthNav();
   document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
+  if (_analyticsTab==='overview') { requestAnimationFrame(() => { packMasonry(); setTimeout(packMasonry, 60); }); }
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
   // (Swipe handler is currently disabled — kept as no-op for safety)
@@ -14011,7 +14022,56 @@ function ovCatTog(mode){
     b.style.background = on ? 'var(--bg)' : 'transparent';
     b.style.color = on ? 'var(--text)' : 'var(--text3)';
   });
+  if (typeof packMasonry === 'function') requestAnimationFrame(packMasonry);
 }
+
+// ── PLS #182: embedded masonry packer (no external dep). Shortest-column-window placement
+// with 12-unit span support. Measures natural grid heights first → zero overlap. ──
+function packMasonry(){
+  const host = document.querySelector('.ov-mas');
+  if (!host) return;
+  const cells = Array.from(host.children).filter(c => c.nodeType === 1);
+  if (!cells.length) return;
+  // Reset to natural grid flow so we can measure true heights at the current column widths
+  host.classList.remove('ov-packed');
+  cells.forEach(c => { c.style.position=''; c.style.top=''; c.style.left=''; c.style.width=''; });
+  host.style.height='';
+  const W = host.clientWidth;
+  if (W < 640) return; // mobile: single-column natural flow, no packing
+  const gap = 10, units = 12;
+  const wide = W >= 900;
+  const unitW = (W - gap*(units-1)) / units;
+  const spanOf = (el) => {
+    if (el.classList.contains('ov-c12')) return 12;
+    if (!wide) return 6;               // mid: everything 2-across (matches CSS)
+    if (el.classList.contains('ov-c4')) return 4;  // 3-across
+    if (el.classList.contains('ov-c3')) return 3;  // 4-across
+    return 6;                          // default 2-across
+  };
+  // Measure natural heights BEFORE going absolute (widths already set by CSS grid spans)
+  const items = cells.map(el => ({ el, span: Math.min(spanOf(el), units), h: el.getBoundingClientRect().height }));
+  // Switch to packed (absolute) mode and place each into the shortest sp-wide window
+  host.classList.add('ov-packed');
+  const colTop = new Array(units).fill(0);
+  items.forEach(it => {
+    const sp = it.span;
+    let best = 0, bestTop = Infinity;
+    for (let c = 0; c + sp <= units; c++){
+      let top = 0;
+      for (let k = c; k < c + sp; k++) if (colTop[k] > top) top = colTop[k];
+      if (top < bestTop - 0.5){ bestTop = top; best = c; }
+    }
+    it.el.style.width = (sp*unitW + (sp-1)*gap) + 'px';
+    it.el.style.left  = (best*(unitW+gap)) + 'px';
+    it.el.style.top   = bestTop + 'px';
+    for (let k = best; k < best + sp; k++) colTop[k] = bestTop + it.h + gap;
+  });
+  host.style.height = Math.max(...colTop) + 'px';
+}
+window.addEventListener('resize', () => {
+  clearTimeout(window._packT);
+  window._packT = setTimeout(() => { if (_analyticsTab==='overview') packMasonry(); }, 120);
+});
 
 // ── PLS #178: merged Cashflow & Runway panel (retires waterfall + separate Runway/Velocity cards) ──
 function buildCashflowRunway(metricMk, dispCurr) {
