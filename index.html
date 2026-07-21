@@ -476,14 +476,17 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-picker-label{letter-spacing:-0.2px}
 /* Overview accordion mini-cards */
 .ov-acc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden}
-/* ── PLS #180: masonry via CSS Grid row-span — columns are 100% CSS-driven (correct even if
-   JS never runs); packOverview() only assigns grid-row-end:span N per cell so rows pack
-   tight vertically (grid-auto-flow:dense fills gaps). Breakpoint lowered — sidebar+padding
-   was pushing real container width below the old 1120px trigger, collapsing everything to 2col. ── */
-.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:4px;gap:10px;grid-auto-flow:dense}
+/* ── PLS #181: reverted to plain CSS Grid, dense auto-flow, NO JS packing. The JS row-span
+   technique had a real bug: grid-auto-rows:4px squeezed every card to 4px tall on the very
+   first paint (before JS could measure+correct it), so cards visually overlapped their
+   neighbors for a moment — and if packOverview() ever failed to run, they'd stay squeezed/
+   overlapping permanently. That's strictly worse than the small voids this leaves behind, so
+   it's gone. Columns are 100% CSS-driven and rows auto-size to content — no overlap is
+   possible, ever, but a short card next to a tall one in the same row can still leave a gap
+   beside it (grid-auto-flow:dense fills the NEXT row's gaps, not mid-row height mismatches). ── */
+.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start}
 .ov-mas>div{min-width:0;grid-column:span 12}
-.ov-mas>div>.card{box-sizing:border-box;height:100%}
-.ov-mas>div.metric-card{box-sizing:border-box;height:100%}
+.ov-mas>div>.card{box-sizing:border-box}
 .ov-mas>div.ov-c12{grid-column:span 12!important}
 .ov-mas .card{margin-bottom:0!important;box-sizing:border-box}
 .ov-mas .metric-card{margin-bottom:0!important}
@@ -12358,7 +12361,6 @@ function renderAnalytics() {
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
   const monthNav = _analyticsMonthNav();
   document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
-  if (_analyticsTab==='overview') { requestAnimationFrame(packOverview); }
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
   // (Swipe handler is currently disabled — kept as no-op for safety)
@@ -12710,29 +12712,6 @@ function openCalDay(dateStr) {
 
   openSheet('gen', `📅 ${labelDate}`, body);
 }
-
-// ── PLS #180: masonry via CSS Grid row-span. Columns are entirely CSS-driven (media queries
-// on .ov-mas>div.ov-c3/.ov-c4 above) — this function ONLY sets grid-row-end so each cell's
-// box matches its real content height, letting grid-auto-flow:dense pack the row below it
-// into any leftover space. If this never ran, cards would just use the default 1-row height;
-// it can't break column layout since it never touches width/position.
-function packOverview(){
-  const host = document.querySelector('.ov-mas');
-  if (!host) return;
-  try {
-    const rowH = 4, gap = 10;
-    Array.from(host.children).forEach(el => {
-      const h = el.getBoundingClientRect().height;
-      if (h <= 0) return;
-      const span = Math.max(1, Math.ceil((h + gap) / (rowH + gap)));
-      el.style.gridRowEnd = 'span ' + span;
-    });
-  } catch(e) {}
-}
-window.addEventListener('resize', () => {
-  clearTimeout(window._packT);
-  window._packT = setTimeout(() => { if (_analyticsTab==='overview') packOverview(); }, 120);
-});
 
 function renderAnalyticsOverview() {
   // ── DEBUG-SCAN NOTE ── Empty state + NaN guards exist deeper in this function (uses `|| 0` fallbacks and "No data" empty UI). Naive regex scans may flag as missing — they are present.
