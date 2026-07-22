@@ -4756,7 +4756,6 @@ function renderAddSheet() {
   // ── For Expense/Income/Shared — unified single-screen design ──
   body.innerHTML = typePillsHTML + renderUnifiedAmountForm();
   setTimeout(() => {
-    if (document.getElementById('add-time') && !document.getElementById('add-time').value) dtSet('add-time','time',nowTime());
     syncAddCurrency();
     if (s.type === 'shared') afterRenderShared();
   }, 50);
@@ -4822,24 +4821,16 @@ function renderUnifiedAmountForm() {
       <select id="add-account" onchange="syncAddCurrency();updateBigAmtCurr();updateAcctDisplay()">${acctOpts}</select>
     </div>
 
-    <!-- Date + Time split row -->
+    <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
+         the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="openGZDatePicker('add','onAddDateChange')">
-          <div class="fr-icon" style="background:var(--bg3)">📅</div>
-          <div class="fr-label">Date</div>
-          <div class="fr-value" id="add-date-display">${fmtD(today())}</div>
-        </div>
-        <input type="date" id="add-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-date').value=this.value;onAddDateChange(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
-        <input type="hidden" id="add-date" value="${today()}">
+      <div class="field-row-wrap fw-date form-group" style="margin-bottom:0">
+        <label class="form-label" for="add-date">Date</label>
+        <input class="form-input" type="date" id="add-date" value="${today()}">
       </div>
-      <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="openGZTimePicker('add')">
-          <div class="fr-icon" style="background:var(--bg3)">🕐</div>
-          <div class="fr-value" id="add-time-display">${fmtT(nowTime())}</div>
-        </div>
-        <input type="time" id="add-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
-        <input type="hidden" id="add-time" value="${nowTime()}">
+      <div class="field-row-wrap fw-time form-group" style="margin-bottom:0">
+        <label class="form-label" for="add-time">Time</label>
+        <input class="form-input" type="time" id="add-time" value="${nowTime()}">
       </div>
     </div>
 
@@ -4950,24 +4941,16 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
       <svg width="7" height="11" viewBox="0 0 8 13" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
 
-    <!-- Date + Time split row -->
+    <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
+         the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="openGZDatePicker('add','onAddDateChange')">
-          <div class="fr-icon" style="background:var(--bg3)">📅</div>
-          <div class="fr-label">Date</div>
-          <div class="fr-value" id="add-date-display">${fmtD(today())}</div>
-        </div>
-        <input type="date" id="add-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-date').value=this.value;onAddDateChange(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
-        <input type="hidden" id="add-date" value="${today()}">
+      <div class="field-row-wrap fw-date form-group" style="margin-bottom:0">
+        <label class="form-label" for="add-date">Date</label>
+        <input class="form-input" type="date" id="add-date" value="${today()}">
       </div>
-      <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="openGZTimePicker('add')">
-          <div class="fr-icon" style="background:var(--bg3)">🕐</div>
-          <div class="fr-value" id="add-time-display">${fmtT(nowTime())}</div>
-        </div>
-        <input type="time" id="add-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
-        <input type="hidden" id="add-time" value="${nowTime()}">
+      <div class="field-row-wrap fw-time form-group" style="margin-bottom:0">
+        <label class="form-label" for="add-time">Time</label>
+        <input class="form-input" type="time" id="add-time" value="${nowTime()}">
       </div>
     </div>
 
