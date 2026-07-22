@@ -539,7 +539,7 @@ option{background:var(--bg3);color:var(--text)}
 .ov-heroA{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}
 @media(max-width:900px){.ov-row4{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-row3{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}}
-@media(max-width:640px){.ov-row4,.ov-row3,.ov-heroA{grid-template-columns:1fr}.ov-heroA>.ov-tall{grid-column:auto;grid-row:auto}}
+@media(max-width:640px){.ov-row3,.ov-heroA{grid-template-columns:1fr}.ov-heroA>.ov-tall{grid-column:auto;grid-row:auto}.ov-row4 .kpi-val{padding-right:58px}.ov-row4 .metric-value{font-size:15px}.ov-row4 .kpi-spark svg{width:52px;height:17.3px}}
 .ov-row3 .stat-month-grid,.ov-heroA .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:480px){.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card{padding:12px}}
 .ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start;position:relative}
@@ -12818,7 +12818,11 @@ function renderAnalyticsOverview() {
   const incomeChg = prev.income > 0 ? ((curr.income-prev.income)/prev.income*100) : null;
   const expChg = prev.expense > 0 ? ((curr.expense-prev.expense)/prev.expense*100) : null;
 
-  // Chart months: YTD if ytd, else last 6 months centered on selected
+  // Chart months: YTD if ytd, else a 5-month window around the selected month.
+  // PLS #191: was a fixed ±2 centered range, which — now that the default period is the
+  // current month instead of 'ytd' — wasted its forward half on empty future months
+  // (viewing July showed May–Sep, dropping April). Clamp so it never looks past "now":
+  // shift the window fully backward when centering would spill into the future.
   let chartMonths;
   if (period === 'ytd') {
     chartMonths = ytdMonths;
@@ -12826,7 +12830,16 @@ function renderAnalyticsOverview() {
     chartMonths = [];
     const [selY, selMo] = period.split('-').map(Number);
     const selDate = new Date(selY, selMo-1, 1);
-    for (let i = -2; i <= 2; i++) {
+    const selM0 = selDate.getFullYear()*12 + selDate.getMonth();
+    const curM0 = currentYear*12 + currentMonth;
+    const monthsUntilNow = Math.max(0, curM0 - selM0);
+    let startOffset = -2, endOffset = 2;
+    if (endOffset > monthsUntilNow) {
+      const shift = endOffset - monthsUntilNow;
+      startOffset -= shift;
+      endOffset -= shift;
+    }
+    for (let i = startOffset; i <= endOffset; i++) {
       const d = new Date(selDate.getFullYear(), selDate.getMonth()+i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const t = getMonthTotals(key);
@@ -12945,27 +12958,27 @@ function renderAnalyticsOverview() {
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(incomeChg)}
           </div>
-          <div style="position:relative;z-index:1;padding-right:88px">
+          <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
             <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(curr.income, disp)}</div>
           </div>
-          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.inc, '#7c5cff')}</div>
+          <div class="kpi-spark" style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.inc, '#7c5cff')}</div>
         </div>
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(expChg)}
           </div>
-          <div style="position:relative;z-index:1;padding-right:88px">
+          <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
             <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(curr.expense, disp)}</div>
           </div>
-          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#f43f5e')}</div>
+          <div class="kpi-spark" style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#f43f5e')}</div>
         </div>
         <div class="metric-card" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SAVINGS RATE</span></div>
             
           </div>
-          <div style="position:relative;z-index:1;padding-right:88px">
+          <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
           ${(() => {
             if (curr.income <= 0) {
               return `<div class="metric-value" style="font-size:18px;color:var(--text3)">—</div>
@@ -12981,7 +12994,7 @@ function renderAnalyticsOverview() {
             return `<div class="metric-value" style="font-size:18px">${savedPct}%</div>`;
           })()}
           </div>
-          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.rate, '#2dd4bf')}</div>
+          <div class="kpi-spark" style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.rate, '#2dd4bf')}</div>
         </div>
         ${(() => {
           // ── LIQUIDITY KPI (replaced the "vs 6mo avg" %-only card) ──
@@ -13008,11 +13021,11 @@ function renderAnalyticsOverview() {
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LIQUIDITY</span></div>
             ${chgBadge(ohChg)}
           </div>
-          <div style="position:relative;z-index:1;padding-right:88px">
+          <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
             <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(onHand, disp)}</div>
             <div style="font-size:11px;color:var(--text4)">${nWith} liquid account${nWith !== 1 ? 's' : ''}</div>
           </div>
-          <div style="position:absolute;right:12px;bottom:8px">${_spark(trend, '#a78bfa')}</div>
+          <div class="kpi-spark" style="position:absolute;right:12px;bottom:8px">${_spark(trend, '#a78bfa')}</div>
         </div>`;
         })()}
     </div>
