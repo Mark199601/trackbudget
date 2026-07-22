@@ -14738,23 +14738,48 @@ function buildBudgetRanking(metricMk, dispCurr) {
   if (rows.length === 0) return '';
   rows.sort((a,b) => b.pct - a.pct);
   const top = rows.slice(0, 8);
-  const bars = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;padding-bottom:5px;border-bottom:1px solid var(--border)">
-      <span>Category</span><span style="text-align:right">Spent / Limit</span><span style="text-align:right">Used</span>
-    </div>` + top.map(r => {
+  // ── Status counts for the at-a-glance summary ──
+  const overCount = rows.filter(r => r.over).length;
+  const warnCount = rows.filter(r => !r.over && r.pct >= 80).length;
+  const okCount = rows.length - overCount - warnCount;
+  const monthLabel = (() => { const [y,m] = metricMk.split('-').map(Number); return new Date(y, m-1, 1).toLocaleString('en', {month:'short'}); })();
+  const chip = (n, label, color, bg) => n > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-full);font-size:10px;font-weight:600;background:${bg};color:${color}"><span style="width:6px;height:6px;border-radius:50%;background:${color}"></span>${n} ${label}</span>` : '';
+  const bars = top.map(r => {
     const color = r.over ? 'var(--red)' : r.pct >= 80 ? 'var(--amber)' : 'var(--green)';
-    const mark = r.over ? '⚠' : r.pct >= 80 ? '!' : '✓';
+    const bgTint = r.over ? 'var(--red-bg)' : r.pct >= 80 ? 'var(--amber-bg)' : 'var(--green-bg)';
     const fillPct = Math.min(r.pct, 100).toFixed(1);
-    return `<div style="position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)" class="last-no-border">
-      <div style="position:absolute;left:0;right:0;bottom:0;height:2.5px;background:var(--bg3);border-radius:2px"></div>
-      <div style="position:absolute;left:0;bottom:0;height:2.5px;width:${fillPct}%;background:${color};border-radius:2px"></div>
-      <span style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px"><span>${r.icon}</span><span style="overflow:hidden;text-overflow:ellipsis">${_esc(r.name)}</span></span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text3);text-align:right;white-space:nowrap">${_fmtK(r.spent, r.currency)} / ${_fmtK(r.limAmt, r.currency)}</span>
-      <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};text-align:right;white-space:nowrap">${r.pct.toFixed(0)}% ${mark}</span>
+    const pctDisp = r.pct > 999 ? '>999%' : r.pct.toFixed(0) + '%';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="display:flex;align-items:center;gap:7px;min-width:0">
+          <span style="width:24px;height:24px;border-radius:8px;background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${r.icon}</span>
+          <span style="font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.name)}</span>
+        </span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0">${_fmtK(r.spent, r.currency)} <span style="color:var(--text4)">/ ${_fmtK(r.limAmt, r.currency)}</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:6px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
+          <div style="height:100%;width:${fillPct}%;background:${color};border-radius:var(--r-full);opacity:${r.over ? '1' : '0.85'}"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${color};background:${bgTint};padding:2px 7px;border-radius:var(--r-full);min-width:46px;text-align:center;flex-shrink:0">${pctDisp}</span>
+      </div>
     </div>`;
   }).join('');
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
-    <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:12px">Budgets — % used</div>
+  return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+      <div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Budgets — % used</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthLabel} · ${rows.length} budgeted categor${rows.length === 1 ? 'y' : 'ies'}</div>
+      </div>
+      ${overCount === 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-full);font-size:10px;font-weight:600;background:var(--green-bg);color:var(--green)">✓ all within</span>` : ''}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+      ${chip(overCount, 'over', 'var(--red)', 'var(--red-bg)')}
+      ${chip(warnCount, 'near limit', 'var(--amber)', 'var(--amber-bg)')}
+      ${chip(okCount, 'on track', 'var(--green)', 'var(--green-bg)')}
+    </div>
     ${bars}
+    ${rows.length > top.length ? `<div style="font-size:10.5px;color:var(--accent);font-weight:500;text-align:center;margin-top:auto;padding-top:9px;cursor:pointer" onclick="nav('planning')">+${rows.length - top.length} more → Planning</div>` : `<div style="margin-top:auto"></div>`}
   </div>`;
 }
 
