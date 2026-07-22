@@ -498,6 +498,7 @@ option{background:var(--bg3);color:var(--text)}
 .ov-row3,.ov-row4{display:grid;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-row4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ov-row3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(min-width:641px){.ov-row3.ov-n2{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-row3.ov-n1{grid-template-columns:1fr}}
 .ov-row3>div,.ov-row4>div,.ov-heroA>div{min-width:0}
 .ov-row3>div>.card,.ov-row4>div>.card,.ov-row3>div>.metric-card,.ov-row4>div>.metric-card,.ov-heroA>div>.card{height:100%;box-sizing:border-box;margin-bottom:0!important}
 .ov-heroA{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:10px;align-items:stretch;margin-bottom:10px}
@@ -12893,7 +12894,9 @@ function renderAnalyticsOverview() {
   const _ovRow = (items, cls='ov-row3') => {
     const filled = items.filter(h => h);
     if (!filled.length) return '';
-    return `<div class="${cls}">${filled.map(h=>`<div>${h}</div>`).join('')}</div>`;
+    // Auto-fit: a 3-col row holding only 1–2 cards widens them to fill — no empty slots
+    const fit = cls === 'ov-row3' && filled.length < 3 ? ` ov-n${filled.length}` : '';
+    return `<div class="${cls}${fit}">${filled.map(h=>`<div>${h}</div>`).join('')}</div>`;
   };
   return `<div class="page-pad">
     <!-- ── PLS #184: hand-grouped stretch rows (no JS packer) — KPI strip (4-col), then a
@@ -13004,27 +13007,43 @@ function renderAnalyticsOverview() {
     ${_ovRow([buildMostFrequent(metricMk, dispCurr), buildTimeOfDayPattern(metricMk, dispCurr), buildSpendingDistribution(metricMk, dispCurr)])}
     ${_ovRow([buildIncomeDiversification(metricMk, dispCurr), buildGoalProgress(dispCurr), buildConcentrationRisk(dispCurr)])}
     ${_ovRow([buildSubscriptionPanel(dispCurr), buildYoYComparison(metricMk, dispCurr), (() => {
-      // Top movers: categories where current month spending is significantly higher than 3-month average
-      if (period === 'ytd' || curr.expense === 0) return '';
-      // Build 3-month rolling baseline per category (excluding current)
-      const catBaseline = {}; // {catName: {total, count}}
-      for (let i = 1; i <= 3; i++) {
-        const d = new Date(mY, mM-1-i, 1);
-        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(k) && (t.type === 'expense' || t.type === 'shared'));
+      // Top movers: categories where the metric month's spending deviates from its 3-month average.
+      // ── FIX: previously returned '' whenever period === 'ytd' (the DEFAULT view), so the card
+      // silently disappeared. Now it always compares the metric month (= current month on YTD)
+      // vs the prior 3 months, computing its own month-scoped totals (expCats is year-wide on YTD).
+      const _ncMonthCats = (mk) => {
+        const out = {};
+        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(mk) && (t.type === 'expense' || t.type === 'shared'));
         for (const tx of monthTxs) {
           const cat = getCategoryDisplay(tx.categoryId);
           const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
           const name = _isTop ? cat.name : _stripIcon(cat.name);
           const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
           const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
-          if (!catBaseline[name]) catBaseline[name] = {total:0, count:0, icon:cat.icon};
-          catBaseline[name].total += amt;
+          if (!out[name]) out[name] = {total:0, icon:cat.icon};
+          out[name].total += amt;
+        }
+        return out;
+      };
+      const nowCats = _ncMonthCats(metricMk);
+      // Build 3-month rolling baseline per category (excluding current)
+      const catBaseline = {}; // {catName: {total, icon}}
+      let baselineMonths = 0;
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(mY, mM-1-i, 1);
+        const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const mc = _ncMonthCats(k);
+        if (Object.keys(mc).length) baselineMonths++;
+        for (const [name, c] of Object.entries(mc)) {
+          if (!catBaseline[name]) catBaseline[name] = {total:0, icon:c.icon};
+          catBaseline[name].total += c.total;
         }
       }
+      // Nothing this month AND no history → nothing to compare, hide entirely
+      if (!Object.keys(nowCats).length && !baselineMonths) return '';
       // Compute movers: current vs avg
       const movers = [];
-      for (const [name, c] of Object.entries(expCats)) {
+      for (const [name, c] of Object.entries(nowCats)) {
         const baseline = catBaseline[name];
         if (!baseline || baseline.total === 0) continue; // no baseline = new category, skip
         const avg = baseline.total / 3;
@@ -13037,17 +13056,21 @@ function renderAnalyticsOverview() {
       // Sort by absolute % change, top 3
       movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
       const top = movers.slice(0, 3);
-      if (top.length === 0) return '';
-      return `<div class="card" style="padding:16px;display:flex;flex-direction:column">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Notable Changes vs 3mo Avg</div>
-        ${top.map(m => {
+      const _ncMonthLabel = new Date(mY, mM-1, 1).toLocaleString('en',{month:'short'});
+      return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Notable Changes vs 3mo Avg</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;margin-bottom:8px">${_ncMonthLabel} spending vs avg of prior 3 months</div>
+        ${top.length === 0 ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--text4);line-height:1.5;padding:16px 0">Steady lang ✦<br>No category moved ±30% vs your 3mo average</div>` : top.map(m => {
           const isUp = m.diff > 0;
           const cls = isUp ? 'tx-neg' : 'tx-pos';
           const icon = isUp ? '▲' : '▼';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px" class="last-no-border">
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px" class="last-no-border">
             <div style="display:flex;align-items:center;gap:8px;min-width:0">
               <div style="font-size:16px;flex-shrink:0">${m.icon || '💸'}</div>
-              <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.name)}</div>
+              <div style="min-width:0">
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.name)}</div>
+                <div style="font-size:10px;color:var(--text4);font-family:var(--mono);margin-top:1px">${_fmtK(m.current, dispCurr)} now · ${_fmtK(m.avg, dispCurr)} avg</div>
+              </div>
             </div>
             <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
           </div>`;
@@ -13755,25 +13778,31 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
   if (total === 0) return '';
   const colors = {Morning: '#fbbf24', Afternoon: '#60a5fa', Evening: '#f472b6', Night: '#818cf8'};
   const icons = {Morning: '🌅', Afternoon: '☀️', Evening: '🌆', Night: '🌙'};
+  const ranges = {Morning: '6am–12pm', Afternoon: '12pm–6pm', Evening: '6pm–10pm', Night: '10pm–6am'};
   const peakBucket = Object.entries(buckets).sort((a,b) => b[1] - a[1])[0];
-  return `<div class="card" style="padding:16px">
+  return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Time-of-Day Pattern${_infoBtn('timeofday')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}%)</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${peakBucket[0]} is your peak (${(peakBucket[1]/total*100).toFixed(0)}% of spend)</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-size:14px;font-weight:600">${txs.length}</div>
+        <div style="font-size:10px;color:var(--text4)">timed txns</div>
       </div>
     </div>
     <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
       ${Object.entries(buckets).map(([k,v]) => {
         const pct = (v/total*100);
-        return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};border-radius:var(--r-full)"></div>` : '';
+        return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};border-radius:var(--r-full)" title="${k} · ${pct.toFixed(0)}%"></div>` : '';
       }).join('')}
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;font-size:11px">
       ${Object.entries(buckets).map(([k,v]) => `
-        <div style="text-align:center;background:var(--bg3);border-radius:var(--r-md);padding:8px 4px">
+        <div style="text-align:center;background:var(--bg3);border-radius:var(--r-md);padding:7px 4px 8px;border-top:2px solid ${colors[k]}">
           <div style="font-size:16px">${icons[k]}</div>
-          <div style="color:var(--text3);font-size:10px;margin-top:2px">${k}</div>
+          <div style="color:var(--text3);font-size:10px;margin-top:2px">${k} · ${total>0?(v/total*100).toFixed(0):0}%</div>
+          <div style="color:var(--text4);font-size:8.5px">${ranges[k]}</div>
           <div style="font-family:var(--mono);font-weight:700;font-size:11px;margin-top:2px">${fmt(v, dispCurr)}</div>
           <div style="color:var(--text4);font-size:9.5px;margin-top:1px">${bucketCounts[k]}× · avg ${_fmtK(bucketCounts[k]?v/bucketCounts[k]:0, dispCurr)}</div>
         </div>
@@ -13781,9 +13810,11 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
     </div>
     ${(() => {
       const hourly = new Array(24).fill(0);
+      const hourlyN = new Array(24).fill(0);
       for (const tx of txs) {
         const h = parseInt((tx.time || '12:00').slice(0, 2));
         hourly[h] += _ovExpAmt(tx, dispCurr);
+        hourlyN[h]++;
       }
       const maxH = Math.max(...hourly);
       if (maxH <= 0) return '';
@@ -13794,27 +13825,46 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
       let winBest = 0, winStart = 0;
       for (let h = 0; h < 24; h++){ const sum = hourly[h]+hourly[(h+1)%24]+hourly[(h+2)%24]; if (sum > winBest){ winBest = sum; winStart = h; } }
       const winShare = total > 0 ? (winBest/total*100) : 0;
-      const activeHrs = hourly.filter(v => v > 0).length;
-      return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;color:var(--text4);margin-bottom:8px">
+      const yTop = _fmtK(maxH, dispCurr), yMid = _fmtK(maxH/2, dispCurr);
+      // ── flex:1 makes this section absorb whatever height the row gives the card → no dead
+      // space at the bottom. Chart now has a y-axis (max / half / 0), dashed gridlines, and a
+      // peak readout in the header — bars are readable at a glance, colors match the tiles above.
+      return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);flex:1;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;margin-bottom:8px">
           <span style="font-weight:600;color:var(--text3)">Spending by hour</span>
-          <span>${activeHrs} active hours</span>
+          <span style="color:var(--text4)">Peak <span style="color:${colors[bucketOf(peakHour)]};font-weight:700">${fmtHour(peakHour)}</span> · <span style="font-family:var(--mono);color:var(--text2);font-weight:600">${fmt(maxH, dispCurr)}</span></span>
         </div>
-        <div style="position:relative;display:flex;align-items:flex-end;gap:1.5px;height:60px">
-          ${hourly.map((v,h) => {
-            const isPeak = h === peakHour;
-            const hPct = v > 0 ? Math.max(8, (v/maxH*100)) : 3;
-            return `<div style="position:relative;flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${fmtHour(h)} · ${fmt(v, dispCurr)}">
-              ${isPeak ? `<div style="position:absolute;top:-2px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:8.5px;font-weight:700;color:${colors[bucketOf(h)]}">${_fmtK(maxH, dispCurr)}</div>` : ''}
-              <div style="width:100%;height:${hPct}%;background:${colors[bucketOf(h)]};opacity:${v>0?(isPeak?1:0.7):0.12};border-radius:2px 2px 0 0"></div>
-            </div>`;
-          }).join('')}
+        <div style="display:flex;gap:6px;flex:1;min-height:64px">
+          <div style="display:flex;flex-direction:column;justify-content:space-between;text-align:right;font-family:var(--mono);font-size:8px;color:var(--text4);flex-shrink:0">
+            <span>${yTop}</span><span>${yMid}</span><span>0</span>
+          </div>
+          <div style="position:relative;flex:1">
+            <div style="position:absolute;left:0;right:0;top:0;border-top:1px dashed var(--border2)"></div>
+            <div style="position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--border2)"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;border-bottom:1px solid var(--border)"></div>
+            <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:1.5px">
+              ${hourly.map((v,h) => {
+                const isPeak = h === peakHour;
+                const hPct = v > 0 ? Math.max(6, (v/maxH*100)) : 0;
+                return `<div style="flex:1;display:flex;align-items:flex-end;height:100%" title="${fmtHour(h)} · ${fmt(v, dispCurr)} · ${hourlyN[h]} txn${hourlyN[h]===1?'':'s'}">
+                  <div style="width:100%;height:${hPct}%;background:${colors[bucketOf(h)]};opacity:${isPeak?1:0.7};border-radius:2px 2px 0 0"></div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:8.5px;color:var(--text4);margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)">
-          <span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <span style="visibility:hidden;font-family:var(--mono);font-size:8px;flex-shrink:0">${yTop}</span>
+          <div style="position:relative;flex:1;height:11px;font-size:8.5px;color:var(--text4);font-family:var(--mono)">
+            <span style="position:absolute;left:0">12am</span>
+            <span style="position:absolute;left:25%;transform:translateX(-50%)">6am</span>
+            <span style="position:absolute;left:50%;transform:translateX(-50%)">12pm</span>
+            <span style="position:absolute;left:75%;transform:translateX(-50%)">6pm</span>
+            <span style="position:absolute;right:0">11pm</span>
+          </div>
         </div>
-        <div style="font-size:10.5px;color:var(--text3);margin-top:8px;text-align:center">
-          Busiest ${fmtHour(winStart)}–${fmtHour((winStart+3)%24)} · <span style="color:var(--text2);font-weight:600">${winShare.toFixed(0)}% of spend</span>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:auto;padding-top:8px;text-align:center">
+          Busiest window <span style="color:var(--text2);font-weight:600">${fmtHour(winStart)}–${fmtHour((winStart+3)%24)}</span> · <span style="color:var(--text2);font-weight:600">${winShare.toFixed(0)}%</span> of spend
         </div>
       </div>`;
     })()}
@@ -14498,7 +14548,14 @@ function buildSpendingDistribution(metricMk, dispCurr) {
   const maxCount = Math.max(...buckets.map(b => b.count), 1);
   // Find dominant bucket
   const dominant = buckets.reduce((best, b) => b.count > best.count ? b : best, buckets[0]);
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  // Median & largest for the footer stat row (fills what used to be dead space with signal)
+  const amtsSorted = txs.map(t => _ovExpAmt(t, dispCurr)).sort((a,b) => a-b);
+  const median = amtsSorted.length ? amtsSorted[Math.floor(amtsSorted.length/2)] : 0;
+  const largest = amtsSorted.length ? amtsSorted[amtsSorted.length-1] : 0;
+  const _sdStat = (label, val) => `<div style="text-align:center"><div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">${label}</div><div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text2);margin-top:2px">${val}</div></div>`;
+  // ── Card is flex-column + chart is flex:1 → bars stretch to fill the row height, no void.
+  // % above each bar = share of txn count; per-bucket count & total sit under the labels.
+  return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Transaction Sizes${_infoBtn('distribution')}</div>
@@ -14509,26 +14566,30 @@ function buildSpendingDistribution(metricMk, dispCurr) {
         <div style="font-size:10px;color:var(--text4)">transactions</div>
       </div>
     </div>
-    <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px">
-      ${buckets.map(b => {
-        const isDom = b === dominant;
-        const pct = totalCount > 0 ? (b.count / totalCount * 100) : 0;
-        // Empty buckets render as a faint 3px baseline tick (not a floating stub).
-        const h = b.count > 0 ? Math.max(10, (b.count / maxCount) * 54) : 3;
-        const bg = b.count === 0 ? 'var(--border2)' : (isDom ? 'var(--accent)' : 'var(--text3)');
-        const op = b.count === 0 ? '0.5' : (isDom ? '1' : '0.55');
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${b.count} txns · ${fmt(b.total, dispCurr)}">
-          <div style="font-size:10px;color:var(--text4);font-weight:${isDom?'600':'400'}">${pct >= 8 ? pct.toFixed(0)+'%' : ''}</div>
-          <div style="width:100%;height:${h}px;background:${bg};opacity:${op};border-radius:var(--r-sm)"></div>
-        </div>`;
-      }).join('')}
+    <div style="flex:1;min-height:72px;position:relative;margin-bottom:6px">
+      <div style="position:absolute;left:0;right:0;bottom:0;border-bottom:1px solid var(--border)"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:4px">
+        ${buckets.map(b => {
+          const isDom = b === dominant;
+          const pct = totalCount > 0 ? (b.count / totalCount * 100) : 0;
+          const h = b.count > 0 ? Math.max(14, (b.count / maxCount) * 80) : 2;
+          const bg = b.count === 0 ? 'var(--border2)' : (isDom ? 'var(--accent)' : 'var(--text3)');
+          const op = b.count === 0 ? '0.5' : (isDom ? '1' : '0.55');
+          return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${b.label}: ${b.count} txns · ${fmt(b.total, dispCurr)}">
+            <div style="text-align:center;font-size:10px;color:${isDom?'var(--accent)':'var(--text4)'};font-weight:${isDom?'700':'400'};margin-bottom:2px">${b.count > 0 ? pct.toFixed(0)+'%' : ''}</div>
+            <div style="width:100%;height:${h}%;background:${bg};opacity:${op};border-radius:var(--r-sm) var(--r-sm) 0 0"></div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>
-    <div style="display:flex;gap:4px;font-size:10px;color:var(--text4)">
-      ${buckets.map(b => `<div style="flex:1;text-align:center">${b.label}</div>`).join('')}
+    <div style="display:flex;gap:4px;font-size:10px">
+      ${buckets.map(b => `<div style="flex:1;text-align:center;min-width:0"><div style="font-weight:${b===dominant?'600':'400'};color:${b===dominant?'var(--text2)':'var(--text4)'}">${b.label}</div><div style="font-family:var(--mono);font-size:8.5px;color:var(--text4);margin-top:1px">${b.count>0?`${b.count}× · ${_fmtK(b.total, dispCurr)}`:'—'}</div></div>`).join('')}
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:9px">
-      <span>Avg txn <span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${fmt(totalSpent/totalCount, dispCurr)}</span></span>
-      <span>Total <span style="font-family:var(--mono);font-weight:600;color:var(--text2)">${_fmtK(totalSpent, dispCurr)}</span></span>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid var(--border);margin-top:12px;padding-top:9px">
+      ${_sdStat('Avg txn', fmt(totalSpent/totalCount, dispCurr))}
+      ${_sdStat('Median', fmt(median, dispCurr))}
+      ${_sdStat('Largest', _fmtK(largest, dispCurr))}
+      ${_sdStat('Total', _fmtK(totalSpent, dispCurr))}
     </div>
   </div>`;
 }
