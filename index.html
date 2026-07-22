@@ -502,6 +502,38 @@ option{background:var(--bg3);color:var(--text)}
 .ovcat-pane{display:flex;flex-direction:column;flex:1;min-height:0}
 .ovcat-pane>div{flex:1;min-height:0}
 [data-theme="light"] .card,[data-theme="light"] .metric-card{box-shadow:0 1px 6px rgba(124,109,240,0.07)}
+/* ── iOS-style custom date & time pickers ── */
+.gz-pick-overlay{position:fixed;inset:0;background:rgba(10,8,24,0.45);z-index:12000;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s ease;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.gz-pick-panel{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;width:min(330px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(0,0,0,0.35);padding:14px;animation:gzPickIn 0.22s cubic-bezier(0.34,1.3,0.64,1)}
+@keyframes gzPickIn{from{transform:scale(0.94);opacity:0}to{transform:scale(1);opacity:1}}
+.gz-pick-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px}
+.gz-pick-title{font-size:15px;font-weight:600;color:var(--text)}
+.gz-pick-nav{display:flex;gap:4px}
+.gz-pick-nav button{width:30px;height:30px;border-radius:10px;border:none;background:var(--bg3);color:var(--accent);font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;transition:background 0.15s}
+.gz-pick-nav button:hover{background:var(--bg4)}
+.gz-pick-dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px}
+.gz-pick-dow span{text-align:center;font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;padding:4px 0}
+.gz-pick-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.gz-pick-day{height:36px;border:none;background:transparent;border-radius:10px;font-size:13.5px;font-weight:500;color:var(--text);font-variant-numeric:tabular-nums;transition:background 0.12s;cursor:pointer}
+.gz-pick-day:hover{background:var(--bg3)}
+.gz-pick-day.other{color:var(--text4);opacity:0.45}
+.gz-pick-day.today{color:var(--accent);font-weight:700;box-shadow:inset 0 0 0 1.5px var(--accent-border)}
+.gz-pick-day.sel{background:var(--accent);color:#fff;font-weight:700;box-shadow:var(--shadow-accent)}
+.gz-pick-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.gz-pick-btn{border:none;background:transparent;font-size:13.5px;font-weight:600;color:var(--text3);padding:8px 12px;border-radius:12px;cursor:pointer}
+.gz-pick-btn:hover{background:var(--bg3)}
+.gz-pick-btn.accent{color:var(--accent)}
+.gz-pick-btn.primary{background:var(--accent);color:#fff;padding:8px 20px;border-radius:var(--r-full);box-shadow:var(--shadow-accent)}
+.gz-pick-btn.primary:hover{background:var(--accent2)}
+.gz-time-preview{text-align:center;font-family:var(--mono);font-size:24px;font-weight:700;color:var(--text);margin:2px 0 12px;letter-spacing:0.5px;font-variant-numeric:tabular-nums}
+.gz-time-cols{display:grid;grid-template-columns:1fr 1fr 0.9fr;gap:8px}
+.gz-time-label{font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);text-align:center;margin-bottom:4px;font-weight:600}
+.gz-time-col{position:relative;height:190px;overflow-y:auto;border-radius:12px;background:var(--bg3);padding:4px;scrollbar-width:none;-ms-overflow-style:none}
+.gz-time-col::-webkit-scrollbar{display:none}
+.gz-time-opt{height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:14px;font-family:var(--mono);color:var(--text2);cursor:pointer;transition:background 0.12s;font-variant-numeric:tabular-nums}
+.gz-time-opt:hover{background:var(--bg4)}
+.gz-time-opt.sel{background:var(--accent);color:#fff;font-weight:700}
+.gz-time-ap{height:190px;display:flex;flex-direction:column;justify-content:center;gap:6px;border-radius:12px;background:var(--bg3);padding:4px}
 .ov-row3>div,.ov-row4>div,.ov-heroA>div{min-width:0}
 .ov-row3>div>.card,.ov-row4>div>.card,.ov-row3>div>.metric-card,.ov-row4>div>.metric-card,.ov-heroA>div>.card{height:100%;box-sizing:border-box;margin-bottom:0!important}
 .ov-heroA{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:10px;align-items:stretch;margin-bottom:10px}
@@ -4793,20 +4825,20 @@ function renderUnifiedAmountForm() {
     <!-- Date + Time split row -->
     <div class="field-row-split">
       <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="document.getElementById('add-date-native')?.showPicker?document.getElementById('add-date-native').showPicker():document.getElementById('add-date-native').focus()">
+        <div class="field-row" onclick="openGZDatePicker('add','onAddDateChange')">
           <div class="fr-icon" style="background:var(--bg3)">📅</div>
           <div class="fr-label">Date</div>
           <div class="fr-value" id="add-date-display">${fmtD(today())}</div>
         </div>
-        <input type="date" id="add-date-native" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer" onchange="onAddDateChange(this.value);document.getElementById('add-date').value=this.value" value="${today()}">
+        <input type="date" id="add-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-date').value=this.value;onAddDateChange(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="add-date" value="${today()}">
       </div>
       <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="document.getElementById('add-time-native')?.showPicker?document.getElementById('add-time-native').showPicker():document.getElementById('add-time-native')?.focus()">
+        <div class="field-row" onclick="openGZTimePicker('add')">
           <div class="fr-icon" style="background:var(--bg3)">🕐</div>
           <div class="fr-value" id="add-time-display">${fmtT(nowTime())}</div>
         </div>
-        <input type="time" id="add-time-native" value="${nowTime()}" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="time" id="add-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="add-time" value="${nowTime()}">
       </div>
     </div>
@@ -4921,20 +4953,20 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
     <!-- Date + Time split row -->
     <div class="field-row-split">
       <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="document.getElementById('add-date-native')?.showPicker?document.getElementById('add-date-native').showPicker():document.getElementById('add-date-native')?.focus()">
+        <div class="field-row" onclick="openGZDatePicker('add','onAddDateChange')">
           <div class="fr-icon" style="background:var(--bg3)">📅</div>
           <div class="fr-label">Date</div>
           <div class="fr-value" id="add-date-display">${fmtD(today())}</div>
         </div>
-        <input type="date" id="add-date-native" value="${today()}" onchange="document.getElementById('add-date').value=this.value;document.getElementById('add-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="date" id="add-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-date').value=this.value;onAddDateChange(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="add-date" value="${today()}">
       </div>
       <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="document.getElementById('add-time-native')?.showPicker?document.getElementById('add-time-native').showPicker():document.getElementById('add-time-native')?.focus()">
+        <div class="field-row" onclick="openGZTimePicker('add')">
           <div class="fr-icon" style="background:var(--bg3)">🕐</div>
           <div class="fr-value" id="add-time-display">${fmtT(nowTime())}</div>
         </div>
-        <input type="time" id="add-time-native" value="${nowTime()}" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="time" id="add-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('add-time').value=this.value;document.getElementById('add-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="add-time" value="${nowTime()}">
       </div>
     </div>
@@ -5334,20 +5366,20 @@ function renderRemittanceForm() {
     <!-- Date + Time split row -->
     <div class="field-row-split">
       <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="document.getElementById('rem-date-native')?.showPicker?document.getElementById('rem-date-native').showPicker():document.getElementById('rem-date-native')?.focus()">
+        <div class="field-row" onclick="openGZDatePicker('rem')">
           <div class="fr-icon" style="background:var(--bg3)">📅</div>
           <div class="fr-label">Date</div>
           <div class="fr-value" id="rem-date-display">${fmtD(today())}</div>
         </div>
-        <input type="date" id="rem-date-native" value="${today()}" onchange="document.getElementById('rem-date').value=this.value;document.getElementById('rem-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="date" id="rem-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('rem-date').value=this.value;document.getElementById('rem-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="rem-date" value="${today()}">
       </div>
       <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="document.getElementById('rem-time-native')?.showPicker?document.getElementById('rem-time-native').showPicker():document.getElementById('rem-time-native')?.focus()">
+        <div class="field-row" onclick="openGZTimePicker('rem')">
           <div class="fr-icon" style="background:var(--bg3)">🕐</div>
           <div class="fr-value" id="rem-time-display">${fmtT(nowTime())}</div>
         </div>
-        <input type="time" id="rem-time-native" value="${nowTime()}" onchange="document.getElementById('rem-time').value=this.value;document.getElementById('rem-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="time" id="rem-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('rem-time').value=this.value;document.getElementById('rem-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="rem-time" value="${nowTime()}">
       </div>
     </div>
@@ -5634,20 +5666,20 @@ function renderExternalForm(type) {
     <!-- Date + Time split row -->
     <div class="field-row-split">
       <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="document.getElementById('ext-date-native')?.showPicker?document.getElementById('ext-date-native').showPicker():document.getElementById('ext-date-native')?.focus()">
+        <div class="field-row" onclick="openGZDatePicker('ext')">
           <div class="fr-icon" style="background:var(--bg3)">📅</div>
           <div class="fr-label">Date</div>
           <div class="fr-value" id="ext-date-display">${fmtD(today())}</div>
         </div>
-        <input type="date" id="ext-date-native" value="${today()}" onchange="document.getElementById('ext-date').value=this.value;document.getElementById('ext-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="date" id="ext-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('ext-date').value=this.value;document.getElementById('ext-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="ext-date" value="${today()}">
       </div>
       <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="document.getElementById('ext-time-native')?.showPicker?document.getElementById('ext-time-native').showPicker():document.getElementById('ext-time-native')?.focus()">
+        <div class="field-row" onclick="openGZTimePicker('ext')">
           <div class="fr-icon" style="background:var(--bg3)">🕐</div>
           <div class="fr-value" id="ext-time-display">${fmtT(nowTime())}</div>
         </div>
-        <input type="time" id="ext-time-native" value="${nowTime()}" onchange="document.getElementById('ext-time').value=this.value;document.getElementById('ext-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="time" id="ext-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('ext-time').value=this.value;document.getElementById('ext-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="ext-time" value="${nowTime()}">
       </div>
     </div>
@@ -5774,20 +5806,20 @@ function renderTransferForm() {
     <!-- Date + Time split row -->
     <div class="field-row-split">
       <div class="field-row-wrap fw-date">
-        <div class="field-row" onclick="document.getElementById('tf-date-native')?.showPicker?document.getElementById('tf-date-native').showPicker():document.getElementById('tf-date-native')?.focus()">
+        <div class="field-row" onclick="openGZDatePicker('tf')">
           <div class="fr-icon" style="background:var(--bg3)">📅</div>
           <div class="fr-label">Date</div>
           <div class="fr-value" id="tf-date-display">${fmtD(today())}</div>
         </div>
-        <input type="date" id="tf-date-native" value="${today()}" onchange="document.getElementById('tf-date').value=this.value;document.getElementById('tf-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="date" id="tf-date-native" value="${today()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('tf-date').value=this.value;document.getElementById('tf-date-display').textContent=fmtD(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="tf-date" value="${today()}">
       </div>
       <div class="field-row-wrap fw-time">
-        <div class="field-row" onclick="document.getElementById('tf-time-native')?.showPicker?document.getElementById('tf-time-native').showPicker():document.getElementById('tf-time-native')?.focus()">
+        <div class="field-row" onclick="openGZTimePicker('tf')">
           <div class="fr-icon" style="background:var(--bg3)">🕐</div>
           <div class="fr-value" id="tf-time-display">${fmtT(nowTime())}</div>
         </div>
-        <input type="time" id="tf-time-native" value="${nowTime()}" onchange="document.getElementById('tf-time').value=this.value;document.getElementById('tf-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer">
+        <input type="time" id="tf-time-native" value="${nowTime()}" tabindex="-1" aria-hidden="true" onchange="document.getElementById('tf-time').value=this.value;document.getElementById('tf-time-display').textContent=fmtT(this.value)" style="position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;pointer-events:none">
         <input type="hidden" id="tf-time" value="${nowTime()}">
       </div>
     </div>
@@ -12950,32 +12982,38 @@ function renderAnalyticsOverview() {
           </div>
           <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.rate, '#2dd4bf')}</div>
         </div>
-        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('transactions')">
+        ${(() => {
+          // ── LIQUIDITY KPI (replaced the "vs 6mo avg" %-only card) ──
+          // Total ng actual liquid balances — same definition as the Runway card's "Liquid assets":
+          // lahat ng non-archived accounts EXCEPT Credit Card & Investment, positive balances only.
+          const liqAccts = db.accounts.filter(a => !a.archived && !['Credit Card','Investment'].includes(a.type || ''));
+          const trend = [];
+          for (let i = 5; i >= 0; i--) {
+            const eom = new Date(mY, mM-i, 0); // end of month; future dates resolve to current balance
+            const es = `${eom.getFullYear()}-${String(eom.getMonth()+1).padStart(2,'0')}-${String(eom.getDate()).padStart(2,'0')}`;
+            let v = 0;
+            for (const a of liqAccts) {
+              const b = getAcctBalanceAsOf(a.id, es);
+              if (b > 0) v += a.currency === disp ? b : convert(b, a.currency, disp);
+            }
+            trend.push(v);
+          }
+          const onHand = trend[trend.length-1] || 0;
+          const prevEom = trend.length > 1 ? trend[trend.length-2] : 0;
+          const ohChg = prevEom > 0 ? ((onHand - prevEom) / prevEom * 100) : null;
+          const nWith = liqAccts.filter(a => getAcctBalance(a.id) > 0).length;
+          return `<div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('accounts')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">VS 6MO AVG</span></div>
-            
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LIQUIDITY</span></div>
+            ${chgBadge(ohChg)}
           </div>
           <div style="position:relative;z-index:1;padding-right:88px">
-          ${(() => {
-            let totalExp = 0, count = 0;
-            for (let i = 1; i <= 6; i++) {
-              const d = new Date(mY, mM-1-i, 1);
-              const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-              const t = getMonthTotals(k);
-              if (t.expense > 0) { totalExp += t.expense; count++; }
-            }
-            if (count === 0) return `<div class="metric-value" style="font-size:18px">—</div><div style="font-size:11px;color:var(--text4)">no baseline yet</div>`;
-            const avg = totalExp / count;
-            const diff = curr.expense - avg;
-            const pct = avg > 0 ? (diff / avg * 100) : 0;
-            const cls = diff > 0 ? 'tx-neg' : diff < 0 ? 'tx-pos' : 'tx-neu';
-            const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
-            return `<div class="metric-value" style="font-size:18px">${sign}${Math.abs(pct).toFixed(0)}%</div>
-                    <div style="font-size:11px;color:var(--text4)">${diff > 0 ? 'above' : diff < 0 ? 'below' : 'equal to'} ${count}mo avg</div>`;
-          })()}
+            <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(onHand, disp)}</div>
+            <div style="font-size:11px;color:var(--text4)">${nWith} liquid account${nWith !== 1 ? 's' : ''}</div>
           </div>
-          <div style="position:absolute;right:12px;bottom:8px">${_spark(_spark6.exp, '#a78bfa')}</div>
-        </div>
+          <div style="position:absolute;right:12px;bottom:8px">${_spark(trend, '#a78bfa')}</div>
+        </div>`;
+        })()}
     </div>
 
     ${(() => {
@@ -13390,7 +13428,7 @@ function buildForecastBand(metricMk, dispCurr) {
   const lineColor = variance > 10 ? '#fb7185' : variance < -10 ? '#2dd4bf' : '#38bdf8';
   const spentSoFar = cumActual[cumActual.length-1];
   const expectedByNow = cumExpected[Math.min(dayOfMonth, daysInMonth)-1];
-  const _fcStat = (label, val, color) => `<div style="text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div><div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:${color||'var(--text2)'};margin-top:2px">${val}</div></div>`;
+  const _fcStat = (label, val, color) => `<div style="text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div><div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:${color||'var(--text2)'};margin-top:2px">${val}</div></div>`;
   return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
@@ -13629,7 +13667,7 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
       </div>
     </div>
     ${cutSave >= 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:9px">
-      <span>💡 Cut discretionary by 20%</span>
+      <span>Cut discretionary by 20%</span>
       <span style="font-family:var(--mono);font-weight:600;color:var(--green)">saves ${fmt(cutSave, dispCurr)}/mo</span>
     </div>` : ''}
   </div>`;
@@ -14197,6 +14235,187 @@ function _fmtK(v, curr){
   return (v < 0 ? '−' : '') + sy + nm;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// CUSTOM iOS-STYLE DATE & TIME PICKERS
+// Replaces native <input type=date/time> showPicker() popovers, which
+// anchored to the invisible stretched input (mispositioned) and ignored
+// the app theme. Fully themed, keyboard-escapable, backdrop-dismissable.
+// Two integration modes:
+//   'prefix' — form blocks using `${p}-date` hidden input + `${p}-date-display`
+//   'dt'     — generic dtField() rows (writes input, then calls dtUpdate)
+// ══════════════════════════════════════════════════════════════════════
+function _gzPad2(n){ return String(n).padStart(2, '0'); }
+function _gzPickClose(){
+  const el = document.getElementById('gz-pick-overlay');
+  if (el) el.remove();
+  document.removeEventListener('keydown', _gzPickEsc);
+  window._gzDP = null; window._gzTP = null;
+}
+function _gzPickEsc(e){ if (e.key === 'Escape') _gzPickClose(); }
+function _gzPickOverlay(inner){
+  _gzPickClose();
+  const ov = document.createElement('div');
+  ov.className = 'gz-pick-overlay';
+  ov.id = 'gz-pick-overlay';
+  ov.innerHTML = `<div class="gz-pick-panel">${inner}</div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) _gzPickClose(); });
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', _gzPickEsc);
+  return ov;
+}
+
+// ─── Device routing: native picker sa touch (iOS/Android wheels are great),
+//     custom themed picker sa mouse/PC (native popup anchors sa maling spot) ───
+function _gzCoarse(){
+  try { return window.matchMedia('(pointer: coarse)').matches; }
+  catch(e) { return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0); }
+}
+function _gzNative(el){
+  if (!el) return false;
+  try { el.showPicker ? el.showPicker() : el.focus(); } catch(e) { try { el.focus(); } catch(e2) {} }
+  return true;
+}
+// ─── Date picker ───
+function openGZDatePicker(prefix, extraFn){
+  if (_gzCoarse() && _gzNative(document.getElementById(prefix + '-date-native'))) return;
+  _gzOpenDate({ valId: prefix + '-date', dispId: prefix + '-date-display', extraFn: extraFn || null, apply: 'prefix' });
+}
+function _gzOpenDate(cfg){
+  const valEl = document.getElementById(cfg.valId);
+  const todayStr = (typeof today === 'function') ? today() : new Date().toISOString().slice(0, 10);
+  const cur = (valEl && valEl.value && /^\d{4}-\d{2}-\d{2}$/.test(valEl.value)) ? valEl.value : todayStr;
+  window._gzDP = Object.assign({}, cfg, { y: parseInt(cur.slice(0, 4)), m: parseInt(cur.slice(5, 7)) - 1 });
+  _gzPickOverlay('<div id="gz-dp-body"></div>');
+  _gzDPRender();
+}
+function _gzDPRender(){
+  const st = window._gzDP; if (!st) return;
+  const body = document.getElementById('gz-dp-body'); if (!body) return;
+  const valEl = document.getElementById(st.valId);
+  const selVal = valEl ? valEl.value : '';
+  const todayStr = (typeof today === 'function') ? today() : new Date().toISOString().slice(0, 10);
+  const first = new Date(st.y, st.m, 1);
+  const label = first.toLocaleString('en', { month: 'long', year: 'numeric' });
+  const startDow = first.getDay();
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const dt = new Date(st.y, st.m, i - startDow + 1);
+    const ds = `${dt.getFullYear()}-${_gzPad2(dt.getMonth() + 1)}-${_gzPad2(dt.getDate())}`;
+    const other = dt.getMonth() !== st.m;
+    cells += `<button type="button" class="gz-pick-day${other ? ' other' : ''}${ds === selVal ? ' sel' : ''}${ds === todayStr ? ' today' : ''}" onclick="_gzDatePick('${ds}')">${dt.getDate()}</button>`;
+  }
+  body.innerHTML = `
+    <div class="gz-pick-head">
+      <div class="gz-pick-title">${label}</div>
+      <div class="gz-pick-nav">
+        <button type="button" onclick="_gzDPNav(-12)" title="Previous year">«</button>
+        <button type="button" onclick="_gzDPNav(-1)" title="Previous month">‹</button>
+        <button type="button" onclick="_gzDPNav(1)" title="Next month">›</button>
+        <button type="button" onclick="_gzDPNav(12)" title="Next year">»</button>
+      </div>
+    </div>
+    <div class="gz-pick-dow">${['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => `<span>${d}</span>`).join('')}</div>
+    <div class="gz-pick-grid">${cells}</div>
+    <div class="gz-pick-foot">
+      <button type="button" class="gz-pick-btn" onclick="_gzPickClose()">Cancel</button>
+      <button type="button" class="gz-pick-btn accent" onclick="_gzDatePick('${todayStr}')">Today</button>
+    </div>`;
+}
+function _gzDPNav(dm){
+  const st = window._gzDP; if (!st) return;
+  const d = new Date(st.y, st.m + dm, 1);
+  st.y = d.getFullYear(); st.m = d.getMonth();
+  _gzDPRender();
+}
+function _gzDatePick(ds){
+  const st = window._gzDP; if (!st) return;
+  const valEl = document.getElementById(st.valId);
+  if (valEl) valEl.value = ds;
+  if (st.apply === 'dt') {
+    if (typeof dtUpdate === 'function') dtUpdate(st.valId, 'date');
+  } else {
+    const disp = document.getElementById(st.dispId);
+    if (disp && typeof fmtD === 'function') disp.textContent = fmtD(ds);
+    if (st.extraFn && typeof window[st.extraFn] === 'function') window[st.extraFn](ds);
+  }
+  _gzPickClose();
+}
+
+// ─── Time picker ───
+function openGZTimePicker(prefix){
+  if (_gzCoarse() && _gzNative(document.getElementById(prefix + '-time-native'))) return;
+  _gzOpenTime({ valId: prefix + '-time', dispId: prefix + '-time-display', apply: 'prefix' });
+}
+function _gzOpenTime(cfg){
+  const valEl = document.getElementById(cfg.valId);
+  let cur = (valEl && valEl.value && /^\d{2}:\d{2}/.test(valEl.value)) ? valEl.value : ((typeof nowTime === 'function') ? nowTime() : '12:00');
+  let H = parseInt(cur.slice(0, 2)), M = parseInt(cur.slice(3, 5));
+  if (isNaN(H)) H = 12; if (isNaN(M)) M = 0;
+  window._gzTP = Object.assign({}, cfg, { h: H % 12 === 0 ? 12 : H % 12, m: M, pm: H >= 12 });
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const mins = Array.from({ length: 60 }, (_, i) => i);
+  _gzPickOverlay(`
+    <div class="gz-pick-head"><div class="gz-pick-title">Set Time</div></div>
+    <div class="gz-time-preview" id="gz-tp-preview"></div>
+    <div class="gz-time-cols">
+      <div><div class="gz-time-label">Hour</div><div class="gz-time-col" id="gz-tp-h">${hours.map(h => `<div class="gz-time-opt" data-v="${h}" onclick="_gzTPSet('h',${h})">${h}</div>`).join('')}</div></div>
+      <div><div class="gz-time-label">Minute</div><div class="gz-time-col" id="gz-tp-m">${mins.map(m => `<div class="gz-time-opt" data-v="${m}" onclick="_gzTPSet('m',${m})">${_gzPad2(m)}</div>`).join('')}</div></div>
+      <div><div class="gz-time-label">&nbsp;</div><div class="gz-time-ap" id="gz-tp-ap">
+        <div class="gz-time-opt" data-v="am" onclick="_gzTPSet('ap',0)">AM</div>
+        <div class="gz-time-opt" data-v="pm" onclick="_gzTPSet('ap',1)">PM</div>
+      </div></div>
+    </div>
+    <div class="gz-pick-foot">
+      <button type="button" class="gz-pick-btn" onclick="_gzPickClose()">Cancel</button>
+      <button type="button" class="gz-pick-btn accent" onclick="_gzTPNow()">Now</button>
+      <button type="button" class="gz-pick-btn primary" onclick="_gzTPDone()">Done</button>
+    </div>`);
+  _gzTPSync(true);
+}
+function _gzTPSync(scroll){
+  const st = window._gzTP; if (!st) return;
+  const mark = (colId, val, doScroll) => {
+    const col = document.getElementById(colId); if (!col) return;
+    let selOpt = null;
+    col.querySelectorAll('.gz-time-opt').forEach(o => {
+      const on = String(o.dataset.v) === String(val);
+      o.classList.toggle('sel', on);
+      if (on) selOpt = o;
+    });
+    if (selOpt && doScroll) col.scrollTop = selOpt.offsetTop - (col.clientHeight - selOpt.offsetHeight) / 2;
+  };
+  mark('gz-tp-h', st.h, scroll);
+  mark('gz-tp-m', st.m, scroll);
+  mark('gz-tp-ap', st.pm ? 'pm' : 'am', false);
+  const pv = document.getElementById('gz-tp-preview');
+  if (pv) pv.textContent = `${st.h}:${_gzPad2(st.m)} ${st.pm ? 'PM' : 'AM'}`;
+}
+function _gzTPSet(k, v){
+  const st = window._gzTP; if (!st) return;
+  if (k === 'h') st.h = v; else if (k === 'm') st.m = v; else st.pm = !!v;
+  _gzTPSync(false);
+}
+function _gzTPNow(){
+  const st = window._gzTP; if (!st) return;
+  const n = new Date(); const H = n.getHours();
+  st.h = H % 12 === 0 ? 12 : H % 12; st.m = n.getMinutes(); st.pm = H >= 12;
+  _gzTPSync(true);
+}
+function _gzTPDone(){
+  const st = window._gzTP; if (!st) return;
+  let H = st.h % 12; if (st.pm) H += 12;
+  const val = `${_gzPad2(H)}:${_gzPad2(st.m)}`;
+  const valEl = document.getElementById(st.valId);
+  if (valEl) valEl.value = val;
+  if (st.apply === 'dt') {
+    if (typeof dtUpdate === 'function') dtUpdate(st.valId, 'time');
+  } else {
+    const disp = document.getElementById(st.dispId);
+    if (disp && typeof fmtT === 'function') disp.textContent = fmtT(val);
+  }
+  _gzPickClose();
+}
+
 function ovCatTog(mode){
   document.querySelectorAll('[data-ovcat]').forEach(el => { el.style.display = el.dataset.ovcat === mode ? '' : 'none'; });
   document.querySelectorAll('[data-ovcat-btn]').forEach(b => {
@@ -14618,7 +14837,7 @@ function buildSpendingDistribution(metricMk, dispCurr) {
   const amtsSorted = txs.map(t => _ovExpAmt(t, dispCurr)).sort((a,b) => a-b);
   const median = amtsSorted.length ? amtsSorted[Math.floor(amtsSorted.length/2)] : 0;
   const largest = amtsSorted.length ? amtsSorted[amtsSorted.length-1] : 0;
-  const _sdStat = (label, val) => `<div style="text-align:center"><div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.04em">${label}</div><div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text2);margin-top:2px">${val}</div></div>`;
+  const _sdStat = (label, val) => `<div style="text-align:center"><div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em">${label}</div><div style="font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--text2);margin-top:2px">${val}</div></div>`;
   // ── Card is flex-column + chart is flex:1 → bars stretch to fill the row height, no void.
   // % above each bar = share of txn count; per-bucket count & total sit under the labels.
   return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
@@ -21686,14 +21905,20 @@ function dtField(inputId, type, placeholder, initialValue) {
 }
 
 function dtTrigger(inputId, type) {
+  // Touch → native picker (magaling ang iOS/Android wheels); PC/mouse → custom themed picker
+  // (ang native popup ay nag-a-anchor sa invisible stretched input = mali ang position).
   const input = document.getElementById(inputId);
-  const display = document.getElementById('dtd-' + inputId);
-  if (!input || !display) return;
-  display.classList.add('dt-active');
-  input.style.pointerEvents = 'auto';
-  try { input.showPicker ? input.showPicker() : input.click(); } catch(e) { input.click(); }
-  const onBlur = () => { display.classList.remove('dt-active'); input.style.pointerEvents = 'none'; };
-  input.addEventListener('blur', onBlur, { once: true });
+  if (input && _gzCoarse()) {
+    const display = document.getElementById('dtd-' + inputId);
+    if (display) display.classList.add('dt-active');
+    input.style.pointerEvents = 'auto';
+    try { input.showPicker ? input.showPicker() : input.click(); } catch(e) { input.click(); }
+    const onBlur = () => { if (display) display.classList.remove('dt-active'); input.style.pointerEvents = 'none'; };
+    input.addEventListener('blur', onBlur, { once: true });
+    return;
+  }
+  if (type === 'date') _gzOpenDate({ valId: inputId, apply: 'dt' });
+  else _gzOpenTime({ valId: inputId, apply: 'dt' });
 }
 
 function dtUpdate(inputId, type) {
