@@ -13347,8 +13347,9 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   outliers.sort((a,b) => b.z - a.z);
   const top = outliers.slice(0, 3);
   if (top.length === 0) return '';
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  return `<div class="card" style="padding:16px;margin-bottom:16px;display:flex;flex-direction:column">
     <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Unusual Transactions${_infoBtn('anomaly')}</div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:space-evenly">
     ${top.map(o => {
       const catName = _stripIcon(o.cat.name);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
@@ -13365,6 +13366,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
         </div>
       </div>`;
     }).join('')}
+    </div>
   </div>`;
 }
 
@@ -14692,7 +14694,7 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
   </div>`;
   const lastMo = displayMonths[displayMonths.length-1];
   const lastNet = lastMo.income - lastMo.expense;
-  return `<div class="card" style="padding:16px">
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Income vs Expense</div>
       <div style="display:flex;gap:10px;font-size:10px;align-items:center">
@@ -14700,7 +14702,9 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
         <span style="color:var(--green)">● In</span><span style="color:var(--red)">● Out</span>
       </div>
     </div>
-    <div style="display:flex;gap:4px;align-items:flex-end">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1)).join('')}</div>
+    <div style="flex:1;display:flex;align-items:center">
+      <div style="display:flex;gap:4px;align-items:flex-end;width:100%">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1)).join('')}</div>
+    </div>
     <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
       <span>${lastMo.label} net</span>
       <span style="font-family:var(--mono);font-weight:600;color:${lastNet>=0?'var(--green)':'var(--red)'}">${lastNet>=0?'+':''}${fmt(lastNet, dispCurr)}</span>
