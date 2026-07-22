@@ -14737,7 +14737,7 @@ function buildBudgetRanking(metricMk, dispCurr) {
   }
   if (rows.length === 0) return '';
   rows.sort((a,b) => b.pct - a.pct);
-  const top = rows.slice(0, 8);
+  const top = rows; // scrollable list — lahat kasama, walang cap
   // ── Status counts for the at-a-glance summary ──
   const overCount = rows.filter(r => r.over).length;
   const warnCount = rows.filter(r => !r.over && r.pct >= 80).length;
@@ -14765,7 +14765,7 @@ function buildBudgetRanking(metricMk, dispCurr) {
       </div>
     </div>`;
   }).join('');
-  return `<div class="card" style="padding:16px;margin-bottom:16px">
+  return `<div class="card" style="padding:16px;height:100%;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Budgets — % used</div>
@@ -14778,8 +14778,9 @@ function buildBudgetRanking(metricMk, dispCurr) {
       ${chip(warnCount, 'near limit', 'var(--amber)', 'var(--amber-bg)')}
       ${chip(okCount, 'on track', 'var(--green)', 'var(--green-bg)')}
     </div>
-    ${bars}
-    ${rows.length > top.length ? `<div style="font-size:10.5px;color:var(--accent);font-weight:500;text-align:center;padding-top:9px;cursor:pointer" onclick="nav('planning')">+${rows.length - top.length} more → Planning</div>` : ''}
+    <div style="flex:1;position:relative;min-height:220px;margin-top:2px">
+      <div style="position:absolute;inset:0;overflow-y:auto;padding-right:4px">${bars}</div>
+    </div>
   </div>`;
 }
 
