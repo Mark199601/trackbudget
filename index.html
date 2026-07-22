@@ -11257,8 +11257,9 @@ function openLoanDetail(loanId, direction) {
         ${getLoanOverdueDays(loan)!==null?`<button class="btn btn-danger btn-sm" onclick="openWriteOffLoan('${loanId}','${direction}')">⚠️ Write off (${getLoanOverdueDays(loan)}d overdue)</button>`:''}
       </div>
     `:`
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="editLoanFull('${loanId}','${direction}')">Edit Loan</button>
+        <button class="btn btn-warning btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
       </div>`}
   `);
 }
@@ -11346,40 +11347,49 @@ function saveLoanFull(loanId, direction) {
   loan.dueDate = parseInputDate(document.getElementById('lf-due')?.value) || null;
   loan.notes = document.getElementById('lf-notes')?.value?.trim() || '';
 
-  // PLS #97 + #139: store loan in Expected-Receivable (commitment) currency; account moves the Loaned Amount.
-  if (isCross) {
-    loan.amount = expectAmt;
-    loan.currency = expectCur;
-    loan.remaining = expectAmt;
-    loan.agreedRate = loaned / expectAmt;
-    loan.loanedAmount = loaned;
-    loan.loanedCurrency = acctCurr;
-  } else {
-    loan.amount = loaned;
-    loan.currency = acctCurr;
-    loan.remaining = loaned;
-    delete loan.agreedRate;
-    delete loan.loanedAmount;
-    delete loan.loanedCurrency;
+  // PLS #194: once a loan is settled, amount/remaining/currency reflect a finished payment
+  // history — recomputing them here would silently un-settle or corrupt the balance. Editing a
+  // settled loan may only touch account/person/dates/notes; the money side stays frozen.
+  if (!loan.settled) {
+    // PLS #97 + #139: store loan in Expected-Receivable (commitment) currency; account moves the Loaned Amount.
+    if (isCross) {
+      loan.amount = expectAmt;
+      loan.currency = expectCur;
+      loan.remaining = expectAmt;
+      loan.agreedRate = loaned / expectAmt;
+      loan.loanedAmount = loaned;
+      loan.loanedCurrency = acctCurr;
+    } else {
+      loan.amount = loaned;
+      loan.currency = acctCurr;
+      loan.remaining = loaned;
+      delete loan.agreedRate;
+      delete loan.loanedAmount;
+      delete loan.loanedCurrency;
+    }
+    // Old display-only reminder fields are retired by the new model
+    delete loan.expectedPayment;
+    delete loan.expectedCurrency;
   }
-  // Old display-only reminder fields are retired by the new model
-  delete loan.expectedPayment;
-  delete loan.expectedCurrency;
 
   // Update the parent isLoanTx transaction (account always moves the Loaned Amount)
   const parentTx = db.transactions.find(t => t.isLoanTx && t.loanId === loanId);
   if (parentTx) {
     const isLent = direction === 'lent';
     parentTx.accountId = loan.accountId;
-    parentTx.amount = loaned;
     parentTx.currency = acctCurr;
     parentTx.date = loan.date;
     parentTx.time = loan.time;
-    if (isCross) {
-      parentTx.toAmountIsActual = true;
-      parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${expectAmt} ${expectCur} @ ${fmtRate(loan.agreedRate)} ${acctCurr}/${expectCur}`;
+    if (!loan.settled) {
+      parentTx.amount = loaned;
+      if (isCross) {
+        parentTx.toAmountIsActual = true;
+        parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${expectAmt} ${expectCur} @ ${fmtRate(loan.agreedRate)} ${acctCurr}/${expectCur}`;
+      } else {
+        delete parentTx.toAmountIsActual;
+        parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+      }
     } else {
-      delete parentTx.toAmountIsActual;
       parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
     }
   }
