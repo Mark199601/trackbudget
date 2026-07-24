@@ -245,6 +245,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .skel{background:linear-gradient(90deg,var(--bg3) 25%,var(--bg4) 50%,var(--bg3) 75%);background-size:200% 100%;animation:skelShimmer 1.2s ease-in-out infinite;border-radius:var(--r-sm)}
 @keyframes skelShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;transition:all var(--transition);position:relative;overflow:hidden}
+.metric-icon-chip{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:8px}
 .metric-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:var(--shadow)}
 .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px;font-weight:700;line-height:1.25;min-height:2.5em;display:flex;align-items:flex-start}
 .metric-num{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum","zero"}
@@ -3703,21 +3704,25 @@ function renderDashboard() {
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
   const metricsHTML = `<div class="dash-metrics-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.5vw,20px);margin-bottom:16px">
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('accounts')">
+      <div class="metric-icon-chip" style="background:rgba(45,212,191,0.14);color:#2dd4bf">🏦</div>
       <div class="metric-label" style="white-space:normal;line-height:1.25">CASH &amp; WALLETS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(cashTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums slashed-zero;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${cashAcctCount} accounts<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('loans')">
+      <div class="metric-icon-chip" style="background:rgba(251,191,36,0.14);color:var(--amber)">📤</div>
       <div class="metric-label" style="white-space:normal;line-height:1.25">LOANS OUT</div>
       <div class="metric-num mfit" data-countup="${fromPhp(loansOutTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums slashed-zero;color:var(--amber)">${fmt(fromPhp(loansOutTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${loansOutCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('loans')">
+      <div class="metric-icon-chip" style="background:rgba(251,113,133,0.14);color:var(--red)">📥</div>
       <div class="metric-label" style="white-space:normal;line-height:1.25">DEBTS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(debtsTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums slashed-zero;color:var(--red)">${fmt(fromPhp(debtsTotal,disp),disp)}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">${debtsCount} active<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     </div>
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('transactions')">
+      <div class="metric-icon-chip" style="background:rgba(167,139,250,0.14);color:#a78bfa">🧾</div>
       <div class="metric-label" style="white-space:normal;line-height:1.25">TXNS THIS MONTH</div>
       <div class="metric-num mfit" data-countup="${txnsThisMonth}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums slashed-zero;color:var(--text)">${txnsThisMonth}</div>
       <div class="metric-sub" style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:4px;border-top:1px solid var(--border)">transactions<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -3760,18 +3765,20 @@ function renderDashboard() {
     insights: insightHTML ? `<div style="margin-bottom:16px">${insightHTML}</div>` : '',
     budget: `<div style="margin-bottom:16px">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:4px 14px">
-        <div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('wealth'),100)" style="padding:10px 0 6px;cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+        <div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('wealth'),100)" style="padding:10px 0 10px;cursor:pointer">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
             <span style="font-size:13px;color:var(--text2)">Net worth</span>
             <span style="font-family:var(--mono);font-size:13px;color:var(--text)">${fmt(fromPhp(netWorthCalc,disp),disp)}${Math.abs(curr.net||0)>=0.01?` <span style="color:${curr.net>0?'var(--green)':'var(--red)'};font-size:10px">${curr.net>0?'↑':'↓'}${fmt(Math.abs(curr.net),disp)}</span>`:''}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:3px 0 3px 12px">
-            <span style="font-size:11px;color:var(--text3)">Assets</span>
-            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:3px 0 4px 12px">
-            <span style="font-size:11px;color:var(--text3)">Liabilities</span>
-            <span style="font-family:var(--mono);font-size:11px;color:var(--red)">−${fmt(fromPhp(totalLiab,disp),disp)}</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:var(--green-bg);border-radius:9px;padding:7px 10px">
+              <div style="font-size:9.5px;color:var(--green);letter-spacing:0.04em">ASSETS</div>
+              <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-top:1px">${fmt(fromPhp(totalAssets,disp),disp)}</div>
+            </div>
+            <div style="background:var(--red-bg);border-radius:9px;padding:7px 10px">
+              <div style="font-size:9.5px;color:var(--red);letter-spacing:0.04em">LIABILITIES</div>
+              <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-top:1px">−${fmt(fromPhp(totalLiab,disp),disp)}</div>
+            </div>
           </div>
         </div>
         ${budgetHTML}
@@ -3852,23 +3859,38 @@ function renderDashboard() {
     ${migrationBannerHTML}
     ${onboardChecklistHTML}
     <div class="hero-card hero-gradient" style="margin-bottom:12px">
-      <div class="hero-label">This Month</div>
-      <div style="display:flex;align-items:baseline;gap:4px">
-        <span class="hero-currency">${(curr.net||0)>=0?'+':'−'}${sym(disp)}</span>
-        <span class="hero-amount" data-countup="${Math.abs(curr.net||0)}" data-countup-decimals="2">${Math.abs(curr.net||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="min-width:0">
+          <div class="hero-label">This Month</div>
+          <div style="display:flex;align-items:baseline;gap:4px;margin-top:6px">
+            <span class="hero-currency">${(curr.net||0)>=0?'+':'−'}${sym(disp)}</span>
+            <span class="hero-amount" data-countup="${Math.abs(curr.net||0)}" data-countup-decimals="2">${Math.abs(curr.net||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          </div>
+        </div>
+        ${(()=>{
+          const tot = (curr.income||0) + (curr.expense||0);
+          if (tot <= 0) return '';
+          const circ = 2 * Math.PI * 19;
+          const incLen = (curr.income / tot * circ).toFixed(1);
+          const expLen = (curr.expense / tot * circ).toFixed(1);
+          return `<svg width="46" height="46" viewBox="0 0 46 46" style="flex-shrink:0;position:relative;z-index:1">
+            <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="6"/>
+            <circle cx="23" cy="23" r="19" fill="none" stroke="#a78bfa" stroke-width="6" stroke-dasharray="${incLen} ${circ.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 23 23)"/>
+            <circle cx="23" cy="23" r="19" fill="none" stroke="#f472b6" stroke-width="6" stroke-dasharray="${expLen} ${circ.toFixed(1)}" stroke-dashoffset="-${incLen}" stroke-linecap="round" transform="rotate(-90 23 23)"/>
+          </svg>`;
+        })()}
       </div>
       ${(()=>{
         const tot = (curr.income||0) + (curr.expense||0);
         if (tot <= 0) return '';
-        const incPct = (curr.income / tot * 100).toFixed(1);
-        return `<div style="margin-top:14px">
-          <div style="display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--bg4)">
-            <div style="width:${incPct}%;height:100%;background:linear-gradient(90deg,#a855f7,#f472b6)"></div>
-            <div style="width:${(100-incPct)}%;height:100%;background:var(--bg5)"></div>
+        return `<div style="display:flex;gap:8px;margin-top:16px;position:relative;z-index:1">
+          <div style="flex:1;min-width:0;background:rgba(167,139,250,0.14);border-radius:10px;padding:9px 12px">
+            <div class="hero-in" style="font-size:10px;font-weight:600;letter-spacing:0.04em">IN</div>
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text);font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(curr.income,disp)}</div>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px">
-            <span class="hero-in" style="font-size:11px;font-weight:600">In ${fmt(curr.income,disp)}</span>
-            <span class="hero-out" style="font-size:11px;font-weight:600">Out ${fmt(curr.expense,disp)}</span>
+          <div style="flex:1;min-width:0;background:rgba(244,114,182,0.14);border-radius:10px;padding:9px 12px">
+            <div class="hero-out" style="font-size:10px;font-weight:600;letter-spacing:0.04em">OUT</div>
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text);font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(curr.expense,disp)}</div>
           </div>
         </div>`;
       })()}
