@@ -125,12 +125,15 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .u-pill-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .u-pill-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
 .u-pill-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
-/* ── DARK MODE (default) — purple-tinted, more contrast ── */
+/* ── DARK MODE (default) — unified FIQ chrome (PLS #195: was purple-tinted/translucent,
+   diverging from the Analytics Overview redesign's #15151f/#232334 dark cards; every tab
+   consumes these same tokens via .card/.metric-card/.hero-card, so aligning them here is
+   a whole-app consistency sweep without touching per-page render functions) ── */
 :root, [data-theme="dark"] {
-  --bg:#06060d;--bg2:#0e0d1a;--bg3:#16142a;--bg4:#1f1c38;--bg5:#2a2647;
-  --border:rgba(124,109,240,0.08);--border2:rgba(124,109,240,0.14);--border3:rgba(124,109,240,0.22);
-  --text:#f4f2ff;--text2:#a8a2cc;--text3:#7a72a8;--text4:#5a548a;
-  --shadow:0 4px 20px rgba(0,0,0,0.22);
+  --bg:#0b0b11;--bg2:#15151f;--bg3:#1a1a24;--bg4:#20202c;--bg5:#2a2a3a;
+  --border:#232334;--border2:#2d2d4a;--border3:#38384f;
+  --text:#ececf4;--text2:#c9c9d9;--text3:#8b8ba3;--text4:#5c5c72;
+  --shadow:0 4px 20px rgba(0,0,0,0.3);
 }
 /* ── LIGHT MODE ── */
 [data-theme="light"] {
@@ -2567,7 +2570,7 @@ var _dashReorderMode = false; // C2: dashboard reorder mode
 // fully available via the Customize reorder screen (they remain in DASH_SECTION_LABELS),
 // but are kept OFF the default surface to reduce dashboard clutter — Today's Pulse overlaps
 // with Recent Transactions, and AI Insights now has its own dedicated page.
-const DASH_SECTIONS_DEFAULT = ['alerts','metrics','budget','recent'];
+const DASH_SECTIONS_DEFAULT = ['alerts','budget','recent'];
 // Full set of reorderable sections (used by Customize screen so hidden ones can be re-added).
 const DASH_SECTIONS_ALL = ['alerts','metrics','pulse','insights','budget','recent',
   'w_networth','w_inexp','w_waterfall',
@@ -2579,7 +2582,7 @@ const DASH_SECTION_LABELS = {
   metrics: '4-Metric Grid',
   pulse: "Today's Pulse",
   insights: 'AI Insights',
-  budget: 'Budget Tracker',
+  budget: 'Financial Snapshot',
   recent: 'Recent Transactions',
   // Analytics widgets (hidden by default — add via Customize)
   w_networth: '📈 Net Worth Trend',
@@ -3527,16 +3530,16 @@ function renderDashboard() {
       (t.type==='expense'||t.type==='shared') &&
       t.currency===curr
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
-    const pct = limit > 0 ? Math.min(spent/limit, 1) : 0;
-    const cls = pct > 1 ? 'bar-over' : pct > 0.8 ? 'bar-warn' : 'bar-ok';
+    const rawPct = limit > 0 ? spent/limit : 0;   // uncapped — for the % label
+    const pct = Math.min(rawPct, 1);               // capped — for the bar fill width
     const over = limit > 0 && spent > limit;
-    budgetHTML += `<div class="budget-bar-wrap">
-      <div class="budget-bar-top">
-        <div class="budget-bar-name">${getFlag(country)} ${country}</div>
-        <div class="budget-bar-amounts">${sym(curr)}${spent.toFixed(0)} / ${limit > 0 ? sym(curr)+limit.toLocaleString() : '<span style="color:var(--text4);font-size:11px">No limit set</span>'}</div>
-      </div>
-      <div class="budget-bar-track"><div class="budget-bar-fill ${cls}" style="width:${(pct*100).toFixed(1)}%"></div></div>
-      ${over?`<div style="font-size:11px;color:var(--red);margin-top:4px">⚠ Over by ${sym(curr)}${(spent-limit).toFixed(0)}</div>`:''}
+    const barColor = over ? 'var(--red)' : rawPct > 0.8 ? 'var(--amber)' : 'var(--accent)';
+    budgetHTML += `<div onclick="nav('planning');setTimeout(()=>setPlanTab('budgets'),50)" style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--border);cursor:pointer">
+      <span style="font-size:13px;color:var(--text2)">${getFlag(country)} ${country} budget</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span style="width:56px;height:4px;background:var(--bg4);border-radius:3px;overflow:hidden;display:inline-block"><span style="display:block;width:${(pct*100).toFixed(1)}%;height:100%;background:${barColor}"></span></span>
+        <span style="font-family:var(--mono);font-size:12px;color:${over?'var(--red)':'var(--text)'}">${limit>0?(rawPct*100).toFixed(0)+'%':'—'}</span>
+      </span>
     </div>`;
   }
 
@@ -3743,10 +3746,28 @@ function renderDashboard() {
       </div>`;
     })(),
     insights: insightHTML ? `<div style="margin-bottom:16px">${insightHTML}</div>` : '',
-    budget: budgetHTML ? `<div style="margin-bottom:16px">
-      <div class="section-hdr"><div class="section-title">Budget Tracker</div><span class="section-action" onclick="nav('planning');setTimeout(()=>setPlanTab('budgets'),50)">Manage</span></div>
-      ${budgetHTML}
-    </div>` : '',
+    budget: `<div style="margin-bottom:16px">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:4px 14px">
+        <div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('wealth'),100)" style="padding:10px 0 6px;cursor:pointer">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:var(--text2)">Net worth</span>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--text)">${fmt(fromPhp(netWorthCalc,disp),disp)}${Math.abs(curr.net||0)>=0.01?` <span style="color:${curr.net>0?'var(--green)':'var(--red)'};font-size:10px">${curr.net>0?'↑':'↓'}${fmt(Math.abs(curr.net),disp)}</span>`:''}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0 3px 12px">
+            <span style="font-size:11px;color:var(--text3)">Assets</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:3px 0 4px 12px">
+            <span style="font-size:11px;color:var(--text3)">Liabilities</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--red)">−${fmt(fromPhp(totalLiab,disp),disp)}</span>
+          </div>
+        </div>
+        ${budgetHTML}
+        <div onclick="nav('loans')" style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border);cursor:pointer">
+          <span style="font-size:13px;color:var(--text2)">Receivables</span><span style="font-family:var(--mono);font-size:13px;color:var(--text)">${fmt(fromPhp(loansOutTotal,disp),disp)}</span>
+        </div>
+      </div>
+    </div>`,
     recent: `<div>
       <div class="section-hdr"><div class="section-title">Recent Transactions</div><span class="section-action" onclick="nav('transactions')">View All</span></div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${txHTML}</div>
@@ -3819,29 +3840,26 @@ function renderDashboard() {
     ${migrationBannerHTML}
     ${onboardChecklistHTML}
     <div class="hero-card" style="margin-bottom:12px">
-      <div class="hero-label">Net Worth</div>
+      <div class="hero-label">This Month</div>
       <div style="display:flex;align-items:baseline;gap:4px">
-        <span class="hero-currency">${sym(disp)}</span>
-        <span class="hero-amount" data-countup="${fromPhp(netWorthCalc,disp)}" data-countup-decimals="2">${fromPhp(netWorthCalc,disp).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        <span class="hero-currency">${(curr.net||0)>=0?'+':'−'}${sym(disp)}</span>
+        <span class="hero-amount" data-countup="${Math.abs(curr.net||0)}" data-countup-decimals="2">${Math.abs(curr.net||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
       </div>
       ${(()=>{
-        const mNet = curr.net || 0;
-        if (Math.abs(mNet) < 0.01) return '';
-        const cls = mNet > 0 ? 'hero-trend-up' : 'hero-trend-down';
-        const arrow = mNet > 0 ? '↑' : '↓';
-        return `<div class="hero-trend ${cls}">${arrow} ${fmt(Math.abs(mNet), disp)} this month</div>`;
+        const tot = (curr.income||0) + (curr.expense||0);
+        if (tot <= 0) return '';
+        const incPct = (curr.income / tot * 100).toFixed(1);
+        return `<div style="margin-top:14px">
+          <div style="display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--bg4)">
+            <div style="width:${incPct}%;height:100%;background:var(--green)"></div>
+            <div style="width:${(100-incPct)}%;height:100%;background:var(--red)"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:11px;color:var(--green)">In ${fmt(curr.income,disp)}</span>
+            <span style="font-size:11px;color:var(--red)">Out ${fmt(curr.expense,disp)}</span>
+          </div>
+        </div>`;
       })()}
-      <div style="height:1px;background:var(--border2);margin:14px 0 12px"></div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px">
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:10px">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:3px">Assets</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">${fmt(fromPhp(totalAssets,disp),disp)}</div>
-        </div>
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:10px">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:3px">Liabilities</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--red)">${fmt(fromPhp(totalLiab,disp),disp)}</div>
-        </div>
-      </div>
     </div>
     ${customizeBtn}
     ${reorderToolbarHTML}
