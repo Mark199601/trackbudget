@@ -257,6 +257,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   .metric-num{font-size:10px}
   .metric-sub{font-size:10px;line-height:1.2;white-space:normal;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 }
+@media(max-width:640px){
+  .dash-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
 @media(min-width:768px){
   .metric-card{padding:18px 20px}
   .metric-label{font-size:12px;margin-bottom:10px}
@@ -277,11 +280,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media(max-width:480px){.g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 
 .hero-card{border-radius:var(--r-xl);padding:24px;position:relative;overflow:hidden;background:var(--bg2);border:1px solid var(--accent-border);box-shadow:0 4px 16px rgba(10,12,20,0.12)}
+/* PLS #196: gradient-corner-tile hero variant, Dashboard "This month" only — deliberately
+   purple/pink brand accent rather than green/red semantic (approved sample), consistent
+   recipe across light/dark (dark just fades into the dark card color instead of white). */
+.hero-gradient{background:radial-gradient(135% 160% at 100% -10%,#a3477e 0%,#7c4fc2 30%,#15151f 60%)}
+[data-theme="light"] .hero-gradient{background:radial-gradient(135% 160% at 100% -10%,#f472b6 0%,#a855f7 30%,#ffffff 62%)}
+.hero-gradient .hero-in{color:#a78bfa}
+.hero-gradient .hero-out{color:#f472b6}
+[data-theme="light"] .hero-gradient .hero-in{color:#7c3aed}
+[data-theme="light"] .hero-gradient .hero-out{color:#db2777}
 .hero-card::before{content:none}
 .hero-card::after{content:none}
 .hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1}
 .hero-amount{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-1.8px;color:var(--text);line-height:1;position:relative;z-index:1;font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum","zero"}
-.hero-currency{font-size:0.55em;color:var(--text3);margin-right:2px;font-weight:500;vertical-align:0.18em;letter-spacing:0}
+.hero-currency{font-size:0.62em;color:var(--text2);margin-right:3px;font-weight:600;vertical-align:0.06em;letter-spacing:0}
 .hero-trend{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;padding:3px 9px;border-radius:var(--r-full);margin-top:10px;font-family:var(--font);position:relative;z-index:1}
 .hero-trend-up{background:var(--green-bg);color:var(--green)}
 .hero-trend-down{background:var(--red-bg);color:var(--red)}
@@ -3689,7 +3701,7 @@ function renderDashboard() {
     .reduce((s,l)=>s+loanHomeValue(l),0);
   const debtsCount = db.loans.borrowed.filter(l=>!l.settled).length;
   const txnsThisMonth = db.transactions.filter(t=>!t.archived && t.date && t.date.startsWith(mk)).length;
-  const metricsHTML = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.5vw,20px);margin-bottom:16px">
+  const metricsHTML = `<div class="dash-metrics-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.5vw,20px);margin-bottom:16px">
     <div class="metric-card" style="min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer" onclick="nav('accounts')">
       <div class="metric-label" style="white-space:normal;line-height:1.25">CASH &amp; WALLETS</div>
       <div class="metric-num mfit" data-countup="${fromPhp(cashTotal,disp)}" data-countup-decimals="0" style="font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums slashed-zero;color:var(--text)">${fmt(fromPhp(cashTotal,disp),disp)}</div>
@@ -3839,7 +3851,7 @@ function renderDashboard() {
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
     ${migrationBannerHTML}
     ${onboardChecklistHTML}
-    <div class="hero-card" style="margin-bottom:12px">
+    <div class="hero-card hero-gradient" style="margin-bottom:12px">
       <div class="hero-label">This Month</div>
       <div style="display:flex;align-items:baseline;gap:4px">
         <span class="hero-currency">${(curr.net||0)>=0?'+':'−'}${sym(disp)}</span>
@@ -3851,12 +3863,12 @@ function renderDashboard() {
         const incPct = (curr.income / tot * 100).toFixed(1);
         return `<div style="margin-top:14px">
           <div style="display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--bg4)">
-            <div style="width:${incPct}%;height:100%;background:var(--green)"></div>
-            <div style="width:${(100-incPct)}%;height:100%;background:var(--red)"></div>
+            <div style="width:${incPct}%;height:100%;background:linear-gradient(90deg,#a855f7,#f472b6)"></div>
+            <div style="width:${(100-incPct)}%;height:100%;background:var(--bg5)"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:6px">
-            <span style="font-size:11px;color:var(--green)">In ${fmt(curr.income,disp)}</span>
-            <span style="font-size:11px;color:var(--red)">Out ${fmt(curr.expense,disp)}</span>
+            <span class="hero-in" style="font-size:11px;font-weight:600">In ${fmt(curr.income,disp)}</span>
+            <span class="hero-out" style="font-size:11px;font-weight:600">Out ${fmt(curr.expense,disp)}</span>
           </div>
         </div>`;
       })()}
