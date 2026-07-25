@@ -14348,7 +14348,6 @@ function _gzNative(el){
 }
 // ─── Date picker ───
 function openGZDatePicker(prefix, extraFn){
-  if (_gzCoarse() && _gzNative(document.getElementById(prefix + '-date-native'))) return;
   _gzOpenDate({ valId: prefix + '-date', dispId: prefix + '-date-display', extraFn: extraFn || null, apply: 'prefix' });
 }
 function _gzOpenDate(cfg){
@@ -14414,7 +14413,6 @@ function _gzDatePick(ds){
 
 // ─── Time picker ───
 function openGZTimePicker(prefix){
-  if (_gzCoarse() && _gzNative(document.getElementById(prefix + '-time-native'))) return;
   _gzOpenTime({ valId: prefix + '-time', dispId: prefix + '-time-display', apply: 'prefix' });
 }
 function _gzOpenTime(cfg){
@@ -22004,18 +22002,10 @@ function dtField(inputId, type, placeholder, initialValue) {
 }
 
 function dtTrigger(inputId, type) {
-  // Touch → native picker (magaling ang iOS/Android wheels); PC/mouse → custom themed picker
-  // (ang native popup ay nag-a-anchor sa invisible stretched input = mali ang position).
-  const input = document.getElementById(inputId);
-  if (input && _gzCoarse()) {
-    const display = document.getElementById('dtd-' + inputId);
-    if (display) display.classList.add('dt-active');
-    input.style.pointerEvents = 'auto';
-    try { input.showPicker ? input.showPicker() : input.click(); } catch(e) { input.click(); }
-    const onBlur = () => { if (display) display.classList.remove('dt-active'); input.style.pointerEvents = 'none'; };
-    input.addEventListener('blur', onBlur, { once: true });
-    return;
-  }
+  // PLS #197: always use the custom themed picker — the native-picker fallback on touch
+  // devices was rendering as an unstyled blank overlay on top of the form (showPicker()/
+  // click() behavior is inconsistent across mobile browsers). The custom picker works
+  // reliably everywhere, so there's no upside to gambling on native behavior anymore.
   if (type === 'date') _gzOpenDate({ valId: inputId, apply: 'dt' });
   else _gzOpenTime({ valId: inputId, apply: 'dt' });
 }
