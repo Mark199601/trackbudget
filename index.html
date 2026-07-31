@@ -1557,7 +1557,7 @@ function _ico(name, size, style) {
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${style?` style="${style}"`:''} aria-hidden="true">${d}</svg>`;
 }
 function currMonthKey() { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
-function lastMonthKey() { const n=new Date(); n.setMonth(n.getMonth()-1); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
+function lastMonthKey() { const t=new Date(); const n=new Date(t.getFullYear(), t.getMonth()-1, 1); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
 
 // FX: PHP is always the base. All rates stored as "1 unit of X = ? PHP"
 // fxRates = { PGK: 13.02, USD: 56.5, AUD: 37.2, ... } meaning 1 PGK = 13.02 PHP, 1 USD = 56.5 PHP
@@ -2453,10 +2453,17 @@ function toggleDashReorderMode() {
 // 3-month window misses. Auto-adjusts when the user has <6 months of data (averages only
 // the months that actually have expenses; never divides by empty months).
 // Naming: "Goal Runway" = contract savings ÷ burn; "Cash Runway" = all liquid cash ÷ burn.
+// ── PERSONAL LOGIC SET #201 ── ONE analysis window for the whole app.
+// Every rolling baseline/average uses this many months, and every one of them divides by the
+// number of months that actually HAD data — never by the window size. With 4 months of usage
+// the divisor is 4; it becomes 6 only once six months exist. Dividing by a fixed 6 too early
+// understates the average and makes ordinary spending look like a spike.
+const ANALYSIS_MONTHS = 6;
 function avgMonthlyExpense6mo() {
   let total = 0, months = 0;
-  for (let i = 1; i <= 6; i++) {
-    const d = new Date(); d.setMonth(d.getMonth() - i);
+  const _now = new Date();
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
+    const d = new Date(_now.getFullYear(), _now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const t = getMonthTotals(key); // returns display-currency totals
     if (t.expense > 0) { total += t.expense; months++; }
@@ -13131,10 +13138,10 @@ function renderAnalyticsOverview() {
     ${_ovRow([buildMostFrequent(metricMk, dispCurr), buildTimeOfDayPattern(metricMk, dispCurr), buildSpendingDistribution(metricMk, dispCurr)])}
     ${_ovRow([buildIncomeDiversification(metricMk, dispCurr), buildConcentrationRisk(dispCurr)])}
     ${_ovRow([(() => {
-      // Top movers: categories where the metric month's spending deviates from its 3-month average.
+      // Top movers: categories where the metric month's spending deviates from its rolling average.
       // ── FIX: previously returned '' whenever period === 'ytd' (the DEFAULT view), so the card
       // silently disappeared. Now it always compares the metric month (= current month on YTD)
-      // vs the prior 3 months, computing its own month-scoped totals (expCats is year-wide on YTD).
+      // vs the prior months, computing its own month-scoped totals (expCats is year-wide on YTD).
       const _ncMonthCats = (mk) => {
         const out = {};
         const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(mk) && (t.type === 'expense' || t.type === 'shared'));
@@ -13150,10 +13157,10 @@ function renderAnalyticsOverview() {
         return out;
       };
       const nowCats = _ncMonthCats(metricMk);
-      // Build 3-month rolling baseline per category (excluding current)
+      // Build rolling baseline per category over ANALYSIS_MONTHS (excluding current month)
       const catBaseline = {}; // {catName: {total, icon}}
       let baselineMonths = 0;
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
         const d = new Date(mY, mM-1-i, 1);
         const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         const mc = _ncMonthCats(k);
@@ -13170,7 +13177,7 @@ function renderAnalyticsOverview() {
       for (const [name, c] of Object.entries(nowCats)) {
         const baseline = catBaseline[name];
         if (!baseline || baseline.total === 0) continue; // no baseline = new category, skip
-        const avg = baseline.total / 3;
+        const avg = baseline.total / Math.max(1, baselineMonths); // divide by months that HAD data, not the window
         const diff = c.total - avg;
         const pct = avg > 0 ? (diff / avg * 100) : 0;
         if (Math.abs(pct) >= 30 && Math.abs(diff) >= 100) {
@@ -13182,9 +13189,9 @@ function renderAnalyticsOverview() {
       const top = movers.slice(0, 3);
       const _ncMonthLabel = new Date(mY, mM-1, 1).toLocaleString('en',{month:'short'});
       return `<div class="card" style="height:100%;display:flex;flex-direction:column">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Notable Changes vs 3mo Avg</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px;margin-bottom:8px">${_ncMonthLabel} spending vs avg of prior 3 months</div>
-        ${top.length === 0 ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--text4);line-height:1.5;padding:16px 0">Steady lang ✦<br>No category moved ±30% vs your 3mo average</div>` : top.map(m => {
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">What Changed</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;margin-bottom:8px">${_ncMonthLabel} vs your usual</div>
+        ${top.length === 0 ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--text4);line-height:1.5;padding:16px 0">Steady lang ✦<br>Nothing stood out this month</div>` : top.map(m => {
           const isUp = m.diff > 0;
           const cls = isUp ? 'tx-neg' : 'tx-pos';
           const icon = isUp ? '▲' : '▼';
@@ -13193,7 +13200,7 @@ function renderAnalyticsOverview() {
               <div style="font-size:16px;flex-shrink:0">${m.icon || '💸'}</div>
               <div style="min-width:0">
                 <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.name)}</div>
-                <div style="font-size:10px;color:var(--text4);font-family:var(--mono);margin-top:1px">${_fmtK(m.current, dispCurr)} now · ${_fmtK(m.avg, dispCurr)} avg</div>
+                <div style="font-size:10px;color:var(--text4);font-family:var(--mono);margin-top:1px">${_fmtK(m.current, dispCurr)} now · usually ${_fmtK(m.avg, dispCurr)}</div>
               </div>
             </div>
             <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
@@ -13400,10 +13407,10 @@ function buildRunwayBar(dispCurr) {
 function buildAnomalyHighlights(metricMk, dispCurr) {
   const txs = _ovTxsForMonth(metricMk).filter(t => t.type === 'expense' || t.type === 'shared');
   if (txs.length < 5) return ''; // need data
-  // Build per-category baseline (3-month rolling)
+  // Build per-category baseline (rolling ANALYSIS_MONTHS window)
   const baseline = {}; // {catId: amounts[]}
   const [y, m] = metricMk.split('-').map(Number);
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const d = new Date(y, m-1-i, 1);
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const monthTxs = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
@@ -13472,10 +13479,10 @@ function buildForecastBand(metricMk, dispCurr) {
   const cumActual = [];
   let running = 0;
   for (let d = 1; d <= dayOfMonth; d++) { running += dayTotals[d]; cumActual.push(running); }
-  // 3-month historical avg per-day pattern
+  // historical avg per-day pattern over the shared analysis window
   const histDays = new Array(daysInMonth + 1).fill(0);
   let histMonths = 0;
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const dt = new Date(y, m-1-i, 1);
     const k = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
     const mt = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
@@ -14622,8 +14629,8 @@ function buildCashflowRunway(metricMk, dispCurr) {
   }
   const depletionLabel = (monthsExact > 0 && monthsExact < 36) ? (() => {
     const dd = new Date();
-    dd.setMonth(dd.getMonth() + Math.floor(monthsExact));
-    dd.setDate(dd.getDate() + Math.round((monthsExact % 1) * 30));
+    // add whole days instead of doing month arithmetic — same 30.44 basis as daysRunway
+    dd.setDate(dd.getDate() + Math.round(monthsExact * 30.44));
     return dd.toLocaleString('en', {month:'short', year:'numeric'});
   })() : null;
   const runwayBarHtml = monthsExact > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
@@ -15467,8 +15474,9 @@ function dismissOnboardChecklist() {
 function renderAnalyticsTrends() {
   const disp = _displayCurrency();
   const months = [];
+  const _now12 = new Date();
   for (let i=11; i>=0; i--) {
-    const d = new Date(); d.setMonth(d.getMonth()-i);
+    const d = new Date(_now12.getFullYear(), _now12.getMonth()-i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const t = getMonthTotals(key);
     months.push({ key, label:d.toLocaleString('en',{month:'short', year:'2-digit'}), ...t });
@@ -16634,16 +16642,33 @@ function renderRecurringTab() {
 function advanceRecurringNextDate(r) {
   if (!r.nextDate) return;
   const d = new Date(r.nextDate + 'T12:00');
+  const monthly = ['Monthly','Quarterly','Yearly'].includes(r.frequency) || !r.frequency ||
+                  !['Daily','Weekly','Bi-weekly'].includes(r.frequency);
+  // PLS #200: setMonth() rolls FORWARD when the target month is too short — a schedule on the
+  // 31st went Jan 31 -> Feb 31 -> Mar 3, silently SKIPPING February and then sticking on the
+  // 3rd forever. And because nextDate is persisted, the drift was permanent. Clamp to the
+  // month's last day instead, and remember the day the schedule is anchored to so a short
+  // month doesn't degrade it: Jan 31 -> Feb 28 -> Mar 31, not -> Mar 28.
+  if (monthly && !r.anchorDay) r.anchorDay = d.getDate();
+  const addMonths = n => {
+    const want = r.anchorDay || d.getDate();
+    const t = new Date(d.getFullYear(), d.getMonth() + n, 1);
+    const lastDay = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+    t.setDate(Math.min(want, lastDay));
+    return t;
+  };
+  const addDays = n => { const t = new Date(d); t.setDate(d.getDate() + n); return t; };
+  let out;
   switch (r.frequency) {
-    case 'Daily': d.setDate(d.getDate() + 1); break;
-    case 'Weekly': d.setDate(d.getDate() + 7); break;
-    case 'Bi-weekly': d.setDate(d.getDate() + 14); break;
-    case 'Monthly': d.setMonth(d.getMonth() + 1); break;
-    case 'Quarterly': d.setMonth(d.getMonth() + 3); break;
-    case 'Yearly': d.setFullYear(d.getFullYear() + 1); break;
-    default: d.setMonth(d.getMonth() + 1);
+    case 'Daily':     out = addDays(1);  break;
+    case 'Weekly':    out = addDays(7);  break;
+    case 'Bi-weekly': out = addDays(14); break;
+    case 'Monthly':   out = addMonths(1);  break;
+    case 'Quarterly': out = addMonths(3);  break;
+    case 'Yearly':    out = addMonths(12); break;
+    default:          out = addMonths(1);
   }
-  r.nextDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  r.nextDate = `${out.getFullYear()}-${String(out.getMonth()+1).padStart(2,'0')}-${String(out.getDate()).padStart(2,'0')}`;
 }
 
 function logRecurringNow(id) {
@@ -24799,9 +24824,9 @@ function renderAnalyticsAISummary() {
   const burn = avg6 > 0 ? avg6 : expense;
   const runway = burn > 0 ? cashDisp / burn : 0;
 
-  // ── next month, from a 3-month rolling average ──
+  // ── next month, from the shared rolling window (divides by months that actually had data) ──
   let predNet = 0, predMonths = 0;
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const t = getMonthTotals(mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1)));
     if ((t.income||0) || (t.expense||0)) { predNet += (t.income||0) - (t.expense||0); predMonths++; }
   }
@@ -24809,7 +24834,7 @@ function renderAnalyticsAISummary() {
 
   // ── how this month's net ranks against the last 6 ──
   const recentNets = [];
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const t = getMonthTotals(mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1)));
     if ((t.income||0) || (t.expense||0)) recentNets.push((t.income||0) - (t.expense||0));
   }
