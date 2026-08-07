@@ -53,20 +53,28 @@
   --purple:#7c6df0;--purple-bg:rgba(124,109,240,0.1);
   --blue:#2563eb;--blue-bg:rgba(37,99,235,0.1);
   --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:20px;--r-full:999px;
-  /* ── DESIGN TOKENS — Type scale ── */
+  /* ══ DESIGN TOKENS ══════════════════════════════════════════════════════════════════
+     RESERVED — NOT YET WIRED. These scales were declared for the inline-style → utility-class
+     migration, which is still deferred. Several members are used; the ones marked (unused)
+     below have ZERO call sites today. They are kept on purpose so the migration doesn't have
+     to re-derive the scale — do NOT treat an unused token as dead code and delete it.
+     Before wiring any of these, check the value it would REPLACE: --transition (0.2s) is used
+     in 39 places while --t-base (0.25s) is used in none, so adopting --t-base changes timing
+     app-wide. Same trap for the shadow and icon scales. ══════════════════════════════════ */
+  /* Type scale — xs/sm/base/md/lg in use; xl + hero (unused) */
   --fs-xs:10px;--fs-sm:11px;--fs-base:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fs-hero:32px;
-  /* ── DESIGN TOKENS — Shadow scale ── */
+  /* Shadow scale — sm + accent in use; md + lg (unused) */
   --shadow-sm:0 1px 3px rgba(0,0,0,0.12);
   --shadow-md:0 4px 16px rgba(0,0,0,0.15);
   --shadow-lg:0 12px 40px rgba(0,0,0,0.18);
   --shadow-accent:0 4px 16px var(--accent-glow);
   --shadow-accent-lg:0 8px 32px var(--accent-glow);
-  /* ── DESIGN TOKENS — Transition scale ── */
+  /* Transition scale — ALL FOUR unused; the live token is --transition (0.2s) above */
   --t-fast:0.15s ease;
   --t-base:0.25s cubic-bezier(0.32,0.72,0,1);
   --t-slow:0.4s cubic-bezier(0.32,0.72,0,1);
   --t-spring:0.34s cubic-bezier(0.34,1.3,0.64,1);
-  /* ── DESIGN TOKENS — Icon size scale ── */
+  /* Icon size scale — ALL FOUR unused; icon sizes are passed to _ico(name,size) in JS instead */
   --icon-xs:16px;--icon-sm:20px;--icon-md:28px;--icon-lg:40px;
   /* iOS-style spacing scale */
   /* spacing scale removed — never adopted in stylesheet */
@@ -141,7 +149,10 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 :root, [data-theme="dark"] {
   --bg:#0b0b11;--bg2:#15151f;--bg3:#1a1a24;--bg4:#20202c;--bg5:#2a2a3a;
   --border:#232334;--border2:#2d2d4a;--border3:#38384f;
-  --text:#ececf4;--text2:#c9c9d9;--text3:#8b8ba3;--text4:#5c5c72;
+  /* --text4 raised from #5c5c72 (2.79:1 on cards — below even the 3.0 large-text floor) to
+     #75758c (4.04:1). Deliberately stops short of the 4.5 AA bar so it stays clearly dimmer
+     than --text3 (5.45:1) and the three-tier text hierarchy survives. */
+  --text:#ececf4;--text2:#c9c9d9;--text3:#8b8ba3;--text4:#75758c;
   --shadow:0 4px 20px rgba(0,0,0,0.3);
 }
 /* ── LIGHT MODE ── */
@@ -308,10 +319,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1}
 .hero-amount{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-1.8px;color:var(--text);line-height:1;position:relative;z-index:1;font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum","zero"}
 .hero-currency{font-size:0.62em;color:var(--text2);margin-right:3px;font-weight:600;vertical-align:0.06em;letter-spacing:0}
-.hero-trend{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;padding:3px 9px;border-radius:var(--r-full);margin-top:10px;font-family:var(--font);position:relative;z-index:1}
-.hero-trend-up{background:var(--green-bg);color:var(--green)}
-.hero-trend-down{background:var(--red-bg);color:var(--red)}
-.hero-trend-flat{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6)}
 .hero-sub{font-size:12px;color:rgba(255,255,255,0.7);margin-top:8px}
 .hero-row{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
 .hero-stat{display:flex;flex-direction:column;gap:3px}
@@ -480,15 +487,6 @@ option{background:var(--bg3);color:var(--text)}
 .section-hdr .section-title{margin-bottom:0}
 .section-action{font-size:12px;color:var(--accent);cursor:pointer}
 
-.budget-bar-wrap{background:var(--bg3);border-radius:var(--r-md);padding:12px 15px;margin-bottom:8px}
-.budget-bar-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
-.budget-bar-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
-.budget-bar-amounts{font-family:var(--mono);font-size:11px;color:var(--text3)}
-.budget-bar-track{height:4px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden}
-.budget-bar-fill{height:100%;border-radius:var(--r-sm);transition:width 0.5s cubic-bezier(0.32,0.72,0,1)}
-.bar-ok{background:var(--green)}
-.bar-warn{background:var(--amber)}
-.bar-over{background:var(--red)}
 
 .ai-card{display:flex;gap:10px;align-items:flex-start;padding:12px 15px;background:linear-gradient(135deg,rgba(124,109,240,0.06),rgba(176,126,240,0.06));border:1px solid rgba(124,109,240,0.15);border-radius:var(--r-lg)}
 .ai-dot{width:22px;height:22px;border-radius:50%;background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
@@ -531,6 +529,11 @@ option{background:var(--bg3);color:var(--text)}
 .ov-row3,.ov-row4{display:grid;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-row4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ov-row3{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* PLS #205: the per-bar value label was originally "+₱100.0k" (~43px) with white-space:nowrap,
+   which overflowed the ~32px month columns at 1024px. Dropping the currency symbol and going to
+   8.5px brings it to ~24px, which fits at EVERY breakpoint (verified 1440/1280/1100/1024/901/
+   900/760/640/390px, tightest column 32px), so no responsive hiding is needed. If the label
+   format ever grows again, re-check against the 1024px case — that is the narrowest column. */
 @media(min-width:641px){.ov-row3.ov-n2{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-row3.ov-n1{grid-template-columns:1fr}}
 .ovcat-pane{display:flex;flex-direction:column;flex:1;min-height:0}
 .ovcat-pane>div{flex:1;min-height:0}
@@ -2459,6 +2462,16 @@ function toggleDashReorderMode() {
 // the divisor is 4; it becomes 6 only once six months exist. Dividing by a fixed 6 too early
 // understates the average and makes ordinary spending look like a spike.
 const ANALYSIS_MONTHS = 6;
+// ── PERSONAL LOGIC SET #202 ── ONE definition of "liquid" for the whole app.
+// Two competing definitions had drifted: the dashboard's Cash & Wallets used this ALLOWLIST,
+// while Liquidity / Runway / Concentration used a DENYLIST (everything except Credit Card and
+// Investment) — so Crypto, Loan and "Other" accounts counted as spendable cash in one place
+// and not the other, and the two tiles showed different totals for the same money.
+// Settled on strict on-hand cash: crypto and investments are marketable but NOT cash
+// equivalents — they can fall in value exactly when a runway is being relied on, so they must
+// not lengthen it.
+const LIQUID_TYPES = ['Savings','Checking','Cash','E-Wallet','Prepaid'];
+function isLiquidAccount(a) { return !!a && !a.archived && LIQUID_TYPES.includes(a.type || ''); }
 function avgMonthlyExpense6mo() {
   let total = 0, months = 0;
   const _now = new Date();
@@ -3751,10 +3764,9 @@ function renderDashboard() {
   // Credit Cards (liabilities) are tracked separately sa Net Worth / Liabilities — hindi i-mixed dito
   // para hindi misleading yung "cash" total. Pag may ₱65K savings at -₱5K CC, Cash & Wallets shows ₱65K.
   // ── PERSONAL LOGIC SET #28 (revised) ── Cash & Wallets = liquid assets only. CC excluded (own liability category).
-  const cashWalletTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid'];
-  const cashTotal = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type))
+  const cashTotal = db.accounts.filter(isLiquidAccount)
     .reduce((s,a)=>{ const b=toPhp(getAcctBalance(a.id),a.currency); return s+b; },0);
-  const cashAcctCount = db.accounts.filter(a=>!a.archived && cashWalletTypes.includes(a.type)).length;
+  const cashAcctCount = db.accounts.filter(isLiquidAccount).length;
   const loansOutTotal = db.loans.lent.filter(l=>!l.settled)
     .reduce((s,l)=>s+loanHomeValue(l),0);
   const loansOutCount = db.loans.lent.filter(l=>!l.settled).length;
@@ -8873,7 +8885,7 @@ function renderReimbTab() {
       return `<div class="tx-item" style="cursor:pointer" onclick="openTxDetail('${tx.id}')">
         <div class="tx-icon tx-icon-shared">${catDisp.icon}</div>
         <div class="tx-meta">
-          <div class="tx-name">${_stripIcon(catDisp.name)}</div>
+          <div class="tx-name">${_stripIcon(catDisp.name)}${tx.isFeeReimbursable?` <span style="font-size:9.5px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense — collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
           <div class="tx-detail">${fmtD(tx.date)} · Total ${fmt(tx.totalBill||tx.amount, tx.currency)}${paidLabel}</div>
         </div>
         <div class="tx-right">
@@ -9091,7 +9103,7 @@ function openReimbDialog(person) {
     const cat = getCategoryDisplay(tx.categoryId);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="flex:1;min-width:0">
-        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtD(tx.date)}</div>
+        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtD(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:9.5px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense — collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
         ${e.paid>0?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
       </div>
       <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
@@ -12496,10 +12508,46 @@ function renderAnalytics() {
   else if (_analyticsTab==='forex') content = renderAnalyticsForex();
   else content = renderAnalyticsOverview(); // safe fallback for unknown tab keys
   // Use swipe direction to decide animation class
+  // ── PERSONAL LOGIC SET #206 ── Linking was one-way: the Overview had 16 drill-down doors but
+  // the tabs themselves had almost none, so once you drilled in there was no way across or back.
+  // This strip renders under every tab and lists the tabs that actually relate to the current
+  // one, plus a route home to the Overview. Defined once here so all 18 tabs stay in sync.
+  const _TAB_KIN = {
+    overview:   [],
+    aisummary:  ['overview','cashflow','spending'],
+    cashflow:   ['overview','income','spending','calendar'],
+    calendar:   ['overview','cashflow','dayofweek'],
+    dayofweek:  ['overview','spending','calendar'],
+    spending:   ['overview','dayofweek','budget','subs'],
+    income:     ['overview','cashflow','people'],
+    trends:     ['overview','spending','yoy'],
+    yoy:        ['overview','trends','spending'],
+    budget:     ['overview','spending','subs'],
+    wealth:     ['overview','investments','accthealth'],
+    investments:['overview','wealth','crosscurr'],
+    accthealth: ['overview','wealth','forex'],
+    people:     ['overview','income','subs'],
+    subs:       ['overview','spending','budget'],
+    forex:      ['overview','crosscurr','external'],
+    crosscurr:  ['overview','forex','investments'],
+    external:   ['overview','forex','crosscurr'],
+  };
+  const _TAB_NAME = {overview:'Overview',aisummary:'AI Summary',cashflow:'Cashflow',calendar:'Calendar',
+    dayofweek:'By Day',spending:'Spending',income:'Income',trends:'Trends',yoy:'Year-over-Year',
+    budget:'Budget',wealth:'Wealth',investments:'Investments',accthealth:'Account Health',
+    people:'People',subs:'Subscriptions',forex:'Forex',crosscurr:'Cross-FX',external:'External'};
+  const kin = _TAB_KIN[_analyticsTab] || [];
+  const relatedStrip = kin.length ? `<div class="page-pad" style="margin-top:0;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text4);letter-spacing:0.04em">RELATED</span>
+      ${kin.map(k=>`<span onclick="setAnalyticsTab('${k}')" role="link" tabindex="0"
+        style="font-size:11px;color:${k==='overview'?'var(--text2)':'var(--accent)'};cursor:pointer;padding:3px 9px;border:1px solid var(--border);border-radius:var(--r-full);background:var(--bg2);white-space:nowrap">${k==='overview'?'← ':''}${_TAB_NAME[k]}</span>`).join('')}
+    </div></div>` : '';
+
   const dir = window._analyticsSwipeDir || 'none';
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
   const monthNav = _analyticsMonthNav();
-  document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}</div>`;
+  document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}${relatedStrip}</div>`;
   if (_analyticsTab==='overview') { requestAnimationFrame(() => { packMasonry(); setTimeout(packMasonry, 60); }); }
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
@@ -13017,6 +13065,28 @@ function renderAnalyticsOverview() {
     }
     return {inc, exp, rate};
   })();
+  // ── PERSONAL LOGIC SET #203 ── Overview is the "everything at a glance" surface and the
+  // dedicated tabs are its deep dives (verified: Net Worth 10x, Pareto 4.3x, Day-of-Week 2.8x
+  // more figures in-tab than in the Overview widget). Nothing pointed at those tabs, so the
+  // depth was invisible. _ovDoor stamps a small link onto a widget; _ovSection groups rows
+  // under a heading so 15 cards read as four themes instead of one long column.
+  const _ovDoor = (html, tab, label) => {
+    if (!html) return html;
+    const link = `<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
+      <span onclick="event.stopPropagation();nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)"
+        style="font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+        role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1">→</span></span></div>`;
+    const i = html.lastIndexOf('</div>');
+    return i < 0 ? html : html.slice(0, i) + link + html.slice(i);
+  };
+  const _ovSection = (title, sub, rows) => {
+    const body = rows.filter(Boolean).join('');
+    if (!body.trim()) return '';
+    return `<div style="margin:22px 0 10px">
+      <div style="font-size:13px;font-weight:700;color:var(--text2);letter-spacing:0.02em">${title}</div>
+      ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>`:''}
+    </div>${body}`;
+  };
   const _ovRow = (items, cls='ov-row3') => {
     const filled = items.filter(h => h);
     if (!filled.length) return '';
@@ -13077,7 +13147,7 @@ function renderAnalyticsOverview() {
           // ── LIQUIDITY KPI (replaced the "vs 6mo avg" %-only card) ──
           // Total ng actual liquid balances — same definition as the Runway card's "Liquid assets":
           // lahat ng non-archived accounts EXCEPT Credit Card & Investment, positive balances only.
-          const liqAccts = db.accounts.filter(a => !a.archived && !['Credit Card','Investment'].includes(a.type || ''));
+          const liqAccts = db.accounts.filter(isLiquidAccount);
           const trend = [];
           for (let i = 5; i >= 0; i--) {
             const eom = new Date(mY, mM-i, 0); // end of month; future dates resolve to current balance
@@ -13123,20 +13193,41 @@ function renderAnalyticsOverview() {
           <span><span data-ovcat="exp" style="cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('spending')">View all →</span><span data-ovcat="inc" style="display:none;cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('income')">View all →</span></span>
         </div>
       </div>` : '';
-      const budgetHtml = buildBudgetRanking(metricMk, dispCurr);
-      const cashflowHtml = buildCashflowRunway(metricMk, dispCurr);
-      const savingsRTHtml = buildSavingsSparkline(metricMk, dispCurr);
-      const netWorthHtml = buildNetWorthTrend(metricMk, dispCurr);
+      const budgetHtml = _ovDoor(buildBudgetRanking(metricMk, dispCurr), 'budget', 'Budget detail');
+      const cashflowHtml = _ovDoor(buildCashflowRunway(metricMk, dispCurr), 'cashflow', 'Full cashflow');
+      const savingsRTHtml = _ovDoor(buildSavingsSparkline(metricMk, dispCurr), 'cashflow', 'Full cashflow');
+      const netWorthHtml = _ovDoor(buildNetWorthTrend(metricMk, dispCurr), 'wealth', 'Wealth detail');
       const heroItems = [budgetHtml, cashflowHtml, savingsRTHtml, netWorthHtml].filter(h => h);
       if (!pieHtml && !heroItems.length) return '';
       if (!pieHtml) return _ovRow(heroItems, 'ov-row3'); // fall back to a plain trio row if pie is empty
       return `<div class="ov-heroA"><div class="ov-tall">${pieHtml}</div>${heroItems.map(h=>`<div>${h}</div>`).join('')}</div>`;
     })()}
 
-    ${_ovRow([buildForecastBand(metricMk, dispCurr), buildAnomalyHighlights(metricMk, dispCurr), buildIncomeExpenseBars(metricMk, dispCurr)])}
-    ${_ovRow([buildFixedVsDiscretionary(metricMk, dispCurr), buildDayOfWeekHeatmap(metricMk, dispCurr), buildParetoAnalysis(metricMk, dispCurr)])}
-    ${_ovRow([buildMostFrequent(metricMk, dispCurr), buildTimeOfDayPattern(metricMk, dispCurr), buildSpendingDistribution(metricMk, dispCurr)])}
-    ${_ovRow([buildIncomeDiversification(metricMk, dispCurr), buildConcentrationRisk(dispCurr)])}
+    ${_ovSection('Cash flow', 'Money in, money out, and what that points to', [
+      _ovRow([
+        _ovDoor(buildForecastBand(metricMk, dispCurr), 'cashflow', 'Full cashflow'),
+        _ovDoor(buildAnomalyHighlights(metricMk, dispCurr), 'spending', 'All categories'),
+        _ovDoor(buildIncomeExpenseBars(metricMk, dispCurr), 'cashflow', 'Full cashflow')
+      ])
+    ])}
+    ${_ovSection('Spending patterns', 'Where it goes, and when', [
+      _ovRow([
+        _ovDoor(buildFixedVsDiscretionary(metricMk, dispCurr), 'spending', 'All categories'),
+        _ovDoor(buildDayOfWeekHeatmap(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+        _ovDoor(buildParetoAnalysis(metricMk, dispCurr), 'spending', 'All categories')
+      ]),
+      _ovRow([
+        _ovDoor(buildMostFrequent(metricMk, dispCurr), 'spending', 'All categories'),
+        _ovDoor(buildTimeOfDayPattern(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+        _ovDoor(buildSpendingDistribution(metricMk, dispCurr), 'spending', 'All categories')
+      ])
+    ])}
+    ${_ovSection('Income & wealth', 'What you earn and what you hold', [
+      _ovRow([
+        _ovDoor(buildIncomeDiversification(metricMk, dispCurr), 'income', 'Income breakdown'),
+        _ovDoor(buildConcentrationRisk(dispCurr), 'wealth', 'Wealth detail')
+      ])
+    ])}
     ${_ovRow([(() => {
       // Top movers: categories where the metric month's spending deviates from its rolling average.
       // ── FIX: previously returned '' whenever period === 'ytd' (the DEFAULT view), so the card
@@ -13144,7 +13235,9 @@ function renderAnalyticsOverview() {
       // vs the prior months, computing its own month-scoped totals (expCats is year-wide on YTD).
       const _ncMonthCats = (mk) => {
         const out = {};
-        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && t.date && t.date.startsWith(mk) && (t.type === 'expense' || t.type === 'shared'));
+        // PLS #46: isFeeReimbursable shared txs are tracking-only markers — the real fee expense
+        // is already recorded via its isAutoFee sibling, so counting both double-counts the fee.
+        const monthTxs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && t.date && t.date.startsWith(mk) && (t.type === 'expense' || t.type === 'shared'));
         for (const tx of monthTxs) {
           const cat = getCategoryDisplay(tx.categoryId);
           const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
@@ -13207,8 +13300,13 @@ function renderAnalyticsOverview() {
           </div>`;
         }).join('')}
       </div>`;
-    })(), buildGoalProgress(dispCurr)])}
-    ${_ovRow([buildSubscriptionPanel(dispCurr), buildYoYComparison(metricMk, dispCurr)])}
+    })(), _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')])}
+    ${_ovSection('Commitments & history', 'Recurring costs and how this year compares', [
+      _ovRow([
+        _ovDoor(buildSubscriptionPanel(dispCurr), 'subs', 'Subscription detail'),
+        _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year')
+      ])
+    ])}
 
     ${(()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
@@ -13367,9 +13465,7 @@ function buildRunwayBar(dispCurr) {
 
   // Total liquid funds (savings/checking/cash, excluding credit card and investments)
   let liquid = 0;
-  for (const a of db.accounts.filter(a => !a.archived)) {
-    const t = a.type || '';
-    if (['Credit Card', 'Investment'].includes(t)) continue;
+  for (const a of db.accounts.filter(isLiquidAccount)) {
     const bal = getAcctBalance(a.id);
     if (bal > 0) liquid += a.currency === dispCurr ? bal : convert(bal, a.currency, dispCurr);
   }
@@ -13379,6 +13475,10 @@ function buildRunwayBar(dispCurr) {
   const daysRunway = Math.floor(monthsExact * 30.44);
   const color = monthsExact >= 6 ? 'var(--green)' : monthsExact >= 3 ? 'var(--amber)' : 'var(--red)';
   const label = monthsExact >= 6 ? 'Healthy buffer' : monthsExact >= 3 ? 'Adequate' : monthsExact >= 1 ? 'Tight — build emergency fund' : 'Critical';
+  // PLS #205: a lone "9.9mo" has no yardstick. Express it against the 3-month emergency-fund
+  // convention, in months AND in money, so the number can actually be acted on.
+  const TARGET_MONTHS = 3;
+  const gapMo = monthsExact - TARGET_MONTHS;
   // Visual segments — 12 cells = 1 year
   const cells = 12;
   const filled = Math.min(cells, Math.round(monthsExact));
@@ -13400,6 +13500,7 @@ function buildRunwayBar(dispCurr) {
       <span style="color:${color};font-weight:500">${label}</span>
       <span>${fmt(monthlyBurn, dispCurr)}/mo burn</span>
     </div>
+    ${monthlyBurn > 0 ? `<div style="font-size:10px;color:var(--text4);font-family:var(--mono);margin-top:4px;text-align:right">${TARGET_MONTHS}mo target · ${gapMo >= 0 ? '+' : '−'}${Math.abs(gapMo).toFixed(1)}mo (${fmt(Math.abs(gapMo * monthlyBurn), dispCurr)})</div>` : ''}
   </div>`;
 }
 
@@ -13640,7 +13741,12 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   const trendIcon = trend > 2 ? '▲' : trend < -2 ? '▼' : '→';
   // Plot ONLY months that have a savings rate. Dead months (no income → null) would
   // leave ugly empty edges/gaps, especially while 6 months of history is still incomplete.
-  const plotted = ratedMonths;
+  // PLS #204: the Overview savings card always shows the most recent 4 rated months — no more,
+  // no fewer. The scan above still walks 6 so pre-history months are skipped correctly; this
+  // only trims what gets drawn, so the card's width and label count stay constant month to
+  // month instead of growing from 4 to 6 as history accumulates.
+  const SAVINGS_CARD_MONTHS = 4;
+  const plotted = ratedMonths.slice(-SAVINGS_CARD_MONTHS);
   const n = plotted.length;
   const W = 240, H = 40, padX = 2, padY = 4;
   const cw = W - padX*2, ch = H - padY*2;
@@ -13653,7 +13759,10 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     _slPts.push([+x, +yv]);
   }
   // Dots as HTML overlay so they stay round under preserveAspectRatio="none".
-  const dots = plotted.map((mo, i) => `<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>`).join('');
+  // PLS #205: the line had four unlabelled dots and one figure underneath — the shape was
+  // visible but no month's actual rate was readable. Every point now states its own value.
+  const dots = plotted.map((mo, i) => `<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>
+    <div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;transform:translate(-50%,-165%);font-size:9px;font-family:var(--mono);color:var(--text3);white-space:nowrap">${Math.round(mo.rate)}%</div>`).join('');
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Savings Rate Trend${_infoBtn('savings')}</div>
@@ -13672,6 +13781,16 @@ function buildSavingsSparkline(metricMk, dispCurr) {
       <div style="text-align:right">
         <span style="font-family:var(--mono);font-size:16px;font-weight:700">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</span>
         <span style="font-size:11px;color:${trendColor};margin-left:6px">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</span>
+        ${(() => {
+          // PLS #205: a lone "51%" has nothing to be measured against. Compare it to the user's
+          // OWN average over the rated months — a self-referencing benchmark beats an arbitrary
+          // external target like "20% is good".
+          const rates = ratedMonths.map(mo => mo.rate).filter(r => r !== null);
+          if (rates.length < 2 || currentRate === null) return '';
+          const avg = rates.reduce((s,r)=>s+r,0) / rates.length;
+          const gap = currentRate - avg;
+          return `<div style="font-size:10px;color:var(--text4);margin-top:3px;font-family:var(--mono)">${rates.length}mo avg ${avg.toFixed(0)}% · ${gap>=0?'+':'−'}${Math.abs(gap).toFixed(0)}pp</div>`;
+        })()}
       </div>
     </div>
   </div>`;
@@ -13842,7 +13961,14 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Day-of-Week Pattern${_infoBtn('dow')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${labels[peakIdx]} is your highest spending day</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)">${(() => {
+          // PLS #205: this line used to just name the peak day, which the highlighted bar and
+          // the "avg <day>" figure below already say. State how far above normal it is instead.
+          const avgAll = dowAvgs.reduce((s,v)=>s+v,0) / 7;
+          if (!(avgAll > 0)) return labels[peakIdx];
+          const over = ((dowAvgs[peakIdx] - avgAll) / avgAll) * 100;
+          return `${labels[peakIdx]} runs ${over>=0?'+':'−'}${Math.abs(over).toFixed(0)}% vs your daily average`;
+        })()}</div>
       </div>
     </div>
     <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
@@ -14128,10 +14254,14 @@ function buildIncomeDiversification(metricMk, dispCurr) {
   if (total === 0) return '';
   const topPct = (entries[0][1].total / total * 100);
   // Concentration risk score
-  let risk, riskColor, riskLabel;
-  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; riskLabel = 'Single source dependency'; }
-  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Moderate concentration'; }
-  else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-diversified'; }
+  // PLS #205: figures over prose — state the actual share split rather than naming the risk twice.
+  let risk, riskColor;
+  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; }
+  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; }
+  else { risk = 'LOW'; riskColor = 'var(--green)'; }
+  const riskLabel = entries.length > 1
+    ? `top ${topPct.toFixed(0)}% · rest ${(100-topPct).toFixed(0)}% over ${entries.length-1} source${entries.length===2?'':'s'}`
+    : `${topPct.toFixed(0)}% from one source`;
   const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15'];
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
@@ -14267,7 +14397,7 @@ function buildGoalProgress(dispCurr) {
 // ─── 15. Account Concentration Risk ───
 function buildConcentrationRisk(dispCurr) {
   // Group active liquid accounts by type, exclude credit cards & investments
-  const accts = db.accounts.filter(a => !a.archived && !['Credit Card', 'Investment'].includes(a.type));
+  const accts = db.accounts.filter(isLiquidAccount);
   if (accts.length < 2) return '';
   const balances = accts.map(a => {
     const bal = getAcctBalance(a.id);
@@ -14279,10 +14409,17 @@ function buildConcentrationRisk(dispCurr) {
   if (total === 0) return '';
   const topAcct = balances[0];
   const topPct = (topAcct.balance / total * 100);
-  let risk, riskColor, riskLabel;
-  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; riskLabel = 'Single point of failure'; }
-  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; riskLabel = 'Consider diversifying'; }
-  else { risk = 'LOW'; riskColor = 'var(--green)'; riskLabel = 'Well-distributed'; }
+  // PLS #205: the old labels ("Single point of failure" / "Consider diversifying") only restated
+  // the risk badge and the percentage. Replace with the figure that answers "so what?" — how much
+  // would have to move out of the top account to get under the 60% MEDIUM threshold.
+  let risk, riskColor;
+  if (topPct >= 80) { risk = 'HIGH'; riskColor = 'var(--red)'; }
+  else if (topPct >= 60) { risk = 'MEDIUM'; riskColor = 'var(--amber)'; }
+  else { risk = 'LOW'; riskColor = 'var(--green)'; }
+  const toMove = topPct > 60 ? (topAcct.balance - total * 0.6) : 0;
+  const riskLabel = toMove > 0
+    ? `${fmt(toMove, dispCurr)} elsewhere → under 60%`
+    : `${(100-topPct).toFixed(0)}% spread across ${balances.length-1} other account${balances.length===2?'':'s'}`;
   const colors = ['#a78bfa', '#34d399', '#60a5fa', '#fb923c', '#f472b6', '#facc15', '#e879f9'];
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
@@ -14581,8 +14718,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
   // Runway (same math as the old Cash Runway card — PLS #124 source of truth)
   const monthlyBurn = avgMonthlyExpense6mo();
   let liquid = 0;
-  for (const a of db.accounts.filter(a => !a.archived)) {
-    if (['Credit Card','Investment'].includes(a.type || '')) continue;
+  for (const a of db.accounts.filter(isLiquidAccount)) {
     const bal = getAcctBalance(a.id);
     if (bal > 0) liquid += a.currency === dispCurr ? bal : convert(bal, a.currency, dispCurr);
   }
@@ -14766,13 +14902,22 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
   const displayMonths = months.filter(mo => mo.income > 0 || mo.expense > 0);
   if (displayMonths.length === 0) return '';
   const maxV = Math.max(...displayMonths.flatMap(mo => [mo.income, mo.expense]), 1);
-  const col = (mo, isLast) => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+  // PLS #205: six bars used to carry only ONE figure ("max ₱95.0k"). Every column now states
+  // its own net and its change vs the previous month, so the shape reads as numbers instead
+  // of being estimated by eye.
+  const col = (mo, isLast, prev) => {
+    const net = mo.income - mo.expense;
+    const dPct = prev && prev.expense > 0 ? ((mo.expense - prev.expense) / prev.expense) * 100 : null;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+    <div class="iebar-net" style="font-size:8.5px;font-family:var(--mono);color:${net>=0?'var(--green)':'var(--red)'};white-space:nowrap">${net>=0?'+':'−'}${_fmtK(Math.abs(net), dispCurr).replace(/^[^\d.-]+/,'')}</div>
     <div style="height:70px;display:flex;align-items:flex-end;gap:2px">
       <div style="width:9px;background:var(--green);border-radius:2px 2px 0 0;height:${(mo.income/maxV*100).toFixed(1)}%;min-height:2px;opacity:0.85" title="In ${fmt(mo.income,dispCurr)}"></div>
       <div style="width:9px;background:var(--red);border-radius:2px 2px 0 0;height:${(mo.expense/maxV*100).toFixed(1)}%;min-height:2px;opacity:0.85" title="Out ${fmt(mo.expense,dispCurr)}"></div>
     </div>
     <div style="font-size:10px;color:${isLast?'var(--text2)':'var(--text4)'};font-weight:${isLast?'600':'400'}">${mo.label}</div>
+    <div class="iebar-delta" style="font-size:8.5px;font-family:var(--mono);color:var(--text4);white-space:nowrap;min-height:11px">${dPct===null?'':(dPct>0?'▲':dPct<0?'▼':'')+Math.abs(dPct).toFixed(0)+'%'}</div>
   </div>`;
+  };
   const lastMo = displayMonths[displayMonths.length-1];
   const lastNet = lastMo.income - lastMo.expense;
   return `<div class="card" style="display:flex;flex-direction:column">
@@ -14784,7 +14929,7 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
       </div>
     </div>
     <div style="flex:1;display:flex;align-items:center">
-      <div style="display:flex;gap:4px;align-items:flex-end;width:100%">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1)).join('')}</div>
+      <div style="display:flex;gap:4px;align-items:flex-end;width:100%">${displayMonths.map((mo,i)=>col(mo, i===displayMonths.length-1, displayMonths[i-1])).join('')}</div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
       <span>${lastMo.label} net</span>
@@ -15441,6 +15586,42 @@ function renderAnalyticsIncome() {
       ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:10px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
+    ${(() => {
+      // PLS #206: the Income tab carried only 4 figures — a total and a count. A "deep dive"
+      // has to answer more than the Overview widget does. These are the questions the
+      // Overview's income card cannot: how steady is it, how concentrated, and what does a
+      // typical month look like.
+      const perMonth = {};
+      txs.forEach(t => { const k = (t.date||'').slice(0,7); if(k) perMonth[k] = (perMonth[k]||0) + (t.amount||0); });
+      const vals = Object.values(perMonth);
+      if (!vals.length) return '';
+      const n = vals.length;
+      const avg = vals.reduce((s,v)=>s+v,0) / n;
+      const hi = Math.max(...vals), lo = Math.min(...vals);
+      // coefficient of variation — the standard measure of how volatile a series is
+      const sd = Math.sqrt(vals.reduce((s,v)=>s+Math.pow(v-avg,2),0) / n);
+      const cv = avg > 0 ? (sd/avg)*100 : 0;
+      const steady = cv < 10 ? 'very steady' : cv < 25 ? 'fairly steady' : cv < 50 ? 'variable' : 'highly variable';
+      const steadyColor = cv < 25 ? 'var(--green)' : cv < 50 ? 'var(--amber)' : 'var(--red)';
+      const topShare = total > 0 ? (sorted[0][1].total/total*100) : 0;
+      const perTx = txs.length ? total/txs.length : 0;
+      const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
+        <span style="font-size:12.5px;color:var(--text2)">${label}</span>
+        <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
+      </div>`;
+      // Month-to-month stats are meaningless on a single month — "average over 1 month" and
+      // "best/worst" showing the same figure twice. Only surface them once there are 2+.
+      const multi = n >= 2;
+      return `<div style="background:var(--bg2);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px;border:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Income profile${multi?` · ${n} months`:''}</div>
+        ${multi ? row('Monthly average', fmt(avg, view), `over ${n} months`) : ''}
+        ${multi ? row('Best / worst month', `${_fmtK(hi, view)} / ${_fmtK(lo, view)}`, `spread ${_fmtK(hi-lo, view)}`) : ''}
+        ${multi ? row('Stability', `<span style="color:${steadyColor}">${cv.toFixed(0)}% swing</span>`, steady) : ''}
+        ${row('Top source share', `${topShare.toFixed(0)}%`, `${_stripIcon(sorted[0][0])} · ${sorted.length} source${sorted.length===1?'':'s'} total`)}
+        ${row('Per deposit', fmt(perTx, view), `${txs.length} deposit${txs.length===1?'':'s'}`)}
+        ${sorted.length > 1 ? row('Sources beyond the top', `${(100-topShare).toFixed(0)}%`, `${sorted.length-1} other source${sorted.length===2?'':'s'}`) : ''}
+      </div>`;
+    })()}
     <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Source · ${sorted.length}</div>
     <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">${bars.join('')}</div>
   </div>`;
@@ -17272,7 +17453,9 @@ function doCheckin(contractId, hit) {
   contract.lastCheckin = mk;
   if (!contract.checkinHistory) contract.checkinHistory = [];
   contract.checkinHistory.push({ month: mk, hit, ts: Date.now() });
-  saveDB();
+  // PLS #157: must be the syncing save — plain saveDB() skips the lastLocalEditAt stamp and
+  // the unsaved flag, so the sync indicator would show 🟢 while the check-in sat unsynced.
+  saveDBWithSync();
   renderPlanning();
   showToast(hit ? '✅ Logged — counted as a hit this month.' : '✓ Logged — marked as missed this month.');
 }
@@ -20235,8 +20418,11 @@ function exportXLSX() {
     const bgtRows = [['Budget Name','Currency','Monthly Limit','Spent This Month','Remaining','Alert %']];
     for (const b of (db.budgets || [])) {
       const monthKey = currMonthKey();
+      // PLS #95: use the SAME canonical budget-spend exclusions as the in-app figure, otherwise
+      // the exported sheet reports a different "spent" than the app shows on screen.
       const spent = db.transactions.filter(t =>
-        !t.archived && t.date?.startsWith(monthKey) &&
+        !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment &&
+        !t.isAutoReimb && !t.isFeeReimbursable && t.date?.startsWith(monthKey) &&
         (t.type === 'expense' || t.type === 'shared') &&
         (b.accountIds?.includes(t.accountId) || !b.accountIds?.length)
       ).reduce((s, t) => s + txToPhp(t), 0);
@@ -24227,6 +24413,37 @@ function renderAnalyticsPeople() {
       </div>
     </div>
 
+    ${(() => {
+      // PLS #206: the People tab showed four totals and a list — the same shape as a summary.
+      // A deep dive should answer how OLD the exposure is and how concentrated it is, which
+      // nothing else in the app reports.
+      const openLoans = [...(db.loans?.lent||[]).filter(l=>!l.settled).map(l=>({...l,dir:'lent'})),
+                         ...(db.loans?.borrowed||[]).filter(l=>!l.settled).map(l=>({...l,dir:'borrowed'}))];
+      const withDate = openLoans.filter(l=>l.date);
+      if (!list.length) return '';
+      const today = new Date();
+      const ages = withDate.map(l => Math.max(0, Math.round((today - new Date(l.date+'T12:00')) / 86400000)));
+      const oldest = ages.length ? Math.max(...ages) : 0;
+      const avgAge = ages.length ? Math.round(ages.reduce((s,v)=>s+v,0)/ages.length) : 0;
+      const oldestLoan = ages.length ? withDate[ages.indexOf(oldest)] : null;
+      const topP = list[0];
+      const topExposure = topP ? topP.lent + topP.sharedOwed : 0;
+      const topShare = totalOwedToMe > 0 ? (topExposure/totalOwedToMe*100) : 0;
+      const overdue = openLoans.filter(l => l.dueDate && new Date(l.dueDate+'T12:00') < today);
+      const overdueAmt = overdue.reduce((s,l)=>s+toPhp(l.remaining||l.amount, l.currency),0);
+      const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
+        <span style="font-size:12.5px;color:var(--text2)">${label}</span>
+        <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
+      </div>`;
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
+        <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Exposure profile</div>
+        ${ages.length ? row('Oldest open item', `${oldest} day${oldest===1?'':'s'}`, oldestLoan ? `${_esc(oldestLoan.personName||'—')} · ${fmt(_inDisplay(toPhp(oldestLoan.remaining||oldestLoan.amount, oldestLoan.currency)), dc)}` : '') : ''}
+        ${ages.length ? row('Average age', `${avgAge} day${avgAge===1?'':'s'}`, `${ages.length} dated item${ages.length===1?'':'s'}`) : ''}
+        ${topP ? row('Largest single exposure', `${topShare.toFixed(0)}%`, `${_esc(topP.name)} · ${fmt(_inDisplay(topExposure), dc)}`) : ''}
+        ${overdue.length ? row('<span style="color:var(--red)">Past due</span>', `<span style="color:var(--red)">${fmt(_inDisplay(overdueAmt), dc)}</span>`, `${overdue.length} item${overdue.length===1?'':'s'}`) : row('Past due', 'none', 'nothing overdue')}
+        ${row('Avg per person', fmt(_inDisplay(totalOwedToMe/Math.max(1,list.length)), dc), `across ${list.length} ${list.length===1?'person':'people'}`)}
+      </div>`;
+    })()}
     <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Person</div>`;
 
   list.forEach(p => {
@@ -24482,6 +24699,34 @@ function renderAnalyticsSubs() {
       <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(_inDisplay(totalYearly), dc)}/year · ${subs.length} active</div>
     </div>
 
+    ${(() => {
+      // PLS #203: this tab was only 1.5x deeper than its Overview widget — barely worth the tap.
+      // These three lines answer what the widget can't: what share of income it eats, what it
+      // has already cost you, and which single one is the biggest lever.
+      const inc = getMonthTotals(currMonthKey()).income || 0;
+      const share = inc > 0 ? (_inDisplay(totalMonthly) / inc) * 100 : 0;
+      const biggest = enriched.slice().sort((a,b) => b.monthly - a.monthly)[0];
+      // how long these have actually been running, from the oldest matching expense
+      const names = enriched.map(s => (s.name||'').toLowerCase()).filter(Boolean);
+      const hits = (db.transactions||[]).filter(t => !t.archived && t.date &&
+        names.some(n => n && (t.notes||'').toLowerCase().includes(n))).map(t => t.date).sort();
+      let paidLine = '';
+      if (hits.length) {
+        const fd = new Date(hits[0] + 'T12:00');
+        const mo = Math.max(1, (new Date().getFullYear()-fd.getFullYear())*12 + (new Date().getMonth()-fd.getMonth()));
+        paidLine = `<div class="stat-row"><span>Running since</span><b>${fd.toLocaleDateString('en-PH',{month:'short',year:'numeric'})} · about ${mo} month${mo===1?'':'s'}</b></div>`;
+      }
+      return `<div class="card" style="margin-bottom:16px">
+        <div class="section-title">What this actually costs you</div>
+        <style>.stat-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:12.5px;color:var(--text2)}.stat-row:first-of-type{border-top:0}.stat-row b{font-family:var(--mono);color:var(--text);font-weight:600}</style>
+        ${inc > 0 ? `<div class="stat-row"><span>Share of this month's income</span><b>${share.toFixed(1)}%</b></div>` : ''}
+        <div class="stat-row"><span>Over 5 years, if nothing changes</span><b>${fmt(_inDisplay(totalYearly*5), dc)}</b></div>
+        ${biggest ? `<div class="stat-row"><span>Biggest single one</span><b>${_esc(biggest.name||'—')} · ${fmt(_inDisplay(biggest.monthly), dc)}/mo</b></div>` : ''}
+        ${biggest && totalMonthly>0 ? `<div class="stat-row"><span>Cancelling just that one saves</span><b>${fmt(_inDisplay(biggest.monthly*12), dc)}/yr</b></div>` : ''}
+        ${paidLine}
+      </div>`;
+    })()}
+
     <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Active Subscriptions</div>`;
 
   enriched.forEach(s => {
@@ -24605,7 +24850,19 @@ function renderAnalyticsYoY() {
   // Empty state: no transactions from last year
   const hasLastYearTx = (db.transactions || []).some(t => new Date(t.date).getFullYear() === lastYear);
   if (!hasLastYearTx) {
-    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Not enough history yet</div><div class="empty-sub">Year-over-year comparison needs transactions from last year</div></div></div>`;
+    // PLS #203: a bare "not enough history" tells you nothing actionable. Work out how much
+    // history actually exists and name the month this tab starts working, so the wait is known.
+    const dates = (db.transactions || []).filter(t => !t.archived && t.date).map(t => t.date).sort();
+    const first = dates[0];
+    let detail = 'Log a few months of transactions and this tab will compare them against the same months next year.';
+    if (first) {
+      const fd = new Date(first + 'T12:00');
+      const months = Math.max(0, (curYear - fd.getFullYear()) * 12 + (now.getMonth() - fd.getMonth()));
+      const ready = new Date(fd.getFullYear() + 1, fd.getMonth(), 1);
+      const readyLabel = ready.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+      detail = `You have about ${months} month${months === 1 ? '' : 's'} of history, starting ${fd.toLocaleDateString('en-PH',{month:'long',year:'numeric'})}. This tab needs a full year to compare against — it starts working in <b>${readyLabel}</b>.`;
+    }
+    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Not enough history yet</div><div class="empty-sub">${detail}</div></div></div>`;
   }
   const curMonth = now.getMonth();
 
@@ -24817,8 +25074,7 @@ function renderAnalyticsAISummary() {
   const topShare = topCat && expense > 0 ? (topCatDisp / expense) * 100 : 0;
 
   // ── liquid cash → runway (same account types the dashboard counts as cash) ──
-  const cashTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid'];
-  const cashPhp = db.accounts.filter(a => !a.archived && cashTypes.includes(a.type))
+  const cashPhp = db.accounts.filter(isLiquidAccount)
     .reduce((s,a) => s + toPhp(getAcctBalance(a.id), a.currency), 0);
   const cashDisp = _inDisplay(cashPhp);
   const burn = avg6 > 0 ? avg6 : expense;
