@@ -159,7 +159,7 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 [data-theme="light"] {
   --bg:#f8f7ff;--bg2:#ffffff;--bg3:#f0eeff;--bg4:#e8e4ff;--bg5:#ddd8ff;
   --border:rgba(124,109,240,0.22);--border2:rgba(124,109,240,0.32);--border3:rgba(124,109,240,0.42);
-  --text:#1a1330;--text2:#3d3560;--text3:#5c5285;--text4:#8878b8;
+  --text:#1a1330;--text2:#3d3560;--text3:#5c5285;--text4:#8472b4;
   --input-bg:#ffffff;--shadow:0 2px 12px rgba(124,109,240,0.12);
   --shadow-purple:0 4px 24px rgba(124,109,240,0.18);
   /* Override semantic colors for light mode readability */
@@ -943,7 +943,7 @@ option{background:var(--bg3);color:var(--text)}
     </div>
     <div class="onboard-step" id="ob-step-2">
       <div style="font-size:22px;font-weight:700;margin-bottom:6px">Currencies 💱</div>
-      <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Choose currencies to track. <span id="ob-homebase-text">Your home currency is auto-tracked.</span></div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Choose currencies to track. <span id="ob-homebase-text">Your home currency is tracked automatically.</span></div>
       <div class="form-group">
         <label class="form-label" for="ob-curr-search">Add Currency</label>
         <input class="form-input" id="ob-curr-search" placeholder="Search..." oninput="searchCurr(this.value)" autocomplete="off">
@@ -1551,6 +1551,7 @@ const _ICONS = {
   gauge:    '<path d="M12 21a9 9 0 1 1 9-9"/><line x1="12" y1="12" x2="16.5" y2="8.5"/><circle cx="12" cy="12" r="1.2"/>',
   target:   '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
   alert:    '<path d="M10.3 4.3 2.6 18a1.6 1.6 0 0 0 1.4 2.4h16a1.6 1.6 0 0 0 1.4-2.4L13.7 4.3a1.6 1.6 0 0 0-2.8 0z"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
   list:     '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
 };
 function _ico(name, size, style) {
@@ -2159,8 +2160,20 @@ function saveDBWithSync() {
 }
 // ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
-function showToast(msg, dur=2200) {
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+function showToast(msg, dur=2200, icon=null) {
+  // PLS #209: optional leading line icon. `icon` must be a key in _ICONS — arbitrary markup is
+  // never accepted, and the message itself is still set as a text node, so it cannot inject.
+  const t=document.getElementById('toast');
+  t.textContent='';
+  const glyph = icon && _ICONS[icon] ? _ico(icon, 14) : '';
+  if (glyph) {
+    const s=document.createElement('span');
+    s.style.cssText='display:inline-flex;align-items:center;margin-right:7px;vertical-align:-2px';
+    s.innerHTML=glyph;
+    t.appendChild(s);
+  }
+  t.appendChild(document.createTextNode(msg));
+  t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), dur);
 }
 
@@ -3662,7 +3675,7 @@ function renderDashboard() {
       <div style="margin-bottom:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-left:4px solid var(--amber);border-radius:var(--r-md);padding:12px 14px;display:flex;align-items:flex-start;gap:10px">
         <div style="font-size:20px;flex-shrink:0">🔄</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:3px">Contract auto-created from your old investment plan</div>
+          <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:3px">Contract created automatically from your old investment plan</div>
           <div style="font-size:12px;color:var(--text2);line-height:1.5">Your previous savings plan was migrated to a Contract. Please review it in <span onclick="nav('planning')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Planning → Contracts</span> and confirm the dates, target, and bucket links are correct.</div>
         </div>
         <button aria-label="Close" onclick="dismissMigrationBanner()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;padding:0;line-height:1;flex-shrink:0">×</button>
@@ -3888,7 +3901,7 @@ function renderDashboard() {
       const hidden = DASH_SECTIONS_ALL.filter(s => !order.includes(s));
       if (hidden.length === 0) return '';
       return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:8px">Hidden — tap to add back</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:8px">Hidden. Tap to add back</div>
         ${hidden.map(id => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px dashed var(--border3);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;opacity:0.75">
           <span style="flex:1;font-size:13px;font-weight:500;color:var(--text3)">${DASH_SECTION_LABELS[id]}</span>
           <button onclick="addDashSection('${id}')" style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);border-radius:var(--r-sm);padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer">+ Add</button>
@@ -5936,7 +5949,7 @@ function renderTransferForm() {
               <input class="form-input numpad-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()" inputmode="none">
             </div>
           </div>
-          <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either — auto-syncs. Leave blank to use snapshot.</div>
+          <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Type either one, the other fills in. Leave blank to use snapshot.</div>
         </div>
 
         <!-- Transfer fee + reimbursable person -->
@@ -6208,7 +6221,7 @@ function updateTransferPreview() {
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
         const label = isLoss ? 'Forex Loss' : 'Forex Gain';
-        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + sym(home) + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text4)">auto-logged</span>';
+        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + sym(home) + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text4)">logged automatically</span>';
       } else if (!useSnapshot && userToAmount > 0 && snapRate > 0) {
         // User entered actual received only — diff vs snapshot
         const snapAmt = txCurr === home ? amount / snapRate : amount * snapRate;
@@ -6773,7 +6786,7 @@ function renderTxLog() {
       ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No ${qfLabels[_txQuickFilter]||'matches'} this month</div><button class="btn btn-ghost btn-sm" onclick="setTxQuickFilter('${_txQuickFilter}')">Clear filter</button></div>`
       : searchActive
         ? `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No matches for "${searchQuery.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]))}"</div><div class="empty-sub">Try a different keyword, amount, or account name.</div><button class="btn btn-ghost btn-sm" onclick="clearTxSearch()">Clear search</button></div>`
-        : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one — expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
+        : `<div class="empty-state"><div class="empty-icon">🪶</div><div class="empty-text">No transactions this month yet</div><div class="empty-sub">Tap the button below to log your first one: expense, income, transfer, or anything else.</div><button class="btn btn-primary btn-sm" onclick="openAddSheet()">+ Add Transaction</button></div>`;
   }
 
   // ── BULK TOOLBAR ──
@@ -8058,7 +8071,7 @@ function updateEditTransferPreview() {
       const effRate = customRate > 0 ? customRate : (txCurr === home ? amount / actualToAmt : actualToAmt / amount);
       fxPrev.style.display = 'block';
       fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${fmtRate(snapRate)} | Transaction rate: ${sym(_homeBase())}${fmtRate(effRate)}</div>
-        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(auto-logged)</span></div>`;
+        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text4)">(logged automatically)</span></div>`;
     } else { fxPrev.style.display = 'none'; }
   } else if (fxPrev) { fxPrev.style.display = 'none'; }
 }
@@ -8240,7 +8253,7 @@ function openEditTransfer(txId) {
           <input class="form-input numpad-input" type="number" id="etf-custom-rate" placeholder="0.0000" step="any" value="${existingCustomRate}" oninput="onEtfCustomRateInput()" inputmode="none">
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Optional — type either field to override snapshot rate. Leave blank to use snapshot.</div>
+      <div style="font-size:10px;color:var(--text4);line-height:1.3">💡 Optional. Type either field to override the snapshot rate, or leave blank to use it.</div>
     </div>
     <div id="etf-forex-preview" style="font-size:12px;padding:10px 12px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px;display:none"></div>
     <div class="form-group">
@@ -8617,7 +8630,7 @@ function restoreTx(txId) {
       openDlg('Restore Parent Instead?',
         `<div style="font-size:13px;color:var(--text2);line-height:1.6">
           This is a linked child transaction. To keep accounting consistent, restore the
-          <strong>parent transaction</strong> instead — all linked children will be restored together.
+          <strong>parent transaction</strong> instead, and all linked children will be restored together.
         </div>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
          <button class="btn btn-primary btn-sm" onclick="closeDlg();restoreTx('${txData.cascadedFrom}')">Restore Parent</button>`
@@ -8934,7 +8947,7 @@ function openSettledReimbSheet() {
 
   if (settled.length === 0) {
     openSheet('gen', 'Settled Reimbursements',
-      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled reimbursements yet</div><div class="empty-sub">Fully-paid shared transactions will appear here.</div></div>`
+      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled reimbursements yet</div><div class="empty-sub">Fully paid shared transactions will appear here.</div></div>`
     );
     return;
   }
@@ -9255,7 +9268,7 @@ function openWriteOffReimb(person) {
         ${summaryHtml}
         <li>Log each as <strong>Reimbursement Settlement Loss</strong> (real expense)</li>
         <li>Mark all entries as settled (won't appear in active list)</li>
-        <li>Cannot be undone — but each loss is a regular tx you can delete</li>
+        <li>Cannot be undone, but each loss is a regular tx you can delete</li>
       </ul>
     </div>
     <div class="form-group"><label class="form-label" for="wor-reason">Reason</label>
@@ -9603,7 +9616,7 @@ function renderAcctCard(a) {
   return `<div class="acct-card" onclick="openAcctDetail('${a.id}')">
     <div class="acct-card-top">
       <div class="acct-name">${_esc(a.name)}</div>
-      <div class="acct-type-badge">${a.type}</div>
+      <div class="acct-type-badge">${a.type || 'Other'}</div>
     </div>
     ${a.note?`<div style="font-size:11px;color:var(--text4);margin-bottom:4px;overflow-wrap:anywhere">${_esc(a.note)}</div>`:''}
     <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency)}</div>
@@ -9629,7 +9642,7 @@ function renderArchivedAccounts() {
       </div>
       <div style="font-size:11px;color:var(--text4);margin-bottom:10px">
         ${hasTxns
-          ? `<span style="color:var(--amber)">⚠ Has transactions — cannot be permanently deleted</span>`
+          ? `<span style="color:var(--amber)">⚠ Has transactions, so it cannot be permanently deleted</span>`
           : `<span style="color:var(--green)">✓ No transactions</span>`}
       </div>
       <div style="display:flex;gap:8px">
@@ -9936,7 +9949,7 @@ function deleteAccount(acctId) {
   const hasTxns = db.transactions.some(t => t.accountId === acctId || t.fromAccountId === acctId || t.toAccountId === acctId);
   if (hasTxns) {
     openDlg('Cannot Delete',
-      `<p style="font-size:14px;color:var(--text2)">This account has existing transactions and cannot be permanently deleted. You can archive it instead — all transaction history will be preserved.</p>`,
+      `<p style="font-size:14px;color:var(--text2)">This account has existing transactions and cannot be permanently deleted. You can archive it instead, and all transaction history will be preserved.</p>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">OK</button>`
     );
     return;
@@ -9949,7 +9962,7 @@ function deleteAccount(acctId) {
 }
 function confirmDeleteAccount(acctId) {
   db.accounts = db.accounts.filter(a=>a.id!==acctId);
-  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderAccounts(); showToast('Account deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderAccounts(); showToast('Account deleted', 2200, 'trash');
 }
 
 
@@ -10406,7 +10419,7 @@ function confirmDeleteInv(id) {
   // ── PERSONAL LOGIC SET #50 ── Investment cascade: delete investment → permanently delete all linked isInvestmentFund + isInvestmentReturn txs
   db.transactions = db.transactions.filter(t => t.investmentId !== id);
   db.investments = db.investments.filter(i => i.id !== id);
-  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAfterInvChange(); showToast('Investment deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAfterInvChange(); showToast('Investment deleted', 2200, 'trash');
 }
 function archiveInv(id) {
   const inv = db.investments.find(i=>i.id===id);
@@ -11533,6 +11546,16 @@ function saveLoanPayment(paymentId, loanId, direction) {
 }
 
 function deleteLoanPayment(paymentId, loanId, direction) {
+  // PLS #208: confirm first. This does not merely remove a row — it recomputes the loan's
+  // remaining balance and settled state, so a mistap silently rewrites money data.
+  const l0 = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
+  if (!l0) return;
+  openDlg('Delete this payment?',
+    `<p style="font-size:14px;color:var(--text2);margin:0;line-height:1.6">Removing this payment will recalculate the remaining balance on <strong>${_esc(l0.personName||'this loan')}</strong>. This cannot be undone.</p>`,
+    `<button class="btn btn-ghost" onclick="editLoanPayment('${paymentId}','${loanId}','${direction}')">Cancel</button>
+     <button class="btn btn-danger" onclick="confirmDeleteLoanPayment('${paymentId}','${loanId}','${direction}')">Delete</button>`);
+}
+function confirmDeleteLoanPayment(paymentId, loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
   db.transactions = db.transactions.filter(t => t.id !== paymentId);
@@ -11542,7 +11565,7 @@ function deleteLoanPayment(paymentId, loanId, direction) {
   loan.remaining = Math.max(0, loan.amount - totalPaid);
   loan.settled = loan.remaining <= 0.001;
   if (!loan.settled) loan.settledDate = null;
-  saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment deleted');
+  saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment deleted', 2200, 'trash');
 }
 
 
@@ -11934,7 +11957,7 @@ function confirmDeleteLoan(loanId) {
   // Remove loan settlement gain/loss children (parentId points to batch settlement tx OR loan id directly for write-offs)
   db.transactions = db.transactions.filter(t=>!((t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId)));
   db.archivedTransactions = db.archivedTransactions.filter(t=>!((t.isLoanSettlementGain || t.isLoanSettlementLoss) && allParentIds.includes(t.parentId)));
-  saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted');
+  saveDBWithSync(); closeDlg(); renderLoans(); showToast('Loan and payments deleted', 2200, 'trash');
   // Refresh open archive sheet if still mounted
   if (document.getElementById('gen-sheet')?.classList.contains('open')) {
     if ((db.archivedLoans||[]).length > 0) openLoanArchiveSheet();
@@ -12805,6 +12828,33 @@ function renderAnalyticsCalendar() {
     html += `</div>`;
   }
 
+  // ── PLS #210 ── The Calendar tab is a drill-down, so it has to say more than the grid shows.
+  // These are the questions a month grid cannot answer by eye: how many days you actually spent,
+  // what a spending day costs, and which single day carried the most.
+  html += (() => {
+    const days = Object.keys(byDate).filter(k => k.startsWith(_calMonth));
+    const spendDays = days.filter(k => (byDate[k].expense || 0) > 0);
+    if (!spendDays.length) return '';
+    const amounts = spendDays.map(k => byDate[k].expense);
+    const totalSpent = amounts.reduce((s, v) => s + v, 0);
+    const peakKey = spendDays.reduce((a, b) => byDate[a].expense >= byDate[b].expense ? a : b);
+    const perSpendDay = totalSpent / spendDays.length;
+    const perCalendarDay = totalSpent / daysInMonth;
+    const quietDays = daysInMonth - spendDays.length;
+    const netDays = days.filter(k => ((byDate[k].income || 0) - (byDate[k].expense || 0)) > 0).length;
+    const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
+      <span style="font-size:12.5px;color:var(--text2)">${label}</span>
+      <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
+    </div>`;
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Month rhythm</div>
+      ${row('Days you spent', `${spendDays.length} of ${daysInMonth}`, `${quietDays} quiet day${quietDays===1?'':'s'}`)}
+      ${row('Cost of a spending day', fmt(perSpendDay, dc), `spread over every day it is ${fmt(perCalendarDay, dc)}`)}
+      ${row('Heaviest day', fmt(byDate[peakKey].expense, dc), `${fmtD(peakKey)} · ${totalSpent>0?((byDate[peakKey].expense/totalSpent)*100).toFixed(0):0}% of the month`)}
+      ${row('Days you ended ahead', `${netDays}`, `income beat spending`)}
+    </div>`;
+  })();
+
   html += `<div style="font-size:11px;color:var(--text4);text-align:center;margin-bottom:20px">
     Tap any day to see transactions · 🟢 net positive · 🔴 net negative · ⚠ has upcoming bill
   </div>`;
@@ -13284,7 +13334,7 @@ function renderAnalyticsOverview() {
       return `<div class="card" style="height:100%;display:flex;flex-direction:column">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">What Changed</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;margin-bottom:8px">${_ncMonthLabel} vs your usual</div>
-        ${top.length === 0 ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--text4);line-height:1.5;padding:16px 0">Steady lang ✦<br>Nothing stood out this month</div>` : top.map(m => {
+        ${top.length === 0 ? `<div style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:var(--text4);line-height:1.5;padding:16px 0">Steady ✦<br>Nothing stood out this month</div>` : top.map(m => {
           const isUp = m.diff > 0;
           const cls = isUp ? 'tx-neg' : 'tx-pos';
           const icon = isUp ? '▲' : '▼';
@@ -13312,8 +13362,10 @@ function renderAnalyticsOverview() {
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
-      // Show most recent first
-      const sorted = [...activeMonths].reverse();
+      // PLS #204: the Overview month cards are capped at the most recent 4, same rule as the
+      // Savings card — the grid stays a constant 2x2 instead of growing to 5 and leaving one
+      // card stranded on its own row.
+      const sorted = [...activeMonths].reverse().slice(0, 4);
       const cards = sorted.map(m => {
         const net = m.income - m.expense;
         const isActive = m.key === metricMk;
@@ -13362,7 +13414,7 @@ function renderAnalyticsOverview() {
       return `<div class="card" style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">${headerLabel}</div>
-          <div style="font-size:11px;color:var(--text4)">${activeMonths.length} mo</div>
+          <div style="font-size:11px;color:var(--text4)">${sorted.length} mo</div>
         </div>
         <div class="stat-month-grid">${cards}</div>
       </div>`;
@@ -13474,7 +13526,7 @@ function buildRunwayBar(dispCurr) {
   const monthsRunway = monthsExact.toFixed(1);
   const daysRunway = Math.floor(monthsExact * 30.44);
   const color = monthsExact >= 6 ? 'var(--green)' : monthsExact >= 3 ? 'var(--amber)' : 'var(--red)';
-  const label = monthsExact >= 6 ? 'Healthy buffer' : monthsExact >= 3 ? 'Adequate' : monthsExact >= 1 ? 'Tight — build emergency fund' : 'Critical';
+  const label = monthsExact >= 6 ? 'Healthy buffer' : monthsExact >= 3 ? 'Adequate' : monthsExact >= 1 ? 'Tight, build an emergency fund' : 'Critical';
   // PLS #205: a lone "9.9mo" has no yardstick. Express it against the 3-month emergency-fund
   // convention, in months AND in money, so the number can actually be acted on.
   const TARGET_MONTHS = 3;
@@ -13538,9 +13590,13 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   outliers.sort((a,b) => b.z - a.z);
   const top = outliers.slice(0, 3);
   if (top.length === 0) return '';
+  // PLS #207: with a single outlier, `justify-content:space-evenly` (added in v-63 to kill
+  // bottom dead-space) stranded one lone row in the middle of a stretched card. Distribute only
+  // when there are 2+ rows, and give a quiet month a real figure instead of empty space.
+  const screened = txs.length;
   return `<div class="card" style="margin-bottom:16px;display:flex;flex-direction:column">
     <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Unusual Transactions${_infoBtn('anomaly')}</div>
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:space-evenly">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:${top.length >= 2 ? 'space-evenly' : 'flex-start'}">
     ${top.map(o => {
       const catName = _stripIcon(o.cat.name);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
@@ -13557,6 +13613,10 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
         </div>
       </div>`;
     }).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:10px;padding-top:8px">
+      <span>${screened} transaction${screened===1?'':'s'} screened</span>
+      <span style="font-family:var(--mono)">${top.length} flagged · ${screened>0?((top.length/screened)*100).toFixed(1):'0'}%</span>
     </div>
   </div>`;
 }
@@ -14096,14 +14156,14 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
         return pct > 0 ? `<div style="width:${pct}%;background:${colors[k]};border-radius:var(--r-full)" title="${k} · ${pct.toFixed(0)}%"></div>` : '';
       }).join('')}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;font-size:11px">
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;font-size:11px">
       ${Object.entries(buckets).map(([k,v]) => `
         <div style="text-align:center;background:var(--bg3);border-radius:var(--r-md);padding:7px 4px 8px;border-top:2px solid ${colors[k]}">
           <div style="font-size:16px">${icons[k]}</div>
-          <div style="color:var(--text3);font-size:10px;margin-top:2px">${k} · ${total>0?(v/total*100).toFixed(0):0}%</div>
-          <div style="color:var(--text4);font-size:8.5px">${ranges[k]}</div>
-          <div style="font-family:var(--mono);font-weight:700;font-size:11px;margin-top:2px">${fmt(v, dispCurr)}</div>
-          <div style="color:var(--text4);font-size:9.5px;margin-top:1px">${bucketCounts[k]}× · avg ${_fmtK(bucketCounts[k]?v/bucketCounts[k]:0, dispCurr)}</div>
+          <div style="color:var(--text3);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${k} · ${total>0?(v/total*100).toFixed(0):0}%</div>
+          <div style="color:var(--text4);font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ranges[k]}</div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_fmtK(v, dispCurr)}</div>
+          <div style="color:var(--text4);font-size:9.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${bucketCounts[k]}× · ${_fmtK(bucketCounts[k]?v/bucketCounts[k]:0, dispCurr)}</div>
         </div>
       `).join('')}
     </div>
@@ -15005,7 +15065,7 @@ function buildBudgetRanking(metricMk, dispCurr) {
   return `<div class="card" style="height:100%;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
       <div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Budgets — % used</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Budgets, % used</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthLabel} · ${rows.length} budgeted categor${rows.length === 1 ? 'y' : 'ies'}</div>
       </div>
       ${overCount === 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-full);font-size:10px;font-weight:600;background:var(--green-bg);color:var(--green)">✓ all within</span>` : ''}
@@ -16628,7 +16688,7 @@ function _doDeleteWishlistItem(itemId) {
   saveDBWithSync();
   closeDlg();
   closeSheet('gen');
-  haptic('warn'); showToast('🗑 Deleted');
+  haptic('warn'); showToast('Deleted', 2200, 'trash');
   if (currentPage === 'planning') renderPlanning();
 }
 
@@ -16781,8 +16841,15 @@ function saveEditPayday(id) {
 }
 
 function deletePayday(id) {
+  const ps = (db.paydaySchedules||[]).find(s=>s.id===id);
+  openDlg('Delete this payday schedule?',
+    `<p style="font-size:14px;color:var(--text2);margin:0;line-height:1.6">Permanently delete <strong>${_esc(ps?.name || 'this schedule')}</strong>? This cannot be undone.</p>`,
+    `<button class="btn btn-ghost" onclick="editPaydaySchedule('${id}')">Cancel</button>
+     <button class="btn btn-danger" onclick="confirmDeletePayday('${id}')">Delete</button>`);
+}
+function confirmDeletePayday(id) {
   db.paydaySchedules = db.paydaySchedules.filter(s=>s.id!==id);
-  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Deleted');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderPlanning(); showToast('Deleted', 2200, 'trash');
 }
 
 function renderRecurringTab() {
@@ -16999,8 +17066,15 @@ function toggleRecurring(id) {
 }
 
 function deleteRecurring(id) {
+  const r = (db.recurringTxs||[]).find(x=>x.id===id);
+  openDlg('Delete this recurring entry?',
+    `<p style="font-size:14px;color:var(--text2);margin:0;line-height:1.6">Permanently delete <strong>${_esc(r?.name || 'this entry')}</strong>? This cannot be undone.</p>`,
+    `<button class="btn btn-ghost" onclick="editRecurring('${id}')">Cancel</button>
+     <button class="btn btn-danger" onclick="confirmDeleteRecurring('${id}')">Delete</button>`);
+}
+function confirmDeleteRecurring(id) {
   db.recurringTxs = db.recurringTxs.filter(r=>r.id!==id);
-  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Deleted');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Deleted', 2200, 'trash');
 }
 
 function renderContractTab() {
@@ -17305,7 +17379,7 @@ function renderContractTab() {
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:8px">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Per-bucket balances</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Balance per bucket</div>
       <div style="display:flex;gap:6px">
         ${(window._bucketEditMode===activeId && active.bucketManualOrder)?`<button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="resortBucketsAZ('${activeId}')" title="Re-sort alphabetically">A→Z</button>`:''}
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="openBucketSheet('${activeId}',null)">+ Add</button>
@@ -17443,7 +17517,7 @@ function deleteContractPerm(contractId) {
 
 function confirmDeleteContract(contractId) {
   db.contracts = (db.contracts||[]).filter(c=>c.id!==contractId);
-  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Contract deleted');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Contract deleted', 2200, 'trash');
 }
 
 function doCheckin(contractId, hit) {
@@ -17932,7 +18006,7 @@ function _confirmDeleteBucket(contractId, bucketId) {
   if (c.bucketLinks) delete c.bucketLinks[bucketId];
   saveDBWithSync();
   renderPlanning();
-  showToast('Bucket deleted');
+  showToast('Bucket deleted', 2200, 'trash');
 }
 
 // Drag-and-drop reorder
@@ -18071,7 +18145,7 @@ function renderProfileTab() {
         <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())} ${_homeBase()}</div>
       </div>
       <div class="settings-row" style="cursor:pointer" onclick="openDisplayCurrencyPicker()">
-        <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">View totals in this currency · view-only</div></div></div>
+        <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">View totals in this currency · display only</div></div></div>
         <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--accent)">${sym(_displayCurrency())} ${_displayCurrency()}</div>
       </div>
     </div>
@@ -18133,7 +18207,7 @@ function renderProfileTab() {
     </div>
     <div style="margin-top:24px">
       <div class="quiet-row" onclick="nav('planning');setTimeout(()=>setPlanTab('budgets'),50)">
-        <div>Budgets — moved to Planning</div><div style="color:var(--text4)">›</div>
+        <div>Budgets, moved to Planning</div><div style="color:var(--text4)">›</div>
       </div>
     </div>
   </div>`;
@@ -18156,7 +18230,7 @@ function openEditProfile() {
       <label class="form-label" for="ep2-country">📍 Current Location</label>
       <input class="form-input" id="ep2-country" value="${escapeAttr(p.country||'')}" placeholder="Where you live now..." oninput="searchEpList(this.value,'ep2-country-list','ep2-country')" autocomplete="off">
       <div id="ep2-country-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
-      <div style="font-size:11px;color:var(--text4);margin-top:6px;line-height:1.4">Where you live now. Optional context only — doesn't affect FX math.</div>
+      <div style="font-size:11px;color:var(--text4);margin-top:6px;line-height:1.4">Where you live now. Optional context only, it doesn't affect FX math.</div>
     </div>
     <button class="btn btn-primary btn-full" onclick="saveProfile()">Save Profile</button>
   `);
@@ -18235,7 +18309,7 @@ function openDisplayCurrencyPicker() {
     <button class="btn ${c===cur?'btn-primary':'btn-ghost'}" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 14px" onclick="setDisplayCurrency('${c}');closeDlg()">
       <span style="font-family:var(--mono);font-weight:600">${sym(c)} ${c}</span>${c===cur?'<span>✓</span>':''}
     </button>`).join('')}</div>
-    <div style="font-size:11px;color:var(--text4);margin-top:10px">View-only — totals shown in this currency. Doesn't change FX math or your home base.</div>`;
+    <div style="font-size:11px;color:var(--text4);margin-top:10px">Display only. Totals are shown in this currency. It doesn't change FX math or your home base.</div>`;
   openDlg('Display Currency', html, `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`);
 }
 
@@ -18673,7 +18747,7 @@ function confirmDeleteFxHistory(currency, idx) {
   closeDlg();
   renderSettings();
   openFxHistoryPage(currency);
-  showToast('Rate entry deleted');
+  showToast('Rate entry deleted', 2200, 'trash');
 }
 
 
@@ -19545,7 +19619,7 @@ function doDeleteCat(catId, forType) {
   const idx = db.categories[forType].findIndex(c=>c.id===catId);
   if (idx < 0) return;
   db.categories[forType].splice(idx, 1);
-  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Category deleted');
+  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Category deleted', 2200, 'trash');
 }
 
 function saveEditCat(catId, forType) {
@@ -19693,7 +19767,7 @@ function doDeleteArchivedCat(catId, forType, isParent, parentId) {
     }
   }
   saveDBWithSync();
-  showToast('Category deleted permanently');
+  showToast('Category deleted permanently', 2200, 'trash');
   showArchivedCatsPage();
 }
 
@@ -19758,7 +19832,7 @@ function doDeleteSubCat(catId, subId, forType) {
   const idx = cat.subcats.findIndex(s=>s.id===subId);
   if (idx < 0) return;
   cat.subcats.splice(idx, 1);
-  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Subcategory deleted');
+  saveDBWithSync(); closeDlg(); renderSettings(); showToast('Subcategory deleted', 2200, 'trash');
 }
 
 function saveEditSubCat(catId, subId, forType) {
@@ -21731,7 +21805,7 @@ function deleteSnapshot(fileId, label) {
 async function deleteSnapshotNow(fileId) {
   try {
     await driveRequest('DELETE', `https://www.googleapis.com/drive/v3/files/${fileId}`);
-    showToast('Snapshot deleted');
+    showToast('Snapshot deleted', 2200, 'trash');
     showSnapshotPicker(); // refresh list
   } catch(e) {
     showToast('Delete failed');
@@ -22015,7 +22089,7 @@ async function confirmLoadDriveBackup(fileId, force) {
       const diff = localTx - backupTx;
       openDlg('⚠️ Fewer Transactions in Backup',
         `<div style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:14px">This backup has <strong style="color:var(--text)">${backupTx}</strong> transaction${backupTx===1?'':'s'}, but your current data has <strong style="color:var(--text)">${localTx}</strong>.</div>
-         <div style="background:var(--red-bg);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red)">Loading replaces your current data — you'll lose <strong>${diff}</strong> transaction${diff===1?'':'s'}.</div>
+         <div style="background:var(--red-bg);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red)">Loading replaces your current data, so you'll lose <strong>${diff}</strong> transaction${diff===1?'':'s'}.</div>
          <div style="font-size:12px;color:var(--text4)">Only continue if you're sure this older backup is the one you want.</div>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
          <button class="btn btn-danger btn-sm" onclick="confirmLoadDriveBackup('${fileId}', true)">Load Anyway</button>`
@@ -24426,11 +24500,23 @@ function renderAnalyticsPeople() {
       const oldest = ages.length ? Math.max(...ages) : 0;
       const avgAge = ages.length ? Math.round(ages.reduce((s,v)=>s+v,0)/ages.length) : 0;
       const oldestLoan = ages.length ? withDate[ages.indexOf(oldest)] : null;
-      const topP = list[0];
-      const topExposure = topP ? topP.lent + topP.sharedOwed : 0;
+      // BUG FIX: this took list[0] — whoever happened to sort first — which can be a person you
+      // OWE and who owes you nothing, producing "Largest single exposure 0% · Ana · ₱0.00".
+      // Rank by actual receivable exposure and drop the row entirely when nobody owes anything.
+      const byExposure = [...list].sort((a,b)=>((b.lent||0)+(b.sharedOwed||0))-((a.lent||0)+(a.sharedOwed||0)));
+      const topP = byExposure[0];
+      const topExposure = topP ? (topP.lent||0) + (topP.sharedOwed||0) : 0;
       const topShare = totalOwedToMe > 0 ? (topExposure/totalOwedToMe*100) : 0;
-      const overdue = openLoans.filter(l => l.dueDate && new Date(l.dueDate+'T12:00') < today);
-      const overdueAmt = overdue.reduce((s,l)=>s+toPhp(l.remaining||l.amount, l.currency),0);
+      // BUG FIX: this used to fold BOTH directions into one "Past due" figure — money owed to
+      // you plus money YOU owe — while every other row in this block is owed-to-you based. A
+      // ₱5,000 receivable and a ₱20,000 debt showed as a single "₱25,000 past due", which is
+      // not a number that means anything. Split by direction and label each side.
+      const overdueAll = openLoans.filter(l => l.dueDate && new Date(l.dueDate+'T12:00') < today);
+      const sumPhp = arr => arr.reduce((s,l)=>s+toPhp(l.remaining||l.amount, l.currency),0);
+      const overdueIn  = overdueAll.filter(l => l.dir === 'lent');
+      const overdueOut = overdueAll.filter(l => l.dir === 'borrowed');
+      const overdueInAmt  = sumPhp(overdueIn);
+      const overdueOutAmt = sumPhp(overdueOut);
       const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
         <span style="font-size:12.5px;color:var(--text2)">${label}</span>
         <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
@@ -24439,9 +24525,19 @@ function renderAnalyticsPeople() {
         <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Exposure profile</div>
         ${ages.length ? row('Oldest open item', `${oldest} day${oldest===1?'':'s'}`, oldestLoan ? `${_esc(oldestLoan.personName||'—')} · ${fmt(_inDisplay(toPhp(oldestLoan.remaining||oldestLoan.amount, oldestLoan.currency)), dc)}` : '') : ''}
         ${ages.length ? row('Average age', `${avgAge} day${avgAge===1?'':'s'}`, `${ages.length} dated item${ages.length===1?'':'s'}`) : ''}
-        ${topP ? row('Largest single exposure', `${topShare.toFixed(0)}%`, `${_esc(topP.name)} · ${fmt(_inDisplay(topExposure), dc)}`) : ''}
-        ${overdue.length ? row('<span style="color:var(--red)">Past due</span>', `<span style="color:var(--red)">${fmt(_inDisplay(overdueAmt), dc)}</span>`, `${overdue.length} item${overdue.length===1?'':'s'}`) : row('Past due', 'none', 'nothing overdue')}
-        ${row('Avg per person', fmt(_inDisplay(totalOwedToMe/Math.max(1,list.length)), dc), `across ${list.length} ${list.length===1?'person':'people'}`)}
+        ${topP && topExposure > 0 ? row('Largest single exposure', `${topShare.toFixed(0)}%`, `${_esc(topP.name)} · ${fmt(_inDisplay(topExposure), dc)}`) : ''}
+        ${overdueIn.length ? row('<span style="color:var(--red)">Past due to you</span>', `<span style="color:var(--red)">${fmt(_inDisplay(overdueInAmt), dc)}</span>`, `${overdueIn.length} item${overdueIn.length===1?'':'s'} · collectable`) : ''}
+        ${overdueOut.length ? row('<span style="color:var(--amber)">Past due by you</span>', `<span style="color:var(--amber)">${fmt(_inDisplay(overdueOutAmt), dc)}</span>`, `${overdueOut.length} item${overdueOut.length===1?'':'s'} · you owe`) : ''}
+        ${overdueAll.length === 0 ? row('Past due', 'none', 'nothing overdue either way') : ''}
+        ${(() => {
+          // BUG FIX (same class as the two above): dividing totalOwedToMe by list.length counted
+          // people who owe you NOTHING — one ₱5,000 receivable across a list that also contains
+          // someone you owe read as "₱2,500 across 2 people". Divide by the debtors only.
+          const debtors = list.filter(p => ((p.lent||0) + (p.sharedOwed||0)) > 0);
+          if (!debtors.length) return '';
+          return row('Avg per debtor', fmt(_inDisplay(totalOwedToMe/debtors.length), dc),
+            `across ${debtors.length} ${debtors.length===1?'person who owes you':'people who owe you'}`);
+        })()}
       </div>`;
     })()}
     <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Person</div>`;
@@ -24988,9 +25084,35 @@ function renderAnalyticsAccountHealth() {
   const dormantList = enriched.filter(a => a.dormantDays !== null && a.dormantDays > 60);
 
   let html = `<div class="page-pad">`;
+  // ── PLS #210 ── Account Health listed accounts but never summarised the estate. These answer
+  // the questions the per account rows cannot: how much is actually in play, how spread out it
+  // is, and how much of it is sitting idle.
+  html += (() => {
+    const totalPhp = enriched.reduce((s,a) => s + toPhp(a.balance, a.currency || dc), 0);
+    if (!enriched.length) return '';
+    const positives = enriched.filter(a => toPhp(a.balance, a.currency || dc) > 0);
+    const idlePhp = dormantList.reduce((s,a) => s + Math.max(0, toPhp(a.balance, a.currency || dc)), 0);
+    const idleShare = totalPhp > 0 ? (idlePhp/totalPhp)*100 : 0;
+    const currencies = [...new Set(enriched.map(a => a.currency || dc))];
+    const active = enriched.filter(a => a.dormantDays !== null && a.dormantDays <= 14).length;
+    const busiest = enriched.slice().sort((a,b) => b.txCount - a.txCount)[0];
+    const totalTx = enriched.reduce((s,a) => s + a.txCount, 0);
+    const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
+      <span style="font-size:12.5px;color:var(--text2)">${label}</span>
+      <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
+    </div>`;
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Estate summary</div>
+      ${row('Across all accounts', fmt(_inDisplay(totalPhp), dc), `${enriched.length} account${enriched.length===1?'':'s'} in ${currencies.length} ${currencies.length===1?'currency':'currencies'}`)}
+      ${row('Holding a balance', `${positives.length} of ${enriched.length}`, `${enriched.length-positives.length} at zero or below`)}
+      ${row('Recently used', `${active} of ${enriched.length}`, `activity within 14 days`)}
+      ${dormantList.length ? row('<span style="color:var(--amber)">Sitting idle</span>', `<span style="color:var(--amber)">${fmt(_inDisplay(idlePhp), dc)}</span>`, `${idleShare.toFixed(0)}% of your money, ${dormantList.length} account${dormantList.length===1?'':'s'}`) : row('Sitting idle', 'none', 'every account used within 60 days')}
+      ${busiest && busiest.txCount ? row('Busiest account', `${busiest.txCount} tx`, `${escapeAttr(busiest.name)} · ${totalTx>0?((busiest.txCount/totalTx)*100).toFixed(0):0}% of all activity`) : ''}
+    </div>`;
+  })();
   if (dormantList.length > 0) {
     html += `<div style="background:rgba(255,159,10,0.08);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">
-      <b>💤 ${dormantList.length} dormant ${aiPlural(dormantList.length,'account')}</b> — no activity in 60+ days
+      <b>💤 ${dormantList.length} dormant ${aiPlural(dormantList.length,'account')}</b>, no activity in 60+ days
     </div>`;
   }
   html += `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center">Per Account${_infoBtn('accthealth')}</div>`;
@@ -25715,7 +25837,7 @@ function confirmDeleteInstallment(instId) {
   saveDBWithSync();
   closeDlg();
   renderInstallments();
-  showToast('Deleted permanently');
+  showToast('Deleted permanently', 2200, 'trash');
   const stillArchived = (db.installments || []).filter(i => i.archived);
   if (stillArchived.length > 0) openInstArchiveSheet();
   else closeSheet('gen');
