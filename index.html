@@ -529,6 +529,11 @@ option{background:var(--bg3);color:var(--text)}
 .ov-row3,.ov-row4{display:grid;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-row4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ov-row3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(min-width:641px) and (max-width:900px){
+  .ov-pack{column-count:2;column-gap:10px}
+  .ov-pack .ov-row3,.ov-pack .ov-row3.ov-n1,.ov-pack .ov-row3.ov-n2{display:contents}
+  .ov-pack .ov-row3>div{break-inside:avoid;-webkit-column-break-inside:avoid;display:block;margin:0 0 10px}
+}
 /* PLS #205: the per-bar value label was originally "+₱100.0k" (~43px) with white-space:nowrap,
    which overflowed the ~32px month columns at 1024px. Dropping the currency symbol and going to
    8.5px brings it to ~24px, which fits at EVERY breakpoint (verified 1440/1280/1100/1024/901/
@@ -1561,6 +1566,18 @@ function _ico(name, size, style) {
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${style?` style="${style}"`:''} aria-hidden="true">${d}</svg>`;
 }
 function currMonthKey() { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
+// ── PERSONAL LOGIC SET #200b ── Adding months with setMonth() keeps the source day-of-month,
+// so landing on a shorter month rolls FORWARD (Jan 31 + 1 = Mar 3, skipping February). Two
+// sites survived the v-85 sweep: the savings-goal ETA and the contract mid-point milestone.
+// This clamps to the target month's last day instead. Same rule as advanceRecurringNextDate.
+function addMonthsClamped(date, months) {
+  const want = date.getDate();
+  const t = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+  t.setDate(Math.min(want, lastDay));
+  t.setHours(date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+  return t;
+}
 function lastMonthKey() { const t=new Date(); const n=new Date(t.getFullYear(), t.getMonth()-1, 1); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
 
 // FX: PHP is always the base. All rates stored as "1 unit of X = ? PHP"
@@ -2137,6 +2154,9 @@ let db = (() => {
 // _hasUnsavedChanges moved to top
 function saveDB() {
   // Local save only — no Drive sync trigger
+  // PLS #215: every write can change the earliest transaction, so drop the cached
+  // first-complete-month here rather than at each of the many call sites.
+  _invalidateFirstComplete();
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch(e) { showToast('⚠ Storage full — export backup!', UX_TOAST_DUR_LONG); }
 }
@@ -2160,6 +2180,25 @@ function saveDBWithSync() {
 }
 // ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
+// ── PERSONAL LOGIC SET #212 ── Anything given role="link"/role="button" plus tabindex is
+// reachable by Tab, but a <span> does not activate on Enter the way a real <button> does — so
+// the focus ring promised something that did nothing. One delegated handler makes every such
+// element (the Overview drill-down doors, the RELATED tab chips, and anything added later)
+// respond to Enter and Space. Space is prevented from scrolling the page, matching button
+// behaviour. Real <button>/<a> elements are skipped since the browser already handles them.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  const el = e.target;
+  if (!el || !el.getAttribute) return;
+  const role = el.getAttribute('role');
+  if (role !== 'link' && role !== 'button') return;
+  const tag = el.tagName;
+  if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (!el.getAttribute('onclick') && !el.onclick) return;
+  e.preventDefault();
+  el.click();
+});
+
 function showToast(msg, dur=2200, icon=null) {
   // PLS #209: optional leading line icon. `icon` must be a key in _ICONS — arbitrary markup is
   // never accepted, and the message itself is still set as a text node, so it cannot inject.
@@ -2485,12 +2524,36 @@ const ANALYSIS_MONTHS = 6;
 // not lengthen it.
 const LIQUID_TYPES = ['Savings','Checking','Cash','E-Wallet','Prepaid'];
 function isLiquidAccount(a) { return !!a && !a.archived && LIQUID_TYPES.includes(a.type || ''); }
+// ── PERSONAL LOGIC SET #215 ── Analysis starts at the first COMPLETE month.
+// If logging began mid-month (say April 15), April holds only half a month of spending. Every
+// rolling average treated it as a whole month, which dragged the average DOWN — spending looked
+// lower than it is, the runway looked longer, and "usually ₱X" was understated. The partial
+// month stays in the ledger for listing; it is simply not used as an analysis baseline.
+// A month counts as complete only when the first transaction falls on day 1, otherwise the
+// NEXT month is the first complete one. Returns null when no complete month exists yet.
+let _firstCompleteMK = undefined; // undefined = not computed, null = none yet
+function firstCompleteMonthKey() {
+  if (_firstCompleteMK !== undefined) return _firstCompleteMK;
+  const dates = (db.transactions || []).filter(t => !t.archived && t.date).map(t => t.date);
+  if (!dates.length) { _firstCompleteMK = null; return null; }
+  const first = dates.reduce((a, b) => a < b ? a : b);
+  const [fy, fm, fd] = first.split('-').map(Number);
+  // day 1 → that month is complete; any later day → the following month is
+  const d = new Date(fy, fm - 1 + (fd === 1 ? 0 : 1), 1);
+  _firstCompleteMK = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  return _firstCompleteMK;
+}
+// the cache must die whenever transactions change
+function _invalidateFirstComplete() { _firstCompleteMK = undefined; }
+
 function avgMonthlyExpense6mo() {
   let total = 0, months = 0;
   const _now = new Date();
+  const _floor = firstCompleteMonthKey();
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const d = new Date(_now.getFullYear(), _now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (_floor && key < _floor) continue; // PLS #215: skip the partial start month
     const t = getMonthTotals(key); // returns display-currency totals
     if (t.expense > 0) { total += t.expense; months++; }
   }
@@ -6595,6 +6658,12 @@ var _txLongPressFired = false;
 // ── PERSONAL LOGIC SET #35 ── bulk long-press: 550ms hold, 10px scroll cancels
 const TX_BULK_LONGPRESS_MS = 550;
 
+var _txPageCap = 150;
+var _txPageSig = null;
+// NOTE: deliberately does NOT touch _txPageSig. The signature is unchanged (same filter, same
+// search, same row count), so the reset check below sees no change and the raised cap survives
+// the re-render. Clearing the signature here would snap the cap straight back to the first page.
+function _txShowMore() { _txPageCap += 300; renderTransactions(); }
 function renderTransactions() {
   // PLS #132 family: single-tab pages render NO tab strip — the page-header title suffices.
   // (The old solo "Log" underline tab was pure visual noise.)
@@ -6766,9 +6835,24 @@ function renderTxLog() {
   for (const tx of txs) { if (!groups[tx.date]) groups[tx.date]=[]; groups[tx.date].push(tx); }
   const dates = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
 
+  // ── PERSONAL LOGIC SET #213 ── The list rendered EVERY transaction at once. At two years of
+  // history that is ~700 rows built on each render, and it was the slowest screen in the app by
+  // a wide margin. Render in pages instead, breaking on a DAY boundary so a day is never split
+  // in half. The cap resets whenever the filter, search or month changes (see _txResetPage).
+  // Self-resetting page cap: rather than calling a reset from each of the ~14 places that
+  // re-render this list (easy to miss one), derive a signature of WHAT is being listed. When it
+  // changes, the cap goes back to the first page automatically.
+  const _sig = [_txFilter, _txQuickFilter, (typeof searchQuery!=='undefined'?searchQuery:''),
+                (typeof _txMonth!=='undefined'?_txMonth:''), txs.length].join('|');
+  if (_sig !== _txPageSig) { _txPageSig = _sig; _txPageCap = 150; }
+
   let txHTML = '';
+  let _rendered = 0;
+  let _hiddenCount = 0;
+  const _cap = _txPageCap;
   for (const date of dates) {
     const dayTxs = groups[date];
+    if (_rendered >= _cap) { _hiddenCount += dayTxs.length; continue; }
     const dayNet = dayTxs.reduce((s,t)=>{
       if (t.isSettlement || t.isAutoReimb) return s;
       if (t.type==='income') return s + toPhp(t.amount, t.currency);
@@ -6778,6 +6862,12 @@ function renderTxLog() {
     }, 0);
     txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:10px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${dayNet>=0?'+':''}${dayNet.toFixed(0)}</span></div>`;
     txHTML += dayTxs.map(tx=>renderTxRow(tx)).join('');
+    _rendered += dayTxs.length;
+  }
+  if (_hiddenCount > 0) {
+    txHTML += `<div style="padding:14px 16px;text-align:center">
+      <button class="btn btn-ghost btn-sm" onclick="_txShowMore()">Show ${_hiddenCount} more</button>
+    </div>`;
   }
 
   if (!txHTML) {
@@ -13135,7 +13225,7 @@ function renderAnalyticsOverview() {
     return `<div style="margin:22px 0 10px">
       <div style="font-size:13px;font-weight:700;color:var(--text2);letter-spacing:0.02em">${title}</div>
       ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>`:''}
-    </div>${body}`;
+    </div><div class="ov-pack">${body}</div>`;
   };
   const _ovRow = (items, cls='ov-row3') => {
     const filled = items.filter(h => h);
@@ -13303,9 +13393,11 @@ function renderAnalyticsOverview() {
       // Build rolling baseline per category over ANALYSIS_MONTHS (excluding current month)
       const catBaseline = {}; // {catName: {total, icon}}
       let baselineMonths = 0;
+      const _fcFloor = firstCompleteMonthKey();
       for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
         const d = new Date(mY, mM-1-i, 1);
         const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        if (_fcFloor && k < _fcFloor) continue; // PLS #215: skip the partial start month
         const mc = _ncMonthCats(k);
         if (Object.keys(mc).length) baselineMonths++;
         for (const [name, c] of Object.entries(mc)) {
@@ -13327,9 +13419,9 @@ function renderAnalyticsOverview() {
           movers.push({name, icon: c.icon || baseline.icon, current: c.total, avg, diff, pct});
         }
       }
-      // Sort by absolute % change, top 3
       movers.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
-      const top = movers.slice(0, 3);
+      const top = movers.slice(0, 5);
+      const comparedCount = Object.keys(nowCats).filter(k => catBaseline[k] && catBaseline[k].total > 0).length;
       const _ncMonthLabel = new Date(mY, mM-1, 1).toLocaleString('en',{month:'short'});
       return `<div class="card" style="height:100%;display:flex;flex-direction:column">
         <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">What Changed</div>
@@ -13349,6 +13441,10 @@ function renderAnalyticsOverview() {
             <div class="${cls}" style="font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0">${icon} ${Math.abs(m.pct).toFixed(0)}%</div>
           </div>`;
         }).join('')}
+        ${top.length ? `<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:auto;padding-top:9px">
+          <span>${comparedCount} categor${comparedCount===1?'y':'ies'} compared</span>
+          <span style="font-family:var(--mono)">${movers.length} moved &plusmn;30%${movers.length>top.length?` · showing ${top.length}`:''}</span>
+        </div>` : ''}
       </div>`;
     })(), _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')])}
     ${_ovSection('Commitments & history', 'Recurring costs and how this year compares', [
@@ -13563,9 +13659,11 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   // Build per-category baseline (rolling ANALYSIS_MONTHS window)
   const baseline = {}; // {catId: amounts[]}
   const [y, m] = metricMk.split('-').map(Number);
+  const _fcFloor = firstCompleteMonthKey();
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const d = new Date(y, m-1-i, 1);
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (_fcFloor && k < _fcFloor) continue; // PLS #215: skip the partial start month
     const monthTxs = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
     for (const tx of monthTxs) {
       if (!baseline[tx.categoryId]) baseline[tx.categoryId] = [];
@@ -13643,9 +13741,11 @@ function buildForecastBand(metricMk, dispCurr) {
   // historical avg per-day pattern over the shared analysis window
   const histDays = new Array(daysInMonth + 1).fill(0);
   let histMonths = 0;
+  const _fcFloor = firstCompleteMonthKey();
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
     const dt = new Date(y, m-1-i, 1);
     const k = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    if (_fcFloor && k < _fcFloor) continue; // PLS #215: skip the partial start month
     const mt = _ovTxsForMonth(k).filter(t => t.type === 'expense' || t.type === 'shared');
     if (mt.length === 0) continue;
     histMonths++;
@@ -14160,8 +14260,9 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
       ${Object.entries(buckets).map(([k,v]) => `
         <div style="text-align:center;background:var(--bg3);border-radius:var(--r-md);padding:7px 4px 8px;border-top:2px solid ${colors[k]}">
           <div style="font-size:16px">${icons[k]}</div>
-          <div style="color:var(--text3);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${k} · ${total>0?(v/total*100).toFixed(0):0}%</div>
-          <div style="color:var(--text4);font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ranges[k]}</div>
+          <div style="color:var(--text3);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${k}</div>
+          <div style="font-size:9px;font-family:var(--mono);background:var(--accent-bg);color:var(--accent);border-radius:var(--r-full);padding:0 5px;display:inline-block;margin-top:3px">${total>0?(v/total*100).toFixed(0):0}%</div>
+          <div style="color:var(--text4);font-size:8.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ranges[k]}</div>
           <div style="font-family:var(--mono);font-weight:700;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_fmtK(v, dispCurr)}</div>
           <div style="color:var(--text4);font-size:9.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${bucketCounts[k]}× · ${_fmtK(bucketCounts[k]?v/bucketCounts[k]:0, dispCurr)}</div>
         </div>
@@ -14383,13 +14484,28 @@ function buildGoalProgress(dispCurr) {
   // Saved pace since contract start → projected finish date
   let paceMo = null, etaLabel = null, etaOnTime = null;
   if (startDate && !isNaN(startDate)) {
-    const monthsElapsed = Math.max(0.25, (new Date() - startDate) / (1000*60*60*24*30.44));
+    // PLS #215: pace used to divide by calendar months since the CONTRACT start, which counts
+    // months before any logging existed and any partial start month — both drag the pace down
+    // and push the finish date out. Divide by COMPLETE logged months instead, so this reads as
+    // the rate actually being sustained. Falls back to elapsed time until a complete month exists.
+    const _now2 = new Date();
+    const _fc = firstCompleteMonthKey();
+    let monthsElapsed;
+    if (_fc) {
+      const [cy, cm] = _fc.split('-').map(Number);
+      // whole months from the first complete month up to (not including) the current one
+      const complete = (_now2.getFullYear() - cy) * 12 + (_now2.getMonth() - (cm - 1));
+      monthsElapsed = Math.max(1, complete);
+    } else {
+      monthsElapsed = Math.max(0.25, (_now2 - startDate) / (1000*60*60*24*30.44));
+    }
     paceMo = actual / monthsElapsed;
+    var _paceBasis = _fc ? `${monthsElapsed} complete month${monthsElapsed===1?'':'s'}` : 'time since start';
     const rem0 = target - actual;
     if (rem0 > 0 && paceMo > 0) {
       const monthsToGo = rem0 / paceMo;
       if (monthsToGo < 240) {
-        const eta = new Date(); eta.setMonth(eta.getMonth() + Math.round(monthsToGo));
+        const eta = addMonthsClamped(new Date(), Math.round(monthsToGo));
         etaLabel = eta.toLocaleString('en', {month:'short', year:'numeric'});
         if (endDate && !isNaN(endDate)) etaOnTime = eta <= endDate;
       }
@@ -14438,7 +14554,7 @@ function buildGoalProgress(dispCurr) {
         <div style="background:var(--bg3);border-radius:var(--r-md);padding:9px 10px;min-width:0">
           <div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px">Your pace</div>
           <div style="font-family:var(--mono);font-size:12.5px;font-weight:700;color:${paceMo !== null ? (paceOk ? 'var(--green)' : 'var(--amber)') : 'var(--text2)'}">${paceMo !== null ? fmt(paceMo, dispCurr) : '—'}<span style="font-size:9px;color:var(--text4);font-weight:400">/mo</span></div>
-          <div style="font-size:9.5px;color:var(--text4);margin-top:2px">avg since start</div>
+          <div style="font-size:9.5px;color:var(--text4);margin-top:2px">avg over ${typeof _paceBasis !== 'undefined' && _paceBasis ? _paceBasis : 'time since start'}</div>
         </div>
         <div style="background:var(--bg3);border-radius:var(--r-md);padding:9px 10px;min-width:0">
           <div style="font-size:9.5px;color:var(--text4);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px">Pace needed</div>
@@ -16688,7 +16804,7 @@ function _doDeleteWishlistItem(itemId) {
   saveDBWithSync();
   closeDlg();
   closeSheet('gen');
-  haptic('warn'); showToast('Deleted', 2200, 'trash');
+  haptic('warn'); showToast('Wishlist item deleted', 2200, 'trash');
   if (currentPage === 'planning') renderPlanning();
 }
 
@@ -16849,7 +16965,7 @@ function deletePayday(id) {
 }
 function confirmDeletePayday(id) {
   db.paydaySchedules = db.paydaySchedules.filter(s=>s.id!==id);
-  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderPlanning(); showToast('Deleted', 2200, 'trash');
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderPlanning(); showToast('Payday schedule deleted', 2200, 'trash');
 }
 
 function renderRecurringTab() {
@@ -17074,7 +17190,7 @@ function deleteRecurring(id) {
 }
 function confirmDeleteRecurring(id) {
   db.recurringTxs = db.recurringTxs.filter(r=>r.id!==id);
-  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Deleted', 2200, 'trash');
+  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Recurring entry deleted', 2200, 'trash');
 }
 
 function renderContractTab() {
@@ -17607,7 +17723,7 @@ function saveContractWizard() {
     bucketDefs: [],
     milestones: [
       { label:'Contract start', date:startDate, note:'Day 1 begins' },
-      { label:`Month ${Math.round(totalMonths/2)}`, date: (() => { const d=new Date(startDate+'T00:00:00'); d.setMonth(d.getMonth()+Math.round(totalMonths/2)); return localDate(d); })(), note:'Midpoint review' },
+      { label:`Month ${Math.round(totalMonths/2)}`, date: (() => { const d=addMonthsClamped(new Date(startDate+'T00:00:00'), Math.round(totalMonths/2)); return localDate(d); })(), note:'Midpoint review' },
       { label:`Month ${totalMonths} — end`, date:endDate, note:'Final deployment' },
     ],
     lastCheckin: null,
@@ -19767,7 +19883,7 @@ function doDeleteArchivedCat(catId, forType, isParent, parentId) {
     }
   }
   saveDBWithSync();
-  showToast('Category deleted permanently', 2200, 'trash');
+  showToast('Category deleted', 2200, 'trash');
   showArchivedCatsPage();
 }
 
@@ -25204,8 +25320,11 @@ function renderAnalyticsAISummary() {
 
   // ── next month, from the shared rolling window (divides by months that actually had data) ──
   let predNet = 0, predMonths = 0;
+  const _fcFloor = firstCompleteMonthKey();
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
-    const t = getMonthTotals(mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1)));
+    const _k = mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1));
+    if (_fcFloor && _k < _fcFloor) continue; // PLS #215
+    const t = getMonthTotals(_k);
     if ((t.income||0) || (t.expense||0)) { predNet += (t.income||0) - (t.expense||0); predMonths++; }
   }
   predNet = predMonths > 0 ? predNet / predMonths : net;
@@ -25213,7 +25332,9 @@ function renderAnalyticsAISummary() {
   // ── how this month's net ranks against the last 6 ──
   const recentNets = [];
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
-    const t = getMonthTotals(mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1)));
+    const _k = mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1));
+    if (_fcFloor && _k < _fcFloor) continue; // PLS #215
+    const t = getMonthTotals(_k);
     if ((t.income||0) || (t.expense||0)) recentNets.push((t.income||0) - (t.expense||0));
   }
   const betterThan = recentNets.filter(n => net > n).length;
@@ -25837,7 +25958,7 @@ function confirmDeleteInstallment(instId) {
   saveDBWithSync();
   closeDlg();
   renderInstallments();
-  showToast('Deleted permanently', 2200, 'trash');
+  showToast('Installment deleted', 2200, 'trash');
   const stillArchived = (db.installments || []).filter(i => i.archived);
   if (stillArchived.length > 0) openInstArchiveSheet();
   else closeSheet('gen');
