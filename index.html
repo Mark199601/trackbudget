@@ -14692,8 +14692,10 @@ function _gzOpenDate(cfg){
   const valEl = document.getElementById(cfg.valId);
   const todayStr = (typeof today === 'function') ? today() : new Date().toISOString().slice(0, 10);
   const cur = (valEl && valEl.value && /^\d{4}-\d{2}-\d{2}$/.test(valEl.value)) ? valEl.value : todayStr;
-  window._gzDP = Object.assign({}, cfg, { y: parseInt(cur.slice(0, 4)), m: parseInt(cur.slice(5, 7)) - 1 });
+  // PLS #216: overlay FIRST — _gzPickOverlay() calls _gzPickClose(), which nulls _gzDP/_gzTP.
+  // Assigning before it meant the state was erased before the renderer could read it.
   _gzPickOverlay('<div id="gz-dp-body"></div>');
+  window._gzDP = Object.assign({}, cfg, { y: parseInt(cur.slice(0, 4)), m: parseInt(cur.slice(5, 7)) - 1 });
   _gzDPRender();
 }
 function _gzDPRender(){
@@ -14754,7 +14756,7 @@ function _gzOpenTime(cfg){
   let cur = (valEl && valEl.value && /^\d{2}:\d{2}/.test(valEl.value)) ? valEl.value : ((typeof nowTime === 'function') ? nowTime() : '12:00');
   let H = parseInt(cur.slice(0, 2)), M = parseInt(cur.slice(3, 5));
   if (isNaN(H)) H = 12; if (isNaN(M)) M = 0;
-  window._gzTP = Object.assign({}, cfg, { h: H % 12 === 0 ? 12 : H % 12, m: M, pm: H >= 12 });
+  const _gzTPState = Object.assign({}, cfg, { h: H % 12 === 0 ? 12 : H % 12, m: M, pm: H >= 12 });
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const mins = Array.from({ length: 60 }, (_, i) => i);
   _gzPickOverlay(`
@@ -14773,6 +14775,8 @@ function _gzOpenTime(cfg){
       <button type="button" class="gz-pick-btn accent" onclick="_gzTPNow()">Now</button>
       <button type="button" class="gz-pick-btn primary" onclick="_gzTPDone()">Done</button>
     </div>`);
+  // PLS #216: assign only after _gzPickOverlay(), which nulls it via _gzPickClose()
+  window._gzTP = _gzTPState;
   _gzTPSync(true);
 }
 function _gzTPSync(scroll){
