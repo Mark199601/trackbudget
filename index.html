@@ -104,15 +104,6 @@ html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code',
 .field-row-split .field-row-wrap{flex:1;min-width:0;margin-bottom:0}
 .field-row-split .field-row-wrap.fw-date{flex:1.7}
 .field-row-split .field-row-wrap.fw-time{flex:1}
-/* PLS #197: Date/Time pickers — no preset value; icon+label live INSIDE the picker as an
-   overlay placeholder (hidden once a value is chosen) so the split row's height matches the
-   surrounding field-row cards instead of being taller from external labels. */
-.dt-wrap{position:relative}
-.dt-wrap .dt-input{padding:14px 13px;min-height:60px}
-.dt-wrap .dt-input.dt-empty::-webkit-datetime-edit{color:transparent}
-.dt-wrap .dt-input.dt-empty{color:transparent}
-.dt-ph{display:none;position:absolute;inset:0;align-items:center;gap:6px;padding:0 13px;pointer-events:none;font-size:13px;color:var(--text2)}
-.dt-wrap .dt-input.dt-empty~.dt-ph{display:flex}
 .field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
 /* big amount hero spacing refinements */
 .big-amt-wrap .big-amt-input{font-weight:600;letter-spacing:-1.5px}
@@ -924,7 +915,7 @@ option{background:var(--bg3);color:var(--text)}
     </div>
     <div class="ob-progress" id="ob-progress"></div>
     <div class="onboard-step active" id="ob-step-1">
-      <div style="font-size:22px;font-weight:700;margin-bottom:6px">Welcome! 👋</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:6px">Welcome!</div>
       <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Let's set up your profile in under a minute.</div>
       
       <div style="position:relative;margin-bottom:16px">
@@ -947,7 +938,7 @@ option{background:var(--bg3);color:var(--text)}
       <button onclick="obNext(1)" style="margin-top:8px;width:100%;background:linear-gradient(135deg,var(--accent),var(--accent3));border:none;border-radius:var(--r-md);padding:14px;font-weight:600;color:#fff;cursor:pointer">Continue →</button>
     </div>
     <div class="onboard-step" id="ob-step-2">
-      <div style="font-size:22px;font-weight:700;margin-bottom:6px">Currencies 💱</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:6px">Currencies</div>
       <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Choose currencies to track. <span id="ob-homebase-text">Your home currency is tracked automatically.</span></div>
       <div class="form-group">
         <label class="form-label" for="ob-curr-search">Add Currency</label>
@@ -1556,6 +1547,17 @@ const _ICONS = {
   gauge:    '<path d="M12 21a9 9 0 1 1 9-9"/><line x1="12" y1="12" x2="16.5" y2="8.5"/><circle cx="12" cy="12" r="1.2"/>',
   target:   '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
   alert:    '<path d="M10.3 4.3 2.6 18a1.6 1.6 0 0 0 1.4 2.4h16a1.6 1.6 0 0 0 1.4-2.4L13.7 4.3a1.6 1.6 0 0 0-2.8 0z"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  x:        '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  archive:  '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  cog:      '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.35.4.64.73.82H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  bolt:     '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  pie:      '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+  layers:   '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  crystal:  '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  trendDown:'<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+  send:     '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  inbox:    '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  scale:    '<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7 2 14h6z"/><path d="M19 7l-3 7h6z"/><path d="M8 21h8"/>',
   trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
   list:     '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
 };
@@ -2186,6 +2188,15 @@ function saveDBWithSync() {
 // element (the Overview drill-down doors, the RELATED tab chips, and anything added later)
 // respond to Enter and Space. Space is prevented from scrolling the page, matching button
 // behaviour. Real <button>/<a> elements are skipped since the browser already handles them.
+// PLS #218: the sheet and dialog close buttons live in the STATIC HTML, which cannot evaluate
+// a template literal — writing ${_ico(...)} there would print the source text verbatim. Swap
+// them to line art once at boot instead.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.sheet-close').forEach(b => {
+    if (b.textContent.trim() === '\u2715') b.innerHTML = _ico('x', 16);
+  });
+});
+
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
   const el = e.target;
@@ -2686,27 +2697,30 @@ function txTypeColor(type) {
   const map = {expense:'red',income:'green',shared:'accent',transfer:'purple',lend:'amber',borrow:'teal'};
   return map[type] || 'gray';
 }
+// PLS #218: row-type glyphs are display chrome, not user data — line art per the icon rule.
+// `vertical-align:-2px` keeps the 12px glyph sitting on the mono baseline of the amount.
+function _txIco(name) { return `<span style="display:inline-flex;vertical-align:-2px;margin-right:3px">${_ico(name,12)}</span>`; }
 function txAmountDisplay(tx) {
-  if (tx.isLoanSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
+  if (tx.isLoanSettlementGain) return {cls:'tx-pos', str:_txIco('trend')+'+'+fmt(tx.amount,tx.currency)};
   if (tx.isLoanSettlementLoss) {
     const isGain = tx.type === 'income'; // borrowed write-off (forgiveness)
-    return {cls: isGain ? 'tx-pos' : 'tx-neg', str: '📉 ' + (isGain?'+':'-') + fmt(tx.amount,tx.currency)};
+    return {cls: isGain ? 'tx-pos' : 'tx-neg', str: _txIco(isGain?'trend':'trendDown') + (isGain?'+':'-') + fmt(tx.amount,tx.currency)};
   }
-  if (tx.isReimbSettlementGain) return {cls:'tx-pos', str:'📈 +'+fmt(tx.amount,tx.currency)};
-  if (tx.isReimbSettlementLoss) return {cls:'tx-neg', str:'📉 -'+fmt(tx.amount,tx.currency)};
+  if (tx.isReimbSettlementGain) return {cls:'tx-pos', str:_txIco('trend')+'+'+fmt(tx.amount,tx.currency)};
+  if (tx.isReimbSettlementLoss) return {cls:'tx-neg', str:_txIco('trendDown')+'-'+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='income') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='expense') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='borrow') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='transfer') return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
-  if (tx.type==='remittance') return {cls:'tx-neu', str:'📤 '+fmt(tx.amount,tx.currency)};
+  if (tx.type==='remittance') return {cls:'tx-neu', str:_txIco('send')+fmt(tx.amount,tx.currency)};
   if (tx.type==='shared') return {cls:'tx-neg', str:'-'+fmt(tx.totalBill||tx.amount, tx.currency)};
-  if (tx.type==='external-in') return {cls:'tx-pos', str:'📥 +'+fmt(tx.amount,tx.currency)};
-  if (tx.type==='external-out') return {cls:'tx-neg', str:'📤 -'+fmt(tx.amount,tx.currency)};
+  if (tx.type==='external-in') return {cls:'tx-pos', str:_txIco('inbox')+'+'+fmt(tx.amount,tx.currency)};
+  if (tx.type==='external-out') return {cls:'tx-neg', str:_txIco('send')+'-'+fmt(tx.amount,tx.currency)};
   if (tx.type==='correction') {
     const sign = tx.direction === 'up' ? '+' : '-';
     const cls = tx.direction === 'up' ? 'tx-pos' : 'tx-neg';
-    return {cls, str: '⚖️ ' + sign + fmt(tx.amount, tx.currency)};
+    return {cls, str: _txIco('scale') + sign + fmt(tx.amount, tx.currency)};
   }
   return {cls:'tx-neg', str:'-'+fmt(tx.amount,tx.currency)};
 }
@@ -2742,26 +2756,54 @@ const DASH_SECTION_LABELS = {
   budget: 'Financial Snapshot',
   recent: 'Recent Transactions',
   // Analytics widgets (hidden by default — add via Customize)
-  w_networth: '📈 Net Worth Trend',
-  w_inexp: '📊 Income vs Expense',
-  w_waterfall: '🌊 Cashflow Waterfall',
-  w_savings: '📈 Savings Trend',
-  w_runway: '🛟 Cash Runway',
-  w_velocity: '⚡ Spending Velocity',
-  w_forecast: '🔮 Month-End Forecast',
-  w_anomaly: '🚨 Anomaly Highlights',
-  w_subs: '🔁 Subscriptions',
-  w_fixeddisc: '⚖️ Fixed vs Discretionary',
-  w_pareto: '📊 80/20 Spending',
-  w_dow: '📅 Day-of-Week',
-  w_frequent: '🔂 Most Frequent',
-  w_timeofday: '🕐 Time-of-Day',
-  w_distribution: '📉 Spending Distribution',
-  w_yoy: '🗓 Year-over-Year',
-  w_incomediv: '💰 Income Diversity',
-  w_goals: '🎯 Goal Progress',
-  w_concentration: '🎰 Concentration Risk',
+  w_networth: 'Net Worth Trend',
+  w_inexp: 'Income vs Expense',
+  w_waterfall: 'Cashflow Waterfall',
+  w_savings: 'Savings Trend',
+  w_runway: 'Cash Runway',
+  w_velocity: 'Spending Velocity',
+  w_forecast: 'Month-End Forecast',
+  w_anomaly: 'Anomaly Highlights',
+  w_subs: 'Subscriptions',
+  w_fixeddisc: 'Fixed vs Discretionary',
+  w_pareto: '80/20 Spending',
+  w_dow: 'Day-of-Week',
+  w_frequent: 'Most Frequent',
+  w_timeofday: 'Time-of-Day',
+  w_distribution: 'Spending Distribution',
+  w_yoy: 'Year-over-Year',
+  w_incomediv: 'Income Diversity',
+  w_goals: 'Goal Progress',
+  w_concentration: 'Concentration Risk',
 };
+const DASH_SECTION_ICONS = {
+  alerts: 'alert',
+  metrics: 'list',
+  pulse: 'gauge',
+  insights: 'sparkle',
+  budget: 'wallet',
+  recent: 'receipt',
+  w_networth: 'trend',
+  w_inexp: 'exchange',
+  w_waterfall: 'trendDown',
+  w_savings: 'trend',
+  w_runway: 'gauge',
+  w_velocity: 'bolt',
+  w_forecast: 'crystal',
+  w_anomaly: 'alert',
+  w_subs: 'transfer',
+  w_fixeddisc: 'scale',
+  w_pareto: 'layers',
+  w_dow: 'calendar',
+  w_frequent: 'transfer',
+  w_timeofday: 'clock',
+  w_distribution: 'pie',
+  w_yoy: 'calendar',
+  w_incomediv: 'cash',
+  w_goals: 'target',
+  w_concentration: 'pie',
+};
+
 
 // Maps a dashboard widget-section id → its builder call. Each returns '' on no data (auto-hide).
 // Reuses the EXACT same builders as Analytics → Overview, so numbers always match.
@@ -2789,7 +2831,7 @@ function _dashWidgetHTML(id, mk, disp) {
     case 'w_concentration': inner = buildConcentrationRisk(disp); break;
   }
   if (!inner) return ''; // auto-hide when widget has no data
-  return `<div style="margin-bottom:16px"><div class="section-hdr"><div class="section-title">${(DASH_SECTION_LABELS[id]||'').replace(/^[^ ]+ /,'')}</div><span class="section-action" onclick="nav('analytics')">Open</span></div>${inner}</div>`;
+  return `<div style="margin-bottom:16px"><div class="section-hdr"><div class="section-title">${DASH_SECTION_LABELS[id]||''}</div><span class="section-action" onclick="nav('analytics')">Open</span></div>${inner}</div>`;
 }
 
 function nav(page) {
@@ -3952,7 +3994,7 @@ function renderDashboard() {
     ${order.map((id, idx) => `
       <div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
         <span style="font-size:18px;color:var(--text3);cursor:grab">⠿</span>
-        <span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">${DASH_SECTION_LABELS[id]}</span>
+        <span style="flex:1;font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:8px">${DASH_SECTION_ICONS[id]?_ico(DASH_SECTION_ICONS[id],15):''}${DASH_SECTION_LABELS[id]}</span>
         <div style="display:flex;flex-direction:column;gap:2px">
           <button aria-label="Move up" onclick="moveDashSection('${id}',-1)" ${idx===0?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px 8px;font-size:11px;color:var(--text2)">↑</button>
           <button aria-label="Move down" onclick="moveDashSection('${id}',1)" ${idx===order.length-1?'disabled style="opacity:0.3"':'style="cursor:pointer"'} style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px 8px;font-size:11px;color:var(--text2)">↓</button>
@@ -3966,7 +4008,7 @@ function renderDashboard() {
       return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:8px">Hidden. Tap to add back</div>
         ${hidden.map(id => `<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px dashed var(--border3);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;opacity:0.75">
-          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text3)">${DASH_SECTION_LABELS[id]}</span>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text3);display:flex;align-items:center;gap:8px">${DASH_SECTION_ICONS[id]?_ico(DASH_SECTION_ICONS[id],15):''}${DASH_SECTION_LABELS[id]}</span>
           <button onclick="addDashSection('${id}')" style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);border-radius:var(--r-sm);padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer">+ Add</button>
         </div>`).join('')}
       </div>`;
@@ -4000,7 +4042,7 @@ function renderDashboard() {
 
   // Customize button (small, below hero card)
   const customizeBtn = !_dashReorderMode ? `<div style="text-align:right;margin:-8px 0 12px">
-    <button onclick="toggleDashReorderMode()" style="background:none;border:none;font-size:11px;color:var(--text4);cursor:pointer;padding:4px 0">⚙ Customize</button>
+    <button onclick="toggleDashReorderMode()" style="background:none;border:none;font-size:11px;color:var(--text4);cursor:pointer;padding:4px 0">${_ico('cog',12)} Customize</button>
   </div>` : '';
 
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim">
@@ -4244,7 +4286,7 @@ function bulkArchiveTxns() {
       <div style="margin-top:8px;color:var(--text3);font-size:12px">You can restore them anytime from the Archive tab.</div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-primary btn-sm" onclick="confirmBulkArchive()">📦 Archive ${ids.length}</button>`
+     <button class="btn btn-primary btn-sm" onclick="confirmBulkArchive()">${_ico('archive',13)} Archive ${ids.length}</button>`
   );
 }
 
@@ -4286,7 +4328,7 @@ function bulkDeleteTxns() {
       <div style="margin-top:8px;color:var(--amber)">⚠️ This cannot be undone. Linked auto-generated children will also be deleted.</div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="confirmBulkDelete()">🗑️ Delete ${ids.length}</button>`
+     <button class="btn btn-danger btn-sm" onclick="confirmBulkDelete()">${_ico('trash',13)} Delete ${ids.length}</button>`
   );
 }
 
@@ -5019,14 +5061,8 @@ function renderUnifiedAmountForm() {
     <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
          the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date dt-wrap">
-        <input class="form-input dt-input dt-empty" type="date" id="add-date" onchange="dtEmptyTog(this)" aria-label="Date">
-        <div class="dt-ph">${_ico('calendar',13)}Date</div>
-      </div>
-      <div class="field-row-wrap fw-time dt-wrap">
-        <input class="form-input dt-input dt-empty" type="time" id="add-time" onchange="dtEmptyTog(this)" aria-label="Time">
-        <div class="dt-ph">${_ico('clock',13)}Time</div>
-      </div>
+      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date')}</div>
+      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time')}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -5139,14 +5175,8 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
     <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
          the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date dt-wrap">
-        <input class="form-input dt-input dt-empty" type="date" id="add-date" onchange="dtEmptyTog(this)" aria-label="Date">
-        <div class="dt-ph">${_ico('calendar',13)}Date</div>
-      </div>
-      <div class="field-row-wrap fw-time dt-wrap">
-        <input class="form-input dt-input dt-empty" type="time" id="add-time" onchange="dtEmptyTog(this)" aria-label="Time">
-        <div class="dt-ph">${_ico('clock',13)}Time</div>
-      </div>
+      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date')}</div>
+      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time')}</div>
     </div>
 
     <!-- Split With section -->
@@ -5543,14 +5573,8 @@ function renderRemittanceForm() {
 
     <!-- Date + Time split row -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date dt-wrap">
-        <input class="form-input dt-input dt-empty" type="date" id="rem-date" onchange="dtEmptyTog(this)" aria-label="Date">
-        <div class="dt-ph">${_ico('calendar',13)}Date</div>
-      </div>
-      <div class="field-row-wrap fw-time dt-wrap">
-        <input class="form-input dt-input dt-empty" type="time" id="rem-time" onchange="dtEmptyTog(this)" aria-label="Time">
-        <div class="dt-ph">${_ico('clock',13)}Time</div>
-      </div>
+      <div class="field-row-wrap fw-date">${dtField('rem-date','date','Date')}</div>
+      <div class="field-row-wrap fw-time">${dtField('rem-time','time','Time')}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -5834,14 +5858,8 @@ function renderExternalForm(type) {
 
     <!-- Date + Time split row -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date dt-wrap">
-        <input class="form-input dt-input dt-empty" type="date" id="ext-date" onchange="dtEmptyTog(this)" aria-label="Date">
-        <div class="dt-ph">${_ico('calendar',13)}Date</div>
-      </div>
-      <div class="field-row-wrap fw-time dt-wrap">
-        <input class="form-input dt-input dt-empty" type="time" id="ext-time" onchange="dtEmptyTog(this)" aria-label="Time">
-        <div class="dt-ph">${_ico('clock',13)}Time</div>
-      </div>
+      <div class="field-row-wrap fw-date">${dtField('ext-date','date','Date')}</div>
+      <div class="field-row-wrap fw-time">${dtField('ext-time','time','Time')}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -5965,14 +5983,8 @@ function renderTransferForm() {
 
     <!-- Date + Time split row -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date dt-wrap">
-        <input class="form-input dt-input dt-empty" type="date" id="tf-date" onchange="dtEmptyTog(this)" aria-label="Date">
-        <div class="dt-ph">${_ico('calendar',13)}Date</div>
-      </div>
-      <div class="field-row-wrap fw-time dt-wrap">
-        <input class="form-input dt-input dt-empty" type="time" id="tf-time" onchange="dtEmptyTog(this)" aria-label="Time">
-        <div class="dt-ph">${_ico('clock',13)}Time</div>
-      </div>
+      <div class="field-row-wrap fw-date">${dtField('tf-date','date','Date')}</div>
+      <div class="field-row-wrap fw-time">${dtField('tf-time','time','Time')}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -6885,9 +6897,9 @@ function renderTxLog() {
       <button aria-label="Close" class="bt-x" onclick="exitTxBulkMode()" title="Exit bulk mode">×</button>
       <span class="bt-count">${_txBulkSet.size} selected</span>
       <button onclick="bulkSelectAllVisible()" title="Select all visible">All</button>
-      <button onclick="bulkRecategorize()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🏷️ Re-cat</button>
-      <button onclick="bulkArchiveTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>📦 Archive</button>
-      <button class="bt-danger" onclick="bulkDeleteTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>🗑️ Delete</button>
+      <button onclick="bulkRecategorize()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>${_ico('tag',13)} Re-cat</button>
+      <button onclick="bulkArchiveTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>${_ico('archive',13)} Archive</button>
+      <button class="bt-danger" onclick="bulkDeleteTxns()" ${_txBulkSet.size===0?'disabled style="opacity:0.5;cursor:not-allowed"':''}>${_ico('trash',13)} Delete</button>
     </div>` : '';
 
   // ── Account options for filter panel ──
@@ -22396,7 +22408,8 @@ function autoSaveTrigger() {
 
 // ── CUSTOM DATE/TIME PICKER ──
 function dtField(inputId, type, placeholder, initialValue) {
-  const icon = type === 'time' ? '🕐' : '📅';
+  // PLS #198: chrome uses line art, never emoji
+  const icon = _ico(type === 'time' ? 'clock' : 'calendar', 14);
   // Auto-resolve Today/Now so .value is never blank on submit
   if (!initialValue && placeholder === 'Today' && type === 'date') initialValue = today();
   if (!initialValue && placeholder === 'Now'   && type === 'time') initialValue = nowTime();
@@ -22454,12 +22467,6 @@ function dtUpdate(inputId, type) {
   valSpan.classList.remove('dt-placeholder');
 }
 
-// PLS #197: toggles the in-picker icon+label placeholder — visible while the field is empty,
-// hidden once the user picks a value (and back if they clear it).
-function dtEmptyTog(el) {
-  if (!el) return;
-  el.classList.toggle('dt-empty', !el.value);
-}
 function dtSet(inputId, value, type) {
   const input = document.getElementById(inputId);
   if (!input) return;
