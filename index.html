@@ -2603,7 +2603,21 @@ function getMonthTotals(monthKey) {
     // PLS #46: isFeeReimbursable is tracking-only shared tx, fee already counted via isAutoFee parent
     if (t.isFeeReimbursable) continue;
     // isInvestmentFund = type:'transfer' — already excluded from monthly totals via transfer type filter
-    // isInvestmentReturn = real income when investment sold — included
+    // ── PERSONAL LOGIC SET #219 ── An investment SALE returns capital; it is not earnings.
+    // Buying was already treated as a transfer (money changing form, not leaving), so selling
+    // must be its mirror. Counting the whole proceeds as income double-counted money the user
+    // already had and hid the real result: selling ₱100,000 of crypto for ₱70,000 reported
+    // +₱70,000 income on a month where ₱30,000 was actually lost.
+    // Only the REALIZED gain or loss is real income/expense — carried on the sale tx as
+    // realizedGL and added below.
+    if (t.isInvestmentReturn) {
+      const gl = Number(t.realizedGL);
+      if (Number.isFinite(gl) && gl !== 0) {
+        const glDisp = t.currency === dispCurr ? gl : convert(gl, t.currency, dispCurr);
+        if (glDisp > 0) income += glDisp; else expense += -glDisp;
+      }
+      continue; // the capital portion is never income
+    }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
     const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
@@ -10340,7 +10354,7 @@ function confirmSellInv(invId) {
   if (acctId) {
     // Find the original fund tx to link as parent
     const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===invId);
-    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${_esc(inv.name)}${notes?' — '+notes:''}`, isInvestmentReturn:true, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${_esc(inv.name)}${notes?' — '+notes:''}`, isInvestmentReturn:true, realizedGL, costBasis:inv.amount, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
   const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
@@ -22975,6 +22989,23 @@ function ensureDBIntegrity() {
       }
     });
     if (fixedAccts > 0) issues.push(`patched ${fixedAccts} accounts with missing balance`);
+
+    // ── PLS #219 migration ── Sales recorded before this fix carry no realizedGL, so the whole
+    // proceeds would still read as income. Recompute it from the investment's cost basis. Runs
+    // once per tx (guarded by the field already existing) and never invents a figure: if the
+    // investment record is gone, the tx is left alone rather than guessed at.
+    let fixedInvReturns = 0;
+    (db.transactions || []).forEach(t => {
+      if (!t.isInvestmentReturn) return;
+      if (Number.isFinite(Number(t.realizedGL))) return; // already migrated
+      const inv = (db.investments || []).find(i => i.id === t.investmentId);
+      if (!inv || typeof inv.amount !== 'number') return;
+      const basis = Number.isFinite(Number(inv.costBasisAtSale)) ? Number(inv.costBasisAtSale) : inv.amount;
+      t.realizedGL = roundMoney((Number(t.amount) || 0) - basis, t.currency || _homeBase());
+      t.costBasis = basis;
+      fixedInvReturns++;
+    });
+    if (fixedInvReturns > 0) issues.push(`recomputed gain/loss on ${fixedInvReturns} investment sale${fixedInvReturns===1?'':'s'}`);
 
     if (issues.length > 0) {
       console.log('[Integrity] Patched:', issues.join(' · '));
