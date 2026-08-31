@@ -10625,38 +10625,106 @@ function confirmVoidInvSale(id) {
 // Calendar or any monthly total. This scan only REPORTS; it writes nothing on its own, because
 // repairing means choosing an account and a date and a wrong guess would invent money that never
 // moved. The user confirms each one. Read-only and safe to run any time.
+// -- PERSONAL LOGIC SET #227 -- The first version of this scan only asked "does a ledger entry
+// EXIST?". That certified a sale as healthy while its result was still invisible: a sale tx whose
+// realizedGL is missing contributes nothing anywhere, because _investmentGL (PLS #221) is inert on
+// a non-finite value. ensureDBIntegrity recomputes realizedGL from the investment's cost basis, but
+// it deliberately gives up when the investment record is gone -- correctly, since guessing would
+// invent a figure. So an orphaned sale tx sits there counting for nothing while the scan reports
+// all clean. A health check that says "clean" over an invisible loss is worse than no check.
+// Two gap kinds now: 'missing' (no entry) and 'uncountable' (entry exists, carries no usable
+// realizedGL). Returns {kind, inv, tx} -- callers must read .inv / .tx, not the object itself.
 function scanInvestmentLedger() {
   const out = [];
+  const live = t => t.isInvestmentReturn && !t.archived;
   (db.investments || []).forEach(inv => {
     if (inv.status !== 'sold') return;
-    const has = db.transactions.some(t => t.isInvestmentReturn && t.investmentId === inv.id);
-    if (has) return;
-    out.push(inv);
+    const led = (db.transactions || []).filter(t => live(t) && t.investmentId === inv.id);
+    if (!led.length) { out.push({ kind:'missing', inv, tx:null }); return; }
+    const dead = led.filter(t => !Number.isFinite(Number(t.realizedGL)));
+    if (dead.length === led.length) out.push({ kind:'uncountable', inv, tx:dead[0] });
+  });
+  // Orphans: the sale tx outlived its investment record, so nothing can recompute its result.
+  (db.transactions || []).forEach(t => {
+    if (!live(t)) return;
+    if ((db.investments || []).some(i => i.id === t.investmentId)) return;
+    if (Number.isFinite(Number(t.realizedGL))) return;   // still counts, leave it alone
+    out.push({ kind:'uncountable', inv:null, tx:t });
   });
   return out;
+}
+// PLS #227: repair for an 'uncountable' entry. The proceeds are already on the tx; the only
+// missing piece is what the investment originally cost. Ask for that one number and derive the
+// rest -- never guess it, because the derived figure lands straight in the monthly totals.
+function openInvGLRepair(txId) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const acct = db.accounts.find(a => a.id === tx.accountId);
+  openSheet('gen2', 'Make this countable', `<div style="padding:8px 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:13px;color:var(--text3)">${_esc(tx.notes || 'Investment sale')}</div>
+      <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(tx.amount, tx.currency)}</div>
+      <div style="font-size:11px;color:var(--text4);margin-top:4px">${fmtD(tx.date)}${acct?' &middot; '+_esc(acct.name):''}</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:var(--r-md);padding:11px 13px;margin-bottom:14px;font-size:12px;color:var(--text3);line-height:1.6">
+      This sale has no recorded gain or loss, so it currently counts for nothing in your totals.
+      Enter what the investment originally cost and the result is worked out from the proceeds above.
+    </div>
+    <div class="form-group"><label class="form-label" for="glr-basis">Original cost (${tx.currency})</label>
+      <input class="form-input numpad-input" type="number" id="glr-basis" inputmode="none" placeholder="0.00"></div>
+    <button class="btn btn-primary btn-full" onclick="confirmInvGLRepair('${txId}')">Save Result</button>
+  </div>`);
+}
+function confirmInvGLRepair(txId) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const basis = parseFloat(document.getElementById('glr-basis')?.value);
+  if (!Number.isFinite(basis) || basis < 0) { showToast('Enter the original cost'); return; }
+  tx.costBasis = roundMoney(basis, tx.currency);                                   // PLS #122
+  tx.realizedGL = roundMoney((Number(tx.amount) || 0) - tx.costBasis, tx.currency);
+  const inv = db.investments.find(i => i.id === tx.investmentId);
+  if (inv) inv.realizedGL = tx.realizedGL;
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
+  const g = tx.realizedGL;
+  showToast(g > 0 ? 'Recorded as a ' + fmt(g, tx.currency) + ' gain'
+          : g < 0 ? 'Recorded as a ' + fmt(Math.abs(g), tx.currency) + ' loss'
+                  : 'Recorded as break even');
 }
 function openInvLedgerRepair() {
   const gaps = scanInvestmentLedger();
   if (!gaps.length) {
-    openDlg('Ledger check', `<p style="font-size:14px;color:var(--text2);margin:0">Every sold investment has a matching ledger entry. Nothing to repair.</p>`,
+    openDlg('Ledger check', `<p style="font-size:14px;color:var(--text2);margin:0">Every sold investment has a ledger entry, and every entry carries a recorded gain or loss. Nothing to repair.</p>`,
       `<button class="btn btn-primary" onclick="closeDlg()">Done</button>`);
     return;
   }
-  const rows = gaps.map(inv => {
-    const gl = Number(inv.realizedGL);
-    const glTxt = Number.isFinite(gl) && gl !== 0
-      ? `<span style="color:${gl>0?'var(--green)':'var(--red)'}">${gl>0?'+':''}${fmt(gl, inv.currency)} ${gl>0?'gain':'loss'}</span>`
-      : `<span style="color:var(--text4)">break even</span>`;
-    return `<div class="settings-row" onclick="openInvBackfill('${inv.id}')">
-      <div class="sr-left"><div class="sr-icon">${invTypeIcon(inv.type)}</div><div>
-        <div class="sr-text">${_esc(inv.name)}</div>
-        <div class="sr-sub">Sold ${fmtD(inv.soldDate||inv.date)} &middot; ${glTxt}</div>
+  const nMiss = gaps.filter(g=>g.kind==='missing').length;
+  const nUnc  = gaps.filter(g=>g.kind==='uncountable').length;
+  const rows = gaps.map(g => {
+    if (g.kind === 'missing') {
+      const inv = g.inv, gl = Number(inv.realizedGL);
+      const glTxt = Number.isFinite(gl) && gl !== 0
+        ? `<span style="color:${gl>0?'var(--green)':'var(--red)'}">${gl>0?'+':''}${fmt(gl, inv.currency)} ${gl>0?'gain':'loss'}</span>`
+        : `<span style="color:var(--text4)">break even</span>`;
+      return `<div class="settings-row" onclick="openInvBackfill('${inv.id}')">
+        <div class="sr-left"><div class="sr-icon">${invTypeIcon(inv.type)}</div><div>
+          <div class="sr-text">${_esc(inv.name)}</div>
+          <div class="sr-sub">No ledger entry &middot; sold ${fmtD(inv.soldDate||inv.date)} &middot; ${glTxt}</div>
+        </div></div><div class="sr-right">Review &rarr;</div>
+      </div>`;
+    }
+    const tx = g.tx, nm = g.inv ? g.inv.name : (tx.notes || 'Investment sale');
+    return `<div class="settings-row" onclick="openInvGLRepair('${tx.id}')">
+      <div class="sr-left"><div class="sr-icon">${g.inv?invTypeIcon(g.inv.type):'📈'}</div><div>
+        <div class="sr-text">${_esc(nm)}</div>
+        <div class="sr-sub">Counts for nothing &middot; ${fmtD(tx.date)} &middot; ${fmt(tx.amount, tx.currency)}${g.inv?'':' &middot; investment record gone'}</div>
       </div></div><div class="sr-right">Review &rarr;</div>
     </div>`;
   }).join('');
   openSheet('gen', 'Ledger Repair', `<div style="padding:4px 4px 12px">
     <div style="background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--text2);line-height:1.6">
-      <b>${gaps.length}</b> sold ${gaps.length===1?'investment has':'investments have'} no ledger entry, so the realized result is missing from your Calendar and monthly totals.
+      ${nMiss?`<b>${nMiss}</b> sold ${nMiss===1?'investment has':'investments have'} no ledger entry.`:''}
+      ${nUnc?`${nMiss?'<br>':''}<b>${nUnc}</b> ledger ${nUnc===1?'entry carries':'entries carry'} no recorded gain or loss, so ${nUnc===1?'it counts':'they count'} for nothing.`:''}
+      <br>Either way the realized result is missing from your Calendar and monthly totals.
       Tap one to review and confirm before anything is written.
     </div>
     <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden">${rows}</div>
@@ -20272,7 +20340,7 @@ function renderDataTab() {
       </div>
       ${(()=>{ const g = (typeof scanInvestmentLedger==='function') ? scanInvestmentLedger() : [];
         return `<div class="settings-row" onclick="openInvLedgerRepair()">
-        <div class="sr-left"><div class="sr-icon">${g.length?'⚠️':'✅'}</div><div><div class="sr-text">Investment Ledger Check</div><div class="sr-sub">${g.length ? g.length+' sold '+(g.length===1?'investment has':'investments have')+' no ledger entry' : 'All sold investments are recorded'}</div></div></div>
+        <div class="sr-left"><div class="sr-icon">${g.length?'⚠️':'✅'}</div><div><div class="sr-text">Investment Ledger Check</div><div class="sr-sub">${g.length ? g.length+' investment '+(g.length===1?'sale is':'sales are')+' missing from your totals' : 'All sold investments are counted'}</div></div></div>
         <div class="sr-right">→</div>
       </div>`; })()}
       ${(db.reconciliations || []).length > 0 ? `
