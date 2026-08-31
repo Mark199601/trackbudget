@@ -2571,6 +2571,23 @@ function avgMonthlyExpense6mo() {
   return months > 0 ? total / months : 0;
 }
 
+// -- PERSONAL LOGIC SET #221 -- PLS #219 (an investment sale returns capital, it is not
+// earnings) was implemented inside getMonthTotals ONLY, so five other aggregators still
+// counted the whole proceeds as income: the Calendar month grid, the Calendar day sheet,
+// the Dashboard Pulse, Income Diversification and aiGetMonthsTxs. Selling PHP100,000 of
+// crypto for PHP70,000 therefore showed +PHP70,000 income on a day that actually lost
+// PHP30,000. This helper is the ONE place that decides what an isInvestmentReturn tx
+// contributes, so every aggregator stays in step. Only the realized gain or loss is real;
+// the capital portion is never income anywhere.
+function _investmentGL(tx, toCurr) {
+  const gl = Number(tx && tx.realizedGL);
+  if (!Number.isFinite(gl) || gl === 0) return { income: 0, expense: 0 };
+  const from = (tx.currency) || _homeBase();
+  const to = toCurr || _homeBase();
+  const v = convert(gl, from, to);
+  return v > 0 ? { income: v, expense: 0 } : { income: 0, expense: -v };
+}
+
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
@@ -2611,11 +2628,8 @@ function getMonthTotals(monthKey) {
     // Only the REALIZED gain or loss is real income/expense — carried on the sale tx as
     // realizedGL and added below.
     if (t.isInvestmentReturn) {
-      const gl = Number(t.realizedGL);
-      if (Number.isFinite(gl) && gl !== 0) {
-        const glDisp = t.currency === dispCurr ? gl : convert(gl, t.currency, dispCurr);
-        if (glDisp > 0) income += glDisp; else expense += -glDisp;
-      }
+      const _g = _investmentGL(t, dispCurr); // PLS #221: one shared decision
+      income += _g.income; expense += _g.expense;
       continue; // the capital portion is never income
     }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
@@ -3941,8 +3955,12 @@ function renderDashboard() {
       const todayTxsA = db.transactions.filter(t=>!t.archived && t.date===today() &&
         !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund);
       // Sum in PHP for math accuracy, then convert to display currency for rendering
-      const todayIncPhp = todayTxsA.filter(t=>t.type==='income').reduce((s,t)=>s+txToPhp(t),0);
-      const todayExpPhp = todayTxsA.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+txToPhp(t),0);
+      // PLS #221 / #219: an investment sale contributes only its realized gain or loss here.
+      const _invRet = todayTxsA.filter(t=>t.isInvestmentReturn);
+      const _plain  = todayTxsA.filter(t=>!t.isInvestmentReturn);
+      const _invGL  = _invRet.reduce((a,t)=>{ const g=_investmentGL(t,_homeBase()); a.inc+=g.income; a.exp+=g.expense; return a; }, {inc:0,exp:0});
+      const todayIncPhp = _plain.filter(t=>t.type==='income').reduce((s,t)=>s+txToPhp(t),0) + _invGL.inc;
+      const todayExpPhp = _plain.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+txToPhp(t),0) + _invGL.exp;
       const todayIncA = fromPhp(todayIncPhp, disp);
       const todayExpA = fromPhp(todayExpPhp, disp);
       const todayNetA = todayIncA - todayExpA;
@@ -12599,19 +12617,19 @@ function renderAnalytics() {
   const TAB_REGISTRY = {
     overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance — net worth, income vs expense, cashflow, and budget.'},
     aisummary:  {label:'AI Summary',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
-    cashflow:   {label:'Cashflow',       icon:'💰', section:'cashflow', desc:'Money in vs money out over time, and what is left over each month.'},
-    calendar:   {label:'Calendar',       icon:'📅', section:'cashflow', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
-    dayofweek:  {label:'By Day',         icon:'📅', section:'cashflow', desc:'Which days of the week you tend to spend the most.'},
-    spending:   {label:'Spending',       icon:'🛒', section:'spending', desc:'Where your money goes, broken down by category.'},
-    income:     {label:'Income',         icon:'💵', section:'spending', desc:'Where your money comes from, broken down by source.'},
-    trends:     {label:'Trends',         icon:'📈', section:'spending', desc:'How your spending shifts over the months, shown as a heatmap.'},
-    yoy:        {label:'Year-over-Year', icon:'🗓', section:'spending', desc:'This year vs last year, month by month.'},
-    budget:     {label:'Budget',         icon:'🎯', section:'spending', desc:'How your spending tracks against your monthly limit per category.'},
+    cashflow:   {label:'Cashflow',       icon:'💰', section:'patterns', desc:'Money in vs money out over time, and what is left over each month.'},
+    calendar:   {label:'Calendar',       icon:'📅', section:'patterns', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
+    dayofweek:  {label:'By Day',         icon:'📅', section:'patterns', desc:'Which days of the week you tend to spend the most.'},
+    spending:   {label:'Spending',       icon:'🛒', section:'out', desc:'Where your money goes, broken down by category.'},
+    income:     {label:'Income',         icon:'💵', section:'in', desc:'Where your money comes from, broken down by source.'},
+    trends:     {label:'Trends',         icon:'📈', section:'patterns', desc:'How your spending shifts over the months, shown as a heatmap.'},
+    yoy:        {label:'Year-over-Year', icon:'🗓', section:'patterns', desc:'This year vs last year, month by month.'},
+    budget:     {label:'Budget',         icon:'🎯', section:'out', desc:'How your spending tracks against your monthly limit per category.'},
     wealth:     {label:'Wealth',         icon:'💎', section:'wealth', desc:'Your net worth over time and how assets and debt stack up.'},
     investments:{label:'Investments',    icon:'📊', section:'wealth', desc:'Your portfolio by type, cost vs current value, and gains.'},
     accthealth: {label:'Account Health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
-    people:     {label:'People',         icon:'👥', section:'people', desc:'Who you send money to or receive from, with running balances.'},
-    subs:       {label:'Subscriptions',  icon:'🔁', section:'people', desc:'Your recurring payments and what they cost per month and per year.'},
+    people:     {label:'People',         icon:'👥', section:'in', desc:'Who you send money to or receive from, with running balances.'},
+    subs:       {label:'Subscriptions',  icon:'🔁', section:'out', desc:'Your recurring payments and what they cost per month and per year.'},
     forex:      {label:'Forex Rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
     crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
     external:   {label:'External',       icon:'🔄', section:'currency', desc:'Money moving in and out of accounts you do not fully track.'},
@@ -12665,7 +12683,7 @@ function renderAnalytics() {
     wealth:     ['overview','investments','accthealth'],
     investments:['overview','wealth','crosscurr'],
     accthealth: ['overview','wealth','forex'],
-    people:     ['overview','income','subs'],
+    people:     ['overview','income','cashflow'],
     subs:       ['overview','spending','budget'],
     forex:      ['overview','crosscurr','external'],
     crosscurr:  ['overview','forex','investments'],
@@ -12719,12 +12737,17 @@ function setAnalyticsTab(t) {
 // Tap any item → closes sheet, swaps content.
 function openAnalyticsPicker() {
   const reg = window._TAB_REGISTRY || {};
+  // -- PERSONAL LOGIC SET #220 -- Analytics picker regrouped. Income used to sit under
+  // "Spending", which read as if earnings were a kind of expense. Groups now follow the
+  // direction of money: Money In / Money Out / Patterns. Trends, Year-over-Year, Calendar
+  // and By Day are pattern views over BOTH sides, so they no longer live under Spending.
+  // Subscriptions moved People -> Money Out (a recurring expense, not a person).
   const sections = [
-    { id:'home',     title:'',                   keys:['overview','aisummary'] },
-    { id:'cashflow', title:'Cashflow',         keys:['cashflow','calendar','dayofweek'] },
-    { id:'spending', title:'Spending',         keys:['spending','income','trends','yoy','budget'] },
+    { id:'home',     title:'',                 keys:['overview','aisummary'] },
+    { id:'in',       title:'Money In',         keys:['income','people'] },
+    { id:'out',      title:'Money Out',        keys:['spending','budget','subs'] },
+    { id:'patterns', title:'Patterns',         keys:['cashflow','calendar','dayofweek','trends','yoy'] },
     { id:'wealth',   title:'Wealth',           keys:['wealth','investments','accthealth'] },
-    { id:'people',   title:'People',           keys:['people','subs'] },
     { id:'currency', title:'Currency',         keys:['forex','crosscurr','external'] },
   ];
   let html = `<div style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">`;
@@ -12828,7 +12851,11 @@ function renderAnalyticsCalendar() {
     } else {
       amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
     }
-    if (t.type === 'income') byDate[t.date].income += amt;
+    if (t.isInvestmentReturn) {            // PLS #221 / #219: return of capital, not income
+      const _g = _investmentGL(t, _homeBase());
+      byDate[t.date].income += _g.income; byDate[t.date].expense += _g.expense;
+    }
+    else if (t.type === 'income') byDate[t.date].income += amt;
     else if (t.type === 'expense') byDate[t.date].expense += amt;
     byDate[t.date].count += 1;
     byDate[t.date].txs.push(t);
@@ -13022,7 +13049,11 @@ function openCalDay(dateStr) {
       } else {
         amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
       }
-      if (t.type === 'income') dayIncome += amt;
+      if (t.isInvestmentReturn) {          // PLS #221 / #219: return of capital, not income
+        const _g = _investmentGL(t, _homeBase());
+        dayIncome += _g.income; dayExpense += _g.expense;
+      }
+      else if (t.type === 'income') dayIncome += amt;
       else if (t.type === 'expense') dayExpense += amt;
     });
     body = `<div class="page-pad">
@@ -13266,7 +13297,7 @@ function renderAnalyticsOverview() {
          Savings/NetWorth beneath, then trios of related widgets. align-items:stretch means
          every row's shorter card grows to match its tallest sibling — no voids, ever. ── -->
     <div class="ov-row4">
-        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
+        <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(incomeChg)}
@@ -15670,6 +15701,9 @@ function renderAnalyticsIncome() {
     if (t.isAutoReimb && !_isIncGain(t)) return false;
     if (t.isFeeReimbursable) return false;
     if (t.isInvestmentFund) return false;
+    // PLS #221 / #219: a sale is return of capital. Only a realized GAIN is a genuine
+    // income source; a loss is not income at all, so it drops out entirely here.
+    if (t.isInvestmentReturn && !(Number(t.realizedGL) > 0)) return false;
     if (t.currency !== view) return false;
     if (!mks.some(mk => t.date?.startsWith(mk))) return false;
     if (t.type !== 'income') return false;
@@ -15681,7 +15715,8 @@ function renderAnalyticsIncome() {
     const _glFlag = tx.isLoanSettlementGain || tx.isReimbSettlementGain;
     const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
     const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134
-    const amt = tx.amount;
+    // PLS #221: proceeds are capital coming back; only the realized gain is income.
+    const amt = tx.isInvestmentReturn ? Number(tx.realizedGL) : tx.amount;
     const parentName = _isTop ? cat.name : _stripIcon(cat.name);
     const parentIcon = cat.icon;
     const subName = parentName;
@@ -18350,11 +18385,6 @@ function renderProfileTab() {
           <div style="font-size:11px;color:var(--text4);margin-top:6px">${u.pct >= 80 ? '⚠ Auto-saves to Drive when over 80%' : '~5 MB browser limit · safe headroom'}</div>
         </div>`;
       })()}
-    </div>
-    <div style="margin-top:24px">
-      <div class="quiet-row" onclick="nav('planning');setTimeout(()=>setPlanTab('budgets'),50)">
-        <div>Budgets, moved to Planning</div><div style="color:var(--text4)">›</div>
-      </div>
     </div>
   </div>`;
 }
@@ -23237,6 +23267,11 @@ function aiGetMonthsTxs(n) {
       if (t.isLoanTx || t.isLoanPayment) return false;
       if (t.isAutoReimb || t.isAutoForex) return false;
       if (t.isFeeReimbursable || t.isInvestmentFund) return false;
+      // PLS #221 / #219: consumers of this list sum t.amount by type, so an
+      // isInvestmentReturn would land here as full proceeds of income. The realized
+      // gain/loss already reaches the narrative via getMonthTotals, so drop it here
+      // exactly as isInvestmentFund is dropped — capital movement, not earnings.
+      if (t.isInvestmentReturn) return false;
       return true;
     }) };
   });
@@ -24424,11 +24459,23 @@ function renderAnalyticsCashflow() {
     });
   }
   const current = months[months.length - 1];
-  const avgNet = months.reduce((s,m)=>s+m.net,0) / months.length;
-  const best = months.reduce((a,b)=>b.net>a.net?b:a, months[0]);
-  const worst = months.reduce((a,b)=>b.net<a.net?b:a, months[0]);
-  const totalInc6 = months.reduce((s,m)=>s+m.income,0);
-  const savingsRate = totalInc6 > 0 ? (months.reduce((s,m)=>s+m.net,0) / totalInc6) * 100 : 0;
+  // -- PERSONAL LOGIC SET #215 (applied here by #221) -- This tab divided by a hard 6 and
+  // ranked Best/Worst across all six slots, so a partial start month and the empty months
+  // before it dragged every stat down and could win "Worst Month" on no data at all.
+  // The six BARS stay (that is a listing), but every STAT is computed only from months at
+  // or after the first COMPLETE month, and the card states the real basis.
+  const _fcFloor = firstCompleteMonthKey();
+  const _statMonths = (() => {
+    const f = months.filter(m => !_fcFloor || m.mk >= _fcFloor);
+    return f.length ? f : months;   // never divide by zero
+  })();
+  const _basisN = _statMonths.length;
+  const avgNet = _statMonths.reduce((s,m)=>s+m.net,0) / _basisN;
+  const best = _statMonths.reduce((a,b)=>b.net>a.net?b:a, _statMonths[0]);
+  const worst = _statMonths.reduce((a,b)=>b.net<a.net?b:a, _statMonths[0]);
+  const totalInc6 = _statMonths.reduce((s,m)=>s+m.income,0);
+  const savingsRate = totalInc6 > 0 ? (_statMonths.reduce((s,m)=>s+m.net,0) / totalInc6) * 100 : 0;
+  const _basisTxt = `over ${_basisN} complete ${_basisN===1?'month':'months'}`;
   const maxAbs = Math.max(...months.map(m=>Math.abs(m.net))) || 1;
 
   // Hero
@@ -24462,12 +24509,13 @@ function renderAnalyticsCashflow() {
   // Stats
   html += `<div class="metric-grid fr2-always" style="margin-bottom:14px">
     <div class="metric-card">
-      <div class="metric-label">6-Mo Avg Net</div>
+      <div class="metric-label">Avg Net · ${_basisN}mo</div>
       <div class="metric-value mfit" style="color:${avgNet>=0?'var(--green)':'var(--red)'}">${avgNet>=0?'+':''}${fmt(avgNet, dc)}</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Savings Rate</div>
       <div class="metric-value mfit">${savingsRate.toFixed(1)}%</div>
+      <div style="font-size:10px;color:var(--text4);margin-top:2px">${_basisTxt}</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Best Month</div>
