@@ -4681,6 +4681,17 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     detail = `<span class="acct-pill">${_esc(acct.name)}</span>`;
   }
   if (tx.notes) detail += ` · ${_esc(tx.notes)}`;
+  // -- PERSONAL LOGIC SET #224 -- An investment sale row shows the PROCEEDS, because that is
+  // the cash that really moved. The realized result was invisible here, so a sale closed at a
+  // loss still read as a plain "+70,000" row in the ledger. Show the gain or loss on the row
+  // itself, tinted, so the log agrees with what the Calendar and monthly totals actually count.
+  // Display only -- no extra transaction, so nothing can double-count (see PLS #221).
+  if (tx.isInvestmentReturn) {
+    const _rg = Number(tx.realizedGL);
+    if (Number.isFinite(_rg) && _rg !== 0) {
+      detail += ` · <span style="color:${_rg>0?'var(--green)':'var(--red)'};font-weight:600">${_rg>0?'▲ gain ':'▼ loss '}${fmt(Math.abs(_rg), tx.currency)}</span>`;
+    }
+  }
   // For shared txs — iOS-style clean breakdown card
   let settlementRows = '';
   if (tx.type === 'shared') {
@@ -10304,6 +10315,7 @@ function openInvDetail(invId) {
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        ${isSold?`<button class="btn btn-outline btn-full" onclick="voidInvSale('${invId}')">↩️ Void Sale</button>`:''}
         ${inv.archived
           ? `<button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">📤 Unarchive</button>
              <button class="btn btn-danger btn-full" onclick="deleteInv('${invId}')">🗑 Delete Permanently</button>`
@@ -10368,6 +10380,8 @@ function confirmSellInv(invId) {
   const date = document.getElementById('si-date')?.value||today();
   const notes = document.getElementById('si-notes')?.value?.trim()||'';
   const realizedGL = proceeds - inv.amount;
+  // PLS #222: remember the pre-sale valuation so Void Sale can put it back exactly.
+  inv.preSaleValue = inv.currentValue || inv.amount;
   inv.status='sold'; inv.soldDate=date; inv.soldProceeds=proceeds; inv.realizedGL=realizedGL; inv.currentValue=proceeds;
   if (acctId) {
     // Find the original fund tx to link as parent
@@ -10538,6 +10552,128 @@ function saveEditInv(id) {
     }
   }
   saveDBWithSync(); closeSheet('gen2'); openInvDetail(id); renderAfterInvChange(); showToast('Updated!');
+}
+
+// -- PERSONAL LOGIC SET #222 -- Selling was a one-way door: status flipped to 'sold' and a
+// ledger entry appeared, with no way back short of deleting the whole investment. Void Sale
+// is the undo. It removes the isInvestmentReturn tx (the sale's only ledger footprint),
+// clears the sold fields and restores the pre-sale valuation. The original isInvestmentFund
+// tx is deliberately untouched -- the purchase still happened.
+function voidInvSale(id) {
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv || inv.status !== 'sold') return;
+  const led = db.transactions.filter(t => t.isInvestmentReturn && t.investmentId === id);
+  const back = (inv.preSaleValue != null) ? inv.preSaleValue : inv.amount;
+  openDlg('Void this sale?',
+    `<p style="font-size:14px;color:var(--text2);margin:0 0 10px">Reopen <strong>${_esc(inv.name)}</strong> as an active investment.</p>
+     <div style="background:var(--bg2);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;color:var(--text2);line-height:1.6">
+       ${led.length ? `Removes <b>${led.length}</b> ledger ${led.length===1?'entry':'entries'} for the sale.` : `No ledger entry exists for this sale, so nothing is removed.`}<br>
+       Restores value to <b>${fmt(back, inv.currency)}</b>.<br>
+       The original purchase entry stays.
+     </div>`,
+    `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger" onclick="confirmVoidInvSale('${id}')">Void Sale</button>`
+  );
+}
+function confirmVoidInvSale(id) {
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv) { closeDlg(); return; }
+  const before = db.transactions.length;
+  db.transactions = db.transactions.filter(t => !(t.isInvestmentReturn && t.investmentId === id));
+  const removed = before - db.transactions.length;
+  inv.currentValue = (inv.preSaleValue != null) ? inv.preSaleValue : inv.amount;
+  delete inv.status; delete inv.soldDate; delete inv.soldProceeds; delete inv.realizedGL; delete inv.preSaleValue;
+  saveDBWithSync(); closeDlg(); closeSheet('gen'); closeSheet('gen2'); renderAfterInvChange();
+  showToast(removed ? 'Sale voided - ' + removed + ' ledger entry removed' : 'Sale voided');
+}
+
+// -- PERSONAL LOGIC SET #223 -- Ledger repair for sales made by older builds, which marked an
+// investment sold WITHOUT writing the matching isInvestmentReturn tx. The result is a sale that
+// exists in the Investments tab and nowhere else, so its realized gain or loss never reaches the
+// Calendar or any monthly total. This scan only REPORTS; it writes nothing on its own, because
+// repairing means choosing an account and a date and a wrong guess would invent money that never
+// moved. The user confirms each one. Read-only and safe to run any time.
+function scanInvestmentLedger() {
+  const out = [];
+  (db.investments || []).forEach(inv => {
+    if (inv.status !== 'sold') return;
+    const has = db.transactions.some(t => t.isInvestmentReturn && t.investmentId === inv.id);
+    if (has) return;
+    out.push(inv);
+  });
+  return out;
+}
+function openInvLedgerRepair() {
+  const gaps = scanInvestmentLedger();
+  if (!gaps.length) {
+    openDlg('Ledger check', `<p style="font-size:14px;color:var(--text2);margin:0">Every sold investment has a matching ledger entry. Nothing to repair.</p>`,
+      `<button class="btn btn-primary" onclick="closeDlg()">Done</button>`);
+    return;
+  }
+  const rows = gaps.map(inv => {
+    const gl = Number(inv.realizedGL);
+    const glTxt = Number.isFinite(gl) && gl !== 0
+      ? `<span style="color:${gl>0?'var(--green)':'var(--red)'}">${gl>0?'+':''}${fmt(gl, inv.currency)} ${gl>0?'gain':'loss'}</span>`
+      : `<span style="color:var(--text4)">break even</span>`;
+    return `<div class="settings-row" onclick="openInvBackfill('${inv.id}')">
+      <div class="sr-left"><div class="sr-icon">${invTypeIcon(inv.type)}</div><div>
+        <div class="sr-text">${_esc(inv.name)}</div>
+        <div class="sr-sub">Sold ${fmtD(inv.soldDate||inv.date)} &middot; ${glTxt}</div>
+      </div></div><div class="sr-right">Review &rarr;</div>
+    </div>`;
+  }).join('');
+  openSheet('gen', 'Ledger Repair', `<div style="padding:4px 4px 12px">
+    <div style="background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--text2);line-height:1.6">
+      <b>${gaps.length}</b> sold ${gaps.length===1?'investment has':'investments have'} no ledger entry, so the realized result is missing from your Calendar and monthly totals.
+      Tap one to review and confirm before anything is written.
+    </div>
+    <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden">${rows}</div>
+  </div>`);
+}
+function openInvBackfill(id) {
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv) return;
+  const gl = Number(inv.realizedGL);
+  const proceeds = (inv.soldProceeds != null) ? inv.soldProceeds : (inv.currentValue || inv.amount);
+  const acctOpts = db.accounts.filter(a=>!a.archived)
+    .map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
+  openSheet('gen2', 'Confirm ledger entry', `<div style="padding:8px 4px">
+    <div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:13px;color:var(--text3)">${_esc(inv.name)}</div>
+      <div style="font-size:18px;font-weight:700;font-family:var(--mono)">${fmt(proceeds, inv.currency)}</div>
+      <div style="font-size:12px;margin-top:4px;color:${gl>0?'var(--green)':gl<0?'var(--red)':'var(--text4)'}">
+        ${Number.isFinite(gl)&&gl!==0 ? `Realized ${gl>0?'gain':'loss'} ${fmt(Math.abs(gl), inv.currency)}` : 'Break even'}</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:var(--r-md);padding:11px 13px;margin-bottom:14px;font-size:12px;color:var(--text3);line-height:1.6">
+      This adds the missing entry to your ledger. Check the account and date first - a wrong
+      account would show money arriving somewhere it never did. You can undo it with Void Sale.
+    </div>
+    <div class="form-group"><label class="form-label" for="bf-acct">Proceeds landed in</label>
+      <select class="form-input" id="bf-acct">${acctOpts}</select></div>
+    ${dtField('bf-date','Sale Date', inv.soldDate || inv.date || today())}
+    <button class="btn btn-primary btn-full" onclick="confirmInvBackfill('${id}')">Write Ledger Entry</button>
+  </div>`);
+}
+function confirmInvBackfill(id) {
+  const inv = db.investments.find(i=>i.id===id);
+  if (!inv) return;
+  if (db.transactions.some(t => t.isInvestmentReturn && t.investmentId === id)) {
+    closeSheet('gen2'); showToast('Already has a ledger entry'); return;   // idempotent
+  }
+  const acctId = document.getElementById('bf-acct')?.value;
+  if (!acctId) { showToast('Pick an account'); return; }
+  const date = document.getElementById('bf-date')?.value || inv.soldDate || inv.date || today();
+  const proceeds = roundMoney((inv.soldProceeds != null) ? inv.soldProceeds : (inv.currentValue || inv.amount), inv.currency); // PLS #122
+  const realizedGL = (Number.isFinite(Number(inv.realizedGL))) ? Number(inv.realizedGL) : (proceeds - inv.amount);
+  inv.soldProceeds = proceeds; inv.soldDate = date; inv.realizedGL = realizedGL;
+  const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===id);
+  db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId,
+    date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${_esc(inv.name)}`,
+    isInvestmentReturn:true, realizedGL, costBasis:inv.amount, investmentId:id,
+    parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, backfilled:true,
+    fxSnapshot:buildFxSnapshot(date, nowTime()), createdAt:new Date().toISOString() });
+  saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
+  showToast('Ledger entry added');
 }
 
 function deleteInv(id) {
@@ -20085,6 +20221,11 @@ function renderDataTab() {
         <div class="sr-left"><div class="sr-icon">🏦</div><div><div class="sr-text">Bank Reconciliation</div><div class="sr-sub">Compare app balance vs real bank balance</div></div></div>
         <div class="sr-right">→</div>
       </div>
+      ${(()=>{ const g = (typeof scanInvestmentLedger==='function') ? scanInvestmentLedger() : [];
+        return `<div class="settings-row" onclick="openInvLedgerRepair()">
+        <div class="sr-left"><div class="sr-icon">${g.length?'⚠️':'✅'}</div><div><div class="sr-text">Investment Ledger Check</div><div class="sr-sub">${g.length ? g.length+' sold '+(g.length===1?'investment has':'investments have')+' no ledger entry' : 'All sold investments are recorded'}</div></div></div>
+        <div class="sr-right">→</div>
+      </div>`; })()}
       ${(db.reconciliations || []).length > 0 ? `
       <div class="settings-row" onclick="openReconHistory()">
         <div class="sr-left"><div class="sr-icon">📜</div><div><div class="sr-text">Reconciliation History</div><div class="sr-sub">${(db.reconciliations || []).length} past ${aiPlural((db.reconciliations || []).length,'check')}</div></div></div>
@@ -24453,6 +24594,11 @@ function renderAnalyticsCashflow() {
     months.push({
       mk,
       label: d.toLocaleDateString('en-PH',{month:'short',year:'2-digit'}),
+      // stacked form for the bar rows: month over year, so every row is the same
+      // height and the gaps between months read as even. The single-line `label`
+      // is still what the Best/Worst cards and the row tooltip use.
+      mon: d.toLocaleDateString('en-PH',{month:'short'}),
+      yr: String(d.getFullYear()).slice(-2),
       income: tot.income || 0,
       expense: tot.expense || 0,
       net: (tot.income || 0) - (tot.expense || 0)
@@ -24495,8 +24641,8 @@ function renderAnalyticsCashflow() {
     const pct = Math.abs(m.net) / maxAbs * 100;
     const color = m.net >= 0 ? 'var(--green)' : 'var(--red)';
     const emoji = m.net >= 0 ? '✅' : '❌';
-    html += `<div onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
-      <div style="width:36px;font-size:11px;color:var(--text3)">${m.label}</div>
+    html += `<div onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions" style="display:flex;align-items:center;gap:10px;min-height:34px;margin-bottom:4px;cursor:pointer">
+      <div style="width:30px;flex-shrink:0;text-align:center;font-size:10px;line-height:1.2;color:var(--text3)">${m.mon}<br><span style="color:var(--text4)">${m.yr}</span></div>
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
         <div style="width:${pct}%;height:100%;background:${color};border-radius:var(--r-sm)"></div>
       </div>
