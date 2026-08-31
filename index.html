@@ -4165,6 +4165,13 @@ function isBulkEligible(tx) {
   if (tx.isSettlement) return false;
   if (tx.isLoanTx) return false;
   if (tx.isLoanPayment) return false;
+  // -- PERSONAL LOGIC SET #229 -- Investment capital txs are DERIVED from an investment record:
+  // the sale carries realizedGL/costBasis and the investment carries the matching soldProceeds.
+  // Bulk delete or bulk archive would break that pair with no confirmation and no cascade, leaving
+  // an investment marked sold whose result counts nowhere. Every other derived tx is already
+  // excluded here for the same reason. Use Void Sale, which unwinds both sides together.
+  if (tx.isInvestmentReturn) return false;
+  if (tx.isInvestmentFund) return false;
   return true;
 }
 
@@ -7647,6 +7654,19 @@ function openTxReceipt(txId) {
   // Build detail rows
   let rowsHTML = '';
   rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Date</div><div class="rcpt-row-value">${fmtDFull(tx.date)}${tx.time?` · ${tx.time}`:''}</div></div>`;
+  // -- PERSONAL LOGIC SET #231 -- The receipt is a shareable, printable record, so it must not be
+  // the one surface still implying a sale was earnings. PLS #224 put the realized result on the log
+  // row and #225 on the detail sheet; the receipt kept showing a bare proceeds figure. Same facts,
+  // same three surfaces.
+  if (tx.isInvestmentReturn) {
+    const _rg = Number(tx.realizedGL), _cb = Number(tx.costBasis);
+    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Kind</div><div class="rcpt-row-value">Return of capital</div></div>`;
+    if (Number.isFinite(_cb) && _cb > 0) rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Cost basis</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(_cb, tx.currency)}</div></div>`;
+    if (Number.isFinite(_rg)) {
+      const _w = _rg > 0 ? 'Realized gain' : _rg < 0 ? 'Realized loss' : 'Realized result';
+      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">${_w}</div><div class="rcpt-row-value" style="font-family:var(--mono);color:${_rg>0?'var(--green)':_rg<0?'var(--red)':'var(--text3)'}">${_rg>0?'+':''}${fmt(_rg, tx.currency)}</div></div>`;
+    }
+  }
 
   if (isTransfer) {
     const fromAcct = getAccountDisplay(tx.fromAccountId);
@@ -8029,6 +8049,7 @@ function saveEditTx(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) { showToast('TX not found'); return; }
   const isShared = tx.type === 'shared';
+  const _origEditCurrency = tx.currency;   // PLS #228: needed to detect a currency switch below
   const newDate = document.getElementById('edit-date')?.value;
 
   tx.categoryId = document.getElementById('edit-cat')?.value || tx.categoryId;
@@ -8124,6 +8145,29 @@ function saveEditTx(txId) {
   if (newDate && newDate !== tx.date) {
     tx.date = newDate;
     tx.fxSnapshot = buildFxSnapshot(newDate);
+  }
+  // -- PERSONAL LOGIC SET #228 -- An investment sale carries a DERIVED figure: realizedGL is
+  // proceeds minus cost basis. Editing the proceeds here used to leave realizedGL untouched, so a
+  // sale edited from 70,000 to 90,000 still claimed a 30,000 loss when the real one was 10,000 --
+  // and the wrong figure went straight into the monthly totals. ensureDBIntegrity could not catch
+  // it (realizedGL was present, just wrong) and neither could the ledger scan (PLS #227), which
+  // looks for a MISSING figure, not a stale one. Nothing warned. Recompute it here instead, and
+  // keep the investment record in step, since the two must always agree.
+  if (tx.isInvestmentReturn) {
+    const inv = db.investments.find(i => i.id === tx.investmentId);
+    let basis = Number(tx.costBasis);
+    if (!Number.isFinite(basis) && inv) basis = Number(inv.amount);
+    // A currency switch invalidates the basis -- it was recorded in the old currency and there is
+    // no honest way to restate it here. Drop the derived figures rather than keep a wrong one; the
+    // ledger scan then reports the sale as uncountable and the user supplies the cost themselves.
+    if (tx.currency !== _origEditCurrency || !Number.isFinite(basis)) {
+      delete tx.realizedGL; delete tx.costBasis;
+      if (inv) delete inv.realizedGL;
+    } else {
+      tx.costBasis = roundMoney(basis, tx.currency);
+      tx.realizedGL = roundMoney((Number(tx.amount) || 0) - tx.costBasis, tx.currency); // PLS #122
+      if (inv) { inv.realizedGL = tx.realizedGL; inv.soldProceeds = tx.amount; inv.currentValue = tx.amount; }
+    }
   }
   saveDBWithSync();
   closeSheet('gen');
@@ -10343,6 +10387,11 @@ function openInvDetail(invId) {
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        ${/* PLS #222: shown only when isSold. This is the ONLY way to undo a sale — it removes the
+             ledger entry and restores preSaleValue together. Deleting the sale tx from the
+             transaction log instead leaves the investment marked sold with nothing recorded
+             (the ledger check then reports it), which is why sale txs are bulk-ineligible
+             under PLS #229. */''}
         ${isSold?`<button class="btn btn-outline btn-full" onclick="voidInvSale('${invId}')">↩️ Void Sale</button>`:''}
         ${inv.archived
           ? `<button class="btn btn-outline btn-full" onclick="archiveInv('${invId}')">📤 Unarchive</button>
@@ -10697,6 +10746,10 @@ function openInvLedgerRepair() {
       `<button class="btn btn-primary" onclick="closeDlg()">Done</button>`);
     return;
   }
+  // PLS #227: scanInvestmentLedger returns {kind, inv, tx} — NOT bare investments. `inv` is null
+  // for an orphaned sale whose investment record is gone, so always guard g.inv before reading it.
+  // The two kinds need different repairs: 'missing' has no ledger entry at all and goes to the
+  // backfill flow; 'uncountable' has an entry with no usable realizedGL and only needs the cost.
   const nMiss = gaps.filter(g=>g.kind==='missing').length;
   const nUnc  = gaps.filter(g=>g.kind==='uncountable').length;
   const rows = gaps.map(g => {
@@ -10750,16 +10803,25 @@ function openInvBackfill(id) {
     </div>
     <div class="form-group"><label class="form-label" for="bf-acct">Proceeds landed in</label>
       <select class="form-input" id="bf-acct">${acctOpts}</select></div>
+    ${/* PLS #217: every date field routes through dtField -> dtTrigger -> the GZ picker.
+         Never drop a plain native <input type="date"> in here. */''}
     ${dtField('bf-date','Sale Date', inv.soldDate || inv.date || today())}
     <button class="btn btn-primary btn-full" onclick="confirmInvBackfill('${id}')">Write Ledger Entry</button>
   </div>`);
 }
 function confirmInvBackfill(id) {
+  // PLS #223: idempotent by design. The sheet can be reopened, double-tapped, or reached again
+  // from a stale Ledger Repair list, and every one of those must write AT MOST one entry —
+  // a duplicated sale would double the proceeds in the account balance.
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
   if (db.transactions.some(t => t.isInvestmentReturn && t.investmentId === id)) {
     closeSheet('gen2'); showToast('Already has a ledger entry'); return;   // idempotent
   }
+  // PLS #223: the account and date are the two things this flow must NOT guess — a wrong account
+  // shows money arriving somewhere it never did. The select is built from non-archived accounts
+  // only, so it can legitimately be empty (every account archived); refuse rather than write to a
+  // blank accountId, which would produce a tx belonging to no account at all.
   const acctId = document.getElementById('bf-acct')?.value;
   if (!acctId) { showToast('Pick an account'); return; }
   const date = document.getElementById('bf-date')?.value || inv.soldDate || inv.date || today();
@@ -12850,6 +12912,14 @@ function renderAnalytics() {
   }
   // ── PERSONAL LOGIC SET #88 ── iOS Health-style picker header (replaces 17-tab horizontal scroll).
   // Tap the title to open a categorized bottom sheet for tab switching.
+  // ── PERSONAL LOGIC SET #220 ── The `section` values below are NOT arbitrary labels — they are
+  // the DIRECTION of money, and they must stay in sync with the `sections` array in
+  // openAnalyticsPicker(); a value with no matching section id silently drops that tab out of the
+  // picker entirely. 'in' = money arriving · 'out' = money leaving · 'patterns' = views that read
+  // BOTH sides over time. Income used to sit in 'spending', which read as if earnings were a kind
+  // of expense; Trends/YoY/Calendar/By Day sat there too though they describe both directions;
+  // Subscriptions sat under 'people' though it is a recurring expense, not a person.
+  // Do not "tidy" these back toward the old spending/cashflow/people names.
   const TAB_REGISTRY = {
     overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance — net worth, income vs expense, cashflow, and budget.'},
     aisummary:  {label:'AI Summary',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
@@ -12864,7 +12934,10 @@ function renderAnalytics() {
     wealth:     {label:'Wealth',         icon:'💎', section:'wealth', desc:'Your net worth over time and how assets and debt stack up.'},
     investments:{label:'Investments',    icon:'📊', section:'wealth', desc:'Your portfolio by type, cost vs current value, and gains.'},
     accthealth: {label:'Account Health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
+    // PLS #220: 'in' — People tracks who pays you and who you owe, i.e. money arriving.
     people:     {label:'People',         icon:'👥', section:'in', desc:'Who you send money to or receive from, with running balances.'},
+    // PLS #220: 'out' — a subscription is a recurring EXPENSE, not a person. It sat under
+    // section:'people' only because subscriptions are often paid to people.
     subs:       {label:'Subscriptions',  icon:'🔁', section:'out', desc:'Your recurring payments and what they cost per month and per year.'},
     forex:      {label:'Forex Rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
     crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
@@ -12919,6 +12992,9 @@ function renderAnalytics() {
     wealth:     ['overview','investments','accthealth'],
     investments:['overview','wealth','crosscurr'],
     accthealth: ['overview','wealth','forex'],
+    // PLS #220: 'subs' was removed from People's kin when Subscriptions moved People -> Money Out.
+    // _TAB_KIN is about topical relatedness, not grouping, so entries MAY cross groups — but a
+    // recurring payment is not a person, and it never belonged here.
     people:     ['overview','income','cashflow'],
     subs:       ['overview','spending','budget'],
     forex:      ['overview','crosscurr','external'],
@@ -13537,6 +13613,10 @@ function renderAnalyticsOverview() {
          Savings/NetWorth beneath, then trios of related widgets. align-items:stretch means
          every row's shorter card grows to match its tallest sibling — no voids, ever. ── -->
     <div class="ov-row4">
+        <!-- PLS #220: this tile drills into 'income', NOT 'spending'. It pointed at the Spending
+             tab for as long as the tile existed, so tapping INCOME opened a breakdown of expenses.
+             The Expenses tile below correctly uses 'spending' — the two look alike, check which
+             one you are editing. -->
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
             <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
@@ -17721,10 +17801,14 @@ function renderContractTab() {
 
   const totalActual = BUCKET_DEFS.reduce((s,b)=>s+getBucketBalance(b),0);
   const overallPct = safeGoal>0?Math.min(100,(totalActual/safeGoal)*100):0;
-  const targetPct = Math.min(100,(targetToday/safeGoal)*100);
+  // PLS #233: with no goal set this is 0/0 -> NaN, and Math.min(100, NaN) is NaN. It printed as
+  // "target pace today (NaN%)" AND landed in the marker's CSS left:, breaking its position.
+  const targetPct = safeGoal > 0 ? Math.min(100,(targetToday/safeGoal)*100) : 0;
   const gap = totalActual - targetToday;
   const gapColor = gap>=0?'var(--green)':'var(--red)';
-  const gapLabel = gap>=0?`+${fmt(Math.round(gap),goalCurr)} ahead`:`${fmt(Math.round(Math.abs(gap)),goalCurr)} behind`;
+  // -- PERSONAL LOGIC SET #233 -- Say what the gap is measured AGAINST. "behind" on its own reads
+  // as "behind the goal", when it is actually the distance from today's target PACE.
+  const gapLabel = gap>=0?`+${fmt(Math.round(gap),goalCurr)} ahead of pace`:`${fmt(Math.round(Math.abs(gap)),goalCurr)} behind pace`;
   const toGoal = Math.max(0, safeGoal - totalActual);
 
   // Milestones
@@ -17763,14 +17847,22 @@ function renderContractTab() {
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div>
+      <!-- PLS #233: two UNRELATED figures used to sit stacked in one right-hand column with no
+           label on either — a big percentage (progress toward the goal) directly above small red
+           text ending in "behind". Read top to bottom that says "18.2% behind", so adding money
+           made the number beside "behind" go UP and looked like falling further behind, when
+           progress had risen and the gap had shrunk. Now each figure sits in its OWN column
+           directly under its own label, so neither can be read as qualifying the other.
+           align-items:flex-end keeps both values on one baseline even if a label wraps on a
+           narrow screen. Do not merge these back into a single stacked column. -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:10px">
+        <div style="min-width:0">
           <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Progress to goal</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Marker = target pace today (${targetPct.toFixed(0)}%)</div>
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15;margin-top:3px">${overallPct.toFixed(1)}%</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono);font-size:20px;font-weight:700">${overallPct.toFixed(1)}%</div>
-          <div style="font-size:11px;color:${gapColor};font-weight:500">${gapLabel}</div>
+        <div style="min-width:0;text-align:right">
+          <div style="font-size:11px;color:var(--text3)">Marker = target pace today (${targetPct.toFixed(0)}%)</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600;line-height:1.15;margin-top:3px;color:${gapColor}">${gapLabel}</div>
         </div>
       </div>
       <div style="height:10px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px;position:relative">
@@ -20338,6 +20430,10 @@ function renderDataTab() {
         <div class="sr-left"><div class="sr-icon">🏦</div><div><div class="sr-text">Bank Reconciliation</div><div class="sr-sub">Compare app balance vs real bank balance</div></div></div>
         <div class="sr-right">→</div>
       </div>
+      ${/* PLS #223/#227: the scan runs on every render of this tab. It is READ-ONLY and cheap
+             (two array passes), so it is safe here — but never call it from a hot render path.
+             The typeof guard exists because this template is also reached during early boot,
+             before the function is defined. */''}
       ${(()=>{ const g = (typeof scanInvestmentLedger==='function') ? scanInvestmentLedger() : [];
         return `<div class="settings-row" onclick="openInvLedgerRepair()">
         <div class="sr-left"><div class="sr-icon">${g.length?'⚠️':'✅'}</div><div><div class="sr-text">Investment Ledger Check</div><div class="sr-sub">${g.length ? g.length+' investment '+(g.length===1?'sale is':'sales are')+' missing from your totals' : 'All sold investments are counted'}</div></div></div>
@@ -23525,13 +23621,23 @@ function aiGetMonthsTxs(n) {
       if (t.isLoanTx || t.isLoanPayment) return false;
       if (t.isAutoReimb || t.isAutoForex) return false;
       if (t.isFeeReimbursable || t.isInvestmentFund) return false;
-      // PLS #221 / #219: consumers of this list sum t.amount by type, so an
-      // isInvestmentReturn would land here as full proceeds of income. The realized
-      // gain/loss already reaches the narrative via getMonthTotals, so drop it here
-      // exactly as isInvestmentFund is dropped — capital movement, not earnings.
-      if (t.isInvestmentReturn) return false;
+      // PLS #221 / #219: consumers of this list sum t.amount by type, so a raw
+      // isInvestmentReturn would land here as full proceeds of income.
+      // -- PERSONAL LOGIC SET #230 -- Dropping it outright (the first fix) went too far: it
+      // made the AI narrative's income disagree with getMonthTotals whenever a sale closed
+      // at a gain, because the gain IS income and getMonthTotals counts it. Two surfaces
+      // describing the same month with different figures is its own bug. Instead the tx is
+      // passed through as a lightweight PROXY carrying only the realized result, so any
+      // consumer summing t.amount by type gets the right number and never sees the
+      // proceeds. A loss becomes an expense proxy; a break-even drops out entirely because
+      // it contributes nothing either way.
       return true;
-    }) };
+    }).map(t => {
+      if (!t.isInvestmentReturn) return t;
+      const gl = Number(t.realizedGL);
+      if (!Number.isFinite(gl) || gl === 0) return null;
+      return Object.assign({}, t, { amount: Math.abs(gl), type: gl > 0 ? 'income' : 'expense', _glProxy: true });
+    }).filter(Boolean) };
   });
 }
 
@@ -24713,9 +24819,9 @@ function renderAnalyticsCashflow() {
     months.push({
       mk,
       label: d.toLocaleDateString('en-PH',{month:'short',year:'2-digit'}),
-      // stacked form for the bar rows: month over year, so every row is the same
-      // height and the gaps between months read as even. The single-line `label`
-      // is still what the Best/Worst cards and the row tooltip use.
+      // PLS #232: stacked form for the bar rows — month over year, so every row is the
+      // same height and the gaps between months read as even. The single-line `label`
+      // is still what the Best/Worst cards and the row tooltip use; do not merge them.
       mon: d.toLocaleDateString('en-PH',{month:'short'}),
       yr: String(d.getFullYear()).slice(-2),
       income: tot.income || 0,
@@ -24729,18 +24835,46 @@ function renderAnalyticsCashflow() {
   // before it dragged every stat down and could win "Worst Month" on no data at all.
   // The six BARS stay (that is a listing), but every STAT is computed only from months at
   // or after the first COMPLETE month, and the card states the real basis.
+  // -- PERSONAL LOGIC SET #232 -- Second floor, at the OTHER end. Everywhere else in the app a
+  // BASELINE figure excludes the in-progress month (avgMonthlyExpense6mo, buildAnomalyHighlights,
+  // buildForecastBand and the AI Summary all loop from i=1), while DISPLAY series include it
+  // (the savings sparkline, net-worth trend and income/expense bars all loop from i=5 down to 0).
+  // That split is deliberate: a half-finished month belongs on a chart but not in an average.
+  // This tab took its STATS from the display array, so on the 10th of a month the "Avg Net" here
+  // was dragged down by ten days of data while every other baseline in the app ignored them —
+  // two different answers to "what is a typical month for me". The BARS still show the current
+  // month; the stats no longer count it.
   const _fcFloor = firstCompleteMonthKey();
+  const _nowKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
   const _statMonths = (() => {
-    const f = months.filter(m => !_fcFloor || m.mk >= _fcFloor);
-    return f.length ? f : months;   // never divide by zero
+    const f = months.filter(m => (!_fcFloor || m.mk >= _fcFloor) && m.mk < _nowKey);
+    if (f.length) return f;
+    // Only the current month has data — keep it and say the basis is still in progress.
+    const g = months.filter(m => !_fcFloor || m.mk >= _fcFloor);
+    if (g.length) return g;
+    // Both floors can exclude everything at once: logging that began mid-current-month puts
+    // firstCompleteMonthKey in the FUTURE, past the end of the six-month window. best/worst read
+    // [0] and _basisN is a divisor, so this array must NEVER be empty. Falling back to the full
+    // display array keeps the tab rendering; the basis label below says it is in progress.
+    return months;
   })();
+  // PLS #232: true only when the baseline genuinely excludes the in-progress month. The length
+  // check matters — [].every() returns TRUE, which would claim a complete-month basis over no
+  // months at all.
+  const _statsExcludeCurrent = _statMonths.length > 0 && _statMonths.every(m => m.mk < _nowKey);
+  // PLS #232: EVERY figure below is derived from _statMonths, never from `months`. `months` is the
+  // display array and still contains the in-progress month; using it here is exactly the bug this
+  // rule fixed. _statMonths is guaranteed non-empty above because best/worst read [0] and _basisN
+  // is a divisor.
   const _basisN = _statMonths.length;
   const avgNet = _statMonths.reduce((s,m)=>s+m.net,0) / _basisN;
   const best = _statMonths.reduce((a,b)=>b.net>a.net?b:a, _statMonths[0]);
   const worst = _statMonths.reduce((a,b)=>b.net<a.net?b:a, _statMonths[0]);
   const totalInc6 = _statMonths.reduce((s,m)=>s+m.income,0);
   const savingsRate = totalInc6 > 0 ? (_statMonths.reduce((s,m)=>s+m.net,0) / totalInc6) * 100 : 0;
-  const _basisTxt = `over ${_basisN} complete ${_basisN===1?'month':'months'}`;
+  const _basisTxt = _statsExcludeCurrent
+    ? `over ${_basisN} complete ${_basisN===1?'month':'months'}, this month excluded`
+    : `over ${_basisN} ${_basisN===1?'month':'months'}, still in progress`;
   const maxAbs = Math.max(...months.map(m=>Math.abs(m.net))) || 1;
 
   // Hero
@@ -24760,6 +24894,9 @@ function renderAnalyticsCashflow() {
     const pct = Math.abs(m.net) / maxAbs * 100;
     const color = m.net >= 0 ? 'var(--green)' : 'var(--red)';
     const emoji = m.net >= 0 ? '✅' : '❌';
+    // PLS #232: the BARS deliberately iterate `months`, not _statMonths — the in-progress month is
+    // out of the statistics but must still be visible as a listing. min-height:34px fixes the row
+    // height so the two-line labels below cannot make the gaps between months uneven.
     html += `<div onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions" style="display:flex;align-items:center;gap:10px;min-height:34px;margin-bottom:4px;cursor:pointer">
       <div style="width:30px;flex-shrink:0;text-align:center;font-size:10px;line-height:1.2;color:var(--text3)">${m.mon}<br><span style="color:var(--text4)">${m.yr}</span></div>
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
@@ -24774,6 +24911,8 @@ function renderAnalyticsCashflow() {
   // Stats
   html += `<div class="metric-grid fr2-always" style="margin-bottom:14px">
     <div class="metric-card">
+      <!-- PLS #232: this label must show _basisN, the REAL divisor, not a hardcoded 6. It read
+           "6-Mo Avg Net" while dividing by whatever months existed — a stated basis that was false. -->
       <div class="metric-label">Avg Net · ${_basisN}mo</div>
       <div class="metric-value mfit" style="color:${avgNet>=0?'var(--green)':'var(--red)'}">${avgNet>=0?'+':''}${fmt(avgNet, dc)}</div>
     </div>
