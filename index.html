@@ -2738,6 +2738,13 @@ function txAmountDisplay(tx) {
   if (tx.isReimbSettlementLoss) return {cls:'tx-neg', str:_txIco('trendDown')+'-'+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='income') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
   if (tx.isSettlement && tx.type==='expense') return {cls:'tx-neu', str:'⇄ '+fmt(tx.amount,tx.currency)};
+  // -- PERSONAL LOGIC SET #225 -- A sale is capital coming back from a ledger the user does not
+  // control into the one they do. The cash movement is real, but it is not earnings, so it must
+  // never wear the green "+" of income (PLS #219/#221). It reads neutral, exactly like the
+  // transfer that funded it -- buy and sell are mirrors. The realized gain or loss is carried
+  // separately on the row and in the detail sheet. Stored type stays 'income' because
+  // getAcctBalance needs it to credit the account; only the DISPLAY changes.
+  if (tx.isInvestmentReturn) return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='borrow') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='transfer') return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
@@ -6829,14 +6836,20 @@ function renderTxLog() {
     if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
-    const _isInvCapital = t.isInvestmentFund || t.isInvestmentReturn || t.isCorrection; // (incl. balance corrections) — bypass type filter so they always show under All/Expense/Income/Transfer/Shared (still excluded under Loans, see below)
-    // Type filter (still applies during search) — investment fund/return bypass type filter (capital movement ≠ income/expense)
+    // -- PERSONAL LOGIC SET #226 -- Investment fund/return txs used to bypass the type filter
+    // entirely, so they surfaced under EVERY pill including "Income" -- the exact treatment
+    // PLS #219/#225 removed everywhere else. A purchase and a sale are both capital moving
+    // between a ledger the user controls and one they do not, so they filter as TRANSFERS.
+    // Balance corrections keep the old bypass: they genuinely fit no standard type.
+    const _isInvCapital = t.isCorrection;
+    const _invAsTransfer = t.isInvestmentFund || t.isInvestmentReturn;
     if (_txFilter !== 'all' && !_isInvCapital) {
       if (_txFilter === 'loans') { if (!(t.isLoanTx || t.isLoanPayment)) return false; }
+      else if (_invAsTransfer) { if (_txFilter !== 'transfer') return false; }
       else if (t.type !== _txFilter) return false;
     }
-    // Even with _isInvCapital, if user explicitly filters Loans, exclude investment txs
-    if (_txFilter === 'loans' && _isInvCapital) return false;
+    // Corrections and investment capital never belong under an explicit Loans filter
+    if (_txFilter === 'loans' && (_isInvCapital || _invAsTransfer)) return false;
     // Search match — check notes, amount, account name, category name
     if (searchActive) {
       const notes = (t.notes || '').toLowerCase();
@@ -7293,6 +7306,21 @@ function openTxDetail(txId) {
     : cat;
 
   let rows = '';
+  if (tx.isInvestmentReturn) {
+    // PLS #225: label it for what it is, and show the parts the amount alone cannot tell you.
+    const _rg = Number(tx.realizedGL);
+    const _cb = Number(tx.costBasis);
+    rows += `<div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-purple">return of capital</span></div></div>`;
+    if (Number.isFinite(_cb) && _cb > 0) {
+      rows += `<div class="detail-row"><div class="detail-label">Cost basis</div><div class="detail-value" style="font-family:var(--mono)">${fmt(_cb, tx.currency)}</div></div>`;
+    }
+    if (Number.isFinite(_rg)) {
+      const _c = _rg > 0 ? 'var(--green)' : _rg < 0 ? 'var(--red)' : 'var(--text3)';
+      const _w = _rg > 0 ? 'Realized gain' : _rg < 0 ? 'Realized loss' : 'Realized result';
+      rows += `<div class="detail-row"><div class="detail-label">${_w}</div><div class="detail-value" style="font-family:var(--mono);color:${_c};font-weight:600">${_rg>0?'+':''}${fmt(_rg, tx.currency)}</div></div>`;
+      rows += `<div class="detail-row"><div class="detail-label">Counts as</div><div class="detail-value" style="font-size:12px;color:var(--text3)">${_rg===0?'nothing — break even':(_rg>0?'income':'expense')+' of '+fmt(Math.abs(_rg), tx.currency)}</div></div>`;
+    }
+  } else
   rows += `<div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${txTypeColor(tx.type)}">${tx.type}</span></div></div>`;
   if (tx.type === 'shared') {
     const owed = (tx.totalBill||tx.amount) - (tx.myShare||(tx.totalBill||tx.amount)/2);
@@ -10578,6 +10606,10 @@ function voidInvSale(id) {
 function confirmVoidInvSale(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) { closeDlg(); return; }
+  // A second void must be a no-op. preSaleValue is consumed and deleted by the first one, so
+  // running again would fall through to the cost-basis fallback and silently overwrite the
+  // valuation just restored -- a double tap on the button would quietly rewrite the number.
+  if (inv.status !== 'sold') { closeDlg(); return; }
   const before = db.transactions.length;
   db.transactions = db.transactions.filter(t => !(t.isInvestmentReturn && t.investmentId === id));
   const removed = before - db.transactions.length;
@@ -13344,12 +13376,16 @@ function renderAnalyticsOverview() {
       expCats[name].total += amt;
       expCats[name].txs.push(tx);
       expTotal += amt;
-    } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)) {
+    } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)
+               // PLS #226: the Overview income pie is an income-SOURCE breakdown. A sale closed at a
+               // loss is no source at all; one closed at a gain contributes only that gain.
+               && !(tx.isInvestmentReturn && !(Number(tx.realizedGL) > 0))) {
       const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
       const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
       const name = _isTop ? cat.name : _stripIcon(cat.name);
       // Convert to display currency
-      const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
+      const _rawInc = tx.isInvestmentReturn ? Number(tx.realizedGL) : tx.amount;   // PLS #226
+      const amt = tx.currency === dispCurr ? _rawInc : convert(_rawInc, tx.currency, dispCurr);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
       incCats[name].total += amt;
       incCats[name].txs.push(tx);
@@ -14578,7 +14614,11 @@ function buildIncomeDiversification(metricMk, dispCurr) {
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     // Include all income txs, plus PLS #47 gain/loss settlements (real FX arbitrage income)
     // Note: _ovTxsForMonth excludes settlements, so we add them separately
-    const baseTxs = _ovTxsForMonth(k).filter(t => t.type === 'income');
+    // PLS #221 / #226: _ovTxsForMonth drops isInvestmentFund but not isInvestmentReturn, so a
+    // sale still arrived here as full proceeds and ranked as an income SOURCE. Only a realized
+    // gain is genuine income; a loss is no source at all.
+    const baseTxs = _ovTxsForMonth(k).filter(t => t.type === 'income'
+      && !(t.isInvestmentReturn && !(Number(t.realizedGL) > 0)));
     const gainTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
       (t.isLoanSettlementGain || t.isReimbSettlementGain) && t.type === 'income');
     const lossTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
@@ -14589,7 +14629,9 @@ function buildIncomeDiversification(metricMk, dispCurr) {
       const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
       const name = _isTop ? cat.name : _stripIcon(cat.name);
       if (!incomes[name]) incomes[name] = {total: 0, icon: cat.icon};
-      const amt = tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
+      // PLS #226: for a sale, only the realized gain is the income figure, not the proceeds.
+      const _raw = tx.isInvestmentReturn ? Number(tx.realizedGL) : tx.amount;
+      const amt = tx.currency === dispCurr ? _raw : convert(_raw, tx.currency, dispCurr);
       incomes[name].total += amt;
     }
     // Add FX arbitrage gains as a dedicated source (PLS #47)
@@ -15580,9 +15622,16 @@ function buildPieChart(cats, total, prefix, period) {
       .map(tx => {
         const acct = db.accounts.find(a => a.id === tx.accountId);
         const acctName = acct?.name || '—';
-        const txAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+        // PLS #226: the pie's drill-down list must agree with the slice it sits under. The slice
+        // counts only an investment sale's realized gain, so the row shows the gain too -- not the
+        // proceeds, which would print a bigger number than the whole slice it belongs to.
+        const _isInvRet = !!tx.isInvestmentReturn;
+        const _rg = Number(tx.realizedGL);
+        const txAmt = _isInvRet ? Math.abs(Number.isFinite(_rg) ? _rg : 0)
+                                : (tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount);
         const dateLabel = fmtD(tx.date);
-        const isExpense = tx.type === 'expense' || tx.type === 'shared';
+        const isExpense = _isInvRet ? (Number.isFinite(_rg) && _rg < 0)
+                                    : (tx.type === 'expense' || tx.type === 'shared');
         const sign = isExpense ? '−' : '+';
         const amtColor = isExpense ? 'var(--red)' : 'var(--green)';
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px 8px 22px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -23601,7 +23650,9 @@ function aiPaydayPredictor() {
   // ── PERSONAL LOGIC SET #62 ── payday predictor: only regular recurring income.
   // Excludes settlement income (loan/reimb payments received, gains/losses) and batch reimb parents
   // — these are one-time events that distort the salary interval calculation.
-  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoReimb&&!t.isLoanTx&&!t.isLoanPayment).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  // PLS #226: a sale and a dividend are not paycheques -- one sale would shift the detected
+  // payday interval. isDividend stays out too: it is real income but not on a salary cycle.
+  const incomeTxs = db.transactions.filter(t=>t.type==='income'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoReimb&&!t.isLoanTx&&!t.isLoanPayment&&!t.isInvestmentReturn&&!t.isDividend).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if (incomeTxs.length < 2) return insights;
   const dates = incomeTxs.map(t=>new Date(t.date));
   const intervals = dates.slice(0,-1).map((d,i)=>Math.round((d-dates[i+1])/(1000*60*60*24)));
