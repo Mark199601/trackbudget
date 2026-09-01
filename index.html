@@ -2936,6 +2936,12 @@ function renderPageHeader(page) {
     pageHTML = `<button class="btn-text" onclick="openAddLoan(_loanTab)">+ Loan</button>`; // PLS #132: preset follows active Lent/Borrowed tab
   } else if (page==='investments') {
     pageHTML = `<button class="btn-text" onclick="openAddInv()">+ Investment</button>`;
+  } else if (page==='installments') {
+    // -- PERSONAL LOGIC SET #236 -- Installments was the ONE list page with no header action, so
+    // it carried a full-width gradient button at the bottom of the list instead. That pushed the
+    // Completed toggle into the middle of the page and gave the same action two different shapes
+    // in two places. Every list page now states its add action in the same spot, the same way.
+    pageHTML = `<button class="btn-text" onclick="openAddInstallment()">+ Installment</button>`;
   }
   // sync first, then page actions, then theme
   r.innerHTML = syncHTML + pageHTML + themeHTML;
@@ -10220,7 +10226,10 @@ function renderInvestments() {
     ${totalGL!==0?`<div style="font-size:13px;color:${totalGL>0?'var(--green)':'var(--red)'};margin-top:2px">${totalGL>0?'▲':'▼'} ${fmt(fromPhp(Math.abs(totalGL),dc),dc)} (${totalGL>0?'+':''}${totalGLPct.toFixed(1)}%) unrealized</div>`:''}
     <div style="font-size:12px;color:var(--text3);margin-top:6px">Invested: ${fmt(fromPhp(totalInvested,dc),dc)}</div>
   </div>`;
-  if (typeEntries.length > 0) {
+  // -- PERSONAL LOGIC SET #238 -- An allocation bar needs something to allocate BETWEEN. With one
+  // holding it is a single full-width block reading "100.0%", which states nothing and takes the
+  // space of a real chart. Show it only when there are at least two types to compare.
+  if (typeEntries.length > 1) {
     html += `<div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin-bottom:10px">PORTFOLIO ALLOCATION</div>
       <div style="display:flex;height:8px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:10px">
@@ -10261,8 +10270,15 @@ function renderInvestments() {
     }
   }
   if (sold.length > 0) {
-    html += `<div class="list-section-header">CLOSED / SOLD (${sold.length})</div>
-    <div class="list-card list-row-archived">`;
+    // -- PERSONAL LOGIC SET #237 -- Archive sections behave the same on every list page: LAST in
+    // the list, collapsed by default, same chevron and heading. Installments' "Completed" was
+    // collapsible while this one was a fixed header, so the identical idea looked like two
+    // different features. Closed positions are history — they should not compete with holdings.
+    html += `<div onclick="const b=document.getElementById('inv-sold-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.inv-sold-chev').style.transform=b.style.display==='none'?'':'rotate(90deg)'" style="display:flex;align-items:center;gap:6px;padding:14px 4px 8px;cursor:pointer">
+      <span class="inv-sold-chev" style="font-size:10px;color:var(--text3);transition:transform 0.2s;display:inline-block">&#9654;</span>
+      <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Closed / Sold (${sold.length})</span>
+    </div>
+    <div id="inv-sold-body" style="display:none"><div class="list-card list-row-archived">`;
     sold.forEach(inv => {
       const realizedGL = inv.realizedGL || 0;
       const glClass = realizedGL > 0 ? 'tx-pos' : realizedGL < 0 ? 'tx-neg' : 'tx-neu';
@@ -10277,7 +10293,7 @@ function renderInvestments() {
         </div>
       </div>`;
     });
-    html += `</div>`;
+    html += `</div></div>`;   // PLS #237: closes .list-card AND the collapsible #inv-sold-body
   }
   if (archived.length > 0) {
     html += `<div style="margin:4px 0 8px">
@@ -10302,7 +10318,9 @@ function renderInvestments() {
       html += `</div>`;
     }
   }
-  html += `<button class="pool-add-btn" onclick="openAddInv()">+ Add Investment</button></div>`;
+  // PLS #236: the header already carries "+ Investment". A second add button at the foot of the
+  // list gave one action two shapes on one screen; the header is the single place for it.
+  html += `</div>`;
   return html;
 }
 
@@ -12749,7 +12767,6 @@ function renderInstallments() {
       <div id="inst-completed-body" style="display:none">
         ${completed.map(installCard).join('')}
       </div>` : ''}
-    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="openAddInstallment()">+ Add Installment</button>
     ${archived.length > 0 ? `
       <div style="margin-top:24px">
         <button class="btn btn-ghost btn-sm" onclick="openInstArchiveSheet()" style="width:100%">📦 Archive (${archived.length})</button>
@@ -14262,6 +14279,17 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   // flat/empty segment for pre-history months. Mirrors the Net Worth Trend behavior.
   const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
   const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
+  // -- PERSONAL LOGIC SET #239 -- This chart skipped pre-history using earliestTx, the first
+  // transaction DATE, while PLS #215 says analysis begins at the first COMPLETE month. Start
+  // logging on the 22nd and April holds nine days: income 5,000, expense 500, a 90% rate plotted
+  // beside full months at 50% as though it were a great month. It only looked safe because a
+  // first month with no income yields null and drew a gap — the moment any income lands in that
+  // partial month the false rate appears. A savings RATE is a monthly ratio and needs a whole
+  // month; a net-worth BALANCE is a point in time and stays valid, which is why the Net Worth
+  // Trend keeps using earliestTx and correctly still plots that first partial month.
+  // The month stays on the axis so both charts span the same range (PLS #235) — it just never
+  // carries a rate. Never compute a rate for a month before _fcFloor, whatever its income.
+  const _fcFloor = firstCompleteMonthKey();
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(y, m-1-i, 1);
@@ -14269,8 +14297,9 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     // Skip months entirely before the first transaction's month.
     if (earliestTx && k < earliestTx.slice(0,7)) continue;
     const t = getMonthTotals(k);
-    const rate = t.income > 0 ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
-    months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, income: t.income, expense: t.expense});
+    const _partial = !!(_fcFloor && k < _fcFloor);
+    const rate = (!_partial && t.income > 0) ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
+    months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, partial: _partial, income: t.income, expense: t.expense});
   }
   const validRates = months.filter(mo => mo.rate !== null).map(mo => mo.rate);
   if (validRates.length < 2) return '';
@@ -14287,37 +14316,75 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   // no fewer. The scan above still walks 6 so pre-history months are skipped correctly; this
   // only trims what gets drawn, so the card's width and label count stay constant month to
   // month instead of growing from 4 to 6 as history accumulates.
-  const SAVINGS_CARD_MONTHS = 4;
-  const plotted = ratedMonths.slice(-SAVINGS_CARD_MONTHS);
+  // -- PERSONAL LOGIC SET #235 -- SUPERSEDES the 4-month cap of PLS #204 for this card.
+  // #204 pinned this chart to exactly 4 RATED months so its width never changed. Sitting beside
+  // Net Worth Trend, which plots every month back to the first transaction (up to 6), that made
+  // the pair unreadable: two cards with different x-ranges make one line look steeper than the
+  // other when neither is. Worse, the mismatch GREW — this card stayed at 4 while its neighbour
+  // walked out to 6. A constant width is worth less than two charts that can be compared.
+  // Both now use the same window: every month in the 6-month span that is not pre-history.
+  // A month with no income has NO savings rate (income of 0 makes the ratio undefined), so it
+  // is drawn as a GAP — the line breaks, the month keeps its axis label, and a hollow marker
+  // says the point is missing rather than zero. Never plot a null rate as 0%; that reads as
+  // "saved nothing" when the truth is "nothing was earned to save from".
+  const plotted = months;
   const n = plotted.length;
   const W = 240, H = 40, padX = 2, padY = 4;
   const cw = W - padX*2, ch = H - padY*2;
   const maxRate = Math.max(...validRates, 50);
   const xAt = (i) => padX + (n === 1 ? cw/2 : (i / (n-1)) * cw);
   const yAt = (r) => padY + ch - (r / maxRate) * ch;
-  const _slPts = [];
-  for (let i = 0; i < plotted.length; i++) {
-    const x = xAt(i).toFixed(1), yv = yAt(plotted[i].rate).toFixed(1);
-    _slPts.push([+x, +yv]);
-  }
+  // One path per unbroken run of rated months, so a gap leaves a real break in the line
+  // instead of a straight segment jumping across the missing month.
+  const _segs = [];
+  let _run = [];
+  plotted.forEach((mo, i) => {
+    if (mo.rate === null) { if (_run.length) { _segs.push(_run); _run = []; } return; }
+    _run.push([+xAt(i).toFixed(1), +yAt(mo.rate).toFixed(1)]);
+  });
+  if (_run.length) _segs.push(_run);
+  const _slPath = _segs.filter(sg => sg.length > 1).map(sg => _smoothD(sg)).join(' ');
   // Dots as HTML overlay so they stay round under preserveAspectRatio="none".
   // PLS #205: the line had four unlabelled dots and one figure underneath — the shape was
   // visible but no month's actual rate was readable. Every point now states its own value.
-  const dots = plotted.map((mo, i) => `<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>
-    <div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(mo.rate)/H*100).toFixed(2)}%;transform:translate(-50%,-165%);font-size:9px;font-family:var(--mono);color:var(--text3);white-space:nowrap">${Math.round(mo.rate)}%</div>`).join('');
+  // PLS #235: a rated month gets a filled dot and its figure; a month with no income gets a
+  // hollow marker on the baseline and NO figure — there is no rate to state.
+  const dots = plotted.map((mo, i) => {
+    const L = (xAt(i)/W*100).toFixed(2);
+    if (mo.rate === null) {
+      const _why = mo.partial ? `${mo.label} is a partial month — logging began mid-month, so it has no comparable savings rate`
+                              : `No income logged in ${mo.label} — no savings rate to compute`;
+      return `<div title="${_why}" style="position:absolute;left:${L}%;top:100%;width:6px;height:6px;border-radius:50%;background:transparent;border:1.5px dashed var(--text4);transform:translate(-50%,-50%)"></div>`;
+    }
+    const T = (yAt(mo.rate)/H*100).toFixed(2);
+    return `<div style="position:absolute;left:${L}%;top:${T}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>
+    <div style="position:absolute;left:${L}%;top:${T}%;transform:translate(-50%,-165%);font-size:9px;font-family:var(--mono);color:var(--text3);white-space:nowrap">${Math.round(mo.rate)}%</div>`;
+  }).join('');
+  // PLS #239: state WHY a month has no rate. "partial month" and "no income" are different
+  // facts and the user acts on them differently.
+  const _gaps = plotted.filter(mo => mo.rate === null);
+  const _gapNote = _gaps.length ? (() => {
+    const par = _gaps.filter(mo=>mo.partial).map(mo=>mo.label);
+    const noi = _gaps.filter(mo=>!mo.partial).map(mo=>mo.label);
+    const bits = [];
+    if (par.length) bits.push(`${par.join(', ')}: partial month`);
+    if (noi.length) bits.push(`${noi.join(', ')}: no income logged`);
+    return `<div style="font-size:9.5px;color:var(--text4);margin-top:-2px;margin-bottom:6px">${bits.join(' · ')}</div>`;
+  })() : '';
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Savings Rate Trend${_infoBtn('savings')}</div>
     </div>
     <div style="position:relative;margin-bottom:6px">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">
-        <path d="${_smoothD(_slPts)}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke"/>
+        <path d="${_slPath}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
       ${dots}
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:10px;color:var(--text4)">
-      ${plotted.map(mo => `<span>${mo.label}</span>`).join('')}
+      ${plotted.map(mo => `<span${mo.rate===null?' style="opacity:0.55"':''}>${mo.label}</span>`).join('')}
     </div>
+    ${_gapNote}
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px solid var(--border)">
       <div style="font-size:11px;color:var(--text3)">Current month</div>
       <div style="text-align:right">
