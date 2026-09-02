@@ -1345,6 +1345,39 @@ const EMOJI_GROUPS = {
 // ════════════════════════════════════════════════════════════
 // DATA LAYER
 // ════════════════════════════════════════════════════════════
+/* ============================================================================================
+   -- PERSONAL LOGIC SET #242 -- KNOWN FALSE POSITIVES. Read before reporting any of these.
+   Every item below has been investigated and is CORRECT. Each was reported as a bug at least
+   once, cost real time to re-diagnose, and will look wrong again to the next reader. Anything
+   tagged NOT-A-BUG in this file is one of these; grep that tag to find them all in place.
+
+   1. div delta is -3, not 0.  The ORIGINAL upload is also -3. Compare against the upload, never
+      against zero. A -3 result means no regression.
+   2. Eleven raw saveDB calls exist (written here without the call punctuation ON PURPOSE, so
+      this very comment does not inflate the count you are about to run). That is the baseline,
+      not eleven violations of the saveDBWithSync rule. The rule is "add no more"; compare the
+      count against the previous build, and remember comments are counted too.
+   3. `packMasonry` looks like dead code.  It is deliberately inert: PLS #184 replaced the JS
+      packer with a stretch grid, so no `.ov-mas` container is rendered and the function returns
+      at its first guard. Still called; do not delete, do not "fix".
+   4. `dtField` / `dtTrigger` / `_gz*` look unused.  Thirty live call sites (PLS #217). Every
+      date and time field in the app routes through them.
+   5. An investment sale is STORED as `type:'income'`.  Required — getAcctBalance needs it to
+      credit the account, because the cash really did arrive. Only the DISPLAY is neutral
+      (PLS #225). Changing the stored type breaks every account balance.
+   6. `avgMonthlyExpense6mo` "ignores" the current month.  By design: baselines exclude the
+      in-progress month (PLS #232). A partial month must never drag an average.
+   7. The Savings chart shows fewer plotted points than the Net Worth chart.  Correct when a
+      month is partial or had no income (PLS #239) — the month keeps its axis slot and its
+      marker, it just carries no rate.
+
+   Two that bite in the TEST harness rather than the app:
+   8. `body.innerHTML` contains the whole `<script>` SOURCE. A plain string search there matches
+      the code that builds the UI, not the rendered UI, and reports a false PASS. Scope DOM
+      assertions to #dlg-body, #dlg-footer, #page-content or a specific sheet element.
+   9. Comments quote the strings they replaced (e.g. "6-Mo Avg Net"). Strip comments before
+      asserting on rendered markup, or the explanation matches and the test fails.
+   ============================================================================================ */
 const DB_KEY = 'trackbudget_v2'; // ── PERSONAL LOGIC SET #1 ── unique key — do not change, changing this loses all local data
 
 // Country → native currency mapping (for budget display logic)
@@ -2562,6 +2595,9 @@ function firstCompleteMonthKey() {
 // the cache must die whenever transactions change
 function _invalidateFirstComplete() { _firstCompleteMK = undefined; }
 
+// NOT-A-BUG (PLS #242 item 6): the loop starts at i=1, so the IN-PROGRESS month is excluded on
+// purpose (PLS #232). A partial month must never drag a baseline. Returning a figure that looks
+// too high for "the last 6 months" is the correct answer, not an off-by-one.
 function avgMonthlyExpense6mo() {
   let total = 0, months = 0;
   const _now = new Date();
@@ -2749,6 +2785,8 @@ function txAmountDisplay(tx) {
   // transfer that funded it -- buy and sell are mirrors. The realized gain or loss is carried
   // separately on the row and in the detail sheet. Stored type stays 'income' because
   // getAcctBalance needs it to credit the account; only the DISPLAY changes.
+  // NOT-A-BUG (PLS #242 item 5): tx.type stays 'income' in the DB on purpose — getAcctBalance
+  // needs it to credit the account. Only this display is neutral.
   if (tx.isInvestmentReturn) return {cls:'tx-neu', str:'↔ '+fmt(tx.amount,tx.currency)};
   if (tx.type==='income') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
   if (tx.type==='borrow') return {cls:'tx-pos', str:'+'+fmt(tx.amount,tx.currency)};
@@ -3335,7 +3373,7 @@ function searchNat(q) {
   if (!list) return;
   const qq = (q||'').toLowerCase();
   const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
-  list.innerHTML = matches.map(c=>`<div onmousedown="selectNat('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:#fff" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectNat('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
   list.style.display = matches.length ? 'block' : 'none';
 }
 
@@ -3357,7 +3395,7 @@ function searchLoc(q) {
   if (!list) return;
   const qq = (q||'').toLowerCase();
   const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
-  list.innerHTML = matches.map(c=>`<div onmousedown="selectLoc('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:#fff" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectLoc('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
   list.style.display = matches.length ? 'block' : 'none';
 }
 
@@ -7087,9 +7125,9 @@ function renderTxLog() {
             <div>
               <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">Date Range</div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <input type="date" class="form-input" value="${window._txDateFrom||''}" onchange="setTxDateRange('from',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+                ${dtField('txrange-from','date','From',window._txDateFrom||'',{onchange:"setTxDateRange('from',this.value)"})}
                 <span style="font-size:12px;color:var(--text3)">→</span>
-                <input type="date" class="form-input" value="${window._txDateTo||''}" onchange="setTxDateRange('to',this.value)" style="flex:1;min-width:120px;padding:6px 8px;font-size:12px">
+                ${dtField('txrange-to','date','To',window._txDateTo||'',{onchange:"setTxDateRange('to',this.value)"})}
                 ${(window._txDateFrom||window._txDateTo)?`<button class="btn btn-ghost btn-sm" onclick="clearTxDateRange()" style="padding:6px 10px;font-size:11px;color:var(--red)">Clear</button>`:''}
               </div>
             </div>
@@ -7228,16 +7266,10 @@ function clearTxDateRange() {
 
 
 
-// Click outside to close filter dropdown
-document.addEventListener('click', function(e) {
-  const container = document.getElementById('txfilter-container');
-  const menu = document.getElementById('txfilter-menu');
-  if (container && menu && !container.contains(e.target)) {
-    menu.style.display = 'none';
-    const arrow = document.getElementById('txfilter-arrow');
-    if (arrow) arrow.style.transform = '';
-  }
-});
+// PLS #243: removed a document-level click listener that looked for #txfilter-container and
+// #txfilter-menu. Neither element exists anywhere in this file — no id=, no .id =, no
+// createElement — so both lookups always returned null and the body never ran. Left over from the
+// dropdown that toggleTxFilterPanel replaced. It cost two DOM queries on EVERY click in the app.
 
 function setTxFilter(f) { _txFilter = f; _txQuickFilter = null; renderTransactions(); }
 function setTxAcctFilter(a) { _txAcctFilter = a; renderTransactions(); }
@@ -7978,7 +8010,7 @@ function openEditTx(txId) {
     ${fxBadgeHTML}
     <div class="form-group"><label class="form-label" for="edit-account">Account</label><select class="form-input" id="edit-account">${acctOpts}</select></div>
     ${tx.personName?`<div class="form-group"><label class="form-label" for="edit-person">Person</label><input class="form-input" id="edit-person" value="${escapeAttr(tx.personName||'')}"></div>`:''}
-    ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label" for="edit-duedate">Due Date</label><input class="form-input" type="date" id="edit-duedate" value="${tx.dueDate||''}"></div>`:''}
+    ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label" for="edit-duedate">Due Date</label>${dtField('edit-duedate','date','Due Date',tx.dueDate||'')}</div>`:''}
   `;
 
   openSheet('gen', 'Edit Transaction', `
@@ -9376,10 +9408,10 @@ function openReimbDialog(person) {
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="rsl-date">Date</label>
-         <input class="form-input" type="date" id="rsl-date" value="${today()}" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
+         ${dtField('rsl-date','date','Date',today(),{onchange:'updateReimbBatchPreview(\'${person.replace(/\'/g,'})}
        </div>
        <div class="form-group"><label class="form-label" for="rsl-time">Time</label>
-         <input class="form-input" type="time" id="rsl-time" value="${nowTime()}" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
+         ${dtField('rsl-time','time','Time',nowTime(),{onchange:'updateReimbBatchPreview(\'${person.replace(/\'/g,'})}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="rsl-notes">Notes (optional)</label>
@@ -9506,7 +9538,7 @@ function openWriteOffReimb(person) {
       <input class="form-input" id="wor-notes" placeholder="Additional context...">
     </div>
     <div class="form-group"><label class="form-label" for="wor-date">Date</label>
-      <input class="form-input" type="date" id="wor-date" value="${today()}">
+      ${dtField('wor-date','date','Date',today())}
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="confirmWriteOffReimb('${person.replace(/'/g,"\\'")}')">Write off</button>`
@@ -10206,7 +10238,6 @@ function renderAfterInvChange() {
 }
 
 function renderInvestments() {
-  const _showArchived = window._invShowArchived || false;
   const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
   const sold = db.investments.filter(i=>!i.archived && i.status === 'sold');
   const archived = db.investments.filter(i=>i.archived);
@@ -10269,55 +10300,21 @@ function renderInvestments() {
       html += `</div>`;
     }
   }
-  if (sold.length > 0) {
-    // -- PERSONAL LOGIC SET #237 -- Archive sections behave the same on every list page: LAST in
-    // the list, collapsed by default, same chevron and heading. Installments' "Completed" was
-    // collapsible while this one was a fixed header, so the identical idea looked like two
-    // different features. Closed positions are history — they should not compete with holdings.
-    html += `<div onclick="const b=document.getElementById('inv-sold-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.inv-sold-chev').style.transform=b.style.display==='none'?'':'rotate(90deg)'" style="display:flex;align-items:center;gap:6px;padding:14px 4px 8px;cursor:pointer">
-      <span class="inv-sold-chev" style="font-size:10px;color:var(--text3);transition:transform 0.2s;display:inline-block">&#9654;</span>
-      <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Closed / Sold (${sold.length})</span>
+  // -- PERSONAL LOGIC SET #241 -- SUPERSEDES the inline collapsible of PLS #237. Finished items
+  // use the SAME footer on every page: quiet-rows at the end of the list opening a sheet, exactly
+  // as Reimbursements and Loans do for Settled and Archive. An inline accordion here was a third
+  // shape for one idea. Closed positions are history and belong off the main list entirely.
+  html += `</div><div style="margin-top:24px">
+    <div class="quiet-row" onclick="openSoldInvSheet()">
+      <div>✓ Closed / Sold${sold.length>0?` <span style="color:var(--text4)">(${sold.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
     </div>
-    <div id="inv-sold-body" style="display:none"><div class="list-card list-row-archived">`;
-    sold.forEach(inv => {
-      const realizedGL = inv.realizedGL || 0;
-      const glClass = realizedGL > 0 ? 'tx-pos' : realizedGL < 0 ? 'tx-neg' : 'tx-neu';
-      html += `<div class="list-row" onclick="openInvDetail('${inv.id}')">
-        <div class="list-row-meta">
-          <div class="list-row-title">${_esc(inv.name)}</div>
-          <div class="list-row-sub">${inv.type} · Sold ${inv.soldDate?fmtD(inv.soldDate):''}</div>
-        </div>
-        <div class="list-row-right">
-          <div class="list-row-amt ${glClass}">${realizedGL>=0?'+':''}${fmt(realizedGL,inv.currency)}</div>
-          <div class="list-row-date">realized</div>
-        </div>
-      </div>`;
-    });
-    html += `</div></div>`;   // PLS #237: closes .list-card AND the collapsible #inv-sold-body
-  }
-  if (archived.length > 0) {
-    html += `<div style="margin:4px 0 8px">
-      <button class="chip${_showArchived?' active':''}" onclick="window._invShowArchived=!window._invShowArchived;renderAfterInvChange()" style="font-size:11px">
-        📦 Archived (${archived.length})
-      </button>
-    </div>`;
-    if (_showArchived) {
-      html += `<div class="list-card list-row-archived">`;
-      archived.forEach(inv => {
-        html += `<div class="list-row" onclick="openInvDetail('${inv.id}')">
-          <div style="font-size:18px;flex-shrink:0">${invTypeIcon(inv.type)}</div>
-          <div class="list-row-meta">
-            <div class="list-row-title">${_esc(inv.name)}</div>
-            <div class="list-row-sub">${inv.type} · Archived</div>
-          </div>
-          <div class="list-row-right">
-            <div class="list-row-amt tx-neu">${fmt(inv.amount,inv.currency)}</div>
-          </div>
-        </div>`;
-      });
-      html += `</div>`;
-    }
-  }
+    <div class="quiet-row" onclick="openInvArchiveSheet()">
+      <div>🗃️ Archive${archived.length>0?` <span style="color:var(--text4)">(${archived.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
+    </div>
+  </div><div>`;
+  // PLS #241: the archived list moved into openInvArchiveSheet(), reached from the footer row
+  // above. The old chip toggled an inline list in the middle of the page — a fourth shape.
+
   // PLS #236: the header already carries "+ Investment". A second add button at the foot of the
   // list gave one action two shapes on one screen; the header is the single place for it.
   html += `</div>`;
@@ -10327,6 +10324,44 @@ function renderInvestments() {
 function invTypeIcon(type) {
   const map = { Stocks:'📊', Crypto:'₿', Bonds:'📜', 'Treasury Bond':'🏛️', 'MP2 (Pag-IBIG)':'🪙', REITs:'🏬', 'Mutual Fund':'🏦', 'Time Deposit':'🔒', 'Real Estate':'🏠', Cooperative:'🤝', Corporation:'🏢', 'Land Ownership':'🌏', 'Insurance/VUL':'☂️', Other:'📈' };
   return map[type]||'📈';
+}
+
+// PLS #241: closed positions and archived investments each live in a sheet, matching
+// openSettledReimbSheet / openSettledLoansSheet. Reached from the quiet-rows at the foot of the list.
+function openSoldInvSheet() {
+  const sold = (db.investments || []).filter(i => i.status === 'sold' && !i.archived);
+  const rows = sold.map(inv => {
+    const gl = Number(inv.realizedGL) || 0;
+    const cls = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
+    return `<div class="list-row" onclick="closeSheet('gen');openInvDetail('${inv.id}')">
+      <div style="font-size:18px;flex-shrink:0">${invTypeIcon(inv.type)}</div>
+      <div class="list-row-meta">
+        <div class="list-row-title">${_esc(inv.name)}</div>
+        <div class="list-row-sub">${inv.type} &middot; Sold ${inv.soldDate?fmtD(inv.soldDate):''}</div>
+      </div>
+      <div class="list-row-right">
+        <div class="list-row-amt ${cls}">${gl>=0?'+':''}${fmt(gl, inv.currency)}</div>
+        <div class="list-row-date">realized</div>
+      </div>
+    </div>`;
+  }).join('');
+  openSheet('gen', 'Closed / Sold', sold.length
+    ? `<div style="padding:4px 4px 12px"><div class="list-card">${rows}</div></div>`
+    : `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing closed yet</div><div class="empty-sub">Positions you sell collect here with their realized result</div></div>`);
+}
+function openInvArchiveSheet() {
+  const arch = (db.investments || []).filter(i => i.archived);
+  const rows = arch.map(inv => `<div class="list-row" onclick="closeSheet('gen');openInvDetail('${inv.id}')">
+      <div style="font-size:18px;flex-shrink:0">${invTypeIcon(inv.type)}</div>
+      <div class="list-row-meta">
+        <div class="list-row-title">${_esc(inv.name)}</div>
+        <div class="list-row-sub">${inv.type} &middot; Archived</div>
+      </div>
+      <div class="list-row-right"><div class="list-row-amt tx-neu">${fmt(inv.amount, inv.currency)}</div></div>
+    </div>`).join('');
+  openSheet('gen', 'Archive', arch.length
+    ? `<div style="padding:4px 4px 12px"><div class="list-card list-row-archived">${rows}</div></div>`
+    : `<div class="empty-state"><div class="empty-icon">🗃️</div><div class="empty-text">Archive is empty</div><div class="empty-sub">Archived investments collect here</div></div>`);
 }
 
 function openAddInv() {
@@ -10464,7 +10499,13 @@ function openSellInv(invId) {
       <input class="form-input numpad-input" type="number" id="si-proceeds" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
     <div class="form-group"><label class="form-label" for="si-acct">Receive to Account</label>
       <select class="form-input" id="si-acct">${acctOpts}</select></div>
-    ${dtField('si-date','Sale Date',today())}
+    ${/* -- PERSONAL LOGIC SET #243 -- The signature is dtField(inputId, TYPE, placeholder,
+         initialValue). 'Sale Date' was being passed as the TYPE, which pushed the date into the
+         placeholder and left initialValue undefined — so the hidden input rendered value="" while
+         the field DISPLAYED the date. Untouched, the form then fell through to `|| today()` and
+         saved a different date from the one on screen. Verified: getElementById('si-date').value
+         was "". The type must be the literal 'date' or 'time'. */''}
+    ${dtField('si-date','date','Sale Date',today())}
     <div class="form-group"><label class="form-label" for="si-notes">Notes</label>
       <input class="form-input" id="si-notes" placeholder="Optional"></div>
     <button class="btn btn-success btn-full" onclick="confirmSellInv('${invId}')">Confirm Sale</button>
@@ -10828,7 +10869,7 @@ function openInvBackfill(id) {
       <select class="form-input" id="bf-acct">${acctOpts}</select></div>
     ${/* PLS #217: every date field routes through dtField -> dtTrigger -> the GZ picker.
          Never drop a plain native <input type="date"> in here. */''}
-    ${dtField('bf-date','Sale Date', inv.soldDate || inv.date || today())}
+    ${dtField('bf-date','date','Sale Date', inv.soldDate || inv.date || today())}   ${/* PLS #243 */''}
     <button class="btn btn-primary btn-full" onclick="confirmInvBackfill('${id}')">Write Ledger Entry</button>
   </div>`);
 }
@@ -11139,10 +11180,10 @@ function openBatchSettleEdit(txId, direction) {
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="bse-date">Date</label>
-         <input class="form-input" type="date" id="bse-date" value="${tx.date}">
+         ${dtField('bse-date','date','Date',tx.date)}
        </div>
        <div class="form-group"><label class="form-label" for="bse-time">Time</label>
-         <input class="form-input" type="time" id="bse-time" value="${tx.time||''}">
+         ${dtField('bse-time','time','Time',tx.time||'')}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="bse-notes">Notes</label>
@@ -11253,10 +11294,10 @@ function openBatchReimbSettleEdit(txId) {
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="brse-date">Date</label>
-         <input class="form-input" type="date" id="brse-date" value="${tx.date}">
+         ${dtField('brse-date','date','Date',tx.date)}
        </div>
        <div class="form-group"><label class="form-label" for="brse-time">Time</label>
-         <input class="form-input" type="time" id="brse-time" value="${tx.time||''}">
+         ${dtField('brse-time','time','Time',tx.time||'')}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="brse-notes">Notes</label>
@@ -11385,10 +11426,10 @@ function openBatchSettleLoans(direction, person) {
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="bsl-date">Date</label>
-         <input class="form-input" type="date" id="bsl-date" value="${today()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+         ${dtField('bsl-date','date','Date',today(),{onchange:'updateBatchSettlePreview(\'${direction}\',\'${person.replace(/\'/g,'})}
        </div>
        <div class="form-group"><label class="form-label" for="bsl-time">Time</label>
-         <input class="form-input" type="time" id="bsl-time" value="${nowTime()}" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+         ${dtField('bsl-time','time','Time',nowTime(),{onchange:'updateBatchSettlePreview(\'${direction}\',\'${person.replace(/\'/g,'})}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="bsl-notes">Notes (optional)</label>
@@ -11866,10 +11907,10 @@ function editLoanFull(loanId, direction) {
     </div>
     <div style="font-size:10px;color:var(--text4);margin:-4px 0 10px">Leave Expected Receivable blank if same currency. If a different currency, the agreed rate is worked out from these two amounts.</div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="lf-date">Date</label><input class="form-input" type="date" id="lf-date" value="${loanDate}"></div>
-      <div class="form-group"><label class="form-label" for="lf-time">Time</label><input class="form-input" type="time" id="lf-time" value="${loanTime}"></div>
+      <div class="form-group"><label class="form-label" for="lf-date">Date</label>${dtField('lf-date','date','Date',loanDate)}</div>
+      <div class="form-group"><label class="form-label" for="lf-time">Time</label>${dtField('lf-time','time','Time',loanTime)}</div>
     </div>
-    <div class="form-group"><label class="form-label" for="lf-due">Due Date</label><input class="form-input" type="date" id="lf-due" value="${loan.dueDate||''}"></div>
+    <div class="form-group"><label class="form-label" for="lf-due">Due Date</label>${dtField('lf-due','date','Due Date',loan.dueDate||'')}</div>
     <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="saveLoanFull('${loanId}','${direction}')">Save</button>`
@@ -11969,8 +12010,8 @@ function editLoanPayment(paymentId, loanId, direction) {
     </div>
     <div class="form-group"><label class="form-label" for="ep2-acct">Account</label><select class="form-input" id="ep2-acct">${acctOpts}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="ep2-date">Date</label><input class="form-input" type="date" id="ep2-date" value="${payment.date}"></div>
-      <div class="form-group"><label class="form-label" for="ep2-time">Time</label><input class="form-input" type="time" id="ep2-time" value="${payment.time||''}"></div>
+      <div class="form-group"><label class="form-label" for="ep2-date">Date</label>${dtField('ep2-date','date','Date',payment.date)}</div>
+      <div class="form-group"><label class="form-label" for="ep2-time">Time</label>${dtField('ep2-time','time','Time',payment.time||'')}</div>
     </div>
     <div class="form-group"><label class="form-label" for="ep2-notes">Notes</label><input class="form-input" id="ep2-notes" value="${escapeAttr(payment.notes||'')}"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
@@ -12099,7 +12140,7 @@ function openWriteOffLoan(loanId, direction) {
       <input class="form-input" id="wol-notes" placeholder="Additional context...">
     </div>
     <div class="form-group"><label class="form-label" for="wol-date">Date</label>
-      <input class="form-input" type="date" id="wol-date" value="${today()}">
+      ${dtField('wol-date','date','Date',today())}
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="confirmWriteOffLoan('${loanId}','${direction}')">Write off</button>`
@@ -12475,10 +12516,10 @@ function openAddLoan(direction='lent') {
       <div id="nl-more-row" style="display:none">
 
         <div class="form-row fr2">
-          <div class="form-group"><label class="form-label" for="nl-date">Date</label><input class="form-input" type="date" id="nl-date" value="${today()}"></div>
-          <div class="form-group"><label class="form-label" for="nl-time">Time</label><input class="form-input" type="time" id="nl-time" value="${nowTime()}"></div>
+          <div class="form-group"><label class="form-label" for="nl-date">Date</label>${dtField('nl-date','date','Date',today())}</div>
+          <div class="form-group"><label class="form-label" for="nl-time">Time</label>${dtField('nl-time','time','Time',nowTime())}</div>
         </div>
-        <div class="form-group"><label class="form-label" for="nl-due">Due Date</label><input class="form-input" type="date" id="nl-due"></div>
+        <div class="form-group"><label class="form-label" for="nl-due">Due Date</label>${dtField('nl-due','date','Due Date','')}</div>
         <div class="form-group"><label class="form-label" for="nl-notes">Notes / Commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
       </div>
     </div>
@@ -12696,6 +12737,53 @@ function saveAddLoan(direction) {
 // ════════════════════════════════════════════════════════════
 // TARGETS PAGE
 // ════════════════════════════════════════════════════════════
+// PLS #241: hoisted to module scope so the Completed SHEET can render the very same card as
+// the active list. It was nested inside renderInstallments, which meant any other surface had
+// to reimplement the card and would drift from it.
+function installCard(inst) {
+  const totalMonths = inst.totalMonths || 12;
+  const paidMonths = inst.paidMonths || 0;
+  const monthlyAmt = inst.monthlyAmount || 0;
+  const alreadyPaid = inst.alreadyPaid || 0;
+  const totalPaidMonths = alreadyPaid + paidMonths;
+  const remainingMonths = totalMonths - totalPaidMonths;
+  const remaining = remainingMonths * monthlyAmt;
+  const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
+  const isComplete = remainingMonths <= 0;
+
+  const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
+  const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01T12:00':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
+  const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01T12:00':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
+
+  return `<div class="card" style="margin-bottom:12px;cursor:pointer${isComplete ? ';opacity:0.65' : ''}" onclick="openInstallmentDetail('${inst.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${_esc(inst.name)}</div>
+        <div style="font-size:11px;color:var(--text4)">📂 ${catName} · ${fmt(monthlyAmt, _homeBase())}/month</div>
+      </div>
+      ${isComplete
+        ? `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
+        : `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} left</span>`}
+    </div>
+    ${!isComplete ? `
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
+      <span>${fmt(remaining, _homeBase())} remaining</span>
+      <span>${totalPaidMonths} / ${totalMonths} ${aiPlural(totalMonths,'month')} paid</span>
+    </div>
+    <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px">
+      <div style="height:100%;border-radius:var(--r-sm);background:var(--accent);width:${pct.toFixed(1)}%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
+      <span>${startD} – ${endD}</span>
+      <span>Total: ${fmt(totalMonths * monthlyAmt, _homeBase())}</span>
+    </div>` : `
+    <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:6px">
+      <div style="height:100%;border-radius:var(--r-sm);background:var(--green);width:100%"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text4);text-align:center">${startD} – ${endD}</div>`}
+  </div>`;
+}
+
 function renderInstallments() {
   // ── DEBUG-SCAN NOTE ── Uses `paidMonths` (derived from linkedTxIds[].length elsewhere). Naive regex scans flagging missing `linkedTxIds` are false positives.
   const installs = db.installments || [];
@@ -12713,64 +12801,23 @@ function renderInstallments() {
     return;
   }
 
-  function installCard(inst) {
-    const totalMonths = inst.totalMonths || 12;
-    const paidMonths = inst.paidMonths || 0;
-    const monthlyAmt = inst.monthlyAmount || 0;
-    const alreadyPaid = inst.alreadyPaid || 0;
-    const totalPaidMonths = alreadyPaid + paidMonths;
-    const remainingMonths = totalMonths - totalPaidMonths;
-    const remaining = remainingMonths * monthlyAmt;
-    const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
-    const isComplete = remainingMonths <= 0;
-
-    const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
-    const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01T12:00':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
-    const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01T12:00':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
-
-    return `<div class="card" style="margin-bottom:12px;cursor:pointer${isComplete ? ';opacity:0.65' : ''}" onclick="openInstallmentDetail('${inst.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${_esc(inst.name)}</div>
-          <div style="font-size:11px;color:var(--text4)">📂 ${catName} · ${fmt(monthlyAmt, _homeBase())}/month</div>
-        </div>
-        ${isComplete
-          ? `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
-          : `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} left</span>`}
-      </div>
-      ${!isComplete ? `
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
-        <span>${fmt(remaining, _homeBase())} remaining</span>
-        <span>${totalPaidMonths} / ${totalMonths} ${aiPlural(totalMonths,'month')} paid</span>
-      </div>
-      <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px">
-        <div style="height:100%;border-radius:var(--r-sm);background:var(--accent);width:${pct.toFixed(1)}%"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
-        <span>${startD} – ${endD}</span>
-        <span>Total: ${fmt(totalMonths * monthlyAmt, _homeBase())}</span>
-      </div>` : `
-      <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:6px">
-        <div style="height:100%;border-radius:var(--r-sm);background:var(--green);width:100%"></div>
-      </div>
-      <div style="font-size:11px;color:var(--text4);text-align:center">${startD} – ${endD}</div>`}
-    </div>`;
-  }
 
   const html = `<div class="page-pad">
     ${active.map(installCard).join('')}
-    ${completed.length > 0 ? `
-      <div onclick="document.getElementById('inst-completed-body').style.display=document.getElementById('inst-completed-body').style.display==='none'?'block':'none';this.querySelector('.inst-completed-chev').style.transform=document.getElementById('inst-completed-body').style.display==='none'?'rotate(0deg)':'rotate(90deg)'" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:16px 0 6px;user-select:none">
-        <span class="inst-completed-chev" style="font-size:10px;color:var(--text3);transition:transform 0.2s;display:inline-block">▶</span>
-        <span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600">Completed (${completed.length})</span>
+    ${/* -- PERSONAL LOGIC SET #241 -- Finished items use the SAME footer everywhere: quiet-rows at
+         the end of the list that open a sheet, exactly as Reimbursements and Loans do for Settled
+         and Archive. This page had two shapes for one idea -- an inline collapsible with a chevron
+         for Completed, and a full-width ghost BUTTON for Archive -- so the same concept looked like
+         two features and neither matched the rest of the app. Inline expansion also pushed finished
+         items into the middle of the list, competing with the active ones. */''}
+    <div style="margin-top:24px">
+      <div class="quiet-row" onclick="openCompletedInstSheet()">
+        <div>✓ Completed${completed.length>0?` <span style="color:var(--text4)">(${completed.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
       </div>
-      <div id="inst-completed-body" style="display:none">
-        ${completed.map(installCard).join('')}
-      </div>` : ''}
-    ${archived.length > 0 ? `
-      <div style="margin-top:24px">
-        <button class="btn btn-ghost btn-sm" onclick="openInstArchiveSheet()" style="width:100%">📦 Archive (${archived.length})</button>
-      </div>` : ''}
+      <div class="quiet-row" onclick="openInstArchiveSheet()">
+        <div>🗃️ Archive${archived.length>0?` <span style="color:var(--text4)">(${archived.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
+      </div>
+    </div>
   </div>`;
 
   document.getElementById('page-content').innerHTML = html;
@@ -12792,7 +12839,7 @@ function openAddTarget() {
     </div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="nt-current">Current Saved</label><input class="form-input numpad-input" type="number" id="nt-current" placeholder="0.00" value="0" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="nt-deadline">Deadline</label><input class="form-input" type="date" id="nt-deadline"></div>
+      <div class="form-group"><label class="form-label" for="nt-deadline">Deadline</label>${dtField('nt-deadline','date','Deadline','')}</div>
     </div>
     <div class="form-group"><label class="form-label" for="nt-notes">Notes</label><input class="form-input" id="nt-notes" placeholder="Optional"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddTarget()">Add Target</button>
@@ -14298,6 +14345,8 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     if (earliestTx && k < earliestTx.slice(0,7)) continue;
     const t = getMonthTotals(k);
     const _partial = !!(_fcFloor && k < _fcFloor);
+    // NOT-A-BUG (PLS #242 item 7): a null here is correct, not a missing calculation. The month
+    // keeps its axis slot and gets a hollow marker; it simply has no rate to state.
     const rate = (!_partial && t.income > 0) ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
     months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, partial: _partial, income: t.income, expense: t.expense});
   }
@@ -15198,6 +15247,11 @@ function _gzDatePick(ds){
   if (valEl) valEl.value = ds;
   if (st.apply === 'dt') {
     if (typeof dtUpdate === 'function') dtUpdate(st.valId, 'date');
+    // -- PERSONAL LOGIC SET #244 -- Fire a real change event. This picker writes .value directly,
+    // so an inline onchange= on the field never ran when the user picked on DESKTOP, while the
+    // touch path (native picker) fired it normally. Any caller wiring a live preview or a
+    // dependent field would have worked on a phone and silently done nothing on a laptop.
+    if (valEl) valEl.dispatchEvent(new Event('change', { bubbles: true }));
   } else {
     const disp = document.getElementById(st.dispId);
     if (disp && typeof fmtD === 'function') disp.textContent = fmtD(ds);
@@ -15271,6 +15325,7 @@ function _gzTPDone(){
   if (valEl) valEl.value = val;
   if (st.apply === 'dt') {
     if (typeof dtUpdate === 'function') dtUpdate(st.valId, 'time');
+    if (valEl) valEl.dispatchEvent(new Event('change', { bubbles: true }));   // PLS #244
   } else {
     const disp = document.getElementById(st.dispId);
     if (disp && typeof fmtT === 'function') disp.textContent = fmtT(val);
@@ -15290,6 +15345,8 @@ function ovCatTog(mode){
 
 // ── PLS #182: embedded masonry packer (no external dep). Shortest-column-window placement
 // with 12-unit span support. Measures natural grid heights first → zero overlap. ──
+// NOT-A-BUG (PLS #242 item 3): inert since PLS #184 — no .ov-mas is rendered, so this returns
+// at its first guard. Deliberate. Do not delete.
 function packMasonry(){
   const host = document.querySelector('.ov-mas');
   if (!host) return;
@@ -15482,14 +15539,28 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   // SVG line spans only plotted points (no phantom flat segment for pre-history months).
   const W = 240, H = 48, padX = 2, padY = 5;
   const cw = W - padX*2, ch = H - padY*2;
-  const maxV = Math.max(...dispVals), minV = Math.min(...dispVals, 0);
+  // -- PERSONAL LOGIC SET #240 -- This chart pinned its floor to zero (Math.min(..., 0)). Net
+  // worth in the hundreds of thousands then lived in the TOP TENTH of the box: every month of
+  // real movement was squeezed into a few pixels while nine tenths of the card drew empty space
+  // below it, and the line read as flat when it was not. The floor now follows the data.
+  // The guard matters as much as the change: scaling straight to min..max turns noise into a
+  // cliff, so a 0.06% wobble would look like a crash. The plotted range is therefore never
+  // allowed below 4% of the largest value — under that the line stays honestly flat, and above
+  // it the card is actually used. 12% headroom keeps the top and bottom dots off the edges.
+  const rawMax = Math.max(...dispVals), rawMin = Math.min(...dispVals);
+  const _span = Math.max(rawMax - rawMin, Math.abs(rawMax) * 0.04, 1);
+  const _headroom = _span * 0.12;
+  const maxV = rawMax + _headroom;
+  const minV = Math.min(rawMin - _headroom, rawMax - _span - _headroom);
   const range = (maxV - minV) || 1;
   const n = plotted.length;
   const xAt = (i) => padX + (n === 1 ? cw/2 : (i / (n-1)) * cw);
   const yAt = (v) => padY + ch - ((v - minV) / range) * ch;
   const path = _smoothD(dispVals.map((v,i) => [xAt(i), yAt(v)]));
-  const zeroY = yAt(Math.max(minV, 0)).toFixed(1);
-  const areaPath = path + ` L${xAt(n-1).toFixed(1)},${zeroY} L${xAt(0).toFixed(1)},${zeroY} Z`;
+  // PLS #240: the fill now drops to the floor of the plotted band, not to a zero that is no
+  // longer on the chart. Filling to an off-canvas zero would leave the area clipped mid-card.
+  const baseY = (H - padY).toFixed(1);
+  const areaPath = path + ` L${xAt(n-1).toFixed(1)},${baseY} L${xAt(0).toFixed(1)},${baseY} Z`;
   // Dots as HTML overlay (positioned by %) so they stay round under preserveAspectRatio="none".
   const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:#38bdf8;transform:translate(-50%,-50%)"></div>`).join('');
   return `<div class="card" style="margin-bottom:16px">
@@ -15497,8 +15568,10 @@ function buildNetWorthTrend(metricMk, dispCurr) {
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Net Worth Trend</div>
     </div>
     <div style="position:relative;margin-bottom:6px;padding-left:2px">
-      <span style="position:absolute;left:0;top:-3px;font-size:9px;color:var(--text4)">${_fmtK(maxV, dispCurr)}</span>
-      <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(minV, dispCurr)}</span>
+      ${/* PLS #240: label the real plotted band. These used to read "₱424k" over "₱0", implying a
+           zero-based axis; with the floor following the data that would be a false scale. */''}
+      <span style="position:absolute;left:0;top:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMax, dispCurr)}</span>
+      <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMin, dispCurr)}</span>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
         <path d="${areaPath}" fill="#38bdf8" opacity="0.10"/>
         <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"/>
@@ -17366,7 +17439,7 @@ function openAddPayday() {
         <option>Monthly</option><option>Bi-monthly</option><option>Weekly</option><option>Bi-weekly</option><option>Irregular</option>
       </select>
     </div>
-    <div class="form-group"><label class="form-label" for="np-next">Next Payday</label><input class="form-input" type="date" id="np-next"></div>
+    <div class="form-group"><label class="form-label" for="np-next">Next Payday</label>${dtField('np-next','date','Next Payday','')}</div>
     <div class="form-group"><label class="form-label" for="np-acct">Linked Account</label>
       <select class="form-input" id="np-acct">
         ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${_esc(a.name)}</option>`).join('')}
@@ -17405,7 +17478,7 @@ function editPaydaySchedule(id) {
         ${['Monthly','Bi-monthly','Weekly','Bi-weekly','Irregular'].map(f=>`<option ${f===ps.frequency?'selected':''}>${f}</option>`).join('')}
       </select>
     </div>
-    <div class="form-group"><label class="form-label" for="ep-next">Next Payday</label><input class="form-input" type="date" id="ep-next" value="${ps.nextDate||''}"></div>
+    <div class="form-group"><label class="form-label" for="ep-next">Next Payday</label>${dtField('ep-next','date','Next Payday',ps.nextDate||'')}</div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveEditPayday('${id}')">Save</button>
       <button class="btn btn-danger" onclick="deletePayday('${id}')">Delete</button>
@@ -17522,7 +17595,7 @@ function logRecurringNow(id) {
     openDlg(`Log: ${_esc(r.name)}`,
       `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">${fmt(r.amount,r.currency)} · ${getCategoryDisplay(r.categoryId).icon} ${getCategoryDisplay(r.categoryId).name}</div>
       <div class="form-group"><label class="form-label" for="rec-acct">From Account</label><select class="form-input" id="rec-acct">${acctOpts}</select></div>
-      <div class="form-group"><label class="form-label" for="rec-date">Date</label><input class="form-input" type="date" id="rec-date" value="${today()}"></div>`,
+      <div class="form-group"><label class="form-label" for="rec-date">Date</label>${dtField('rec-date','date','Date',today())}</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
        <button class="btn btn-primary btn-sm" onclick="confirmLogRecurring('${id}')">Log</button>`
     );
@@ -17603,7 +17676,7 @@ function openAddRecurring() {
         <option>Monthly</option><option>Weekly</option><option>Daily</option><option>Bi-weekly</option><option>Quarterly</option><option>Yearly</option>
       </select>
     </div>
-    <div class="form-group"><label class="form-label" for="nr-next">Next Date</label><input class="form-input" type="date" id="nr-next"></div>
+    <div class="form-group"><label class="form-label" for="nr-next">Next Date</label>${dtField('nr-next','date','Next Date','')}</div>
     <button class="btn btn-primary btn-full" onclick="saveAddRecurring()">Add</button>
   `);
 }
@@ -17627,7 +17700,7 @@ function editRecurring(id) {
   const r = db.recurringTxs.find(x=>x.id===id);
   if (!r) return;
   openDlg(`Edit: ${_esc(r.name)}`,
-    `<div class="form-group"><label class="form-label" for="er-next">Next Date</label><input class="form-input" type="date" id="er-next" value="${r.nextDate||''}"></div>
+    `<div class="form-group"><label class="form-label" for="er-next">Next Date</label>${dtField('er-next','date','Next Date',r.nextDate||'')}</div>
      <div class="form-group"><label class="form-label" for="er-amt">Amount</label><input class="form-input numpad-input" type="number" id="er-amt" value="${r.amount}" inputmode="none"></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-warning btn-sm" onclick="toggleRecurring('${id}')">${r.active?'Pause':'Resume'}</button>
@@ -18140,8 +18213,8 @@ function openContractWizard() {
       <div id="cw-loc-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:160px;overflow-y:auto"></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="cw-start">Start Date *</label><input class="form-input" type="date" id="cw-start" value="${today()}"></div>
-      <div class="form-group"><label class="form-label" for="cw-end">End Date *</label><input class="form-input" type="date" id="cw-end"></div>
+      <div class="form-group"><label class="form-label" for="cw-start">Start Date *</label>${dtField('cw-start','date','Start Date',today())}</div>
+      <div class="form-group"><label class="form-label" for="cw-end">End Date *</label>${dtField('cw-end','date','End Date','')}</div>
     </div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="cw-monthly">Monthly Savings Goal *</label><input class="form-input numpad-input" type="number" id="cw-monthly" placeholder="45000" step="1000" inputmode="none"></div>
@@ -18227,8 +18300,8 @@ function openEditContract(contractId) {
   openSheet('gen','Edit Contract',`
     <div class="form-group"><label class="form-label" for="ec2-loc">Location</label><input class="form-input" id="ec2-loc" value="${c.location}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="ec2-start">Start Date</label><input class="form-input" type="date" id="ec2-start" value="${c.startDate}"></div>
-      <div class="form-group"><label class="form-label" for="ec2-end">End Date</label><input class="form-input" type="date" id="ec2-end" value="${c.endDate}"></div>
+      <div class="form-group"><label class="form-label" for="ec2-start">Start Date</label>${dtField('ec2-start','date','Start Date',c.startDate)}</div>
+      <div class="form-group"><label class="form-label" for="ec2-end">End Date</label>${dtField('ec2-end','date','End Date',c.endDate)}</div>
     </div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="ec2-monthly">Monthly Goal</label><input class="form-input numpad-input" type="number" id="ec2-monthly" value="${c.monthlyGoal}" step="1000" inputmode="none"></div>
@@ -19054,8 +19127,8 @@ function openFxHistoryPage(currency) {
           const isLatest = i===0;
           return `<div style="display:flex;align-items:center;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border);${isLatest?'background:var(--accent-bg)':''}">
             <span style="font-size:13px;flex-shrink:0">${sourceIcon}</span>
-            <input class="form-input fx-hist-date" type="date" value="${entry.date}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 6px;flex:1;min-width:0;max-width:120px">
-            <input class="form-input fx-hist-time" type="time" value="${entry.time || ''}" data-curr="${currency}" data-idx="${i}" style="font-size:12px;padding:5px 6px;width:80px;flex-shrink:0" title="Time this rate took effect">
+            ${dtField(`fxh-d-${currency}-${i}`,'date','Date',entry.date,{onchange:`saveFxHistoryEntry('${currency}',${i})`})}
+            ${dtField(`fxh-t-${currency}-${i}`,'time','Time',entry.time||'',{onchange:`saveFxHistoryEntry('${currency}',${i})`})}
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
               <span style="color:var(--text3);font-size:12px">${sym(_homeBase())}</span>
               <input class="form-input fx-hist-rate numpad-input" type="number" step="any" value="${entry.rate}" data-curr="${currency}" data-idx="${i}" style="width:100px;padding:5px 8px;text-align:right;font-size:13px" inputmode="none">
@@ -19093,7 +19166,7 @@ function openAddFxHistoryDlg(currency) {
   openDlg(`Add ${currency} Rate Entry`,
     `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add a manual rate override. This will affect snapshot resolution for any tx on or after this date (until the next rate entry).</div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="addfx-date">Date</label><input class="form-input" type="date" id="addfx-date" value="${today()}"></div>
+      <div class="form-group"><label class="form-label" for="addfx-date">Date</label>${dtField('addfx-date','date','Date',today())}</div>
       <div class="form-group"><label class="form-label" for="addfx-rate">Rate (1 ${currency} = ? ${_homeBase()})</label><input class="form-input numpad-input" type="number" step="any" id="addfx-rate" value="${latest}" inputmode="none"></div>
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
@@ -19187,8 +19260,10 @@ function recomputeAffectedTxs(currency, periodStart, newRate) {
 }
 
 function saveFxHistoryEntry(currency, idx) {
-  const row = document.querySelector(`.fx-hist-date[data-curr="${currency}"][data-idx="${idx}"]`);
-  const timeRow = document.querySelector(`.fx-hist-time[data-curr="${currency}"][data-idx="${idx}"]`);
+  // PLS #244: these two now render through dtField, which owns the element and cannot carry the
+  // old class + data-attr hooks, so they are addressed by the same deterministic id it was given.
+  const row = document.getElementById(`fxh-d-${currency}-${idx}`);
+  const timeRow = document.getElementById(`fxh-t-${currency}-${idx}`);
   const rateRow = document.querySelector(`.fx-hist-rate[data-curr="${currency}"][data-idx="${idx}"]`);
   if (!row || !rateRow) return;
 
@@ -21735,7 +21810,7 @@ function renderBankReconBody() {
 
       <div class="form-group">
         <label class="form-label" for="recon-date">As of date *</label>
-        <input class="form-input" type="date" id="recon-date" value="${s.asOfDate}" max="${today()}" onchange="_reconState.asOfDate = this.value">
+        ${dtField('recon-date','date','As of date',s.asOfDate,{onchange:'_reconState.asOfDate = this.value',max:`${today()}`})}
       </div>
 
       <div class="form-group">
@@ -22877,7 +22952,17 @@ function autoSaveTrigger() {
 }
 
 // ── CUSTOM DATE/TIME PICKER ──
-function dtField(inputId, type, placeholder, initialValue) {
+// NOT-A-BUG (PLS #242 item 4): 30 live call sites. Every date/time field routes through this
+// (PLS #217). It looks unused because nothing calls it by name in a search for "input type=date".
+// -- PERSONAL LOGIC SET #244 -- opts carries the two things a plain <input type="date"> could do
+// that this wrapper could not, which is why 35 native inputs were still scattered through the app
+// instead of routing through here (PLS #217 claimed zero; there were 35).
+//   opts.onchange  extra handler, chained AFTER dtUpdate. Fires on touch AND desktop because
+//                  _gzDatePick / _gzTimePick now dispatch a real change event.
+//   opts.max/min   forwarded to the native input, e.g. max=today() to block future dates.
+// Quote-safety: onchange lands inside a double-quoted attribute, so it must not contain ".
+function dtField(inputId, type, placeholder, initialValue, opts) {
+  opts = opts || {};
   // PLS #198: chrome uses line art, never emoji
   const icon = _ico(type === 'time' ? 'clock' : 'calendar', 14);
   // Auto-resolve Today/Now so .value is never blank on submit
@@ -22899,7 +22984,7 @@ function dtField(inputId, type, placeholder, initialValue) {
       <span class="dt-icon">${icon}</span>
       <span class="dt-val${initialValue?'':' dt-placeholder'}" id="dtv-${inputId}">${displayLabel}</span>
     </div>
-    <input type="${type}" class="dt-native form-input" id="${inputId}" value="${initialValue||''}" onchange="dtUpdate('${inputId}','${type}')">
+    <input type="${type}" class="dt-native form-input" id="${inputId}" value="${initialValue||''}"${opts.max?` max="${opts.max}"`:''}${opts.min?` min="${opts.min}"`:''} onchange="dtUpdate('${inputId}','${type}')${opts.onchange?';'+opts.onchange:''}">
   </div>`;
 }
 
@@ -26528,6 +26613,17 @@ function confirmDeleteInstallment(instId) {
   const stillArchived = (db.installments || []).filter(i => i.archived);
   if (stillArchived.length > 0) openInstArchiveSheet();
   else closeSheet('gen');
+}
+
+// PLS #241: Completed installments live in a sheet, matching openSettledReimbSheet and
+// openSettledLoansSheet. Same card renderer as the active list, so a finished plan looks like
+// itself — only the surface it sits on changes.
+function openCompletedInstSheet() {
+  const done = (db.installments || []).filter(i => !i.archived && (i.completed || (i.linkedTxIds||[]).length >= i.totalMonths));
+  const body = done.length
+    ? `<div style="padding:4px 4px 12px">${done.map(installCard).join('')}</div>`
+    : `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing completed yet</div><div class="empty-sub">Plans you finish paying off collect here</div></div>`;
+  openSheet('gen', 'Completed', body);
 }
 
 function openInstArchiveSheet() {
