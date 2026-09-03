@@ -310,6 +310,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
    behind it, so in light mode they were white on white -- the Investments page rendered its Total
    Portfolio Value completely invisible, which reads as missing data rather than a colour bug.
    Every hero child must use a text TOKEN. Never hardcode #fff or rgba(255,255,255,..) in here. */
+/* -- PERSONAL LOGIC SET #250 -- The KPI header rows (Progress to goal, Current month) were built
+   with hardcoded inline px, so an iPad and a 4K monitor rendered them at phone size while a small
+   Android was tight. Every other card in the app already scales through the 480 / 768 / 1024
+   breakpoints; these now do too. Use these classes instead of inline font-size on any figure-plus-
+   label pair, so one change moves every device at once.
+   kpi-label = the caption above a figure · kpi-value = the figure · kpi-sub = the note below. */
+.kpi-label{font-size:11px;color:var(--text3);line-height:1.25}
+.kpi-label-strong{font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;line-height:1.25}
+.kpi-value{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15}
+.kpi-value-sm{font-family:var(--mono);font-size:13px;font-weight:600;line-height:1.15}
+.kpi-value-cur{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1.15}
+.kpi-sub{font-size:10px;color:var(--text4);line-height:1.3}
+@media(min-width:481px){.kpi-label{font-size:11.5px}.kpi-label-strong{font-size:13px}.kpi-value{font-size:22px}.kpi-value-sm{font-size:14px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:10.5px}}
+@media(min-width:768px){.kpi-label{font-size:12.5px}.kpi-label-strong{font-size:14px}.kpi-value{font-size:26px}.kpi-value-sm{font-size:15.5px}.kpi-value-cur{font-size:21px}.kpi-sub{font-size:11.5px}}
+@media(min-width:1024px){.kpi-label{font-size:13px}.kpi-label-strong{font-size:15px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:17px}.kpi-value-cur{font-size:24px}.kpi-sub{font-size:12px}}
 .hero-card::before{content:none}
 .hero-card::after{content:none}
 .hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1}
@@ -1377,6 +1392,46 @@ const EMOJI_GROUPS = {
       assertions to #dlg-body, #dlg-footer, #page-content or a specific sheet element.
    9. Comments quote the strings they replaced (e.g. "6-Mo Avg Net"). Strip comments before
       asserting on rendered markup, or the explanation matches and the test fails.
+
+   Verified-correct behaviour that keeps getting re-investigated (PLS #249). Each of these looked
+   wrong at a glance, was chased down, and turned out right. Do not re-litigate without new evidence:
+  10. Shared expenses produce THREE different numbers from one transaction, and all three are
+      correct. Pay 3,000 with a 1,000 share: monthly SPENDING counts 1,000 (your share), the
+      ACCOUNT drops 3,000 (what actually left), and NET WORTH adds back 2,000 (owed to you).
+      Seeing 3,000 and 1,000 for the same tx is the design, not double counting.
+  11. The split field is `persons`, NOT `splitPersons`. `splitPersons` appears nowhere in this
+      file; older notes name it wrongly and a test seeded with it will silently find no
+      receivable and look like a net-worth bug.
+  12. Loans: `lent` counts as an asset at `remaining` (not `amount`, so repayments reduce it),
+      `borrowed` counts as a liability, and a settled loan contributes to neither. A foreign
+      loan IS revalued at today's rate — it is an asset, so PLS #245 does not freeze it.
+  13. Deleting an account that has transactions is already refused (PLS #80, archive-first).
+      `confirmDeleteAccount` is the INNER step; calling it directly bypasses the guard and
+      produces orphans that the real UI can never create.
+  14. Month-end dates are already safe (PLS #200 / addMonthsClamped). Jan 31 + 1 month lands in
+      February, a 31st payday survives February, and a reversed contract does not crash.
+  15. A negative amount cannot be entered: every form guards `amount <= 0` and the CSV import
+      takes Math.abs. Only a hand-edited backup restore could carry one in, which is why the
+      Unusual Transactions card flags it (PLS #248) rather than the forms re-checking.
+  16. `runDiagDbIntegrity()` returns undefined by design — it writes to `_diagBuffer`. Read that,
+      not the return value, or the scan looks broken when it is working.
+  17. Archiving already removes a transaction from EVERYTHING: monthly totals, account balance,
+      net worth, the 6-month average, all 20 analytics tabs, budget spend and the default
+      transaction list — and un-archiving puts it back in all of them. Verified end to end; do
+      not add per-surface `!archived` filters "to be safe", they are already there.
+  18. A budget with a limit of 0 does not divide by zero, and archived spending never counts
+      against a budget.
+  19. Snapshots live in Google DRIVE, not in db. `db.snapshots` staying empty after saving one
+      is correct — saveSnapshotToDrive / showSnapshotPicker are the real entry points, and none
+      of it is reachable in a test without Drive.
+  20. Reimbursements: a partial repayment reduces the receivable, an OVERpayment does not push it
+      negative, and a settled shared expense contributes nothing. Verified.
+  21. Installments survive more linked payments than months: no negative remaining, no bar past
+      100%. Do not add clamping "just in case", it is handled.
+  22. Notes are escaped. A note containing <b> or an apostrophe renders as text and does not
+      break search. Verified against both.
+  23. An empty database and a one-transaction database both render every page and all 20
+      analytics tabs with no NaN. 3,000 transactions likewise.
    ============================================================================================ */
 const DB_KEY = 'trackbudget_v2'; // ── PERSONAL LOGIC SET #1 ── unique key — do not change, changing this loses all local data
 
@@ -1687,6 +1742,21 @@ function _homeBase() {
 // Use _displayCurrency() for VIEW (dashboard total, equiv badges, receipt home-row).
 // Use _homeBase() for MATH ANCHOR (db.fxRates, Net Worth, FX gain/loss compute).
 // _inDisplay(homeAmt) converts a home-base value to display currency for presentation.
+// -- PERSONAL LOGIC SET #247 -- The two-country rule, stated plainly:
+//   HOME country    -> MAIN currency   (_homeBase, from nationality) — what your money means to you
+//   CURRENT country -> FOREX currency  (this, from db.profile.country) — what you actually spend in
+// Everything that talks about converting, remitting or exchanging must use THIS, not a hardcoded
+// code. aiFxAdvisor had 'PGK' pinned in eight places — the rate it read, the history it read, and
+// six lines of user-facing copy — so a New Zealander in Australia was told about kina.
+// Returns null when the user has not set a location, or when they live in their home country and
+// so have no foreign currency to advise on. Callers must handle null by staying silent.
+function _localCurrency() {
+  const c = db?.profile?.country;
+  if (!c || typeof COUNTRY_CURRENCIES === 'undefined') return null;
+  const cur = COUNTRY_CURRENCIES[c];
+  if (!cur || cur === _homeBase()) return null;
+  return cur;
+}
 function _displayCurrency() {
   return db?.displayCurrency || _homeBase();
 }
@@ -2307,6 +2377,9 @@ function haptic(pattern = 'tap') {
   } catch(e) {}
 }
 
+// -- PLS #245 boundary -- DELIBERATELY LIVE. An account balance answers "what is this worth
+// right now", so it must follow today's rate. Never route this through txAmtIn: freezing it
+// would mean your PGK holding stopped gaining value the day you logged it.
 function getAcctBalance(acctId) {
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) return 0;
@@ -2419,6 +2492,8 @@ function loanHomeValue(loan) {
   return toPhp(remain, loan.currency);
 }
 
+// -- PLS #245 boundary -- DELIBERATELY LIVE, same reason as getAcctBalance: assets are marked
+// to today's rate. Spending is frozen; holdings are not.
 function getNetWorth() {
   // Single source of truth — returns { assets, liabs, net, assetRows, liabRows }
   // Used by: hero card, analytics wealth, alerts, AI insights, Excel export
@@ -2484,6 +2559,9 @@ function getNetWorth() {
     // The actual fee expense is recorded via isAutoFee; this shared tx is just a marker.
     // Including it as receivable would double-count net worth (fee already left the account).
     if (tx.isFeeReimbursable) continue;
+    // NOT-A-BUG (PLS #249 item 11): the field is `persons`. There is no `splitPersons` anywhere in
+    // this file, whatever older notes say — seeding that name finds no receivable here and makes
+    // net worth look like it is losing money owed to the user.
     const persons = tx.persons || [];
     for (const p of persons) {
       const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
@@ -2629,6 +2707,32 @@ function _investmentGL(tx, toCurr) {
   return v > 0 ? { income: v, expense: 0 } : { income: 0, expense: -v };
 }
 
+// -- PERSONAL LOGIC SET #245 -- Historical money must be converted at the rate that was live WHEN
+// IT HAPPENED, never at today's rate. Eleven functions used convert(amount, tx.currency, display),
+// which reads db.fxRates as it stands right now, so updating a rate silently rewrote the past:
+// PGK 2,000 spent across three months at 12.50 / 12.80 / 13.02 really cost PHP 76,640, the app
+// showed PHP 75,000, and moving the rate to 15.00 turned it into PHP 90,000 — the history grew by
+// PHP 13,360 with no new transaction. Every tx already carries fxSnapshot; it just was not read.
+//
+// The split that matters: "what left my pocket back then" is HISTORY and uses this. "what is this
+// worth now" — account balances, net worth, investment values, goal progress — stays on live rates
+// and must NOT be routed through here.
+//
+// Two legs, both historical: the tx currency to home base via the tx's own snapshot, then home to
+// the display currency via that same snapshot, so a round trip returns the original amount exactly.
+function txAmtIn(amount, tx, toCurr) {
+  if (typeof amount !== 'number' || isNaN(amount)) return 0;   // PLS #102: FX NaN guard
+  const home = _homeBase();
+  const from = (tx && tx.currency) || home;
+  let php;
+  if (from === home) php = amount;
+  else if (tx && tx.fxSnapshot && tx.fxSnapshot[from]) php = amount * tx.fxSnapshot[from];
+  else if (tx && tx.date && typeof getSnapshotRate === 'function') php = amount * getSnapshotRate(from, tx.date, tx.time);
+  else php = toPhp(amount, from);
+  if (!toCurr || toCurr === home) return php;
+  return fromPhp(php, toCurr, tx && tx.fxSnapshot);
+}
+
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
@@ -2675,7 +2779,9 @@ function getMonthTotals(monthKey) {
     }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
     // Convert to display currency (same-currency shortcut to avoid double conversion rounding)
-    const converted = t.currency === dispCurr ? amt : convert(amt, t.currency, dispCurr);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const converted = t.currency === dispCurr ? amt : txAmtIn(amt, t, dispCurr);
     if (t.type==='income') income += converted;
     else if (t.type==='expense' || t.type==='shared') expense += converted;
     // Remittance, transfer, lend, borrow excluded from monthly income/expense totals
@@ -6979,9 +7085,11 @@ function renderTxLog() {
     if (_rendered >= _cap) { _hiddenCount += dayTxs.length; continue; }
     const dayNet = dayTxs.reduce((s,t)=>{
       if (t.isSettlement || t.isAutoReimb) return s;
-      if (t.type==='income') return s + toPhp(t.amount, t.currency);
-      if (t.type==='expense') return s - toPhp(t.amount, t.currency);
-      if (t.type==='shared') return s - toPhp(t.myShare || t.amount, t.currency);
+      // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+      // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+      if (t.type==='income') return s + txAmtIn(t.amount, t);
+      if (t.type==='expense') return s - txAmtIn(t.amount, t);
+      if (t.type==='shared') return s - txAmtIn(t.myShare || t.amount, t);
       return s;
     }, 0);
     txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:10px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${dayNet>=0?'+':''}${dayNet.toFixed(0)}</span></div>`;
@@ -7683,7 +7791,9 @@ function openTxReceipt(txId) {
     const fromAcct = getAccountDisplay(tx.fromAccountId);
     const toAcct = getAccountDisplay(tx.toAccountId);
     const toCurr = toAcct.currency || tx.currency;
-    const toAmt = tx.toAmount != null ? tx.toAmount : convert(tx.amount, tx.currency, toCurr);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const toAmt = tx.toAmount != null ? tx.toAmount : txAmtIn(tx.amount, tx, toCurr);
     heroAmount = `${fmt(tx.amount, tx.currency)}`;
     heroLabel = `${fromAcct.name} → ${toAcct.name}${tx.currency !== toCurr ? ` · ${fmt(toAmt, toCurr)}` : ''}`;
   } else if (isShared) {
@@ -7715,7 +7825,8 @@ function openTxReceipt(txId) {
     const fromAcct = getAccountDisplay(tx.fromAccountId);
     const toAcct = getAccountDisplay(tx.toAccountId);
     const toCurr = toAcct.currency || tx.currency;
-    const toAmt = tx.toAmount != null ? tx.toAmount : convert(tx.amount, tx.currency, toCurr);
+    // PLS #245: spending — frozen at the rate that was live when it happened.
+    const toAmt = tx.toAmount != null ? tx.toAmount : txAmtIn(tx.amount, tx, toCurr);
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">From</div><div class="rcpt-row-value">${_esc(fromAcct.name)}<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">−${fmt(tx.amount, tx.currency)}</span></div></div>`;
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">To</div><div class="rcpt-row-value">${_esc(toAcct.name)}<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">+${fmt(toAmt, toCurr)}</span></div></div>`;
     if (tx.currency !== toCurr) {
@@ -7746,7 +7857,8 @@ function openTxReceipt(txId) {
   if (tx.currency !== _homeBase()) {
     const home = _homeBase();
     const disp = _displayCurrency();
-    const homeEquiv = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
+    // PLS #245: spending — frozen at the rate that was live when it happened.
+    const homeEquiv = txAmtIn(isShared ? (tx.myShare || tx.amount) : tx.amount, tx);
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">In ${home}</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(homeEquiv, home)}</div></div>`;
     // If display ≠ home, also show in display currency
     if (disp !== home) {
@@ -7856,7 +7968,9 @@ function buildTxReceiptText(txId) {
     const fromAcct = getAccountDisplay(tx.fromAccountId);
     const toAcct = getAccountDisplay(tx.toAccountId);
     const toCurr = toAcct.currency || tx.currency;
-    const toAmt = tx.toAmount != null ? tx.toAmount : convert(tx.amount, tx.currency, toCurr);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const toAmt = tx.toAmount != null ? tx.toAmount : txAmtIn(tx.amount, tx, toCurr);
     lines.push(`${fmt(tx.amount, tx.currency)} → ${fmt(toAmt, toCurr)}`);
     lines.push(`${fromAcct.name} → ${toAcct.name}`);
   } else {
@@ -7880,7 +7994,8 @@ function buildTxReceiptText(txId) {
 
   const _home = _homeBase();
   if (tx.currency !== _home) {
-    const phpVal = toPhp(isShared ? (tx.myShare || tx.amount) : tx.amount, tx.currency);
+    // PLS #245: spending — frozen at the rate that was live when it happened.
+    const phpVal = txAmtIn(isShared ? (tx.myShare || tx.amount) : tx.amount, tx);
     lines.push(`${_home} Equiv: ${fmt(phpVal, _home)}`);
   }
 
@@ -9245,7 +9360,9 @@ function openSettledReimbSheet() {
   }
   periodOrder.sort((a,b)=>b.localeCompare(a));
 
-  const totalPhp = settled.reduce((s,t)=>s+toPhp(t.totalBill||t.amount, t.currency),0);
+  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+  const totalPhp = settled.reduce((s,t)=>s+txAmtIn(t.totalBill||t.amount, t),0);
 
   let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ${sym(_homeBase())}${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
 
@@ -10201,6 +10318,9 @@ function restoreAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (a) { a.archived=false; saveDBWithSync(); closeSheet('gen'); renderAccounts(); renderPageHeader('accounts'); showToast('Account restored'); }
 }
+// NOT-A-BUG (PLS #249 item 13): this IS the guard. confirmDeleteAccount below is the inner step
+// and assumes this check already passed — calling it directly orphans transactions in a way the
+// real UI cannot.
 function deleteAccount(acctId) {
   // ── PERSONAL LOGIC SET #80 ── Account deletion is archive-first.
   // Delete button is REMOVED from the action sheet — accounts must be archived first,
@@ -13230,7 +13350,9 @@ function renderAnalyticsCalendar() {
     if (t.type === 'remittance') {
       amt = Math.abs(toPhp(t.toAmount || (t.amount * (t.rate||1)), t.toAccountId ? (db.accounts.find(a=>a.id===t.toAccountId)?.currency || _homeBase()) : _homeBase()));
     } else {
-      amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
+      // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+      // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+      amt = Math.abs(t.phpAmount || txAmtIn(t.amount || 0, t));
     }
     if (t.isInvestmentReturn) {            // PLS #221 / #219: return of capital, not income
       const _g = _investmentGL(t, _homeBase());
@@ -13428,7 +13550,9 @@ function openCalDay(dateStr) {
       if (t.type === 'remittance') {
         amt = Math.abs(toPhp(t.toAmount || (t.amount * (t.rate||1)), t.toAccountId ? (db.accounts.find(a=>a.id===t.toAccountId)?.currency || _homeBase()) : _homeBase()));
       } else {
-        amt = Math.abs(t.phpAmount || toPhp(t.amount || 0, t.currency || _homeBase()));
+        // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+        // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+        amt = Math.abs(t.phpAmount || txAmtIn(t.amount || 0, t));
       }
       if (t.isInvestmentReturn) {          // PLS #221 / #219: return of capital, not income
         const _g = _investmentGL(t, _homeBase());
@@ -13584,7 +13708,9 @@ function renderAnalyticsOverview() {
       const name = _isTop ? cat.name : _stripIcon(cat.name);
       const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
       // Convert to display currency (same-currency shortcut to avoid roundtrip rounding)
-      const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
+      // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+      // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+      const amt = tx.currency === dispCurr ? rawAmt : txAmtIn(rawAmt, tx, dispCurr);
       expCats[name] = (expCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
       expCats[name].total += amt;
       expCats[name].txs.push(tx);
@@ -13598,7 +13724,8 @@ function renderAnalyticsOverview() {
       const name = _isTop ? cat.name : _stripIcon(cat.name);
       // Convert to display currency
       const _rawInc = tx.isInvestmentReturn ? Number(tx.realizedGL) : tx.amount;   // PLS #226
-      const amt = tx.currency === dispCurr ? _rawInc : convert(_rawInc, tx.currency, dispCurr);
+      // PLS #245: spending — frozen at the rate that was live when it happened.
+      const amt = tx.currency === dispCurr ? _rawInc : txAmtIn(_rawInc, tx, dispCurr);
       incCats[name] = (incCats[name] || {total:0, icon:cat.icon, color:'', txs:[]});
       incCats[name].total += amt;
       incCats[name].txs.push(tx);
@@ -13829,7 +13956,8 @@ function renderAnalyticsOverview() {
           const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix
           const name = _isTop ? cat.name : _stripIcon(cat.name);
           const rawAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-          const amt = tx.currency === dispCurr ? rawAmt : convert(rawAmt, tx.currency, dispCurr);
+          // PLS #245: spending — frozen at the rate that was live when it happened.
+          const amt = tx.currency === dispCurr ? rawAmt : txAmtIn(rawAmt, tx, dispCurr);
           if (!out[name]) out[name] = {total:0, icon:cat.icon};
           out[name].total += amt;
         }
@@ -13993,7 +14121,9 @@ function _ovTxsForMonth(mk) {
 }
 function _ovExpAmt(tx, dispCurr) {
   const raw = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-  return tx.currency === dispCurr ? raw : convert(raw, tx.currency, dispCurr);
+  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+  return tx.currency === dispCurr ? raw : txAmtIn(raw, tx, dispCurr);
 }
 
 // ─── 1. Velocity Gauge ───
@@ -14133,13 +14263,36 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
   }
   outliers.sort((a,b) => b.z - a.z);
   const top = outliers.slice(0, 3);
-  if (top.length === 0) return '';
+  // -- PERSONAL LOGIC SET #248 -- Two different kinds of "look at this" share one card.
+  // An OUTLIER above is real, correct data that happens to be large. A BROKEN amount is data that
+  // cannot exist: a negative or non-finite expense. It slips past every form (all of them guard
+  // amount <= 0) and past the bank-statement import (which takes Math.abs), but a restored backup
+  // is not validated, so a corrupted or hand-edited file can carry one in. Left alone it does not
+  // just look odd, it CANCELS real spending: a -500 beside a +500 reports zero spent that month.
+  // It is surfaced here rather than in a dashboard banner because this is the card the user
+  // already opens to ask "is something wrong with my numbers". Listed first, since it is the only
+  // one of the two that means something is actually broken.
+  const broken = txs.filter(t => {
+    const a = Number(t.amount);
+    return !Number.isFinite(a) || a < 0;
+  }).slice(0, 3);
+  if (top.length === 0 && broken.length === 0) return '';
   // PLS #207: with a single outlier, `justify-content:space-evenly` (added in v-63 to kill
   // bottom dead-space) stranded one lone row in the middle of a stretched card. Distribute only
   // when there are 2+ rows, and give a quiet month a real figure instead of empty space.
   const screened = txs.length;
   return `<div class="card" style="margin-bottom:16px;display:flex;flex-direction:column">
     <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:10px">Unusual Transactions${_infoBtn('anomaly')}</div>
+    ${broken.map(t => {
+      const cat = getCategoryDisplay(t.subCatId || t.categoryId);
+      return `<div onclick="openTxDetail('${t.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" class="last-no-border">
+        <div style="min-width:0">
+          <div style="font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⚠️ ${_esc(cat.name||'Transaction')}</div>
+          <div style="font-size:10.5px;color:var(--text4)">${fmtD(t.date)} · amount can't be negative</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:12.5px;color:var(--red);font-weight:600;flex-shrink:0">${fmt(t.amount, t.currency)}</div>
+      </div>`;
+    }).join('')}
     <div style="flex:1;display:flex;flex-direction:column;justify-content:${top.length >= 2 ? 'space-evenly' : 'flex-start'}">
     ${top.map(o => {
       const catName = _stripIcon(o.cat.name);
@@ -14357,6 +14510,24 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   const currentRate = ratedMonths[ratedMonths.length-1].rate;
   const prevRate = ratedMonths[ratedMonths.length-2].rate;
   const trend = currentRate - prevRate;
+  // -- PERSONAL LOGIC SET #246 -- The in-progress month was treated as a finished one. On the 2nd
+  // of a month half the salary has not landed but some bills already have, so the card announced
+  // a collapse every single month: with six straight months at 50%, day 2 read "3%, down 47pp,
+  // 6mo avg 42%". Nothing about the user's behaviour had changed. Two separate errors:
+  //   the AVERAGE counted a 2-day month as a full one (the app excludes the current month from
+  //   every other baseline — PLS #232 — this card did not), and
+  //   the vs-prev COMPARISON put 2 days against 30.
+  // The current month is still SHOWN, because month-to-date progress is worth seeing; it is just
+  // labelled with how far in we are, and it stops being compared or averaged until enough of the
+  // month has elapsed to mean something.
+  const _nowKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+  const _curIsNow = ratedMonths[ratedMonths.length-1].key === _nowKey;
+  const _dNow = new Date();
+  const _dayOfMonth = _dNow.getDate();
+  const _daysInMonth = new Date(_dNow.getFullYear(), _dNow.getMonth()+1, 0).getDate();
+  // 40% is the point where a month has enough of itself to compare. Below it the figures move too
+  // much day to day to mean anything; a single rent payment can swing an early month by 50 points.
+  const _tooEarly = _curIsNow && (_dayOfMonth / _daysInMonth) < 0.4;
   const trendColor = trend > 2 ? 'var(--green)' : trend < -2 ? 'var(--red)' : 'var(--text3)';
   const trendIcon = trend > 2 ? '▲' : trend < -2 ? '▼' : '→';
   // Plot ONLY months that have a savings rate. Dead months (no income → null) would
@@ -14403,7 +14574,11 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     if (mo.rate === null) {
       const _why = mo.partial ? `${mo.label} is a partial month — logging began mid-month, so it has no comparable savings rate`
                               : `No income logged in ${mo.label} — no savings rate to compute`;
-      return `<div title="${_why}" style="position:absolute;left:${L}%;top:100%;width:6px;height:6px;border-radius:50%;background:transparent;border:1.5px dashed var(--text4);transform:translate(-50%,-50%)"></div>`;
+      // PLS #239: sit on the chart FLOOR (where a 0% would plot), not at top:100%. At 100% the
+      // marker straddles the container edge and half of it lands on the month label underneath.
+      // Using yAt(0) keeps it inside the box and in the same coordinate system as the real dots.
+      const _floorT = (yAt(0)/H*100).toFixed(2);
+      return `<div title="${_why}" style="position:absolute;left:${L}%;top:${_floorT}%;width:6px;height:6px;border-radius:50%;background:transparent;border:1.5px dashed var(--text4);transform:translate(-50%,-50%)"></div>`;
     }
     const T = (yAt(mo.rate)/H*100).toFixed(2);
     return `<div style="position:absolute;left:${L}%;top:${T}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>
@@ -14435,19 +14610,33 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     </div>
     ${_gapNote}
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3)">Current month</div>
+      <div class="kpi-label">Current month</div>
       <div style="text-align:right">
-        <span style="font-family:var(--mono);font-size:16px;font-weight:700">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</span>
-        <span style="font-size:11px;color:${trendColor};margin-left:6px">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</span>
+        <span class="kpi-value-cur">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</span>
+        ${/* PLS #246: at most TWO items on this line. Value + trend + "day 15 of 30" is three, and
+             on a phone the third wraps under a baseline-aligned row and looks broken. The day
+             marker moves to the sub-line below, which already exists for the average. */''}
+        ${_tooEarly
+          ? `<span class="kpi-sub" style="margin-left:6px;white-space:nowrap">day ${_dayOfMonth} of ${_daysInMonth}</span>`
+          : `<span class="kpi-label" style="color:${trendColor};margin-left:6px;white-space:nowrap">${trendIcon} ${Math.abs(trend).toFixed(0)}pp vs prev</span>`}
         ${(() => {
           // PLS #205: a lone "51%" has nothing to be measured against. Compare it to the user's
           // OWN average over the rated months — a self-referencing benchmark beats an arbitrary
           // external target like "20% is good".
-          const rates = ratedMonths.map(mo => mo.rate).filter(r => r !== null);
+          // PLS #246: average the FINISHED months only. Including the in-progress one pulled a
+          // steady 50% down to 42% and then reported the current month as 39pp below an average
+          // it had itself dragged down.
+          const _done = _curIsNow ? ratedMonths.slice(0, -1) : ratedMonths;
+          const rates = _done.map(mo => mo.rate).filter(r => r !== null);
           if (rates.length < 2 || currentRate === null) return '';
           const avg = rates.reduce((s,r)=>s+r,0) / rates.length;
           const gap = currentRate - avg;
-          return `<div style="font-size:10px;color:var(--text4);margin-top:3px;font-family:var(--mono)">${rates.length}mo avg ${avg.toFixed(0)}% · ${gap>=0?'+':'−'}${Math.abs(gap).toFixed(0)}pp</div>`;
+          // PLS #246: while the month is too young the gap is meaningless, so state the benchmark
+          // without pretending to score the user against it yet.
+          // PLS #246: the day marker lives here when the trend is shown above, so that line stays
+          // at two items. When it is too early the marker is already up there instead.
+          const _dayBit = (_curIsNow && !_tooEarly) ? ` · day ${_dayOfMonth} of ${_daysInMonth}` : '';
+          return `<div class="kpi-sub" style="margin-top:3px;font-family:var(--mono)">${rates.length}mo avg ${avg.toFixed(0)}%${_tooEarly?'' : ` · ${gap>=0?'+':'−'}${Math.abs(gap).toFixed(0)}pp`}${_dayBit}</div>`;
         })()}
       </div>
     </div>
@@ -14900,13 +15089,15 @@ function buildIncomeDiversification(metricMk, dispCurr) {
       if (!incomes[name]) incomes[name] = {total: 0, icon: cat.icon};
       // PLS #226: for a sale, only the realized gain is the income figure, not the proceeds.
       const _raw = tx.isInvestmentReturn ? Number(tx.realizedGL) : tx.amount;
-      const amt = tx.currency === dispCurr ? _raw : convert(_raw, tx.currency, dispCurr);
+      // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+      // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+      const amt = tx.currency === dispCurr ? _raw : txAmtIn(_raw, tx, dispCurr);
       incomes[name].total += amt;
     }
     // Add FX arbitrage gains as a dedicated source (PLS #47)
     let fxGains = 0;
     for (const tx of gainTxs) {
-      fxGains += tx.currency === dispCurr ? tx.amount : convert(tx.amount, tx.currency, dispCurr);
+      fxGains += tx.currency === dispCurr ? tx.amount : txAmtIn(tx.amount, tx, dispCurr);
     }
     if (fxGains > 0) {
       if (!incomes['FX Arbitrage']) incomes['FX Arbitrage'] = {total: 0, icon: '📈'};
@@ -15603,7 +15794,9 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if (earliestTx && k < earliestTx.slice(0,7)) continue;
     const t = getMonthTotals(k);
-    months.push({ label: d.toLocaleString('en',{month:'short'}), income: t.income, expense: t.expense });
+    // PLS #246: carry the month key. Only `label` was stored ("Sep"), which cannot tell the
+    // current month from the same month a year back, so the guard below needs the real key.
+    months.push({ key: k, label: d.toLocaleString('en',{month:'short'}), income: t.income, expense: t.expense });
   }
   // Skip fully-empty months (no income & no expense) so sparse/incomplete history
   // doesn't render ugly empty stub columns — consistent with the other trend charts.
@@ -15613,9 +15806,14 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
   // PLS #205: six bars used to carry only ONE figure ("max ₱95.0k"). Every column now states
   // its own net and its change vs the previous month, so the shape reads as numbers instead
   // of being estimated by eye.
+  // PLS #246: same rule here. The current column holds a few days of spending; putting a percent
+  // against last month's FULL total produced things like "Sep ▲93%" beside five months of "0%".
+  // The bar and its tooltip still show the real amounts — only the false comparison is dropped.
+  const _nowKeyB = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
   const col = (mo, isLast, prev) => {
     const net = mo.income - mo.expense;
-    const dPct = prev && prev.expense > 0 ? ((mo.expense - prev.expense) / prev.expense) * 100 : null;
+    const _isCurrent = (mo.key || mo.mk) === _nowKeyB;
+    const dPct = (!_isCurrent && prev && prev.expense > 0) ? ((mo.expense - prev.expense) / prev.expense) * 100 : null;
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
     <div class="iebar-net" style="font-size:8.5px;font-family:var(--mono);color:${net>=0?'var(--green)':'var(--red)'};white-space:nowrap">${net>=0?'+':'−'}${_fmtK(Math.abs(net), dispCurr).replace(/^[^\d.-]+/,'')}</div>
     <div style="height:70px;display:flex;align-items:flex-end;gap:2px">
@@ -16446,7 +16644,9 @@ function renderSpendingHeatmap(disp) {
     if (tx.type !== 'expense' && tx.type !== 'shared') continue;
     if (!tx.date) continue;
     const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    const inDisp = tx.currency === disp ? amt : convert(amt, tx.currency, disp);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const inDisp = tx.currency === disp ? amt : txAmtIn(amt, tx, disp);
     if (!dayMap[tx.date]) dayMap[tx.date] = { total: 0, count: 0 };
     dayMap[tx.date].total += inDisp;
     dayMap[tx.date].count += 1;
@@ -16674,7 +16874,9 @@ function showHeatmapDay(dateKey) {
   let dayExp = 0, dayInc = 0;
   for (const tx of dayTxs) {
     const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    const inDisp = tx.currency === disp ? amt : convert(amt, tx.currency, disp);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const inDisp = tx.currency === disp ? amt : txAmtIn(amt, tx, disp);
     if (tx.type === 'expense' || tx.type === 'shared') dayExp += inDisp;
     else if (tx.type === 'income') dayInc += inDisp;
   }
@@ -18002,12 +18204,12 @@ function renderContractTab() {
            narrow screen. Do not merge these back into a single stacked column. -->
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:10px">
         <div style="min-width:0">
-          <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Progress to goal</div>
-          <div style="font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15;margin-top:3px">${overallPct.toFixed(1)}%</div>
+          <div class="kpi-label-strong">Progress to goal</div>
+          <div class="kpi-value" style="margin-top:3px">${overallPct.toFixed(1)}%</div>
         </div>
         <div style="min-width:0;text-align:right">
-          <div style="font-size:11px;color:var(--text3)">Marker = target pace today (${targetPct.toFixed(0)}%)</div>
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;line-height:1.15;margin-top:3px;color:${gapColor}">${gapLabel}</div>
+          <div class="kpi-label">Marker = target pace today (${targetPct.toFixed(0)}%)</div>
+          <div class="kpi-value-sm" style="margin-top:3px;color:${gapColor}">${gapLabel}</div>
         </div>
       </div>
       <div style="height:10px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px;position:relative">
@@ -20897,6 +21099,8 @@ function runDiagFxMath() {
   haptic(fail === 0 ? 'success' : 'error');
 }
 
+// NOT-A-BUG (PLS #249 item 16): returns undefined on purpose. Output goes to _diagBuffer; read
+// that, not the return value.
 function runDiagDbIntegrity() {
   _diagBuffer = '';
   _diagLog('📋 DB INTEGRITY SCAN — ' + new Date().toISOString().slice(0,19));
@@ -21286,7 +21490,9 @@ function exportCSV() {
         tx.currency || dc,
         ((tx.type === 'remittance' && tx.toAccountId)
           ? toPhp(tx.toAmount || (tx.amount * (tx.rate||1)), db.accounts.find(a=>a.id===tx.toAccountId)?.currency || dc)
-          : (tx.phpAmount || toPhp(tx.amount || 0, tx.currency || dc))
+          // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+          // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+          : (tx.phpAmount || txAmtIn(tx.amount || 0, tx))
         ).toFixed(2),
         tx.notes || '',
         tx.personName || '',
@@ -21627,6 +21833,8 @@ function parseImportDate(raw) {
 // ── BANK RECONCILIATION ──
 // Computes account balance AS OF a specific date (inclusive)
 // Mirrors getAcctBalance() logic exactly with a date filter (PLS-aware)
+// -- PLS #245 boundary -- DELIBERATELY LIVE. Used by bank reconciliation, which compares the
+// app against a real statement, so it must value holdings the way the bank does today.
 function getAcctBalanceAsOf(acctId, asOfDate) {
   const acct = db.accounts.find(a => a.id === acctId);
   if (!acct) return 0;
@@ -23947,12 +24155,14 @@ function aiAnomalyDetection() {
   for (const m of historical) for (const t of m.txs.filter(t=>t.type==='expense'||t.type==='shared')) {
     const cat = t.categoryId||'misc';
     if (!cats[cat]) cats[cat]=[];
-    cats[cat].push(toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency));
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    cats[cat].push(txAmtIn(t.type==='shared'?(t.myShare||t.amount):t.amount, t));
   }
   for (const [cat,amounts] of Object.entries(cats)) {
     const avg = amounts.reduce((s,v)=>s+v,0)/amounts.length;
     const curAmt = current.txs.filter(t=>(t.type==='expense'||t.type==='shared')&&t.categoryId===cat)
-      .reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
+      .reduce((s,t)=>s+txAmtIn(t.type==='shared'?(t.myShare||t.amount):t.amount, t),0);
     if (curAmt > avg*1.5 && avg > 200) {
       const catName = getCategoryDisplay(cat)?.name||cat;
       const id = 'anomaly-'+cat;
@@ -24169,26 +24379,30 @@ function aiRecurringDetector() {
 }
 
 function aiFxAdvisor() {
-  const insights = []; const history = db.fxHistory?.PGK||[];
+  // PLS #247: advise on the currency the user actually lives in, not a hardcoded one.
+  const insights = [];
+  const FX = _localCurrency();
+  if (!FX) return insights;               // no location set, or living at home — nothing to advise
+  const history = db.fxHistory?.[FX]||[];
   // Need at least 3 rate history entries to give meaningful FX advice
   const remittances = db.transactions.filter(t=>t.type==='remittance'&&!t.archived);
   if (history.length < 3 || remittances.length < 2) return insights;
   const rates = history.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(h=>h.rate);
   const last3Avg = rates.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,rates.length);
-  const current = db.fxRates?.PGK||last3Avg;
+  const current = db.fxRates?.[FX]||last3Avg;
   if (current > last3Avg*1.01) {
     const id = 'fx-good';
     const diffPct = ((current/last3Avg-1)*100).toFixed(1);
     const titles = [
-      'PGK rate above recent average',
+      `${FX} rate above recent average`,
       'Favorable FX window',
-      'PGK rate trending up',
+      `${FX} rate trending up`,
       `Rate ${diffPct}% above your recent average`,
     ];
     const bodies = [
-      `Current ${fmt(current, _homeBase())}/PGK is above the recent avg ${fmt(last3Avg, _homeBase())} — +${diffPct}%. Converting now stretches each PGK a little further.`,
-      `Rate is ${diffPct}% better than your 3-period average — a more efficient window if you have PGK to move.`,
-      `Above your typical ${fmt(last3Avg, _homeBase())} by ${diffPct}%. On a ~${fmt(10000,'PGK')} remit, that's about ${fmt((current-last3Avg)*10000, _homeBase())} more than average.`,
+      `Current ${fmt(current, _homeBase())}/${FX} is above the recent avg ${fmt(last3Avg, _homeBase())} — +${diffPct}%. Converting now stretches each ${FX} a little further.`,
+      `Rate is ${diffPct}% better than your 3-period average — a more efficient window if you have ${FX} to move.`,
+      `Above your typical ${fmt(last3Avg, _homeBase())} by ${diffPct}%. On a ~${fmt(10000,FX)} remit, that's about ${fmt((current-last3Avg)*10000, _homeBase())} more than average.`,
     ];
     insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
   }
@@ -24197,13 +24411,13 @@ function aiFxAdvisor() {
     const diffPct = ((1-current/last3Avg)*100).toFixed(1);
     const titles = [
       'FX rate below average',
-      'PGK softening lately',
+      `${FX} softening lately`,
       'Rate dipped — maybe hold',
     ];
     const bodies = [
-      `Current ${fmt(current, _homeBase())}/PGK below recent avg ${fmt(last3Avg, _homeBase())}. Consider waiting if not urgent.`,
+      `Current ${fmt(current, _homeBase())}/${FX} below recent avg ${fmt(last3Avg, _homeBase())}. Consider waiting if not urgent.`,
       `Rate is ${diffPct}% below your typical conversion — holding is more efficient if the remit isn't urgent.`,
-      `${diffPct}% below your 3-period average — waiting could recover ${fmt((last3Avg-current)*10000, _homeBase())} on a ~${fmt(10000,'PGK')} remit.`,
+      `${diffPct}% below your 3-period average — waiting could recover ${fmt((last3Avg-current)*10000, _homeBase())} on a ~${fmt(10000,FX)} remit.`,
     ];
     insights.push({id,type:'fx',priority:'low',icon:'⏳',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
   }
@@ -24216,7 +24430,9 @@ function aiCategoryTrends() {
   for (const m of months) for (const t of m.txs.filter(t=>t.type==='expense'||t.type==='shared')) {
     const cat = t.categoryId;
     if (!catMonthly[cat]) catMonthly[cat]=[];
-    catMonthly[cat].push({month:m.month,amt:toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency)});
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    catMonthly[cat].push({month:m.month,amt:txAmtIn(t.type==='shared'?(t.myShare||t.amount):t.amount, t)});
   }
   for (const [cat,entries] of Object.entries(catMonthly)) {
     const byMonth = {};
@@ -24260,8 +24476,10 @@ function aiCashFlowForecast() {
     // Gain/Loss included — real income/expense from FX arbitrage
     return true;
   });
-  const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
-  const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+toPhp(t.type==='shared'?(t.myShare||t.amount):t.amount,t.currency),0);
+  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+  const income = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+txAmtIn(t.amount, t),0);
+  const spent = monthTxs.filter(t=>t.type==='expense'||t.type==='shared').reduce((s,t)=>s+txAmtIn(t.type==='shared'?(t.myShare||t.amount):t.amount, t),0);
   const daily = daysPassed > 0 ? spent/daysPassed : 0;
   const projected = spent + daily*daysLeft;
   const bgt = db.budgets?.find(b=>b.active&&b.currency===(_homeBase()));
@@ -24844,8 +25062,10 @@ function renderAnalyticsExternal() {
   if (!txs.length) return `<div class="empty-state page-pad"><div class="empty-icon">📥</div><div class="empty-text">No external transactions yet</div><div class="empty-sub">Use External In/Out in Add Transaction</div></div>`;
   const inTxs = txs.filter(t=>t.type==='external-in');
   const outTxs = txs.filter(t=>t.type==='external-out');
-  const totalIn = inTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
-  const totalOut = outTxs.reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
+  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+  const totalIn = inTxs.reduce((s,t)=>s+txAmtIn(t.amount, t),0);
+  const totalOut = outTxs.reduce((s,t)=>s+txAmtIn(t.amount, t),0);
   const net = totalIn - totalOut;
   const netPositive = net >= 0;
   const ratio = (totalIn + totalOut) > 0 ? (totalIn / (totalIn + totalOut) * 100) : 100;
@@ -24855,8 +25075,8 @@ function renderAnalyticsExternal() {
   for (const t of txs) {
     const p = t.externalParty||'Unknown';
     if (!parties[p]) parties[p] = { in:0, out:0, txs:[] };
-    if (t.type==='external-in') parties[p].in += toPhp(t.amount,t.currency);
-    else parties[p].out += toPhp(t.amount,t.currency);
+    if (t.type==='external-in') parties[p].in += txAmtIn(t.amount, t);
+    else parties[p].out += txAmtIn(t.amount, t);
     parties[p].txs.push(t);
   }
   const sortedParties = Object.entries(parties)
@@ -25124,8 +25344,10 @@ function renderAnalyticsCrossCurrency() {
   const ytdStart = `${new Date().getFullYear()}-01-01`;
   const fxGL = db.transactions.filter(t => !t.archived && t.date >= ytdStart &&
     (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss));
-  const ytdGains = fxGL.filter(t => t.isLoanSettlementGain || t.isReimbSettlementGain).reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
-  const ytdLosses = fxGL.filter(t => t.isLoanSettlementLoss || t.isReimbSettlementLoss).reduce((s,t)=>s+toPhp(t.amount,t.currency),0);
+  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+  const ytdGains = fxGL.filter(t => t.isLoanSettlementGain || t.isReimbSettlementGain).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
+  const ytdLosses = fxGL.filter(t => t.isLoanSettlementLoss || t.isReimbSettlementLoss).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
   const netFX = ytdGains - ytdLosses;
 
   let html = `<div class="page-pad">
@@ -25213,7 +25435,9 @@ function renderAnalyticsPeople() {
         const owed = (p.share || 0) - ((tx.paidSoFar && tx.paidSoFar[name]) || 0);
         if (owed <= 0.001) return;
         if (!people[name]) people[name] = { lent: 0, borrowed: 0, sharedOwed: 0, lentCount: 0, borrowedCount: 0, sharedCount: 0 };
-        people[name].sharedOwed += toPhp(owed, tx.currency || dc);
+        // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+        // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+        people[name].sharedOwed += txAmtIn(owed, tx);
         people[name].sharedCount += 1;
       });
     }
@@ -25640,7 +25864,9 @@ function renderAnalyticsDayOfWeek() {
     const dow = d.getDay();
     if (isNaN(dow)) return;
     byDay[dow].count++;
-    byDay[dow].total += toPhp(t.amount || 0, t.currency || dc);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    byDay[dow].total += txAmtIn(t.amount || 0, t);
   });
   const maxTotal = Math.max(...byDay.map(d=>d.total)) || 1;
   const grandTotal = byDay.reduce((s,d)=>s+d.total,0);
@@ -25655,7 +25881,8 @@ function renderAnalyticsDayOfWeek() {
     const dom = parseInt(t.date.slice(8,10), 10);
     const bk = dom <= 10 ? 'early' : dom <= 20 ? 'mid' : 'late';
     buckets[bk].count++;
-    buckets[bk].total += toPhp(t.amount || 0, t.currency || dc);
+    // PLS #245: spending — frozen at the rate that was live when it happened.
+    buckets[bk].total += txAmtIn(t.amount || 0, t);
   });
 
   let html = `<div class="page-pad">
@@ -25745,7 +25972,9 @@ function renderAnalyticsYoY() {
       !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
       const disp = getCategoryDisplay(t.categoryId);
       const cat = disp.name === 'Category' || disp.name === 'Uncategorized' ? 'Uncategorized' : _stripIcon(disp.name);
-      const amt = toPhp(t.amount||0, t.currency||dc);
+      // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+      // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+      const amt = txAmtIn(t.amount||0, t);
       totals.byCat[cat] = (totals.byCat[cat] || 0) + amt;
     });
     return totals;
@@ -25838,8 +26067,10 @@ function renderAnalyticsAccountHealth() {
   const todayStr = today();
   const enriched = accts.map(a => {
     const txs = db.transactions.filter(t => !t.archived && (t.accountId === a.id || t.fromAccountId === a.id || t.toAccountId === a.id));
-    const totalIn = txs.filter(t => (t.type === 'income' || (t.type === 'transfer' && t.toAccountId === a.id))).reduce((s,t)=>s+toPhp(t.toAmount||t.amount||0, t.currency||dc),0);
-    const totalOut = txs.filter(t => t.type === 'expense' || t.type === 'shared' || (t.type === 'transfer' && t.fromAccountId === a.id)).reduce((s,t)=>s+toPhp(t.amount||0, t.currency||dc),0);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    const totalIn = txs.filter(t => (t.type === 'income' || (t.type === 'transfer' && t.toAccountId === a.id))).reduce((s,t)=>s+txAmtIn(t.toAmount||t.amount||0, t),0);
+    const totalOut = txs.filter(t => t.type === 'expense' || t.type === 'shared' || (t.type === 'transfer' && t.fromAccountId === a.id)).reduce((s,t)=>s+txAmtIn(t.amount||0, t),0);
     const txCount = txs.length;
     const lastTxDate = txs.map(t => t.date).filter(Boolean).sort().pop() || null;
     const dormantDays = lastTxDate ? Math.floor((Date.parse(todayStr) - Date.parse(lastTxDate)) / 86400000) : null;
@@ -25955,7 +26186,9 @@ function renderAnalyticsAISummary() {
     !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
     const disp = getCategoryDisplay(t.categoryId);
     const cat = (disp.name === 'Category' || disp.name === 'Uncategorized') ? 'Uncategorized' : _stripIcon(disp.name);
-    expByCat[cat] = (expByCat[cat] || 0) + toPhp(t.amount||0, t.currency||dc);
+    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
+    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
+    expByCat[cat] = (expByCat[cat] || 0) + txAmtIn(t.amount||0, t);
   });
   const ranked = Object.entries(expByCat).filter(([n]) => n !== 'Uncategorized').sort((a,b) => b[1]-a[1]);
   const topCat = ranked[0];
