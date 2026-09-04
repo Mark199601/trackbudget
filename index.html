@@ -332,8 +332,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media(min-width:768px){.trend-svg{height:112px}}
 @media(min-width:1024px){.trend-svg{height:132px}}
 @media(min-width:481px){.kpi-label{font-size:11.5px}.kpi-label-strong{font-size:13px}.kpi-value{font-size:22px}.kpi-value-sm{font-size:14px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:10.5px}}
-@media(min-width:768px){.kpi-label{font-size:12.5px}.kpi-label-strong{font-size:14px}.kpi-value{font-size:26px}.kpi-value-sm{font-size:15.5px}.kpi-value-cur{font-size:21px}.kpi-sub{font-size:11.5px}}
-@media(min-width:1024px){.kpi-label{font-size:13px}.kpi-label-strong{font-size:15px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:17px}.kpi-value-cur{font-size:24px}.kpi-sub{font-size:12px}}
+/* -- PERSONAL LOGIC SET #264 -- kpi-value-cur is the CARD-FOOTER figure ("Current month 65%"),
+   not a hero. On a desktop it had grown to 24px against an 11px caption and a 78-132px chart, so
+   the footer shouted louder than the trend it was summarising. Stepped down on the two large
+   tiers only -- phone and small tablet are untouched, because the complaint was desktop-specific.
+   .kpi-value (the true hero figure) is deliberately NOT changed. */
+@media(min-width:768px){.kpi-label{font-size:12px}.kpi-label-strong{font-size:14px}.kpi-value{font-size:26px}.kpi-value-sm{font-size:15.5px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:11.5px}}
+@media(min-width:1024px){.kpi-label{font-size:12.5px}.kpi-label-strong{font-size:15px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:17px}.kpi-value-cur{font-size:20px}.kpi-sub{font-size:12px}}
 .hero-card::before{content:none}
 .hero-card::after{content:none}
 .hero-label{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1}
@@ -13797,6 +13802,25 @@ function renderAnalyticsOverview() {
   const dispCurr = _displayCurrency();
   for (const tx of allTxs) {
     const _glFlag = tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain || tx.isReimbSettlementLoss;
+    // -- PERSONAL LOGIC SET #261 -- A sale closed at a LOSS fell through BOTH branches. PLS #226
+    // was right to keep it out of the income pie -- a loss is no income source -- but it was never
+    // added to the expense side, and a loss sale is type:'income', so the expense branch never saw
+    // it either. getMonthTotals counted the realized loss (PLS #219) while the Category Breakdown
+    // did not, so the header total and the donut disagreed by exactly the loss. Same shared
+    // decision as everywhere else (_investmentGL, PLS #221): only the realized figure is real, the
+    // capital portion is never counted. A GAIN still falls to the income branch below, so nothing
+    // is counted twice. Its own label, not the 'Investment Returns' income category, because an
+    // income category name inside the expense donut reads as a miscategorised row.
+    if (tx.isInvestmentReturn) {
+      const _ig = _investmentGL(tx, dispCurr);
+      if (_ig.expense > 0) {
+        const _iname = 'Investment Loss';
+        expCats[_iname] = (expCats[_iname] || {total:0, icon:'\u{1F4C9}', color:'', txs:[]});
+        expCats[_iname].total += _ig.expense;
+        expCats[_iname].txs.push(tx);
+        expTotal += _ig.expense;
+      }
+    }
     if (tx.type === 'expense' || tx.type === 'shared') {
       const cat = _glFlag ? txCategoryDisplay(tx) : getCategoryDisplay(tx.categoryId);
       const _isTop = _glFlag || [...db.categories.expense, ...db.categories.income].some(c => c.id === tx.categoryId); // PLS #134 fix; gain/loss dedicated labels are already clean
@@ -15757,7 +15781,13 @@ function buildCashflowRunway(metricMk, dispCurr) {
     dd.setDate(dd.getDate() + Math.round(monthsExact * 30.44));
     return dd.toLocaleString('en', {month:'short', year:'numeric'});
   })() : null;
-  const runwayBarHtml = monthsExact > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+  // -- PERSONAL LOGIC SET #263 -- This card sits in a stretch row, so it is as tall as its tallest
+  // neighbour and the leftover has to go somewhere. It was all dumped into one spacer just above
+  // the footer, which read as a hole between "lasts until" and the link. The runway block absorbs
+  // it instead: the block grows, and its last row is pinned to the bottom with margin-top:auto
+  // (the same technique as the What Changed footer, PLS #210). The slack lands inside the chart
+  // area where it looks like breathing room, not below a finished sentence.
+  const runwayBarHtml = monthsExact > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);flex:1;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-bottom:5px">
       <span>Liquid assets</span>
       <span style="font-family:var(--mono);color:var(--text3)">${fmt(liquid, dispCurr)}</span>
@@ -15770,7 +15800,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text4);margin-top:3px">
       <span>0mo</span><span>3mo</span><span>6mo · healthy</span><span>12mo+</span>
     </div>
-    ${depletionLabel ? `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-top:10px">
+    ${depletionLabel ? `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);margin-top:auto;padding-top:10px">
       <span>At this burn rate, lasts until</span>
       <span style="font-family:var(--mono);font-weight:600;color:${rColor}">${depletionLabel}</span>
     </div>` : ''}
@@ -15781,8 +15811,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
     ${bar('Expenses', exp, '#f43f5e')}
     ${bar('Saved', saved, saved >= 0 ? '#2dd4bf' : 'var(--red)')}
     ${(runCell || velCell) ? `<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);margin-top:10px;padding-top:10px">${runCell}${velCell}</div>` : ''}
-    ${runwayBarHtml}
-    <div style="flex:1"></div>
+    ${runwayBarHtml || '<div style="flex:1"></div>'}
     ${footHtml}
   </div>`;
 }
@@ -15859,16 +15888,22 @@ function buildNetWorthTrend(metricMk, dispCurr) {
   const areaPath = path + ` L${xAt(n-1).toFixed(1)},${baseY} L${xAt(0).toFixed(1)},${baseY} Z`;
   // Dots as HTML overlay (positioned by %) so they stay round under preserveAspectRatio="none".
   const dotEls = dispVals.map((v,i)=>`<div style="position:absolute;left:${(xAt(i)/W*100).toFixed(2)}%;top:${(yAt(v)/H*100).toFixed(2)}%;width:6px;height:6px;border-radius:50%;background:#38bdf8;transform:translate(-50%,-50%)"></div>`).join('');
-  return `<div class="card" style="margin-bottom:16px">
+  // -- PERSONAL LOGIC SET #265 -- The card is stretched to its row height by .ov-row3>div>.card
+  // {height:100%}, but it was a plain BLOCK, so the leftover piled up at the very bottom -- below
+  // the footer link, which is the one place a gap cannot be read as spacing. Making the card a
+  // flex column and letting the CHART take the slack puts the extra height where it is useful:
+  // the trend line gets taller, the footer stays flush. min-height keeps the chart at its PLS #252
+  // size when this card happens to be the tallest one in the row and there is no slack to take.
+  return `<div class="card" style="margin-bottom:16px;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Net Worth Trend</div>
     </div>
-    <div style="position:relative;margin-bottom:6px;padding-left:2px">
+    <div style="position:relative;margin-bottom:6px;padding-left:2px;flex:1;display:flex;flex-direction:column;min-height:78px">
       ${/* PLS #240: label the real plotted band. These used to read "₱424k" over "₱0", implying a
            zero-based axis; with the floor following the data that would be a false scale. */''}
       <span style="position:absolute;left:0;top:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMax, dispCurr)}</span>
       <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMin, dispCurr)}</span>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg" style="flex:1;height:auto;min-height:78px">
         <path d="${areaPath}" fill="#38bdf8" opacity="0.10"/>
         <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
@@ -15997,19 +16032,25 @@ function buildBudgetRanking(metricMk, dispCurr) {
     const bgTint = r.over ? 'var(--red-bg)' : r.pct >= 80 ? 'var(--amber-bg)' : 'var(--green-bg)';
     const fillPct = Math.min(r.pct, 100).toFixed(1);
     const pctDisp = r.pct > 999 ? '>999%' : r.pct.toFixed(0) + '%';
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)" class="last-no-border">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px">
-        <span style="display:flex;align-items:center;gap:7px;min-width:0">
-          <span style="width:24px;height:24px;border-radius:var(--r-sm);background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${r.icon}</span>
-          <span style="font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.name)}</span>
+    // -- PERSONAL LOGIC SET #262 -- This is a SCROLLING list inside a fixed-height card, so type
+    // size decides how many budgets you can see without scrolling, not just how it reads. At the
+    // old scale a row was 52px and only four fitted; the card advertised "15 budgeted categories"
+    // and showed three. Every figure keeps its own size relation -- name still larger than the
+    // amounts, amounts still larger than the axis -- the whole row just steps down one notch.
+    // Measured: 52px -> 42px per row, so five to six rows fit in the same 220px well.
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="display:flex;align-items:center;gap:6px;min-width:0">
+          <span style="width:20px;height:20px;border-radius:var(--r-sm);background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:11.5px;flex-shrink:0">${r.icon}</span>
+          <span style="font-size:11.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.name)}</span>
         </span>
-        <span style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0">${_fmtK(r.spent, r.currency)} <span style="color:var(--text4)">/ ${_fmtK(r.limAmt, r.currency)}</span></span>
+        <span style="font-family:var(--mono);font-size:10.5px;color:var(--text2);white-space:nowrap;flex-shrink:0">${_fmtK(r.spent, r.currency)} <span style="color:var(--text4)">/ ${_fmtK(r.limAmt, r.currency)}</span></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;height:6px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
+        <div style="flex:1;height:5px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
           <div style="height:100%;width:${fillPct}%;background:${color};border-radius:var(--r-full);opacity:${r.over ? '1' : '0.85'}"></div>
         </div>
-        <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${color};background:${bgTint};padding:2px 7px;border-radius:var(--r-full);min-width:46px;text-align:center;flex-shrink:0">${pctDisp}</span>
+        <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:${color};background:${bgTint};padding:2px 6px;border-radius:var(--r-full);min-width:42px;text-align:center;flex-shrink:0">${pctDisp}</span>
       </div>
     </div>`;
   }).join('');
