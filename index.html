@@ -7495,6 +7495,23 @@ function openTxDetail(txId) {
     : cat;
 
   let rows = '';
+  // -- PERSONAL LOGIC SET #260 -- A write-off is not an ordinary transaction: its amount, its date
+  // and whether it exists at all are decided by the LOAN. Editing the tx here would desynchronise
+  // the two — the loan would still read settled at one figure while its transaction said another.
+  // Every write-off therefore routes to the loan it came from, which is the only place the pair
+  // can be changed together.
+  if (tx.writeOffReason !== undefined && tx.parentId) {
+    const _dir = (db.loans?.lent||[]).some(l=>l.id===tx.parentId) ? 'lent'
+               : (db.loans?.borrowed||[]).some(l=>l.id===tx.parentId) ? 'borrowed' : null;
+    if (_dir) {
+      const _ln = db.loans[_dir].find(l=>l.id===tx.parentId);
+      rows += `<div class="detail-row" onclick="closeDlg();nav('loans');setTimeout(()=>openLoanDetail('${tx.parentId}','${_dir}'),60)" style="cursor:pointer">
+        <div class="detail-label">Written off from</div>
+        <div class="detail-value" style="color:var(--accent)">${_esc(_ln.personName||'loan')} &rsaquo;</div></div>
+        <div class="detail-row"><div class="detail-label">Reason</div><div class="detail-value">${_esc(tx.writeOffReason||'—')}</div></div>
+        <div class="detail-row"><div class="detail-label" style="font-size:11px;color:var(--text4)">Edit this in Loans — changing it here would leave the loan and the entry disagreeing</div><div class="detail-value"></div></div>`;
+    }
+  }
   if (tx.isInvestmentReturn) {
     // PLS #225: label it for what it is, and show the parts the amount alone cannot tell you.
     const _rg = Number(tx.realizedGL);
@@ -23730,6 +23747,26 @@ function detectRecurring() {
 function ensureDBIntegrity() {
   try {
     const issues = [];
+
+    // -- PERSONAL LOGIC SET #259 -- Move write-offs made BEFORE the categories existed. Until
+    // PLS #254 a written-off loan was filed under Miscellaneous and a forgiven debt under
+    // Investment Returns, so past write-offs sit in the wrong place and stay invisible in
+    // Spending even now that the category exists. Matched only on writeOffReason, which nothing
+    // else sets — an ordinary Miscellaneous expense is never touched. Direction decides the
+    // target: money you gave up on is a Write-off, a debt someone cancelled is Forgiven Debt.
+    (function(){
+      let moved = 0;
+      (db.transactions || []).forEach(t => {
+        if (t.writeOffReason === undefined) return;
+        const isLoss = t.type === 'expense';
+        const want = isLoss ? 'sc-writeoff' : 'sc-debtforgiven';
+        if (t.categoryId === want) return;
+        if (t.categoryId !== 'sc-misc' && t.categoryId !== 'sc-investreturns') return;  // leave anything hand-set
+        t.categoryId = want;
+        moved++;
+      });
+      if (moved) issues.push(`recategorised ${moved} past write-off${moved===1?'':'s'}`);
+    })();
 
   // -- PERSONAL LOGIC SET #254 -- Write-offs and forgiven debts had no home. A loan you give up on
   // was filed under Miscellaneous and deliberately kept OUT of expense totals, so real money you
