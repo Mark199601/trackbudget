@@ -322,6 +322,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .kpi-value-sm{font-family:var(--mono);font-size:13px;font-weight:600;line-height:1.15}
 .kpi-value-cur{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1.15}
 .kpi-sub{font-size:10px;color:var(--text4);line-height:1.3}
+/* -- PERSONAL LOGIC SET #252 -- Trend charts were fixed at 44px and 52px, so the plot was a thin
+   strip while the card around it had room to spare, and an iPad or a monitor showed the same strip
+   as a phone. The CHART grows here, not the type — the labels stay on the kpi-* scale (PLS #250).
+   Both use preserveAspectRatio="none", so the viewBox stretches to whatever height is set; every
+   stroke inside must carry vector-effect="non-scaling-stroke" or it thickens as the box grows. */
+.trend-svg{width:100%;display:block;height:78px}
+@media(min-width:481px){.trend-svg{height:88px}}
+@media(min-width:768px){.trend-svg{height:112px}}
+@media(min-width:1024px){.trend-svg{height:132px}}
 @media(min-width:481px){.kpi-label{font-size:11.5px}.kpi-label-strong{font-size:13px}.kpi-value{font-size:22px}.kpi-value-sm{font-size:14px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:10.5px}}
 @media(min-width:768px){.kpi-label{font-size:12.5px}.kpi-label-strong{font-size:14px}.kpi-value{font-size:26px}.kpi-value-sm{font-size:15.5px}.kpi-value-cur{font-size:21px}.kpi-sub{font-size:11.5px}}
 @media(min-width:1024px){.kpi-label{font-size:13px}.kpi-label-strong{font-size:15px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:17px}.kpi-value-cur{font-size:24px}.kpi-sub{font-size:12px}}
@@ -1982,6 +1991,8 @@ function defaultDB() {
           {id:'sc-externalin',name:'External In',icon:'📥',archived:false,autoOnly:true},
           {id:'sc-externalout',name:'External Out',icon:'📤',archived:false,autoOnly:true},
           {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false,autoOnly:true},
+          {id:'sc-writeoff',name:'Write-off',icon:'✗',archived:false,autoOnly:true},
+          {id:'sc-investloss',name:'Investment Loss',icon:'📉',archived:false,autoOnly:true},
           {id:'sc-misc',name:'Miscellaneous',icon:'📌',archived:false},
         ]},
       ],
@@ -1994,6 +2005,7 @@ function defaultDB() {
         {id:'c-returns',name:'Returns & Gains',icon:'📈',archived:false,subcats:[
           {id:'sc-investreturns',name:'Investment Returns',icon:'📈',archived:false},
           {id:'sc-forexgain',name:'Forex Gain',icon:'📊',archived:false,autoOnly:true},
+          {id:'sc-debtforgiven',name:'Forgiven Debt',icon:'🕊',archived:false,autoOnly:true},
           {id:'sc-dividends',name:'Dividends',icon:'💵',archived:false},
         ]},
         {id:'c-otherincome',name:'Other Income',icon:'💰',archived:false,subcats:[
@@ -4786,6 +4798,16 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       ? `${tx.loanDirection==='lent'?'Repayment from':'Payment to'} ${parentLoan.personName}`
       : (tx.notes || 'Loan Payment');
     const cat = getCategoryDisplay(tx.categoryId);
+    // -- PERSONAL LOGIC SET #258 -- A batch settlement is an isLoanPayment, and this branch RETURNS
+    // before the batch-breakdown block further down ever runs — that block has been unreachable for
+    // batch parents all along. So from the transaction log, where you actually notice a settlement
+    // you did not mean to make, there was no way to reach openBatchSettleEdit at all; its only
+    // entry point was the Settled sheet on the Loans page. Without this the Undo added in PLS #256
+    // exists but cannot be reached from the screen that shows the mistake.
+    const batchRoute = tx.isBatchSettlement ? `
+      <div onclick="event.stopPropagation();openBatchSettleEdit('${tx.id}','${tx.batchDirection||tx.loanDirection||'lent'}')"
+           style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+           role="link" tabindex="0">Edit or undo this settlement <span style="font-size:13px;line-height:1">&rsaquo;</span></div>` : '';
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
@@ -4796,7 +4818,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
         ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
       </div>
-    </div>`;
+    </div>${batchRoute}`;
   }
 
   // ── Balance Correction (Batch B #5) — special inline render ──
@@ -4970,6 +4992,10 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementGain);
     const lossChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementLoss);
     if (linkedLoans.length > 0 || gainChild || lossChild) {
+      // -- PERSONAL LOGIC SET #258 -- openBatchSettleEdit was reachable from exactly one place:
+      // the Settled sheet on the Loans page. From the transaction log — where you actually notice
+      // a settlement you did not mean to make — there was no route to it at all, so the Undo added
+      // in PLS #256 could not be reached from the screen where the mistake becomes visible.
       const breakdownId = 'batchparenttx-' + tx.id;
       const childBadge = gainChild
         ? `<span class="pill" style="font-size:10px;padding:1px 8px;background:var(--green-bg);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
@@ -5008,6 +5034,11 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         </div>
         <div id="${breakdownId}" style="display:block;padding:0 12px;border-top:1px solid var(--border)">
           ${loanRows}${gainRow}${lossRow}
+        </div>
+      
+        <div onclick="event.stopPropagation();closeDlg();openBatchSettleEdit('${tx.id}','${direction}')"
+             style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--border);cursor:pointer;color:var(--accent);font-size:11px">
+          <span>Edit or undo this settlement</span><span style="font-size:13px;line-height:1">&rsaquo;</span>
         </div>
       </div>`;
     }
@@ -9693,7 +9724,7 @@ function confirmWriteOffReimb(person) {
       skipBalance: true, // explicit signal for getAcctBalance
       parentId: tx.id,
       writeOffReason: reason,
-      categoryId: 'sc-misc',
+      categoryId: 'sc-writeoff',   // PLS #254: a reimbursement you give up on is a write-off, not misc
       fxSnapshot: buildFxSnapshot(date, time),
       createdAt: new Date().toISOString()
     });
@@ -11310,8 +11341,46 @@ function openBatchSettleEdit(txId, direction) {
        <input class="form-input" id="bse-notes" value="${escapeAttr(tx.notes||'')}">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     ${/* -- PERSONAL LOGIC SET #256 -- Settling was one-way. Batch-settle seven loans by mistake and
+          this dialog offered Cancel (which just closes it) and Save — nothing that puts the loans
+          back. The only escape was editing every loan by hand. Undo reverses the whole batch: the
+          loans return to unsettled with their balances restored, and the settlement transaction
+          and its gain/loss child are removed. */''}
+     <button class="btn btn-danger btn-sm" onclick="undoBatchSettlement('${txId}','${direction||tx.batchDirection||'lent'}')">Undo Settlement</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleEdit('${txId}','${direction||tx.batchDirection||'lent'}')">Save</button>`
   );
+}
+
+// PLS #256: reverse a batch settlement. Restores each loan from the stored batchBreakdown, which
+// holds the per-loan split in that loan's OWN currency (PLS #130), so a cross-currency batch comes
+// back exactly as it went in rather than being re-derived from today's rate.
+function undoBatchSettlement(txId, direction) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) { closeDlg(); return; }
+  const ids = tx.batchLoanIds || (tx.parentId ? [tx.parentId] : []);
+  const bd = Array.isArray(tx.batchBreakdown) ? tx.batchBreakdown : [];
+  const list = db.loans[direction] || [];
+  ids.forEach(id => {
+    const loan = list.find(l => l.id === id);
+    if (!loan) return;
+    const part = bd.find(b => b.loanId === id);
+    const back = part ? Number(part.amount) : null;
+    loan.settled = false;
+    delete loan.settledDate;
+    // Put back what this settlement took off. With no breakdown entry we restore the full amount,
+    // which is the safe direction: it shows MORE outstanding, never less.
+    loan.remaining = Number.isFinite(back)
+      ? roundMoney((Number(loan.remaining) || 0) + back, loan.currency)
+      : (loan.amount || 0);
+  });
+  const before = db.transactions.length;
+  db.transactions = db.transactions.filter(t =>
+    t.id !== txId && t.parentId !== txId && t.cascadedFrom !== txId);
+  const removed = before - db.transactions.length;
+  saveDBWithSync(); closeDlg();
+  if (currentPage === 'loans') renderLoans();
+  else if (currentPage === 'transactions') renderTransactions();
+  showToast(`Settlement undone — ${ids.length} loan${ids.length===1?'':'s'} reopened`);
 }
 
 function confirmBatchSettleEdit(txId, direction) {
@@ -11366,7 +11435,8 @@ function confirmBatchSettleEdit(txId, direction) {
       isSettlement: true,
       parentId: txId,
       batchPerson: tx.batchPerson,
-      categoryId: isGain ? 'sc-investreturns' : 'sc-misc',
+      // PLS #254: settling across currencies produces an FX gain/loss, not a miscellaneous expense.
+      categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
       fxSnapshot: snap,
       createdAt: new Date().toISOString(),
     });
@@ -11975,7 +12045,13 @@ function openLoanDetail(loanId, direction) {
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="editLoanFull('${loanId}','${direction}')">Edit Loan</button>
         <button class="btn btn-warning btn-sm" onclick="archiveLoan('${loanId}','${direction}')">Archive</button>
-        ${getLoanOverdueDays(loan)!==null?`<button class="btn btn-danger btn-sm" onclick="openWriteOffLoan('${loanId}','${direction}')">⚠️ Write off (${getLoanOverdueDays(loan)}d overdue)</button>`:''}
+        ${/* -- PERSONAL LOGIC SET #255 -- Write-off used to appear only when a loan had a due date
+             AND was 90+ days past it. Most personal loans never get a due date, so for those the
+             button could never appear at all and the feature was unreachable — the user reported
+             it as missing entirely. Whether you have given up on collecting is YOUR call, not a
+             function of a date field you may never have filled in. The overdue count is still
+             shown when it is known, because it is useful context. */''}
+        <button class="btn btn-danger btn-sm" onclick="openWriteOffLoan('${loanId}','${direction}')">⚠️ Write off${getLoanOverdueDays(loan)!==null?` (${getLoanOverdueDays(loan)}d overdue)`:''}</button>
       </div>
     `:`
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -12292,7 +12368,9 @@ function confirmWriteOffLoan(loanId, direction) {
     isSettlement: true,
     parentId: loanId,
     writeOffReason: reason,
-    categoryId: direction === 'lent' ? 'sc-misc' : 'sc-investreturns',
+    // PLS #254: its own category. 'sc-misc' buried a real loss among odds and ends, and
+    // 'sc-investreturns' called a forgiven debt an investment return.
+    categoryId: direction === 'lent' ? 'sc-writeoff' : 'sc-debtforgiven',
     fxSnapshot: buildFxSnapshot(date, time),
     createdAt: new Date().toISOString(),
   });
@@ -13781,9 +13859,14 @@ function renderAnalyticsOverview() {
   // under a heading so 15 cards read as four themes instead of one long column.
   const _ovDoor = (html, tab, label) => {
     if (!html) return html;
-    const link = `<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
+    // -- PERSONAL LOGIC SET #253 -- This footer sat INSIDE the card padding with margin-top:10px,
+    // so every widget ended with a band of empty white above the link and the cards grew far
+    // taller than their content. The Category Breakdown footer already had the right shape: a
+    // tinted strip flush to the card edges, pulled out with negative margins and rounded to match
+    // the corner. Same treatment here, so one pattern ends every Overview card.
+    const link = `<div style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
       <span onclick="event.stopPropagation();nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)"
-        style="font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+        style="color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:500"
         role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1">→</span></span></div>`;
     const i = html.lastIndexOf('</div>');
     return i < 0 ? html : html.slice(0, i) + link + html.slice(i);
@@ -14600,7 +14683,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Savings Rate Trend${_infoBtn('savings')}</div>
     </div>
     <div style="position:relative;margin-bottom:6px">
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg">
         <path d="${_slPath}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
       ${dots}
@@ -15640,7 +15723,12 @@ function buildCashflowRunway(metricMk, dispCurr) {
         <div style="font-family:var(--mono);font-size:15px;font-weight:700">${fmt(dailyAvg, dispCurr)}<span style="font-size:10px;color:var(--text4);font-weight:400"> /day</span></div>
         <div style="font-size:10.5px;color:${vColor}">${vLabel} · day ${dayOfMonth}/${daysInMonth}</div>
       </div>`;
-      footHtml = `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin:12px -16px -16px;padding:8px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
+      // -- PERSONAL LOGIC SET #251 -- Only ONE strip may own the bottom edge of a card. This one
+      // claimed it with margin:12px -16px -16px and rounded bottom corners, but _ovDoor appends
+      // its link BELOW it, so the tinted strip ended up floating in the middle of the card with
+      // plain white underneath — the shade sitting in the wrong place. This row is now an
+      // ordinary bordered row inside the padding; the door link is the flush footer (PLS #253).
+      footHtml = `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
       <span style="color:${vColor}">${ratio > 1.10 ? '⚠ ' : ''}Projected ${fmt(projection, dispCurr)}</span>
       <span>excl. FX losses</span>
     </div>`;
@@ -15763,7 +15851,7 @@ function buildNetWorthTrend(metricMk, dispCurr) {
            zero-based axis; with the floor following the data that would be a false scale. */''}
       <span style="position:absolute;left:0;top:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMax, dispCurr)}</span>
       <span style="position:absolute;left:0;bottom:-3px;font-size:9px;color:var(--text4)">${_fmtK(rawMin, dispCurr)}</span>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:52px;display:block">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg">
         <path d="${areaPath}" fill="#38bdf8" opacity="0.10"/>
         <path d="${path}" stroke="#38bdf8" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
@@ -16192,8 +16280,16 @@ function renderAnalyticsSpending() {
   // 📖 USER STORY: Sa Spending pie, dapat hindi kasama yung mga settlement adjustments at
   // mga fully-reimbursed fees — para tama yung totals at hindi makaapekto sa category breakdown.
   // ── PERSONAL LOGIC SET #66 ── spending pie excludes: isSettlement (covers gain/loss + batch parents), isAutoReimb children, fees fully reimbursed (feeReimbSharedTxId + linked shared.settled), isFeeReimbursable shared (tracking-only, fee tx is the real expense)
+  // -- PERSONAL LOGIC SET #257 -- Two kinds of real loss were invisible here. A written-off loan
+  // carries isSettlement, which this filter drops, so money you gave up on never appeared in your
+  // spending. An investment sold at a loss is stored as type 'income' (PLS #225 — the proceeds ARE
+  // cash arriving), so the loss inside it was counted in the monthly total but had no category and
+  // no line. Both are now listed. No new transactions are created for either: the write-off tx
+  // already exists and is simply allowed through, and the investment loss is derived from
+  // realizedGL at render time. Nothing can double-count, because nothing new is stored.
   const txs = db.transactions.filter(t => {
-    if (t.archived || t.isSettlement || t.isAutoReimb) return false;
+    if (t.archived || t.isAutoReimb) return false;
+    if (t.isSettlement && !t.isLoanSettlementLoss) return false;   // write-offs are real spending
     if (t.isFeeReimbursable) return false; // tracking-only, fee tx counted instead
     if (t.currency !== view) return false;
     if (!mks.some(mk => t.date?.startsWith(mk))) return false;
@@ -16202,9 +16298,21 @@ function renderAnalyticsSpending() {
     return true;
   });
 
+  // PLS #257: an investment sold at a loss is a type:'income' tx, so it never reaches the loop
+  // below. Feed it in as a derived entry carrying only the realized loss — never the proceeds.
+  const _lossTxs = db.transactions.filter(t =>
+    !t.archived && t.isInvestmentReturn && t.currency === view &&
+    mks.some(mk => t.date?.startsWith(mk)) && Number(t.realizedGL) < 0
+  ).map(t => Object.assign({}, t, {
+    type: 'expense',
+    amount: Math.abs(Number(t.realizedGL)),
+    categoryId: 'sc-investloss',
+    _derivedLoss: true
+  }));
+
   // Group by parent category with subcategory drill-down + track transactions
   const catTotals = {};
-  for (const tx of txs) {
+  for (const tx of txs.concat(_lossTxs)) {
     const cat = getCategoryDisplay(tx.categoryId);
     const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
     const parentName = _stripIcon(cat.name);
@@ -23622,6 +23730,31 @@ function detectRecurring() {
 function ensureDBIntegrity() {
   try {
     const issues = [];
+
+  // -- PERSONAL LOGIC SET #254 -- Write-offs and forgiven debts had no home. A loan you give up on
+  // was filed under Miscellaneous and deliberately kept OUT of expense totals, so real money you
+  // lost never appeared in your spending anywhere. A debt someone forgives is the mirror: a real
+  // gain with nowhere to land. Two auto-only categories, kept apart on purpose — losing 10,000 you
+  // lent and being forgiven 10,000 you owed are opposite events and must never share a line.
+  // Added here as well as in defaultDB so existing databases get them on next load.
+  (function(){
+    const need = [
+      ['expense','sc-writeoff',   'Write-off',      '\u2717', 'c-financial'],
+      ['expense','sc-investloss','Investment Loss','\ud83d\udcc9', 'c-financial'],
+      ['income', 'sc-debtforgiven','Forgiven Debt','\ud83d\udd4a', 'c-returns'],
+    ];
+    need.forEach(([kind, id, name, icon, parent]) => {
+      const list = (db.categories && db.categories[kind]) || [];
+      const exists = list.some(c => c.id === id || (c.subcats||[]).some(sc => sc.id === id));
+      if (exists) return;
+      const host = list.find(c => c.id === parent) || list[list.length-1];
+      if (!host) return;
+      host.subcats = host.subcats || [];
+      host.subcats.push({ id, name, icon, archived:false, autoOnly:true });
+      issues.push('added ' + name + ' category');
+    });
+  })();
+
 
     // Required top-level collections (lazy init)
     const collections = [
