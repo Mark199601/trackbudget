@@ -727,11 +727,18 @@ option{background:var(--bg3);color:var(--text)}
 .sr-right{color:var(--text4);font-size:12px;display:flex;align-items:center;gap:6px}
 
 /* ── LOAN CARDS ── */
-.loan-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px;margin-bottom:8px;cursor:pointer;transition:border-color var(--transition),transform var(--transition),box-shadow var(--transition)}
-.loan-card:active{transform:scale(0.985)}
-.loan-card:hover{border-color:var(--border2)}
-.loan-progress{height:3px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-top:10px}
-.loan-progress-fill{height:100%;border-radius:var(--r-sm)}
+/* DEAD — KEPT ON PURPOSE. PLS #267 moved the Loans person card onto .reimb-person-card and
+   .tx-item so Loans and Reimbursements share one set of classes instead of two hand-matched
+   copies. Nothing renders .loan-card, .loan-progress or .loan-progress-fill any more — grep
+   returns only these definitions. Kept because this is a complete, working card style (15px
+   padding, press-scale, hover border) that a future loans-adjacent surface could adopt without
+   rebuilding it. If you reuse one, delete its DEAD marker so the next reader is not misled. If
+   nothing has claimed them after a year, delete rather than leave them to rot. */
+.loan-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px;margin-bottom:8px;cursor:pointer;transition:border-color var(--transition),transform var(--transition),box-shadow var(--transition)}  /* DEAD (PLS #267) */
+.loan-card:active{transform:scale(0.985)}  /* DEAD (PLS #267) */
+.loan-card:hover{border-color:var(--border2)}  /* DEAD (PLS #267) */
+.loan-progress{height:3px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-top:10px}  /* DEAD (PLS #267) */
+.loan-progress-fill{height:100%;border-radius:var(--r-sm)}  /* DEAD (PLS #267) */
 
 /* ── TARGET CARDS ── */
 .target-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:8px;cursor:pointer}
@@ -11231,8 +11238,14 @@ function renderLoanList(direction) {
 
     const totalPayments = personLoans.reduce((s,l)=>s+getLoanPayments(l.id).length, 0);
 
-    html += `<div class="loan-card ${urgent?'border-warning':''}" style="${urgent?'border-color:var(--amber)':''};margin-bottom:10px">
-      <div onclick="toggleLoanPersonGroup('${direction}','${person.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer">
+        // -- PERSONAL LOGIC SET #267 -- Loans and Reimbursements are the same idea twice: a person, the
+    // things they owe you, one action at the end. They were drawn in two different hands -- Loans
+    // on .loan-card with 15px padding and hand-set 12px rows, Reimbursements on
+    // .reimb-person-card with .tx-item rows. The Reimbursements one is the better card, so Loans
+    // now uses THE SAME classes rather than a copy of its measurements: change .tx-item once and
+    // both screens move together, which is the whole point of having the class.
+    html += `<div class="reimb-person-card ${urgent?'border-warning':''}" style="${urgent?'border-color:var(--amber)':''}">
+      <div class="reimb-person-hdr" onclick="toggleLoanPersonGroup('${direction}','${person.replace(/'/g,"\\'")}')">
         <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
           <div class="pool-avatar">${person.slice(0,2).toUpperCase()}</div>
           <div style="min-width:0;flex:1">
@@ -11242,32 +11255,48 @@ function renderLoanList(direction) {
             ${expectedHtml?`<div style="font-size:10px;color:var(--accent);margin-top:2px">expecting ${expectedHtml}</div>`:''}
           </div>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'};font-size:13px">${totalsHtml}</div>
+        <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
+          <div>
+          <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'};font-size:14px">${totalsHtml}</div>
           ${Object.keys(byCurr).length>1||(Object.keys(byCurr)[0]&&Object.keys(byCurr)[0]!==(_homeBase()))?`<div style="font-size:10px;color:var(--text4);font-family:var(--mono)">≈ ${fmt(Math.round(totalPersonPhp), _homeBase())}</div>`:''}
-          <div style="font-size:11px;color:var(--text4);margin-top:4px">${_loanPersonExpanded[direction+':'+person]?'▼':'▶'}</div>
+          </div>
+          <span style="color:var(--text4);font-size:11px">${_loanPersonExpanded[direction+':'+person]?'▼':'▶'}</span>
         </div>
       </div>
       ${_loanPersonExpanded[direction+':'+person] ? `
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="border-top:1px solid var(--border)">
         ${personLoans.map(loan => {
           const pl = getLoanPayments(loan.id);
           // ── PERSONAL LOGIC SET #54 ── Expanded loan view:
           // 1. Loan header row — date + remaining (amber/red), tap to open Loan Detail dialog
           // 2. Payment rows — one per recorded payment, showing date + paid amount (green), tap to edit/delete
           // Payments are listed BELOW the loan they belong to, mirroring a real ledger.
-          let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;cursor:pointer;${pl.length>0?'':'border-bottom:1px solid var(--border)'}" onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;color:var(--text2)">${fmtD(loan.date)}${loan.dueDate?` · Due ${fmtD(loan.dueDate)}`:''}</div>
-              ${loan.notes?`<div style="font-size:11px;color:var(--text4);margin-top:2px">${_esc(loan.notes)}</div>`:''}
+          // -- PERSONAL LOGIC SET #267 -- Reimbursement rows lead with WHAT it was and put the date
+          // underneath; loans led with the date and pushed the note below it in the faintest grey
+          // in the card, so a list of eleven loans read as eleven identical "May 3" lines. The
+          // note is the only thing that tells them apart, so it takes the .tx-name slot and the
+          // dates drop to .tx-detail. Falls back to the amount lent when there is no note, which
+          // is still more identifying than a date every row shares.
+          const _loanLabel = (loan.notes||'').trim() || `${direction==='lent'?'Lent':'Borrowed'} ${fmt(loan.amount, loan.currency)}`;
+          let html = `<div class="tx-item" onclick="event.stopPropagation();openLoanDetail('${loan.id}','${direction}')">
+            <div class="tx-icon tx-icon-shared">${direction==='lent'?'💸':'💰'}</div>
+            <div class="tx-meta">
+              <div class="tx-name">${_esc(_loanLabel)}</div>
+              <div class="tx-detail">${fmtD(loan.date)}${loan.dueDate?` · Due ${fmtD(loan.dueDate)}`:''}${pl.length>0?` · ${pl.length} payment${pl.length>1?'s':''}`:''}</div>
             </div>
-            <div style="font-family:var(--mono);font-size:12px;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
+            <div class="tx-right">
+              <div style="font-size:13px;font-family:var(--mono);color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
+              <div class="tx-date-small">${direction==='lent'?'owes':'I owe'}</div>
+            </div>
           </div>`;
           // Individual payment rows
           if (pl.length > 0) {
             html += pl.sort((a,b) => (b.date||'').localeCompare(a.date||'')).map((p, idx) => {
               const isLast = idx === pl.length - 1;
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 6px 16px;cursor:pointer;${isLast?'border-bottom:1px solid var(--border)':''}" onclick="event.stopPropagation();editLoanPayment('${p.id}','${loan.id}','${direction}')">
+              // -- PERSONAL LOGIC SET #267 -- Payments hang off the loan above them, so their indent
+              // is measured from the .tx-item gutter (20px pad + 36px icon + 12px gap = 68px)
+              // rather than a hand-picked 16px that no longer lines up with anything.
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 20px 6px 68px;cursor:pointer;${isLast?'border-bottom:1px solid var(--border)':''}" onclick="event.stopPropagation();editLoanPayment('${p.id}','${loan.id}','${direction}')">
                 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px">
                   <span style="color:var(--text4);font-size:11px">↳</span>
                   <div>
@@ -11281,8 +11310,8 @@ function renderLoanList(direction) {
           }
           return html;
         }).join('')}
-        <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:11px" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">💰 ${personLoans.length>1?'Batch Settle':'Settle'}</button>
+        <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
+          <button class="btn btn-success btn-sm" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">${direction==='lent'?'Receive Payment':'Make Payment'}</button>
         </div>
       </div>` : ''}
     </div>`;
@@ -11646,8 +11675,26 @@ function openBatchSettleLoans(direction, person) {
      </div>
      <div class="form-group"><label class="form-label" for="bsl-notes">Notes (optional)</label>
        <input class="form-input" id="bsl-notes" placeholder="e.g. paid in full">
+     </div>
+     ${/* -- PERSONAL LOGIC SET #266 -- Write-off lived ONLY on the individual loan sheet, so with 11
+          loans under one person you had to open each one to give up on it -- and the reimbursement
+          twin of this very dialog has had Cancel/Write off/Settle all along. The gap read as a
+          missing feature. One control covers both cases: whatever the amount does not cover is
+          what gets written off, so clearing the field writes off everything, and a partial amount
+          settles what it reaches and drops the rest. The reason picker only appears when there IS
+          a shortfall -- an exact settlement has nothing to give a reason for. */''}
+     <div class="form-group" id="bsl-wo-wrap" style="display:none">
+       <label class="form-label" for="bsl-wo-reason">Write-off reason</label>
+       <select class="form-input" id="bsl-wo-reason">
+         <option value="Uncollectible">Uncollectible</option>
+         <option value="Forgiven">Forgiven</option>
+         <option value="Disputed">Disputed</option>
+         <option value="Person unreachable">Person unreachable</option>
+         <option value="Other">Other</option>
+       </select>
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-danger btn-sm" id="bsl-wo-btn" style="display:none" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">Write off</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
   // Auto-fill with grand total in settlement currency
@@ -11682,6 +11729,29 @@ function computeBatchSettleTotal(loans, targetCurr, settlementDate, settlementTi
   return total;
 }
 
+// -- PERSONAL LOGIC SET #266 -- One FIFO walk, used by the live label and by the write-off itself,
+// so the number on the button and the number that gets written are the same number. Anything the
+// payment does not fully cover is uncovered -- including the loan it only partly reaches, whose
+// leftover is what remains after the partial payment has been applied to it.
+function _batchUncoveredLoans(loans, targetCurr, date, time, received) {
+  const snap = buildFxSnapshot(date, time);
+  const conv = (amt, from, to) => from === to ? amt : fromPhp(toPhp(amt, from, snap), to, snap);
+  let left = Math.max(0, received);
+  const out = [];
+  for (const l of loans) {
+    const lc = l.currency || _homeBase();
+    const remain = l.remaining || l.amount;
+    const inTarget = conv(remain, lc, targetCurr);
+    if (left >= inTarget - 0.01) { left -= inTarget; continue; }   // fully paid by the payment
+    const paidInTarget = left;
+    left = 0;
+    const stillOwedInLoanCurr = remain - conv(paidInTarget, targetCurr, lc);
+    out.push({loan: l, remainInLoanCurr: Math.max(0, stillOwedInLoanCurr),
+              remainInTarget: inTarget - paidInTarget});
+  }
+  return out;
+}
+
 function updateBatchSettlePreview(direction, person) {
   const loans = db.loans[direction]
     .filter(l => !l.settled && (l.personName||'').trim() === person)
@@ -11695,6 +11765,28 @@ function updateBatchSettlePreview(direction, person) {
   // Format display below input (comma separators)
   const fmtEl = document.getElementById('bsl-amount-fmt');
   if (fmtEl) fmtEl.textContent = received > 0 ? fmt(received, targetCurr) : '';
+
+  // -- PERSONAL LOGIC SET #266 -- The write-off button carries its own amount, because "Write off"
+  // alone does not say whether it means all eleven loans or only the four the payment missed. The
+  // shortfall IS the write-off, so the same number drives the label and the action. Hidden at zero
+  // shortfall rather than disabled: there is nothing to write off, so the control has no meaning.
+  const _shortfall = grandTotal - Math.max(0, received);
+  const _woBtn = document.getElementById('bsl-wo-btn');
+  const _woWrap = document.getElementById('bsl-wo-wrap');
+  if (_woBtn) {
+    if (_shortfall > 0.01) {
+      const _left = _batchUncoveredLoans(loans, targetCurr, date, time, received).length;
+      _woBtn.style.display = '';
+      _woBtn.textContent = received > 0
+        ? `Write off ${fmt(_shortfall, targetCurr)}`
+        : `Write off all ${loans.length} \u00b7 ${fmt(grandTotal, targetCurr)}`;
+      _woBtn.title = `${_left} ${_left===1?'loan':'loans'} will be closed as written off`;
+      if (_woWrap) _woWrap.style.display = '';
+    } else {
+      _woBtn.style.display = 'none';
+      if (_woWrap) _woWrap.style.display = 'none';
+    }
+  }
   if (!preview) return;
 
   if (received <= 0) {
@@ -11745,6 +11837,101 @@ function updateBatchSettlePreview(direction, person) {
     if (untouched > 0) msg += `<div style="color:var(--text4);margin-top:2px">${untouched} ${untouched>1?'loans':'loan'} untouched</div>`;
     preview.innerHTML = msg;
   }
+}
+
+// -- PERSONAL LOGIC SET #266 -- Person-level write-off. Two shapes, one control: with no amount
+// it writes off every open loan; with a partial amount it settles what the money reaches (by
+// handing that half to confirmBatchSettleLoans, which already does FIFO, FX and the parent tx)
+// and writes off only what is left. ONE ledger entry, not one per loan, matching the batch
+// settlement sitting next to it -- batchLoanIds and batchBreakdown carry the per-loan detail, and
+// parentId keeps the PLS #260 reroute working: opening the write-off lands you on a real loan.
+// isLoanSettlementLoss means getAcctBalance skips it (PLS #116/#12) -- no cash moved here; the
+// money was already gone when you lent it.
+function confirmBatchWriteOffLoans(direction, person) {
+  const loans = db.loans[direction]
+    .filter(l => !l.settled && (l.personName||'').trim() === person)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if (loans.length === 0) { showToast('No active loans'); return; }
+
+  // Read every field BEFORE settling -- confirmBatchSettleLoans closes the dialog behind us.
+  const date = document.getElementById('bsl-date')?.value || today();
+  const time = document.getElementById('bsl-time')?.value || nowTime();
+  const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0].currency || _homeBase());
+  const received = roundMoney(parseFloat(document.getElementById('bsl-amount')?.value) || 0, targetCurr);
+  const reason = document.getElementById('bsl-wo-reason')?.value || 'Uncollectible';
+  const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
+  const acctId = document.getElementById('bsl-acct')?.value;
+
+  if (_batchUncoveredLoans(loans, targetCurr, date, time, received).length === 0) {
+    showToast('Nothing left to write off'); return;
+  }
+
+  // Settle the covered part first. Guard the account HERE so a failed settle cannot leave us
+  // writing off loans the payment was supposed to have paid.
+  if (received > 0) {
+    if (!db.accounts.find(a=>a.id===acctId)) { showToast('Pick an account'); return; }
+    confirmBatchSettleLoans(direction, person);
+  }
+
+  // Re-read after the settle: those loans are closed now and must not be written off as well.
+  const stillOpen = db.loans[direction]
+    .filter(l => !l.settled && (l.personName||'').trim() === person)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if (stillOpen.length === 0) { showToast('Nothing left to write off'); return; }
+
+  const snap = buildFxSnapshot(date, time);
+  const conv = (amt, from, to) => from === to ? amt : fromPhp(toPhp(amt, from, snap), to, snap);
+
+  let totalInTarget = 0;
+  const breakdown = [];
+  for (const l of stillOpen) {
+    const lc = l.currency || _homeBase();
+    const remain = l.remaining || l.amount;
+    totalInTarget += conv(remain, lc, targetCurr);
+    breakdown.push({loanId: l.id, amount: remain, currency: lc});
+  }
+  totalInTarget = roundMoney(totalInTarget, targetCurr);   // PLS #122
+
+  const primary = stillOpen[0];
+  const label = notes ? (reason + ' \u00b7 ' + notes) : reason;
+  db.transactions.push({
+    id: 'tx-'+genId(),
+    type: direction === 'lent' ? 'expense' : 'income',
+    amount: totalInTarget,
+    currency: targetCurr,
+    accountId: primary.accountId,
+    date, time,
+    notes: 'Loan Settlement Loss from ' + person + ' \u00b7 ' + stillOpen.length + ' ' +
+           (stillOpen.length>1?'loans':'loan') + ' \u00b7 ' + label,
+    isLoanSettlementLoss: true,
+    isSettlement: true,
+    isBatchWriteOff: true,
+    loanDirection: direction,
+    parentId: primary.id,
+    batchLoanIds: stillOpen.map(l=>l.id),
+    batchBreakdown: breakdown,
+    batchPerson: person,
+    batchDirection: direction,
+    writeOffReason: reason,
+    categoryId: direction === 'lent' ? 'sc-writeoff' : 'sc-debtforgiven',
+    fxSnapshot: snap,
+    createdAt: new Date().toISOString(),
+  });
+
+  for (const l of stillOpen) {
+    l.remaining = 0;
+    l.settled = true;
+    l.settledDate = date;
+    l.settledAs = 'writeoff';
+    l.writeOffReason = reason;
+  }
+
+  saveDBWithSync();
+  closeDlg();
+  closeSheet('gen');
+  renderLoans();
+  showToast('Wrote off ' + fmt(totalInTarget, targetCurr) + ' \u00b7 ' + stillOpen.length + ' ' +
+            (stillOpen.length>1?'loans':'loan'));
 }
 
 // 📖 USER STORY: Pag pinindot mo ang "Settle All" sa loans ng isang tao, lahat ng active loans
