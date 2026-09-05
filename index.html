@@ -11662,6 +11662,7 @@ function openBatchSettleLoans(direction, person) {
        <div id="bsl-amount-fmt" style="font-size:11px;color:var(--text4);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
      </div>
      <div id="bsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
+     <div id="bsl-wo-hint" style="display:none;font-size:11px;color:var(--text4);margin:-6px 0 12px 2px">Clear the amount above to write off all of it instead.</div>
      <div class="form-group"><label class="form-label" for="bsl-acct">${direction==='lent'?'Receive into':'Pay from'}</label>
        <select class="form-input" id="bsl-acct" onchange="syncCurrToAcct('bsl-acct','bsl-curr');updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${acctOpts}</select>
      </div>
@@ -11694,7 +11695,7 @@ function openBatchSettleLoans(direction, person) {
        </select>
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" id="bsl-wo-btn" style="display:none" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">Write off</button>
+     <button class="btn btn-danger btn-sm" id="bsl-wo-btn" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">Write off</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
   // Auto-fill with grand total in settlement currency
@@ -11768,24 +11769,35 @@ function updateBatchSettlePreview(direction, person) {
 
   // -- PERSONAL LOGIC SET #266 -- The write-off button carries its own amount, because "Write off"
   // alone does not say whether it means all eleven loans or only the four the payment missed. The
-  // shortfall IS the write-off, so the same number drives the label and the action. Hidden at zero
-  // shortfall rather than disabled: there is nothing to write off, so the control has no meaning.
+  // shortfall IS the write-off, so the same number drives the label and the action.
+  //
+  // It is ALWAYS VISIBLE, disabled rather than hidden when there is no shortfall. Hiding it was
+  // wrong and was reported as the feature still being missing: this dialog auto-fills the full
+  // amount owed on open, so "no shortfall" is the state you are in EVERY time you open it, and a
+  // control that is invisible in its default state cannot be discovered at all. Disabled still
+  // says the feature exists and the hint says what to do to reach it.
   const _shortfall = grandTotal - Math.max(0, received);
+  const _hasShort = _shortfall > 0.01;
   const _woBtn = document.getElementById('bsl-wo-btn');
   const _woWrap = document.getElementById('bsl-wo-wrap');
+  const _woHint = document.getElementById('bsl-wo-hint');
   if (_woBtn) {
-    if (_shortfall > 0.01) {
+    _woBtn.style.display = '';
+    _woBtn.disabled = !_hasShort;
+    _woBtn.style.opacity = _hasShort ? '' : '0.45';
+    _woBtn.style.cursor = _hasShort ? '' : 'not-allowed';
+    if (_hasShort) {
       const _left = _batchUncoveredLoans(loans, targetCurr, date, time, received).length;
-      _woBtn.style.display = '';
       _woBtn.textContent = received > 0
         ? `Write off ${fmt(_shortfall, targetCurr)}`
         : `Write off all ${loans.length} \u00b7 ${fmt(grandTotal, targetCurr)}`;
       _woBtn.title = `${_left} ${_left===1?'loan':'loans'} will be closed as written off`;
-      if (_woWrap) _woWrap.style.display = '';
     } else {
-      _woBtn.style.display = 'none';
-      if (_woWrap) _woWrap.style.display = 'none';
+      _woBtn.textContent = 'Write off';
+      _woBtn.title = 'Nothing is unpaid at this amount \u2014 lower it, or clear it to write off everything';
     }
+    if (_woWrap) _woWrap.style.display = _hasShort ? '' : 'none';
+    if (_woHint) _woHint.style.display = _hasShort ? 'none' : '';
   }
   if (!preview) return;
 
