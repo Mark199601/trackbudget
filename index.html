@@ -2861,6 +2861,10 @@ function txCategoryDisplay(tx) {
   if (!tx) return {icon:'📌',name:'Uncategorized'};
   // ── PERSONAL LOGIC SET #48 ── txCategoryDisplay dedicated labels: isBatchReimbSettlement = 💰 Reimbursement Received (accounts receivable, not income); isBatchSettlement = 💰 Loan Settlement Received; Gain/Loss flags get 📈/📉 labels. All hidden from category pickers.
   if (tx.isBatchReimbSettlement) return {icon:'💰', name:'Reimbursement Received'};
+  // PLS #268: the write-off carries isBatchSettlement so the batch machinery can see it, so it has
+  // to be named BEFORE that line -- otherwise it reads "Loan Settlement Received", the exact
+  // opposite of what happened. Nothing was received.
+  if (tx.isBatchWriteOff)        return {icon:'✖️', name:'Loan Write-off'};
   if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
   if (tx.isLoanSettlementGain)   return {icon:'📈', name:'Loan Settlement Gain'};
   if (tx.isLoanSettlementLoss)   return {icon:'📉', name:'Loan Settlement Loss'};
@@ -4816,7 +4820,15 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     // you did not mean to make, there was no way to reach openBatchSettleEdit at all; its only
     // entry point was the Settled sheet on the Loans page. Without this the Undo added in PLS #256
     // exists but cannot be reached from the screen that shows the mistake.
-    const batchRoute = tx.isBatchSettlement ? `
+    // -- PERSONAL LOGIC SET #269 -- A write-off reaches this line because PLS #268 gave it
+    // isBatchSettlement, but "Edit or undo this settlement" is the wrong offer twice over: there
+    // is no amount to edit, and it is not a settlement. Undo is the only real action, so that is
+    // the only one named.
+    const batchRoute = tx.isBatchWriteOff ? `
+      <div onclick="event.stopPropagation();undoBatchWriteOff('${tx.id}')"
+           style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+           role="link" tabindex="0">Undo this write-off <span style="font-size:13px;line-height:1">&rsaquo;</span></div>`
+      : tx.isBatchSettlement ? `
       <div onclick="event.stopPropagation();openBatchSettleEdit('${tx.id}','${tx.batchDirection||tx.loanDirection||'lent'}')"
            style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
            role="link" tabindex="0">Edit or undo this settlement <span style="font-size:13px;line-height:1">&rsaquo;</span></div>` : '';
@@ -5048,7 +5060,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
           ${loanRows}${gainRow}${lossRow}
         </div>
       
-        <div onclick="event.stopPropagation();closeDlg();openBatchSettleEdit('${tx.id}','${direction}')"
+        <div onclick="event.stopPropagation();closeDlg();${tx.isBatchWriteOff?`undoBatchWriteOff('${tx.id}')`:`openBatchSettleEdit('${tx.id}','${direction}')`}"
              style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--border);cursor:pointer;color:var(--accent);font-size:11px">
           <span>Edit or undo this settlement</span><span style="font-size:13px;line-height:1">&rsaquo;</span>
         </div>
@@ -7512,7 +7524,9 @@ function openTxDetail(txId) {
   // the two — the loan would still read settled at one figure while its transaction said another.
   // Every write-off therefore routes to the loan it came from, which is the only place the pair
   // can be changed together.
-  if (tx.writeOffReason !== undefined && tx.parentId) {
+  // PLS #268: a BATCH write-off closed many loans, so "Written off from <one loan>" would be a lie
+  // and the tap would land on one of eleven. The batch row below lists all of them instead.
+  if (tx.writeOffReason !== undefined && tx.parentId && !tx.isBatchWriteOff) {
     const _dir = (db.loans?.lent||[]).some(l=>l.id===tx.parentId) ? 'lent'
                : (db.loans?.borrowed||[]).some(l=>l.id===tx.parentId) ? 'borrowed' : null;
     if (_dir) {
@@ -7714,6 +7728,12 @@ function openTxDetail(txId) {
         <span>💡 ${labelTxt}</span>
         ${inv ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openInvDetail('${inv.id}'),50)">→ View Investment</span>` : ''}
       </div>`;
+    } else if (tx.isBatchWriteOff) {
+      // PLS #268: this tx has no parent settlement -- it IS the settlement. The old branch below
+      // told you to "manage via parent settlement" and offered a link that could never resolve,
+      // because parentId held a loan id, not a tx id. Give it the actions it actually has.
+      footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openTxReceipt('${tx.id}')">Receipt</button>
+       <button class="btn btn-warning btn-sm" onclick="undoBatchWriteOff('${tx.id}')">Undo write-off</button>`;
     } else if (tx.isLoanSettlementGain || tx.isLoanSettlementLoss) {
       const parentExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
       const labelTxt = tx.isLoanSettlementGain ? 'Auto-generated loan settlement gain.' : 'Auto-generated loan settlement loss.';
@@ -11343,6 +11363,15 @@ function toggleLoanPersonGroup(direction, person) {
 function openBatchSettleEdit(txId, direction) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
+  // -- PERSONAL LOGIC SET #269 -- This sheet edits "how much was received". A write-off received
+  // nothing, so every field here is meaningless for it and saving would write a cash figure onto
+  // an entry whose whole point is that no cash arrived. It became reachable only because PLS #268
+  // added isBatchSettlement; refuse at the function so no future caller can reopen the hole.
+  if (tx.isBatchWriteOff) {
+    showToast('A write-off has no amount received \u2014 undo it instead');
+    closeDlg(); setTimeout(() => openTxDetail(txId), 60);
+    return;
+  }
   const loans = (tx.batchLoanIds||[]).map(id =>
     db.loans[direction||tx.batchDirection||'lent'].find(l=>l.id===id)
   ).filter(Boolean);
@@ -11408,6 +11437,13 @@ function openBatchSettleEdit(txId, direction) {
 function undoBatchSettlement(txId, direction) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) { closeDlg(); return; }
+  // -- PERSONAL LOGIC SET #269 -- PLS #268 gave the write-off isBatchSettlement so the batch
+  // machinery could see it, which also opened every settlement ROUTE to it -- including this one.
+  // Undoing a write-off here reopened the loans but left settledAs:'writeoff' and writeOffReason
+  // on them, so they came back into the open list still marked as given up on: a ghost state that
+  // no screen would ever clear. Delegate instead of duplicating, so there is one undo and it is
+  // always the correct one, whichever button the user found.
+  if (tx.isBatchWriteOff) return undoBatchWriteOff(txId);
   const ids = tx.batchLoanIds || (tx.parentId ? [tx.parentId] : []);
   const bd = Array.isArray(tx.batchBreakdown) ? tx.batchBreakdown : [];
   const list = db.loans[direction] || [];
@@ -11432,6 +11468,43 @@ function undoBatchSettlement(txId, direction) {
   if (currentPage === 'loans') renderLoans();
   else if (currentPage === 'transactions') renderTransactions();
   showToast(`Settlement undone — ${ids.length} loan${ids.length===1?'':'s'} reopened`);
+}
+
+// -- PERSONAL LOGIC SET #268 -- Undo for a batch write-off, mirroring undoBatchSettlement. A
+// write-off is the one settlement you are most likely to regret: you give up on eleven loans in a
+// single press, and until now the only way back was to reopen each loan by hand. Restores each
+// loan to what the write-off took off it, using batchBreakdown; with no breakdown entry it puts
+// back the full original amount, which is the safe direction -- it shows MORE outstanding, never
+// less. settledAs and writeOffReason are cleared too, or the loan would come back reading as
+// written off while sitting in the open list.
+function undoBatchWriteOff(txId) {
+  const tx = db.transactions.find(t => t.id === txId);
+  if (!tx) { closeDlg(); return; }
+  const direction = tx.batchDirection || tx.loanDirection || 'lent';
+  const ids = tx.batchLoanIds || [];
+  const bd = Array.isArray(tx.batchBreakdown) ? tx.batchBreakdown : [];
+  const list = db.loans[direction] || [];
+  let reopened = 0;
+  ids.forEach(id => {
+    const loan = list.find(l => l.id === id);
+    if (!loan) return;
+    const part = bd.find(b => b.loanId === id);
+    const back = part ? Number(part.amount) : null;
+    loan.settled = false;
+    delete loan.settledDate;
+    delete loan.settledAs;
+    delete loan.writeOffReason;
+    loan.remaining = Number.isFinite(back)
+      ? roundMoney((Number(loan.remaining) || 0) + back, loan.currency)
+      : (loan.amount || 0);
+    reopened++;
+  });
+  db.transactions = db.transactions.filter(t =>
+    t.id !== txId && t.parentId !== txId && t.cascadedFrom !== txId);
+  saveDBWithSync(); closeDlg();
+  if (currentPage === 'loans') renderLoans();
+  else if (currentPage === 'transactions') renderTransactions();
+  showToast(`Write-off undone \u00b7 ${reopened} loan${reopened===1?'':'s'} reopened`);
 }
 
 function confirmBatchSettleEdit(txId, direction) {
@@ -11918,8 +11991,19 @@ function confirmBatchWriteOffLoans(direction, person) {
     isLoanSettlementLoss: true,
     isSettlement: true,
     isBatchWriteOff: true,
+    // -- PERSONAL LOGIC SET #268 -- A batch write-off IS a batch settlement: same person, same set
+    // of loans, one parent tx closing all of them -- it just settles at zero instead of for cash.
+    // It was written with isBatchWriteOff ALONE, a flag nothing else in the app reads, so every
+    // place that recognises a batch parent by isBatchSettlement was blind to it: the loan-detail
+    // linked-tx list, the settled-loans grouping, the delete and archive cleanup, the member
+    // lookup. Worse, isLoanSettlementLoss made the tx detail print "Manage via parent settlement"
+    // while parentId pointed at a LOAN, not a tx, so the link never resolved and the row dead-ended.
+    // Carrying isBatchSettlement makes all of them work with no new branches. Balance is
+    // unaffected: getAcctBalance skips isLoanSettlementLoss before it looks at anything batch
+    // related (PLS #12). parentId is deliberately NOT set -- this tx has no parent, it IS one, and
+    // batchLoanIds carries the loans it closed.
+    isBatchSettlement: true,
     loanDirection: direction,
-    parentId: primary.id,
     batchLoanIds: stillOpen.map(l=>l.id),
     batchBreakdown: breakdown,
     batchPerson: person,
@@ -12700,7 +12784,10 @@ function openSettledLoansSheet(direction) {
               <div style="font-size:11px;color:var(--text4)">${card.loans.length} ${aiPlural(card.loans.length,'loan')} · ${fmt(bp.amount, bp.currency)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>
+              ${bp.isBatchWriteOff
+                ? /* PLS #269: nothing to edit on a write-off -- undo is the whole vocabulary */
+                  `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();undoBatchWriteOff('${bp.id}')">Undo</button>`
+                : `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>`}
               <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
           </div>
