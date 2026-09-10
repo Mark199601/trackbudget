@@ -20404,8 +20404,24 @@ function openAiAllocate(bgtId) {
         return;
       }
 
-      const { allocations, warning, needsTotal, wantsTotal, usableBudget } = aiAllocateBudget(bgtId, results, bgt.limit);
-      window._pendingAllocations = { bgtId, allocations, results: allRows };
+      const { allocations: aiAlloc, warning, needsTotal, wantsTotal, usableBudget } = aiAllocateBudget(bgtId, results, bgt.limit);
+
+      // -- PERSONAL LOGIC SET #270 -- YOUR numbers win over the AI's. This dialog used to seed every
+      // input from a fresh aiAllocateBudget() run, so reopening it silently discarded whatever you
+      // had tuned -- a category you had set to 2,222 came back as 0 because the AI saw no recent
+      // spending there. Adjusting one line meant re-entering all of them. Once a budget HAS saved
+      // allocations, those are the starting point and the AI figure only fills categories you have
+      // never set. A budget with no allocations yet is untouched: it still opens on the AI's work,
+      // which is the whole point the first time round.
+      const saved = bgt.allocations || {};
+      const hasSaved = Object.keys(saved).length > 0;
+      const allocations = {};
+      allRows.forEach(r => {
+        allocations[r.catId] = hasSaved
+          ? (saved[r.catId] !== undefined ? saved[r.catId] : (aiAlloc[r.catId] || 0))
+          : (aiAlloc[r.catId] || 0);
+      });
+      window._pendingAllocations = { bgtId, allocations, results: allRows, aiAlloc, hasSaved };
 
       const rows = allRows.map(r => {
         const allocated = allocations[r.catId] || 0;
@@ -20443,15 +20459,94 @@ function openAiAllocate(bgtId) {
           <span>Budget: ${sym(bgt.currency)}${effLimitAlloc.toFixed(0)}</span>
           <span>Buffer: <strong style="color:${remaining<0?'var(--red)':'var(--green)'}">${remaining>=0?'+':''}${sym(bgt.currency)}${remaining.toFixed(0)}</strong></span>
         </div>`,
-        `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+        `<span id="alloc-saved" style="font-size:11px;color:var(--green);opacity:0;transition:opacity var(--transition);margin-right:auto;align-self:center"></span>
+         <button class="btn btn-ghost btn-sm" onclick="flushAllocSave('${bgtId}');closeDlg()">Close</button>
          <button class="btn btn-primary btn-sm" onclick="confirmAiAllocate('${bgtId}')">Apply</button>`
       );
 
       // Wire live update of summary as user edits inputs
       setTimeout(() => {
         const sym_ = sym(bgt.currency);
+
+        // -- PERSONAL LOGIC SET #271 -- The budget is a fixed pot, so moving one category has to
+        // take from or give to the others -- otherwise every adjustment silently pushed the total
+        // off the limit and left you to fix the arithmetic by hand across thirty-odd rows.
+        // WHO ABSORBS: only categories you have not touched in this sitting. A category you typed
+        // into is yours and is never moved again, or adjusting a second line would quietly undo
+        // the first -- the same shape of bug as the dialog resetting your work on reopen.
+        // HOW MUCH: the leftover pot is split in proportion to what each absorber already holds,
+        // so a big category takes a big share of the change and a small one a small share; the
+        // shape of your budget survives the adjustment.
+        // Guards: absorbers never go negative (they floor at zero and the buffer goes red
+        // instead), the rounding remainder lands on the largest absorber so the total is exact to
+        // the peso, and if every category is touched or all absorbers sit at zero there is nothing
+        // to move -- the buffer just tells you the truth rather than inventing a redistribution.
+        const _allocTouched = new Set();
+        const _effLim = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+
+        function _rebalance() {
+          const inputs = [...document.querySelectorAll('.alloc-input')];
+          const touched = inputs.filter(i => _allocTouched.has(i.dataset.cat));
+          const absorbers = inputs.filter(i => !_allocTouched.has(i.dataset.cat));
+          if (!absorbers.length) return;                      // nothing left to move
+          const touchedSum = touched.reduce((n,i) => n + (parseFloat(i.value)||0), 0);
+          let pool = _effLim - touchedSum;
+          if (pool < 0) pool = 0;                             // you overspent the limit on purpose
+          const base = absorbers.map(i => Math.max(0, parseFloat(i.value)||0));
+          const baseSum = base.reduce((a,b) => a+b, 0);
+          if (baseSum <= 0) return;                           // no shape to scale; leave them alone
+          const scale = pool / baseSum;
+          let running = 0, biggest = 0;
+          absorbers.forEach((i, n) => {
+            const v = Math.max(0, Math.round(base[n] * scale));
+            i.value = v; running += v;
+            if (base[n] > base[biggest]) biggest = n;
+          });
+          const drift = Math.round(pool - running);           // rounding crumbs, all on one row
+          if (drift !== 0) {
+            const b = absorbers[biggest];
+            b.value = Math.max(0, (parseFloat(b.value)||0) + drift);
+          }
+        }
+
+        function _summary() {
+          let total = 0;
+          document.querySelectorAll('.alloc-input').forEach(i => { total += parseFloat(i.value)||0; });
+          const remain = _effLim - total;
+          const summ = document.getElementById('alloc-summary');
+          if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span>`
+            + `<span>Budget: ${sym_}${_effLim.toFixed(0)}</span>`
+            + `<span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">`
+            + `${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
+        }
+
         document.querySelectorAll('.alloc-input').forEach(inp => {
+          // -- PERSONAL LOGIC SET #270 -- Autosave. Every edit is written to the budget, debounced,
+          // so nothing depends on remembering to press Apply -- closing the sheet, backing out or
+          // the app reloading all keep your work. Debounced rather than per-keystroke because
+          // typing "2222" passes through 2, 22 and 222 on the way, and each of those would be a
+          // real save. Apply stays as the explicit finish; it now confirms rather than rescues.
+          const _autosave = () => {
+            const b = db.budgets.find(x => x.id === bgtId);
+            if (!b) return;
+            const next = {};
+            document.querySelectorAll('.alloc-input').forEach(i => {
+              const v = parseFloat(i.value);
+              if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v;
+            });
+            b.allocations = next;
+            saveDBWithSync();
+            const mark = document.getElementById('alloc-saved');
+            if (mark) { mark.textContent = 'Saved'; mark.style.opacity = '1';
+              clearTimeout(window._allocFade);
+              window._allocFade = setTimeout(() => { mark.style.opacity = '0'; }, 1400); }
+          };
           inp.addEventListener('input', () => {
+            _allocTouched.add(inp.dataset.cat);
+            clearTimeout(window._allocRebalT);
+            window._allocRebalT = setTimeout(() => { _rebalance(); _summary(); }, 300);
+            clearTimeout(window._allocSaveT);
+            window._allocSaveT = setTimeout(_autosave, 700);
             const inputs = document.querySelectorAll('.alloc-input');
             let total = 0;
             inputs.forEach(i => { total += parseFloat(i.value) || 0; });
@@ -20468,6 +20563,20 @@ function openAiAllocate(bgtId) {
       showToast('AI allocation failed: ' + e.message);
     }
   }, 200);
+}
+
+// -- PERSONAL LOGIC SET #270 -- The 700ms debounce means the last thing typed may still be in
+// flight when the sheet closes. Flush it first, so "type a number, close immediately" keeps the
+// number -- the exact case autosave exists to protect.
+function flushAllocSave(bgtId) {
+  clearTimeout(window._allocSaveT);
+  const b = db.budgets.find(x => x.id === bgtId);
+  const inputs = document.querySelectorAll('.alloc-input');
+  if (!b || !inputs.length) return;
+  const next = {};
+  inputs.forEach(i => { const v = parseFloat(i.value); if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v; });
+  b.allocations = next;
+  saveDBWithSync();
 }
 
 function confirmAiAllocate(bgtId) {
