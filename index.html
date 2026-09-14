@@ -5833,9 +5833,20 @@ function renderRemittanceForm() {
     </div>
 
     <!-- Rate field -->
+    ${/* -- PERSONAL LOGIC SET #272 -- You do not know the rate. You know what you sent and what
+         landed: K3,990 out, PHP 52,699.45 in. The form only accepted a rate, so the rate had to be
+         GUESSED to seven decimals to hit a receipt figure -- 13.2078817 instead of 13.2078822,
+         which then rendered back as the right-looking 52,699.45 while being the wrong number. No
+         one can type their way to that. Either box now drives the other, so the receipt figure can
+         be entered directly and the rate is derived at full precision. */''}
     <div class="form-group" style="margin-top:6px">
       <label class="form-label" style="font-size:11px">Rate (1 <span id="rem-from-label">${defaultFromCurr}</span> = <span id="rem-to-label">${defaultToCurr}</span>) *</label>
-      <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="0.0000" step="any" oninput="updateRemittancePhpPreview()" inputmode="none">
+      <input class="form-input numpad-input" type="number" id="rem-rate" placeholder="0.0000" step="any" oninput="updateRemittancePhpPreview('rate')" inputmode="none">
+    </div>
+
+    <div class="form-group" style="margin-top:6px">
+      <label class="form-label" style="font-size:11px">Or amount received (<span id="rem-recv-label">${defaultToCurr}</span>) — type the figure on your receipt</label>
+      <input class="form-input numpad-input" type="number" id="rem-received" placeholder="0.00" step="any" oninput="updateRemittancePhpPreview('received')" inputmode="none">
     </div>
 
     <!-- Date + Time split row -->
@@ -5931,6 +5942,8 @@ function onRemittanceAcctChange() {
   const toLabel = document.getElementById('rem-to-label');
   if (fromLabel && fromCurr) fromLabel.textContent = fromCurr;
   if (toLabel && toCurr) toLabel.textContent = toCurr;
+  const recvLabel = document.getElementById('rem-recv-label');   // PLS #272
+  if (recvLabel && toCurr) recvLabel.textContent = toCurr;
   // Auto-suggest rate based on current FX rates if both selected
   if (fromCurr && toCurr) {
     const rateInp = document.getElementById('rem-rate');
@@ -5952,9 +5965,24 @@ function onRemittanceAcctChange() {
   updateRemittancePhpPreview();
 }
 
-function updateRemittancePhpPreview() {
+function updateRemittancePhpPreview(source) {
   const amt = parseFloat(document.getElementById('rem-amount')?.value) || 0;
-  const rate = parseFloat(document.getElementById('rem-rate')?.value) || 0;
+  const rateEl = document.getElementById('rem-rate');
+  const recvEl = document.getElementById('rem-received');
+  // -- PERSONAL LOGIC SET #272 -- Whichever box you typed in is the truth; the other follows. The
+  // derived rate is NOT rounded -- rounding it is exactly what produced a rate that re-rendered as
+  // the right receipt figure while being the wrong number. The received box is rounded to its
+  // currency, because that one is a real amount of money and PLS #122 governs it.
+  if (source === 'received' && recvEl) {
+    const recv = parseFloat(recvEl.value) || 0;
+    if (amt > 0 && recv > 0 && rateEl) rateEl.value = recv / amt;
+  } else if (source === 'rate' && recvEl) {
+    const r = parseFloat(rateEl?.value) || 0;
+    const toAcctEl = document.getElementById('rem-to-acct');
+    const toA = db.accounts.find(a => a.id === toAcctEl?.value);
+    if (amt > 0 && r > 0) recvEl.value = roundMoney(amt * r, toA?.currency || _homeBase());
+  }
+  const rate = parseFloat(rateEl?.value) || 0;
   const fromAcct = db.accounts.find(a=>a.id===document.getElementById('rem-from-acct')?.value);
   const toAcct = db.accounts.find(a=>a.id===document.getElementById('rem-to-acct')?.value);
   const fromCurr = fromAcct?.currency;
@@ -6031,7 +6059,16 @@ function submitRemittance() {
         // PLS #118: stamp tx time so rate applies from this moment onwards
         db.fxHistory[recordCurr].push({ date, time, rate: recordRate, source: 'remittance' });
         if (db.fxHistory[recordCurr].length > 500) db.fxHistory[recordCurr] = db.fxHistory[recordCurr].slice(-500);
-        db.fxRates[recordCurr] = recordRate;
+        // -- PERSONAL LOGIC SET #272 -- A remittance no longer overwrites db.fxRates. That line
+        // made ONE transfer set the app-wide rate, so every PGK balance on every screen was then
+        // valued at a remittance rate -- which carries the transfer service's margin and is not
+        // what a kina is worth. It also contradicted the rule this app already lives by: a past
+        // transaction keeps the rate it happened at, and nothing re-values it later. The reverse
+        // must hold too -- one past transaction must not re-value everything else. The fxHistory
+        // entry above is kept: it dates the rate, so transactions ON or AFTER that moment still
+        // resolve through it (getSnapshotInfo), which is the honest, time-bounded version of what
+        // the old line was reaching for. The current rate stays where it belongs: Settings, set
+        // by you.
       }
     }
 
