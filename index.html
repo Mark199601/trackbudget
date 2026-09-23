@@ -938,30 +938,50 @@ option{background:var(--bg3);color:var(--text)}
 @media(min-width:768px) and (max-width:1023px){.hero-amount{font-size:42px;letter-spacing:-2px}}
 .quiet-row{display:flex;justify-content:space-between;align-items:center;padding:12px 8px;cursor:pointer;color:var(--text3);font-size:13px;border-radius:var(--r-sm);transition:background var(--transition)}
 .quiet-row + .quiet-row{border-top:0.5px solid var(--border)}
-/* PLS #287: list-page pattern (Loans first). Summary TILES that double as the Lent out / Borrowed
+/* PLS #291: sizes follow the app's list scale (row title 13, detail 11, amount 13 mono, avatar 32),
+   the first pass ran 1-4px larger than every other list. PLS #287: list-page pattern (Loans first). Summary TILES that double as the Lent out / Borrowed
    switch, Active / Settled CHIPS so settled items never mix into the live list, SECTION labels,
    and GROUPED lists (one surface, inset hairlines) like iOS Settings / Mail. */
 .lp-tiles{display:flex;gap:10px}
 .lp-tile{flex:1;min-width:0;background:var(--bg2);border-radius:14px;padding:12px 14px;border:1.5px solid transparent;cursor:pointer;text-align:left;color:var(--text);font:inherit;transition:border-color var(--transition)}
 .lp-tile.on{border-color:var(--accent)}
-.lp-tile-lbl{font-size:12px;color:var(--text3);font-weight:500}
-.lp-tile-amt{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lp-tile-sub{font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-tile-lbl{font-size:11px;color:var(--text3);font-weight:500}
+.lp-tile-amt{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-tile-sub{font-size:11px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-chips{display:flex;gap:8px;margin:14px 0 2px}
-.lp-chip{font:inherit;font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--text3);border:0;cursor:pointer}
+/* PLS #309: more than two tiles become a swipe row (2 in view, the next one peeking), like Apple
+   Wallet / Stocks. On a mouse-driven screen it also gets arrow buttons and a thin scrollbar,
+   since a desktop user cannot swipe. */
+.lp-swipe{position:relative}
+.lp-swipe .lp-tiles{overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.lp-swipe .lp-tiles::-webkit-scrollbar{display:none}
+.lp-swipe .lp-tile{flex:0 0 calc(46% - 5px);scroll-snap-align:start}
+.lp-swipe-btn{display:none;position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:1px solid var(--border2);background:var(--bg4);color:var(--text);font-size:16px;line-height:1;cursor:pointer;z-index:2;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.lp-swipe-btn.prev{left:-10px}.lp-swipe-btn.next{right:-10px}
+.lp-swipe-btn[disabled]{opacity:0;pointer-events:none}
+@media (hover:hover) and (pointer:fine){
+  .lp-swipe{padding:0 20px}                 /* arrows sit in this gutter, never over a figure */
+  .lp-swipe-btn.prev{left:-6px}.lp-swipe-btn.next{right:-6px}
+  .lp-swipe-btn{display:flex}
+  .lp-swipe .lp-tiles{scrollbar-width:thin;padding-bottom:8px}
+  .lp-swipe .lp-tiles::-webkit-scrollbar{display:block;height:6px}
+  .lp-swipe .lp-tiles::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+}
+@media (min-width:700px){ .lp-swipe .lp-tile{flex-basis:calc(33.333% - 7px)} } /* 3 in view only when there is room */
+.lp-chip{font:inherit;font-size:12px;font-weight:500;padding:5px 11px;border-radius:999px;background:var(--bg3);color:var(--text3);border:0;cursor:pointer}
 .lp-chip.on{background:var(--text);color:var(--bg)}
-.lp-sec{font-size:12px;color:var(--text3);font-weight:500;margin:20px 4px 8px}
+.lp-sec{font-size:11.5px;color:var(--text3);font-weight:500;margin:20px 4px 8px}
 .lp-grp{background:var(--bg2);border-radius:14px;overflow:hidden}
 .lp-grp > .reimb-person-card{border:0!important;border-radius:0!important;margin:0!important;background:transparent!important}
-.lp-grp > * + *{box-shadow:inset 58px 0 0 var(--bg2),inset 0 1px 0 var(--border)}
+.lp-grp > * + *{box-shadow:inset 60px 0 0 var(--bg2),inset 0 1px 0 var(--border)}
 .lp-row{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
-.lp-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0}
-.lp-meta{font-size:11.5px;color:var(--text3);margin-top:2px}
-.lp-amt{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
-.lp-amt2{font-family:var(--mono);font-size:10.5px;color:var(--text4);margin-top:2px;white-space:nowrap}
+.lp-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0}
+.lp-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.lp-amt{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
+.lp-amt2{font-family:var(--mono);font-size:10px;color:var(--text4);margin-top:2px;white-space:nowrap}
 .lp-chev{color:var(--text4);font-size:18px;line-height:1;transition:transform var(--transition);flex-shrink:0}
 .lp-chev.open{transform:rotate(90deg)}
-.lp-pill{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
+.lp-pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
 .lp-pill.due{background:rgba(217,119,6,.16);color:#f59e0b}
 .lp-pill.over{background:rgba(220,38,38,.15);color:#f87171}
 .lp-pill.wo{background:rgba(220,38,38,.15);color:#f87171}
@@ -1630,7 +1650,7 @@ function roundMoney(amt, code) {
   const f = Math.pow(10, d);
   return Math.round(amt * f) / f;
 }
-// -- PERSONAL LOGIC SET #283 -- fmt() prints the ABSOLUTE value unless sign=true. 19 call sites wrote
+// -- PERSONAL LOGIC SET #283 (+#298: 5 more sites written `v>0?'+':''`, same bug) -- fmt() prints the ABSOLUTE value unless sign=true. 19 call sites wrote
 // `${v>=0?'+':''}${fmt(v)}`, which labels gains "+" and prints losses with NO sign at all, so a
 // PHP 14,925 loss read as "PHP 14,925.27" and was told apart from a gain by colour alone (invisible
 // to colour-blind users and in screenshots). They now call fmt(v, code, true). Use that for any
@@ -2481,16 +2501,16 @@ function getAcctBalance(acctId) {
     // ── PERSONAL LOGIC SET #13 ── isLoanTx balance direction
     // loanDirection drives balance, not tx.type. Lent = money left pocket (bal -=). Borrowed = money received (bal +=).
     if (tx.isLoanTx) {
-      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= loanAmtInAcctCurr;
       else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += loanAmtInAcctCurr;
     }
     else if (tx.type === 'expense' && tx.accountId === acctId) {
-      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const amt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       bal -= amt;
     }
     else if (tx.type === 'income' && tx.accountId === acctId) {
-      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const amt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       bal += amt;
     }
     // 📖 USER STORY: Pag nag-log ka ng shared expense (e.g. dinner ng tatlo, ₱1,000) at ikaw ang
@@ -2502,13 +2522,13 @@ function getAcctBalance(acctId) {
     // already deducted the cash. Don't double-deduct here.
     else if (tx.type === 'shared' && tx.accountId === acctId && !tx.isFeeReimbursable) {
       const billAmt = tx.totalBill || tx.amount;
-      const billInAcctCurr = tx.currency === acct.currency ? billAmt : convert(billAmt, tx.currency, acct.currency);
+      const billInAcctCurr = tx.currency === acct.currency ? billAmt : _txConv(billAmt, tx, acct.currency);
       bal -= billInAcctCurr;
     }
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) {
         // Deduct in account's currency
-        const deductAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        const deductAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
         bal -= deductAmt;
       }
       if (tx.toAccountId === acctId) {
@@ -2516,14 +2536,14 @@ function getAcctBalance(acctId) {
         if (tx.toAmount != null) {
           bal += tx.toAmount;
         } else {
-          const addAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+          const addAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
           bal += addAmt;
         }
       }
     }
     else if (tx.type === 'remittance') {
       if (tx.fromAccountId === acctId) {
-        const fromAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        const fromAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
         bal -= fromAmt;
       }
       if (tx.toAccountId === acctId) {
@@ -2536,7 +2556,7 @@ function getAcctBalance(acctId) {
     else if (tx.type === 'external-out' && tx.accountId === acctId) bal -= tx.amount;
     // Balance Correction (Batch B #5) — direct adjustment to bring app balance in line with reality
     else if (tx.type === 'correction' && tx.accountId === acctId) {
-      const corrAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const corrAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       if (tx.direction === 'up') bal += corrAmt;
       else if (tx.direction === 'down') bal -= corrAmt;
     }
@@ -2929,7 +2949,8 @@ function txCategoryDisplay(tx) {
   if (tx.isReimbSettlementLoss)  return {icon:'📉', name:'Reimbursement Loss'};
   if (tx.isInvestmentFund)       return {icon:'💼', name:'Investment Fund'};
   if (tx.isDividend)             return {icon:'💵', name:'Dividend'};
-  if (tx.isInvestmentReturn)     return {icon:'📈', name:'Investment Return'};
+  // PLS #299: a sale below cost points down. The up-chart on a loss read as a gain at a glance.
+  if (tx.isInvestmentReturn)     return {icon: Number(tx.realizedGL) < 0 ? '\u{1F4C9}' : '📈', name:'Investment Return'};
   return getCategoryDisplay(tx.categoryId);
 }
 
@@ -3220,6 +3241,10 @@ function renderPageHeader(page) {
     pageHTML = _more('investments') + _plus('openAddInv()', 'Add investment'); // PLS #287
   } else if (page==='reimbursements') {
     pageHTML = _more('reimbursements') + _plus("openAddSheet({type:'shared'})", 'Add shared expense'); // PLS #289
+  } else if (page==='planning') {
+    // PLS #306: "+" adds to whichever Planning tab is open
+    pageHTML = ((db.contracts||[]).some(c => c.id === db.activeContractId) ? _more('planning') : '')
+      + _plus("(_planTab==='wishlist'?openAddWishlist():_planTab==='contract'?openContractWizard():openAddBudget())", 'Add');
   } else if (page==='installments') {
     // -- PERSONAL LOGIC SET #236 -- Installments was the ONE list page with no header action, so
     // it carried a full-width gradient button at the bottom of the list instead. That pushed the
@@ -3232,13 +3257,32 @@ function renderPageHeader(page) {
   updateSyncIndicator();
 }
 
+// PLS #309: wrap a row of tiles; 3 or more become a swipe row with desktop arrows.
+function _tilesRow(tilesHTML, count) {
+  if (count <= 2) return `<div class="lp-tiles">${tilesHTML}</div>`;
+  const id = 'lps-' + Math.random().toString(36).slice(2, 8);
+  return `<div class="lp-swipe"><button class="lp-swipe-btn prev" aria-label="Previous" disabled onclick="_tilesScroll('${id}',-1)">‹</button>
+    <div class="lp-tiles" id="${id}" onscroll="_tilesArrows('${id}')">${tilesHTML}</div>
+    <button class="lp-swipe-btn next" aria-label="Next" onclick="_tilesScroll('${id}',1)">›</button></div>`;
+}
+function _tilesScroll(id, dir) { const el = document.getElementById(id); if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' }); }
+function _tilesArrows(id) {
+  const el = document.getElementById(id); if (!el) return;
+  const w = el.parentElement; const p = w.querySelector('.prev'), n = w.querySelector('.next');
+  if (p) p.disabled = el.scrollLeft <= 2;
+  if (n) n.disabled = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+}
 // PLS #287: the "..." page menu. Only things that already exist on that page, rarely used ones.
 function openPageMenu(ev, page) {
   ev && ev.stopPropagation();
   closePageMenu();
   const items = [];
   if (page === 'loans') items.push(['Archive', (db.archivedLoans||[]).length, 'openLoanArchiveSheet()']);
-  if (page === 'accounts') items.push(['Archived accounts', db.accounts.filter(a=>a.archived).length, 'openArchivedAccountsSheet()']);
+  if (page === 'accounts') {
+    items.push([db.settings.acctView === 'grid' ? 'View as list' : 'View as grid', '', 'toggleAcctView()']); // PLS #302
+    items.push(['Archived accounts', db.accounts.filter(a=>a.archived).length, 'openArchivedAccountsSheet()']);
+  }
+  if (page === 'planning' && db.activeContractId) items.push(['Edit contract', '', `setPlanTab('contract');openEditContract('${db.activeContractId}')`]); // PLS #308
   if (page === 'reimbursements') items.push(['Archive', (db.archivedTransactions||[]).filter(t => t.type === 'shared').length, 'openTxArchiveSheet()']);
   if (page === 'installments') items.push(['Archive', (db.installments||[]).filter(i=>i.archived).length, 'openInstArchiveSheet()']);
   if (page === 'investments') items.push(['Archive', (db.investments||[]).filter(i=>i.archived).length, 'openInvArchiveSheet()']);
@@ -3340,7 +3384,7 @@ function showAnalyticsTabInfo() {
 
 // ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap (i) icon shows plain-English definition
 const _WIDGET_INFO = {
-  'velocity': {title:'Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.'},
+  'velocity': {title:'Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.<br><br>Counts your <b>usual spending</b>. One-time losses are left out (loan write-offs, settlement losses, investments sold below cost). FX losses and fees are included.'}, // PLS #293
   'runway': {title:'Cash Runway', body:'How many <b>months your liquid cash can last</b> at your <b>6-month average</b> spending rate. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
   'anomaly': {title:'Unusual Transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
   'forecast': {title:'Month-End Forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
@@ -3911,7 +3955,7 @@ function checkAlerts() {
 
   // Recurring transactions
   const todayStr = today();
-  for (const r of db.recurringTxs) {
+  for (const r of _recurringList()) { // PLS #305
     if (r.active && r.nextDate && r.nextDate <= todayStr) {
       const exists = db.transactions.find(t=>t.recurringId===r.id && t.date===todayStr);
       if (!exists) _alertCache.push({type:'recurring', id:r.id, msg:`Recurring: ${_esc(r.name)} due today`});
@@ -4514,11 +4558,20 @@ const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records 
 
 // ── APP VERSION ──
 const APP_VERSION = '1.1.9';
-const APP_VERSION_DATE = 'June 2026';
+const APP_VERSION_DATE = 'September 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.1.9', date: 'September 2026', changes: [
+    '🗂️ Loans, Installments, Reimbursements, Investments and Accounts have a new layout: summary tiles on top, and Active and Settled kept apart so finished items never mix into your live list',
+    '➕ Every page puts its actions top right. Tap + to add, and ⋯ for rarely used things like Archive. Accounts can switch between list and grid there too',
+    '🎯 Budgets now show what is left in each category first, with the settings underneath. With three or more budgets you can swipe through them',
+    '💱 Forex gains and losses are measured at each transfer\'s own rate, and a currency swap now asks for the amount you actually received',
+    '➖ Losses always show a minus sign, and figures show exact centavos instead of rounded pesos',
+    '📈 Savings pace counts from your contract start, and spending averages leave out one-time losses like write-offs',
+    '🧹 Payday and Recurring were removed from Planning',
+  ]},
   { ver: '1.1.9', date: 'June 2026', changes: [
     '💱 Cross-currency loans reworked — you enter the "Loaned Amount" (what leaves your account) and the "Expected Receivable" (what they\'ll pay back, e.g. K200), and the agreed rate is worked out for you',
     '📉 The amount you\'re owed now counts down in the payback currency as partial payments come in — no more static reminder',
@@ -5035,13 +5088,17 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // loss still read as a plain "+70,000" row in the ledger. Show the gain or loss on the row
   // itself, tinted, so the log agrees with what the Calendar and monthly totals actually count.
   // Display only -- no extra transaction, so nothing can double-count (see PLS #221).
+  // -- PERSONAL LOGIC SET #295 -- the realized gain/loss of a sale sat at the END of the one-line
+  // detail (pill · note · loss), so any note pushed it past the ellipsis and it was never seen:
+  // "Sale of Binance" read as a neutral PHP-less transfer with no sign of the 243.36 USDT loss.
+  // It now sits under the amount on the right, where brokerage apps put P/L.
+  let _glLine = '';
   if (tx.isInvestmentReturn) {
     const _rg = Number(tx.realizedGL);
     if (Number.isFinite(_rg) && _rg !== 0) {
-      detail += ` · <span style="color:${_rg>0?'var(--green)':'var(--red)'};font-weight:600">${_rg>0?'▲ gain ':'▼ loss '}${fmt(Math.abs(_rg), tx.currency)}</span>`;
+      _glLine = `<div class="tx-date-small" style="color:${_rg>0?'var(--green)':'var(--red)'};font-weight:600">${fmt(_rg, tx.currency, true)} ${_rg>0?'gain':'loss'}</div>`;
     }
   }
-  // For shared txs — iOS-style clean breakdown card
   let settlementRows = '';
   if (tx.type === 'shared') {
     const profile = db.profile?.nickname || 'Me';
@@ -5252,6 +5309,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     </div>
     <div class="tx-right">
       <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
+      ${_glLine}
       ${showDate?`<div class="tx-date-small">${fmtD(tx.date)}</div>`:''}
     </div>
   </div>${settlementRows}${feeReimbNestedHTML(tx)}${invReturnNestedHTML(tx)}${genericChildrenHTML}${batchSettleHTML}${batchReimbHTML}`;
@@ -5261,6 +5319,9 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
 // ADD TRANSACTION SHEET — Category-first flow
 // ════════════════════════════════════════════════════════════
 var _addState = { type:'expense', step:1, catId:null, subCatId:null };
+// PLS #311: declared up front. It was only ever created by setAddType() as an implicit global, so
+// opening Add straight on Shared (the Reimbursements "+", PLS #289) threw "_sharedPersons is not defined".
+var _sharedPersons = [];
 
 function openAddSheet(prefill={}) {
   _addState = { type: prefill.type||'expense', step:1, catId:null, subCatId:null, prefill };
@@ -6147,6 +6208,19 @@ function _txSnapRate(currency, date, time, snap) {
   if (currency === _homeBase()) return 1;
   const r = snap && snap[currency];                        // PLS #273: the tx's own frozen rate wins
   return (r > 0) ? r : getSnapshotRate(currency, date, time); // PLS #273: else the rate AT that moment
+}
+
+// -- PERSONAL LOGIC SET #300 -- balance safety net. When a transaction's currency differs from
+// its account's (forms stop that since #286, but an old backup or an import can still carry one),
+// the balance converted it at TODAY's rate, so the account drifted every time a rate changed. It
+// now converts at the transaction's OWN rate (its fxSnapshot, else the dated history), exactly
+// like every other past figure in the app, so the balance holds still.
+function _txConv(amount, tx, toCurr) {
+  const from = tx.currency || _homeBase();
+  if (from === toCurr) return amount;
+  const rf = _txSnapRate(from, tx.date, tx.time, tx.fxSnapshot);
+  const rt = _txSnapRate(toCurr, tx.date, tx.time, tx.fxSnapshot);
+  return (rf > 0 && rt > 0) ? amount * rf / rt : convert(amount, from, toCurr);
 }
 
 function getLatestFxRate(currency) {
@@ -7676,7 +7750,7 @@ function openTxDetail(txId) {
       </div>
       <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${tx.loanDirection==='lent'?'amber':'teal'}">${label}</span></div></div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const rate=baseAmt>0?(homeAmt/baseAmt):0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(acctLoan.name)}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(loan.personName)}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>
@@ -7699,7 +7773,7 @@ function openTxDetail(txId) {
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
       </div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const rate=baseAmt>0?(homeAmt/baseAmt):0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(acctPay.name)}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(loan.personName)}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>
@@ -7750,7 +7824,7 @@ function openTxDetail(txId) {
     if (Number.isFinite(_rg)) {
       const _c = _rg > 0 ? 'var(--green)' : _rg < 0 ? 'var(--red)' : 'var(--text3)';
       const _w = _rg > 0 ? 'Realized gain' : _rg < 0 ? 'Realized loss' : 'Realized result';
-      rows += `<div class="detail-row"><div class="detail-label">${_w}</div><div class="detail-value" style="font-family:var(--mono);color:${_c};font-weight:600">${_rg>0?'+':''}${fmt(_rg, tx.currency)}</div></div>`;
+      rows += `<div class="detail-row"><div class="detail-label">${_w}</div><div class="detail-value" style="font-family:var(--mono);color:${_c};font-weight:600">${fmt(_rg, tx.currency, true)}</div></div>`;
       rows += `<div class="detail-row"><div class="detail-label">Counts as</div><div class="detail-value" style="font-size:12px;color:var(--text3)">${_rg===0?'nothing — break even':(_rg>0?'income':'expense')+' of '+fmt(Math.abs(_rg), tx.currency)}</div></div>`;
     }
   } else
@@ -7794,7 +7868,7 @@ function openTxDetail(txId) {
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono);font-size:16px">${fmt(tx.amount,tx.currency)}</div></div>`;
   }
-  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare||tx.amount):tx.amount; const rate=baseAmt>0?homeAmt/baseAmt:0; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const label=isSnap?'snapshot':'current'; rows+=`<div class="detail-row"><div class="detail-label">1 ${tx.currency} = ? ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; } }
+  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare||tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; rows+=`<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
@@ -8098,7 +8172,7 @@ function openTxReceipt(txId) {
     if (Number.isFinite(_cb) && _cb > 0) rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Cost basis</div><div class="rcpt-row-value" style="font-family:var(--mono)">${fmt(_cb, tx.currency)}</div></div>`;
     if (Number.isFinite(_rg)) {
       const _w = _rg > 0 ? 'Realized gain' : _rg < 0 ? 'Realized loss' : 'Realized result';
-      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">${_w}</div><div class="rcpt-row-value" style="font-family:var(--mono);color:${_rg>0?'var(--green)':_rg<0?'var(--red)':'var(--text3)'}">${_rg>0?'+':''}${fmt(_rg, tx.currency)}</div></div>`;
+      rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">${_w}</div><div class="rcpt-row-value" style="font-family:var(--mono);color:${_rg>0?'var(--green)':_rg<0?'var(--red)':'var(--text3)'}">${fmt(_rg, tx.currency, true)}</div></div>`;
     }
   }
 
@@ -9571,7 +9645,7 @@ function renderReimbTab() {
   const owedHome = names.reduce((s, n) => s + persons[n].reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0), 0);
   const items = names.reduce((s, n) => s + persons[n].length, 0);
   let html = `<div class="page-pad"><div class="lp-tiles"><div class="lp-tile" style="cursor:default">
-      <div class="lp-tile-lbl">Owed to you</div><div class="lp-tile-amt">${fmt(owedHome, home)}</div>
+      <div class="lp-tile-lbl">Owed to you</div><div class="lp-tile-amt">${fmt(_inDisplay(owedHome), _displayCurrency())}</div>
       <div class="lp-tile-sub">${names.length ? `${names.length} ${names.length>1?'people':'person'} · ${items} ${items>1?'items':'item'}` : 'All settled'}</div></div></div>
     <div class="lp-chips"><button class="lp-chip ${_reimbView!=='settled'?'on':''}" onclick="setReimbView('active')">Active</button><button class="lp-chip ${_reimbView==='settled'?'on':''}" onclick="setReimbView('settled')">Settled${settled.length?` · ${settled.length}`:''}</button></div>`;
   if (_reimbView === 'settled') return html + _reimbSettledView(settled) + `</div>`;
@@ -9582,7 +9656,7 @@ function renderReimbTab() {
     const byCurr = {};
     for (const e of entries) { const c = e.tx.currency || home; byCurr[c] = (byCurr[c] || 0) + e.remaining; }
     const totalLabel = Object.entries(byCurr).map(([c,v]) => fmt(v, c)).join(' + ');
-    const showHome = Object.keys(byCurr).some(c => c !== home);
+    const showHome = Object.keys(byCurr).some(c => c !== _displayCurrency()); // PLS #310
     const pHome = entries.reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0);
     const rid = 'rp-' + person.replace(/\s/g,'_');
     const rowsHTML = entries.map(e => {
@@ -9603,10 +9677,10 @@ function renderReimbTab() {
     }).join('');
     html += `<div class="reimb-person-card">
       <div class="lp-row" onclick="toggleReimbPerson('${rid}')">
-        <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(person.slice(0,2).toUpperCase())}</div>
+        <div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc(person.slice(0,2).toUpperCase())}</div>
         <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(person)}</span></div>
           <div class="lp-meta">${entries.length} ${entries.length>1?'items':'item'}</div></div>
-        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${totalLabel}</div>${showHome?`<div class="lp-amt2">≈ ${fmt(pHome, home)}</div>`:''}</div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${totalLabel}</div>${showHome?`<div class="lp-amt2">≈ ${fmt(_inDisplay(pHome), _displayCurrency())}</div>`:''}</div>
         <span class="lp-chev" id="${rid}-chev">›</span>
       </div>
       <div id="${rid}" style="display:none;border-top:1px solid var(--border)">
@@ -9642,7 +9716,7 @@ function _reimbSettledView(settled) {
     if (!g) { const dt = c.d ? new Date(c.d.slice(0,10) + 'T00:00:00') : new Date(); g = { k, label: dt.toLocaleString('en', {month:'long', year:'numeric'}), rows: [] }; groups.push(g); }
     g.rows.push(c);
   }
-  const ic = x => `<div class="pool-avatar" style="width:34px;height:34px;font-size:16px;background:var(--bg3)">${x}</div>`;
+  const ic = x => `<div class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${x}</div>`;
   let html = '';
   for (const g of groups) {
     html += `<div class="lp-sec">${g.label}</div><div class="lp-grp">`;
@@ -9652,7 +9726,7 @@ function _reimbSettledView(settled) {
         const who = bp.batchPerson || bp.reimbPerson || 'Unknown';
         const gain = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isReimbSettlementGain);
         html += `<div class="reimb-person-card"><div class="lp-row" onclick="toggleReimbPerson('${rid}')">
-          <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(who.slice(0,2).toUpperCase())}</div>
+          <div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc(who.slice(0,2).toUpperCase())}</div>
           <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(who)}</span>${gain?`<span class="lp-pill gain">+${fmt(gain.amount, gain.currency)}</span>`:''}</div>
           <div class="lp-meta">${c.txs.length} ${c.txs.length>1?'items':'item'} · paid ${fmtD(bp.date)}</div></div>
           <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev" id="${rid}-chev">›</span></div>
@@ -10287,24 +10361,27 @@ function setAcctTab(t) { _acctTab=t; renderAccounts(); }
 function toggleArchivedAccounts() { window._acctShowArchived = !window._acctShowArchived; renderAccounts(); }
 window.toggleArchivedAccounts = toggleArchivedAccounts;
 
+// -- PERSONAL LOGIC SET #302 -- Accounts can be viewed as a list (default) or a grid of cards,
+// chosen in the header "..." menu and remembered. Both views share the same sections (currency,
+// then credit cards), totals and #301 fixes; the grid cards show the FULL name on up to two lines
+// (the old grid cut two accounts to the same "Maya Savi...").
+function toggleAcctView() {
+  db.settings.acctView = db.settings.acctView === 'grid' ? 'list' : 'grid';
+  saveDBWithSync(); renderAccounts();
+}
 function renderActiveAccounts() {
+  // -- PERSONAL LOGIC SET #301 -- Accounts on the list-page pattern (PLS #287). Grouped LIST rows
+  // instead of a 2-column card grid: full names (two "Maya Savi..." cards were indistinguishable),
+  // about half the scroll. Sections stay by currency with a neutral total (green read as income);
+  // credit cards get their own section instead of sitting among savings. Zero is grey, never red:
+  // the red "PHP 0.00" was a float residue like -0.000000001 coloured as a negative. Foreign
+  // balances show their exact peso value (was "~P15646", no separators, no decimals). Idle warnings
+  // became a small pill. The bottom "+ Add Account" duplicated the header "+".
+  const home = _homeBase();
+  const dc = _displayCurrency(); // PLS #310: totals and "≈" follow the display currency (Settings), not home
+  const inDc = v => _inDisplay(v);
   const accts = db.accounts.filter(a=>!a.archived);
-  // Group by currency, sorted by highest PHP-equivalent total
-  const groups = {};
-  for (const a of accts) {
-    if (!groups[a.currency]) groups[a.currency] = [];
-    groups[a.currency].push(a);
-  }
-  // Sort groups by total PHP value descending
-  const sortedCurrencies = Object.keys(groups).sort((a,b)=>{
-    const totA = groups[a].reduce((s,ac)=>s+toPhp(getAcctBalance(ac.id),a),0);
-    const totB = groups[b].reduce((s,ac)=>s+toPhp(getAcctBalance(ac.id),b),0);
-    return totB - totA;
-  });
-  // Sort accounts within group alphabetically
-  for (const curr of sortedCurrencies) groups[curr].sort((a,b)=>a.name.localeCompare(b.name));
-
-  if (sortedCurrencies.length === 0) {
+  if (accts.length === 0) {
     return `<div class="empty-state page-pad">
       <div class="empty-icon">🏦</div>
       <div class="empty-text">No accounts yet</div>
@@ -10312,27 +10389,57 @@ function renderActiveAccounts() {
       <button class="btn btn-primary btn-sm" onclick="openAddAccount()">+ Add Account</button>
     </div>`;
   }
-
-  let html = '<div class="page-pad">';
-  for (const curr of sortedCurrencies) {
-    const grpAccts = groups[curr];
-    const grpTotal = grpAccts.reduce((s,a)=>s+getAcctBalance(a.id),0);
-    const grpPhp = toPhp(grpTotal, curr);
-    const currInfo = CURRENCIES.find(c=>c.code===curr) || {flag:'💵'};
-    html += `<div class="acct-currency-group">
-      <div class="acct-group-header">
-        <div class="acct-group-title">${currInfo.flag} ${curr} <span style="font-size:11px;color:var(--text4);font-weight:400">(${grpAccts.length} ${aiPlural(grpAccts.length,'account')})</span></div>
-        <div>
-          <div class="acct-group-total" style="color:${grpTotal>=0?'var(--green)':'var(--red)'}">${fmt(grpTotal,curr)}</div>
-          ${curr!==(_homeBase())?`<div style="font-size:10px;color:var(--text4);text-align:right;font-family:var(--mono)">≈ ${fmt(grpPhp, _homeBase())}</div>`:''}
-        </div>
-      </div>
-      <div class="acct-grid">
-        ${grpAccts.map(a=>renderAcctCard(a)).join('')}
-      </div>
+  const bal = a => { const v = getAcctBalance(a.id); return Math.abs(v) < 0.005 ? 0 : v; };
+  const cards = accts.filter(a => a.type === 'Credit Card');
+  const others = accts.filter(a => a.type !== 'Credit Card');
+  const groups = {};
+  for (const a of others) (groups[a.currency] = groups[a.currency] || []).push(a);
+  const cur = Object.keys(groups).sort((x,y) => groups[y].reduce((s,a)=>s+toPhp(bal(a),y),0) - groups[x].reduce((s,a)=>s+toPhp(bal(a),x),0));
+  for (const c of cur) groups[c].sort((x,y) => x.name.localeCompare(y.name));
+  const inAccts = others.reduce((s,a) => s + toPhp(bal(a), a.currency), 0);
+  const cardOwed = cards.reduce((s,a) => s + Math.max(0, -toPhp(bal(a), a.currency)), 0);
+  const tile = (lbl, amt, sub) => `<div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">${lbl}</div><div class="lp-tile-amt">${amt}</div><div class="lp-tile-sub">${sub}</div></div>`;
+  const row = a => {
+    const v = bal(a);
+    const idle = _alertCache.filter(al => (al.type==='idle'||al.type==='low') && al.id===a.id)[0];
+    const idleDays = idle && (idle.msg.match(/(\d+)\s*days?/) || [])[1];
+    const pill = idle ? `<span class="lp-pill due" title="${_esc(idle.msg)}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span>` : '';
+    const meta = [a.type || 'Other', a.note ? _esc(a.note) : ''].filter(Boolean).join(' · ');
+    return `<div class="lp-row" onclick="openAcctDetail('${a.id}')">
+      <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(a.name)}</span>${pill}</div>
+      <div class="lp-meta">${meta}</div></div>
+      <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency)}</div>
+      ${a.currency!==dc && v!==0 ? `<div class="lp-amt2">≈ ${fmt(inDc(toPhp(v, a.currency)), dc)}</div>` : ''}</div>
+      <span class="lp-chev">›</span></div>`;
+  };
+  const card = a => {
+    const v = bal(a);
+    const idle = _alertCache.filter(al => (al.type==='idle'||al.type==='low') && al.id===a.id)[0];
+    const idleDays = idle && (idle.msg.match(/(\d+)\s*days?/) || [])[1];
+    return `<div class="acct-card" onclick="openAcctDetail('${a.id}')" style="padding:13px 14px">
+      <div class="lp-name" style="white-space:normal;align-items:flex-start"><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3">${_esc(a.name)}</span></div>
+      <div class="lp-meta">${_esc(a.type || 'Other')}${a.note ? ' · ' + _esc(a.note) : ''}</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:600;margin-top:8px;color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency)}</div>
+      ${a.currency!==dc && v!==0 ? `<div class="lp-amt2">≈ ${fmt(inDc(toPhp(v, a.currency)), dc)}</div>` : ''}
+      ${idle ? `<div style="margin-top:6px"><span class="lp-pill due" title="${_esc(idle.msg)}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span></div>` : ''}
     </div>`;
+  };
+  const grid = db.settings.acctView === 'grid';
+  const block = list => grid ? `<div class="acct-grid">${list.map(card).join('')}</div>` : `<div class="lp-grp">${list.map(row).join('')}</div>`;
+  const secHdr = (label, right, right2) => `<div class="lp-sec" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span>${label}</span><span style="text-align:right;font-family:var(--mono);color:var(--text2)">${right}${right2?`<span style="color:var(--text4);margin-left:6px">≈ ${right2}</span>`:''}</span></div>`;
+  let html = `<div class="page-pad"><div class="lp-tiles">
+      ${tile('In accounts', fmt(inDc(inAccts), dc), `${others.length} ${aiPlural(others.length,'account')}`)}
+      ${tile('Credit cards', fmt(inDc(cardOwed), dc), cards.length ? `owed · ${cards.length} ${aiPlural(cards.length,'card')}` : 'None')}
+    </div>`;
+  for (const c of cur) {
+    const g = groups[c], t = g.reduce((s,a)=>s+bal(a),0);
+    const info = CURRENCIES.find(x=>x.code===c) || {flag:''};
+    html += secHdr(`${info.flag} ${c} · ${g.length}`, fmt(t, c), c!==dc ? fmt(inDc(toPhp(t, c)), dc) : '') + block(g);
   }
-  // Show archived section if toggled
+  if (cards.length) {
+    const tc = cards.reduce((s,a)=>s+toPhp(bal(a), a.currency),0);
+    html += secHdr(`💳 Credit cards · ${cards.length}`, fmt(inDc(tc), dc, true), '') + block(cards.slice().sort((x,y)=>x.name.localeCompare(y.name)));
+  }
   if (window._acctShowArchived) {
     const archivedAccts = db.accounts.filter(a=>a.archived);
     if (archivedAccts.length > 0) {
@@ -10353,7 +10460,7 @@ function renderActiveAccounts() {
       html += `</div>`;
     }
   }
-  html += `<div style="margin-top:8px"><button class="pool-add-btn" onclick="openAddAccount()">+ Add Account</button></div></div>`;
+  html += `</div>`;
   return html;
 }
 
@@ -10750,7 +10857,7 @@ function renderInvestments() {
     <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Unrealized</div><div class="lp-tile-amt" style="color:${glCol(totalGL)}">${fmt(fromPhp(totalGL,dc),dc,true)}</div><div class="lp-tile-sub">${totalGL>0?'+':''}${totalGLPct.toFixed(1)}% · ${invs.length} holding${invs.length===1?'':'s'}</div></div>
   </div>
   <div class="lp-chips"><button class="lp-chip ${_invView!=='sold'?'on':''}" onclick="setInvView('active')">Active</button><button class="lp-chip ${_invView==='sold'?'on':''}" onclick="setInvView('sold')">Sold${sold.length?` · ${sold.length}`:''}</button></div>`;
-  const ic = (type) => `<div class="pool-avatar" style="width:34px;height:34px;font-size:16px;border-radius:10px;background:${typeColors[type]||'#94a3b8'}22">${invTypeIcon(type)}</div>`;
+  const ic = (type) => `<div class="pool-avatar" style="width:32px;height:32px;font-size:15px;border-radius:10px;background:${typeColors[type]||'#94a3b8'}22">${invTypeIcon(type)}</div>`;
   if (_invView === 'sold') {
     html += sold.length ? `<div class="lp-sec">Sold</div><div class="lp-grp">` + sold.slice().sort((x,y)=>(y.soldDate||'').localeCompare(x.soldDate||'')).map(inv => {
       const gl = Number(inv.realizedGL) || 0;
@@ -11296,7 +11403,7 @@ function openInvLedgerRepair() {
     if (g.kind === 'missing') {
       const inv = g.inv, gl = Number(inv.realizedGL);
       const glTxt = Number.isFinite(gl) && gl !== 0
-        ? `<span style="color:${gl>0?'var(--green)':'var(--red)'}">${gl>0?'+':''}${fmt(gl, inv.currency)} ${gl>0?'gain':'loss'}</span>`
+        ? `<span style="color:${gl>0?'var(--green)':'var(--red)'}">${fmt(gl, inv.currency, true)} ${gl>0?'gain':'loss'}</span>`
         : `<span style="color:var(--text4)">break even</span>`;
       return `<div class="settings-row" onclick="openInvBackfill('${inv.id}')">
         <div class="sr-left"><div class="sr-icon">${invTypeIcon(inv.type)}</div><div>
@@ -11512,17 +11619,18 @@ function _loanPersonCard(direction, person, personLoans) {
       : dueDays === 0 ? `<span class="lp-pill due">Due today</span>`
       : `<span class="lp-pill due">Due in ${dueDays}d</span>`;
     const _open = !!_loanPersonExpanded[direction+':'+person];
-    const _showHome = Object.keys(byCurr).length>1 || (Object.keys(byCurr)[0] && Object.keys(byCurr)[0] !== _homeBase());
+    const _dcL = _displayCurrency(); // PLS #310
+    const _showHome = Object.keys(byCurr).length>1 || (Object.keys(byCurr)[0] && Object.keys(byCurr)[0] !== _dcL);
     html += `<div class="reimb-person-card">
       <div class="lp-row" onclick="toggleLoanPersonGroup('${direction}','${_pEsc}')">
-        <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(person.slice(0,2).toUpperCase())}</div>
+        <div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc(person.slice(0,2).toUpperCase())}</div>
         <div style="min-width:0;flex:1">
           <div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(person)}</span>${_duePill}</div>
           <div class="lp-meta">${personLoans.length} loan${personLoans.length>1?'s':''}${totalPayments>0?` · ${totalPayments} payment${totalPayments>1?'s':''}`:''}${expectedHtml?` · <span style="color:var(--accent)">expecting ${expectedHtml}</span>`:''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div class="lp-amt">${totalsHtml}</div>
-          ${_showHome?`<div class="lp-amt2">≈ ${fmt(totalPersonPhp, _homeBase())}</div>`:''}
+          ${_showHome?`<div class="lp-amt2">≈ ${fmt(_inDisplay(totalPersonPhp), _dcL)}</div>`:''}
         </div>
         <span class="lp-chev ${_open?'open':''}">›</span>
       </div>
@@ -11594,7 +11702,7 @@ function _loanTilesHTML() {
   const L = t('lent'), B = t('borrowed');
   const sub = x => x.n ? `${x.n} loan${x.n>1?'s':''} · ${x.ppl} ${x.ppl>1?'people':'person'}` : 'None active';
   const tile = (d, label, x) => `<button class="lp-tile ${_loanTab===d?'on':''}" onclick="setLoanTab('${d}')" aria-pressed="${_loanTab===d}">
-      <div class="lp-tile-lbl">${label}</div><div class="lp-tile-amt">${fmt(x.total, _homeBase())}</div><div class="lp-tile-sub">${sub(x)}</div></button>`;
+      <div class="lp-tile-lbl">${label}</div><div class="lp-tile-amt">${fmt(_inDisplay(x.total), _displayCurrency())}</div><div class="lp-tile-sub">${sub(x)}</div></button>`;
   return `<div class="lp-tiles">${tile('lent','Lent out',L)}${tile('borrowed','Borrowed',B)}</div>`;
 }
 function renderLoanList(direction) {
@@ -11643,7 +11751,7 @@ function _loanSettledView(direction, settled) {
     if (!g) { const dt = c.d ? new Date(c.d + 'T00:00:00') : new Date(); g = { k, label: dt.toLocaleString('en', {month:'long', year:'numeric'}), rows: [] }; groups.push(g); }
     g.rows.push(c);
   }
-  const av = n => `<div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc((n||'?').slice(0,2).toUpperCase())}</div>`;
+  const av = n => `<div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc((n||'?').slice(0,2).toUpperCase())}</div>`;
   let html = '';
   for (const g of groups) {
     html += `<div class="lp-sec">${g.label}</div><div class="lp-grp">`;
@@ -12525,14 +12633,23 @@ function openLoanDetail(loanId, direction) {
     // Compute running balance (chronological)
     const sortedAsc = [...payments].sort((a,b)=>a.date.localeCompare(b.date));
     let bal = loan.amount;
-    const timeline = sortedAsc.map((p)=>{ bal -= loanPaymentContribution(p, loan); return { ...p, balAfter: bal }; }); // PLS #130
+    // -- PERSONAL LOGIC SET #292 -- each timeline row shows what reached THIS loan. One payment often
+    // covers several of a person's loans (Receive Payment takes the lump sum and applies it oldest
+    // loan first); the row used to print the whole lump (+K1,076.00 on a loan that got K352.00),
+    // which contradicted "Total paid" and "Bal" right beside it. Now: +K352.00, with
+    // "of K1,076.00 payment" under it (the usual wording for a split payment). A write-off
+    // received nothing, so it reads "Written off" in red, never a green "+".
+    const _isWO = p => !!(p.isBatchWriteOff || (p.writeOffReason && (p.isLoanSettlementLoss || p.categoryId === 'sc-writeoff')));
+    const timeline = sortedAsc.map((p)=>{ const share = loanPaymentContribution(p, loan); bal -= share; return { ...p, balAfter: bal, _share: share, _wo: _isWO(p) }; }); // PLS #130, #292
+    const _paidSum = timeline.filter(p => !p._wo).reduce((s,p) => s + p._share, 0);
+    const _woSum = timeline.filter(p => p._wo).reduce((s,p) => s + p._share, 0);
     // Display newest first
     timeline.reverse();
     return `
     <div style="margin-top:4px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 0 8px">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Payment Timeline · ${payments.length}</div>
-        <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">Total paid: ${fmt(loan.amount-remaining, loan.currency)}</div>
+        <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">${_paidSum > 0.001 || _woSum <= 0.001 ? `Paid: ${fmt(_paidSum, loan.currency)}` : ''}${_paidSum > 0.001 && _woSum > 0.001 ? ' · ' : ''}${_woSum > 0.001 ? `<span style="color:var(--red)">Written off: ${fmt(_woSum, loan.currency)}</span>` : ''}</div>
       </div>
       <div style="background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border)">
         ${timeline.map((p,i) => {
@@ -12543,21 +12660,24 @@ function openLoanDetail(loanId, direction) {
             <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;cursor:pointer" onclick="editLoanPayment('${p.id}','${loanId}','${direction}')">
               <!-- Timeline dot + line -->
               <div style="position:relative;flex-shrink:0;width:24px;display:flex;flex-direction:column;align-items:center;padding-top:4px">
-                <div style="width:10px;height:10px;border-radius:50%;background:var(--green);border:2px solid var(--bg2);box-shadow:0 0 0 1px var(--border);z-index:1"></div>
+                <div style="width:10px;height:10px;border-radius:50%;background:${p._wo?'var(--red)':'var(--green)'};border:2px solid var(--bg2);box-shadow:0 0 0 1px var(--border);z-index:1"></div>
                 ${!isLast?`<div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:1.5px;height:100%;background:var(--border)"></div>`:''}
               </div>
               <div style="flex:1;min-width:0">
                 <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
                   <div style="font-size:13px;font-weight:600">${fmtDFull(p.date)}</div>
-                  <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:${p._wo?'var(--red)':'var(--green)'}">${p._wo ? fmt(p._share, loan.currency) : '+' + fmt(p._share, loan.currency)}</div>
+                    ${!p._wo && (p.currency !== loan.currency || Math.abs(p.amount - p._share) > 0.005) ? `<div style="font-size:10px;color:var(--text4);font-family:var(--mono);margin-top:1px">of ${fmt(p.amount, p.currency)} payment</div>` : ''}
+                  </div>
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-                  <div style="font-size:11px;color:var(--text3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.notes||'Payment'} · ${destAcct?.name||'?'}</div>
+                  <div style="font-size:11px;color:var(--text3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p._wo ? `<span style="color:var(--red)">Written off</span>${p.writeOffReason ? ' · ' + _esc(p.writeOffReason) : ''}` : `${_esc(p.notes||'Payment')} · ${_esc(destAcct?.name||'?')}`}</div>
                   <div style="font-size:10px;color:var(--text4);font-family:var(--mono);flex-shrink:0">Bal: ${fmt(p.balAfter,loan.currency)}</div>
                 </div>
                 <!-- Mini progress bar -->
                 <div style="margin-top:5px;height:3px;background:var(--bg4);border-radius:var(--r-full);overflow:hidden">
-                  <div style="height:100%;width:${(100-balPct).toFixed(1)}%;background:var(--green);transition:width 0.3s"></div>
+                  <div style="height:100%;width:${(100-balPct).toFixed(1)}%;background:${p._wo?'var(--red)':'var(--green)'};transition:width 0.3s"></div>
                 </div>
               </div>
             </div>
@@ -12834,6 +12954,15 @@ function saveLoanFull(loanId, direction) {
 function editLoanPayment(paymentId, loanId, direction) {
   const payment = db.transactions.find(t => t.id === paymentId);
   if (!payment) return;
+  // -- PERSONAL LOGIC SET #297 -- the simple Edit Payment form is for ONE payment to ONE loan.
+  // Tapping a batch payment or a write-off in a loan's timeline used to open it too, so editing the
+  // K1,076.00 lump from inside ONE of the loans it paid changed the total without re-splitting it
+  // (the other loan's balance went stale), and Delete dropped the whole batch while recomputing
+  // only this loan. Batches now open their own editor (it re-splits and keeps every loan in step);
+  // a write-off opens a read-out with "Undo write-off", since nothing was paid to edit.
+  const _isWO = !!(payment.isBatchWriteOff || (payment.writeOffReason && (payment.isLoanSettlementLoss || payment.isSettlement)));
+  if (payment.isBatchSettlement && !payment.isBatchWriteOff) { openBatchSettleEdit(payment.id, direction); return; }
+  if (_isWO) { _loanWriteOffDlg(payment, loanId, direction); return; }
   // -- PERSONAL LOGIC SET #286 -- the payment's currency is its ACCOUNT's currency, never picked
   // separately. A K100 payment filed under GCash (PHP) had no stated rate, so balances converted it
   // at whatever the rate was on each render and GCash drifted every time the rate moved (the Sep 9
@@ -12883,6 +13012,28 @@ function saveLoanPayment(paymentId, loanId, direction) {
   loan.settled = loan.remaining <= 0.001;
   if (loan.settled) loan.settledDate = today();
   saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment updated!');
+}
+
+// PLS #297: a write-off, read-only, with the one action that makes sense for it.
+function _loanWriteOffDlg(payment, loanId, direction) {
+  const loan = (db.loans[direction]||[]).find(l => l.id === loanId);
+  const batch = !!payment.isBatchWriteOff;
+  const n = batch ? (payment.batchLoanIds||[]).length : 1;
+  openDlg('Written off',
+    `<div style="font-size:13px;color:var(--text2);line-height:1.7">
+       <div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Amount</span><b style="font-family:var(--mono);color:var(--red)">${fmt(payment.amount, payment.currency)}</b></div>
+       <div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Date</span><span>${fmtD(payment.date)}</span></div>
+       ${payment.writeOffReason ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Reason</span><span>${_esc(payment.writeOffReason)}</span></div>` : ''}
+       ${batch ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Covers</span><span>${n} loans of ${_esc(payment.batchPerson || loan?.personName || '')}</span></div>` : ''}
+       <p style="margin:12px 0 0;font-size:12px;color:var(--text3)">Nothing was received, so there is no amount to edit. Undo puts ${batch ? 'these loans' : 'this loan'} back as owed.</p>
+     </div>`,
+    `<button class="btn btn-ghost" onclick="closeDlg()">Close</button>
+     <button class="btn btn-danger" onclick="${batch ? `undoBatchWriteOff('${payment.id}')` : `_undoSingleWriteOff('${payment.id}','${loanId}','${direction}')`}">Undo write-off</button>`);
+}
+function _undoSingleWriteOff(paymentId, loanId, direction) {
+  const loan = (db.loans[direction]||[]).find(l => l.id === loanId);
+  if (loan) { delete loan.writeOffReason; delete loan.writtenOff; }
+  confirmDeleteLoanPayment(paymentId, loanId, direction); // recomputes this loan's remaining / settled
 }
 
 function deleteLoanPayment(paymentId, loanId, direction) {
@@ -13672,7 +13823,7 @@ function renderInstallments() {
       ${tile('Per month', fmt(monthly, home), lastEnd ? `until ${_instMonthLbl(lastEnd)}` : 'Nothing due')}
     </div>
     <div class="lp-chips"><button class="lp-chip ${_instView!=='done'?'on':''}" onclick="setInstView('active')">Active</button><button class="lp-chip ${_instView==='done'?'on':''}" onclick="setInstView('done')">Completed${done.length?` · ${done.length}`:''}</button></div>`;
-  const icon = i => `<div class="pool-avatar" style="width:34px;height:34px;font-size:17px;background:var(--bg3)">${i.icon || '🧾'}</div>`;
+  const icon = i => `<div class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${i.icon || '🧾'}</div>`;
   if (_instView === 'done') {
     html += done.length ? `<div class="lp-sec">Paid off</div><div class="lp-grp">` + done.map(i => { const n = _instNums(i); return `<div class="lp-row" onclick="openInstallmentDetail('${i.id}')">${icon(i)}
         <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(i.name)}</span></div>
@@ -14113,7 +14264,7 @@ function renderAnalyticsCalendar() {
   });
 
   // Upcoming recurring/installments this month
-  const recurring = (db.recurringTxs || []).filter(r => !r.archived);
+  const recurring = _recurringList().filter(r => !r.archived);
   const installments = (db.installments || []).filter(i => !i.archived);
   const upcomingByDate = {};
   for (let d = 1; d <= daysInMonth; d++) {
@@ -14947,7 +15098,7 @@ function buildVelocityGauge(metricMk, dispCurr) {
       <div style="width:${fillPct}%;height:100%;background:${status.color};transition:width 0.3s"></div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4)">
-      <span>${fmt(totalExp, dispCurr)} spent <span style="font-size:10px;opacity:0.75">· excl. FX losses</span></span>
+      <span>${fmt(totalExp, dispCurr)} spent <span style="font-size:10px;opacity:0.75">· excl. one-time losses</span>${''/* PLS #293: this total never excluded FX losses (they are in it); what it leaves out are one-time losses (write-offs, settlement losses, investments sold below cost), the #277 "usual spending" set */}</span>
       <span>Projected: ${fmt(projection, dispCurr)}</span>
     </div>
   </div>`;
@@ -15199,7 +15350,7 @@ function buildForecastBand(metricMk, dispCurr) {
 
 // ─── 5. Subscription Leak Panel ───
 function buildSubscriptionPanel(dispCurr) {
-  const recurring = (db.recurringTxs || []).filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
+  const recurring = _recurringList().filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
   if (recurring.length === 0) return '';
   // Total monthly equivalent
   let totalMonthly = 0;
@@ -15423,7 +15574,7 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
   //  2. tx's category matches a category used by any active recurring template (e.g. you have a
   //     recurring "Rent" under category Housing → all Housing this month counts as fixed)
   //  3. category-name / notes keyword match (fallback heuristic)
-  const recurring = (db.recurringTxs || []).filter(r => r.active);
+  const recurring = _recurringList().filter(r => r.active);
   const recurringNames = new Set(recurring.map(r => (r.name || '').toLowerCase()).filter(Boolean));
   const recurringCatIds = new Set(recurring.map(r => r.categoryId).filter(Boolean));
   // Expanded fixed keywords — obligations + common recurring bills.
@@ -16415,7 +16566,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
       // ordinary bordered row inside the padding; the door link is the flush footer (PLS #253).
       footHtml = `<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
       <span style="color:${vColor}">${ratio > 1.10 ? '⚠ ' : ''}Projected ${fmt(projection, dispCurr)}</span>
-      <span>excl. FX losses</span>
+      <span>excl. one-time losses</span>${''/* PLS #293 */}
     </div>`;
     }
   }
@@ -17928,7 +18079,7 @@ function renderAnalyticsInvestments() {
         <div style="font-size:11px;color:var(--text4)">${v.count} · ${allocPct.toFixed(0)}%</div>
       </div>
       <div style="font-family:var(--mono);font-size:14px;font-weight:600">${fmt(v.total, dispCurr)}</div>
-      ${gl !== 0 ? `<div class="${glClass}" style="font-size:11px;font-family:var(--mono);margin-top:2px">${gl > 0 ? '+' : ''}${fmt(gl, dispCurr)} (${gl > 0 ? '+' : ''}${glPct.toFixed(1)}%)</div>` : `<div style="font-size:11px;color:var(--text4);margin-top:2px">No change</div>`}
+      ${gl !== 0 ? `<div class="${glClass}" style="font-size:11px;font-family:var(--mono);margin-top:2px">${fmt(gl, dispCurr, true)} (${gl > 0 ? '+' : ''}${glPct.toFixed(1)}%)</div>` : `<div style="font-size:11px;color:var(--text4);margin-top:2px">No change</div>`}
     </div>`;
   }).join('');
 
@@ -17955,7 +18106,7 @@ function renderAnalyticsInvestments() {
       </div>
       <div class="list-row-right">
         <div class="list-row-amt ${glClass}">${p._gl > 0 ? '+' : ''}${p._pct.toFixed(1)}%</div>
-        <div class="list-row-date">${p._gl > 0 ? '+' : ''}${fmt(p._gl, dispCurr)}</div>
+        <div class="list-row-date">${fmt(p._gl, dispCurr, true)}</div>
       </div>
     </div>`;
   };
@@ -18189,7 +18340,16 @@ function renderAnalyticsForex() {
 // ════════════════════════════════════════════════════════════
 // PLANNING PAGE
 // ════════════════════════════════════════════════════════════
-_planTab = 'payday';
+// -- PERSONAL LOGIC SET #305 -- Payday and Recurring are REMOVED (owner's call, Sep 2026): neither
+// touched a balance or total, Payday never advanced its date ("-55 days"), and auto-detected
+// recurring items sat "Overdue" forever because a hand-logged payment never matched them. Gone:
+// both Planning tabs, the auto-detector, the "Add to recurring" command, the "due today" alert,
+// and every read of recurring templates (Calendar, Recurring Commitments panel, Fixed vs
+// Discretionary, AI summary), which now see none. Fixed vs Discretionary still classifies by its
+// keyword list. db.recurringTxs / db.paydaySchedules are left in the data untouched (inert, and
+// in every backup), so nothing a user entered is destroyed.
+function _recurringList() { return []; } // PLS #305
+_planTab = 'budgets';
 
 function renderPlanning() {
   // ── DEBUG-SCAN NOTE ── Targets are part of Contracts tab structure (planTab values: payday/recurring/budgets/contract/wishlist). Naive scans for "renderTargets" are false positives — Targets live under Contracts.
@@ -18197,17 +18357,14 @@ function renderPlanning() {
   // bills → discretionary caps → savings goals → wants). Settings keeps only a shortcut row.
   const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
     <div class="seg">
-    <button class="seg-btn ${_planTab==='payday'?'active':''}" onclick="setPlanTab('payday')">Payday</button>
-    <button class="seg-btn ${_planTab==='recurring'?'active':''}" onclick="setPlanTab('recurring')">Recurring</button>
     <button class="seg-btn ${_planTab==='budgets'?'active':''}" onclick="setPlanTab('budgets')">Budgets</button>
     <button class="seg-btn ${_planTab==='contract'?'active':''}" onclick="setPlanTab('contract')">Contract</button>
     <button class="seg-btn ${_planTab==='wishlist'?'active':''}" onclick="setPlanTab('wishlist')">Wishlist</button>
     </div>
   </div>`;
   let content = '';
-  if (_planTab==='payday') content = renderPaydayTab();
-  else if (_planTab==='recurring') content = renderRecurringTab();
-  else if (_planTab==='budgets') content = renderBudgetsTab();
+  if (_planTab==='payday' || _planTab==='recurring') _planTab = 'budgets'; // PLS #305: both tabs removed
+  if (_planTab==='budgets') content = renderBudgetsTab();
   else if (_planTab==='wishlist') content = renderWishlistTab();
   else content = renderContractTab();
   document.getElementById('page-content').innerHTML = tabsHTML + content;
@@ -18216,58 +18373,35 @@ function renderPlanning() {
 function setPlanTab(t) { _planTab=t; renderPlanning(); }
 
 // ── WISHLIST ──
+// -- PERSONAL LOGIC SET #307 -- Wishlist on the list pattern, Reminders-style: one summary tile,
+// To buy / Bought chips (bought items leave the live list), one grouped list. The round check on
+// the left marks an item bought (as in Apple Reminders); tapping the row opens Edit. Priority is a
+// coloured dot (red high, amber medium). Price is exact in the item's own currency.
+var _wlView = 'active';
+function setWlView(v) { _wlView = v; renderPlanning(); }
 function renderWishlistTab() {
   const wl = db.wishlist || [];
   const dc = _displayCurrency();
-  // Sort: not purchased first, by priority desc, then created desc
-  const sorted = wl.slice().sort((a, b) => {
-    if (!!a.purchased !== !!b.purchased) return a.purchased ? 1 : -1;
-    const pa = a.priority === 'high' ? 3 : a.priority === 'medium' ? 2 : 1;
-    const pb = b.priority === 'high' ? 3 : b.priority === 'medium' ? 2 : 1;
-    if (pa !== pb) return pb - pa;
-    return (b.createdAt || '').localeCompare(a.createdAt || '');
-  });
-
-  const totalCost = sorted.filter(w => !w.purchased).reduce((s, w) => s + toPhp(w.price || 0, w.currency || dc), 0);
-
-  let html = '<div class="page-pad">';
-
-  if (sorted.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">🛍️</div><div class="empty-text">Your wishlist is empty</div><div class="empty-sub" style="margin-bottom:16px">Track things you want to buy</div></div>`;
-  } else {
-    if (totalCost > 0) {
-      html += `<div class="card" style="margin-bottom:14px;text-align:center">
-        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Total wishlist value</div>
-        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--accent)">${fmt(totalCost, dc)}</div>
-        <div style="font-size:11px;color:var(--text4);margin-top:4px">${sorted.filter(w => !w.purchased).length} active item${sorted.filter(w => !w.purchased).length>1?'s':''}</div>
-      </div>`;
-    }
-
-    sorted.forEach(w => {
-      const priorityColor = w.priority === 'high' ? 'var(--red)' : w.priority === 'medium' ? 'var(--amber)' : 'var(--text3)';
-      const priorityIcon = w.priority === 'high' ? '🔥' : w.priority === 'medium' ? '⭐' : '·';
-      html += `<div class="card" style="margin-bottom:10px;${w.purchased?'opacity:0.55':''}">
-        <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-              <span style="font-size:12px;color:${priorityColor}">${priorityIcon}</span>
-              <div style="font-size:14px;font-weight:600;${w.purchased?'text-decoration:line-through':''}">${escapeAttr(w.name)}</div>
-            </div>
-            ${w.price > 0 ? `<div style="font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600">${fmt(w.price, w.currency || dc)}</div>` : ''}
-            ${w.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${escapeAttr(w.notes)}</div>` : ''}
-            ${w.url ? `<a href="${escapeAttr(w.url)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:underline">🔗 Link</a>` : ''}
-            ${w.purchased ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Purchased ${w.purchasedDate ? 'on '+w.purchasedDate : ''}</div>` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            ${!w.purchased ? `<button class="btn btn-success btn-sm" style="padding:4px 10px;font-size:11px" onclick="markWishlistPurchased('${w.id}')">✓ Bought</button>` : ''}
-            <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="editWishlistItem('${w.id}')">Edit</button>
-          </div>
-        </div>
-      </div>`;
-    });
-  }
-
-  html += `<button class="pool-add-btn" onclick="openAddWishlist()">+ Add to Wishlist</button></div>`;
+  const pr = w => w.priority === 'high' ? 3 : w.priority === 'medium' ? 2 : 1;
+  const active = wl.filter(w => !w.purchased).sort((a,b) => pr(b) - pr(a) || (b.createdAt||'').localeCompare(a.createdAt||''));
+  const bought = wl.filter(w => w.purchased).sort((a,b) => (b.purchasedDate||'').localeCompare(a.purchasedDate||''));
+  if (!wl.length) return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🛍️</div><div class="empty-text">Your wishlist is empty</div><div class="empty-sub" style="margin-bottom:16px">Track things you want to buy</div><button class="btn btn-primary btn-sm" onclick="openAddWishlist()">+ Add to Wishlist</button></div></div>`;
+  const total = active.reduce((s,w) => s + toPhp(w.price || 0, w.currency || dc), 0);
+  let html = `<div class="page-pad"><div class="lp-tiles"><div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">To buy</div><div class="lp-tile-amt">${fmt(fromPhp(total, dc), dc)}</div><div class="lp-tile-sub">${active.length} ${aiPlural(active.length,'item')}</div></div></div>
+    <div class="lp-chips"><button class="lp-chip ${_wlView!=='bought'?'on':''}" onclick="setWlView('active')">To buy</button><button class="lp-chip ${_wlView==='bought'?'on':''}" onclick="setWlView('bought')">Bought${bought.length?` · ${bought.length}`:''}</button></div>`;
+  const list = _wlView === 'bought' ? bought : active;
+  if (!list.length) return html + `<div class="lp-empty">${_wlView==='bought' ? 'Nothing bought yet.' : 'Nothing left to buy.'}</div></div>`;
+  html += `<div class="lp-sec">${_wlView==='bought' ? 'Bought' : 'To buy'}</div><div class="lp-grp">` + list.map(w => {
+    const dot = w.priority === 'high' ? 'var(--red)' : w.priority === 'medium' ? 'var(--amber)' : 'var(--text4)';
+    const check = w.purchased
+      ? `<button aria-label="Mark not bought" onclick="event.stopPropagation();_doMarkPurchased('${w.id}', false)" style="width:22px;height:22px;border-radius:50%;border:0;background:var(--green);color:#fff;font-size:12px;flex-shrink:0;cursor:pointer">✓</button>`
+      : `<button aria-label="Mark bought" onclick="event.stopPropagation();markWishlistPurchased('${w.id}')" style="width:22px;height:22px;border-radius:50%;border:1.5px solid var(--text4);background:none;flex-shrink:0;cursor:pointer"></button>`;
+    const meta = [w.purchased && w.purchasedDate ? 'Bought ' + fmtD(w.purchasedDate) : '', w.notes ? _esc(w.notes) : ''].filter(Boolean).join(' · ');
+    return `<div class="lp-row" onclick="editWishlistItem('${w.id}')">${check}
+      <div style="min-width:0;flex:1"><div class="lp-name"><span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${w.purchased?'text-decoration:line-through;color:var(--text3)':''}">${_esc(w.name)}</span></div>
+      ${meta ? `<div class="lp-meta" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>` : ''}</div>
+      ${w.price > 0 ? `<div class="lp-amt">${fmt(w.price, w.currency || dc)}</div>` : ''}<span class="lp-chev">›</span></div>`;
+  }).join('') + `</div></div>`;
   return html;
 }
 
@@ -18790,7 +18924,7 @@ function renderContractTab() {
   // Monthly goal: use the saved value; if somehow unset, derive from goal pace (no hardcoded number).
   // Overall monthly pace is DERIVED from the total target (the slider now sets the total target,
   // not a monthly amount). Per-bucket monthlies are likewise derived from each bucket's allocation.
-  const monthly = totalMonths > 0 ? Math.round(safeGoal / totalMonths) : 0;
+  const monthly = totalMonths > 0 ? safeGoal / totalMonths : 0; // PLS #308: exact (was rounded, which skewed Target today)
   const targetToday = monthly * monthsElapsed;
   // ── Dynamic TOTAL-TARGET slider range ── based on the current target with headroom. Currency/
   // magnitude agnostic — never clamps the value.
@@ -18810,7 +18944,9 @@ function renderContractTab() {
   const lastCheckin = active.lastCheckin;
   const needsCheckin = !lastCheckin || !lastCheckin.startsWith(thisMonth);
   const dayOfMonth = now.getDate();
-  const checkinPromptHTML = (needsCheckin && dayOfMonth >= 3 && !isEnded) ? `
+  // PLS #312: no "did you hit your goal last month?" before the contract has run a month -- it asked
+  // it of a contract starting in 2028 (found by driving the Contract wizard end to end).
+  const checkinPromptHTML = (needsCheckin && dayOfMonth >= 3 && !isEnded && daysSince >= 28) ? `
     <div style="background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
       <div style="font-size:13px;font-weight:600;margin-bottom:6px">📅 Monthly Check-in</div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Did you hit your savings goal last month?</div>
@@ -18830,7 +18966,7 @@ function renderContractTab() {
         <div style="font-size:28px;margin-bottom:4px">${goalHit?'🎉':'💪'}</div>
         <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:${goalHit?'var(--green)':'var(--amber)'}">${goalHit?'Goal Reached!':'Goal Not Reached'}</div>
         <div class="hero-row">
-          <div class="hero-stat"><div class="hero-stat-label">Total Saved</div><div class="hero-stat-value" style="color:var(--green)">${fmt(Math.round(totalActual),goalCurr)}</div></div>
+          <div class="hero-stat"><div class="hero-stat-label">Total Saved</div><div class="hero-stat-value" style="color:var(--green)">${fmt(totalActual,goalCurr)}</div></div>
           <div class="hero-stat"><div class="hero-stat-label">Target</div><div class="hero-stat-value">${fmt(safeGoal,goalCurr)}</div></div>
           <div class="hero-stat"><div class="hero-stat-label">Duration</div><div class="hero-stat-value">${Math.round(totalMonths)}mo</div></div>
         </div>
@@ -18891,18 +19027,18 @@ function renderContractTab() {
     const diff = val - expectedNow;
     const bPct = target > 0 ? Math.min(100, (val/target)*100) : 0;
     const statusTxt = isFull ? '✓ Full'
-      : (expectedNow > 0 ? (diff >= 0 ? `+${fmt(Math.round(diff),goalCurr)} ahead` : `${fmt(Math.round(Math.abs(diff)),goalCurr)} behind`) : '—');
+      : (expectedNow > 0 ? (diff >= 0 ? `+${fmt(diff,goalCurr)} ahead` : `${fmt(Math.abs(diff),goalCurr)} behind`) : '—');
     const statusColor = isFull ? 'var(--green)' : (diff >= 0 ? 'var(--green)' : 'var(--red)');
     const gaugeColor = isFull ? 'var(--green)' : (expectedNow > 0 ? (diff >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)');
     const rateLabel = b.rate || (af.rateNum ? af.rateNum + '% p.a.' : '—');
     // Show both the % and ₱ equivalent regardless of how it was entered (fixed ⇄ percent).
     const sharePct = safeGoal > 0 ? (target / safeGoal) * 100 : 0;
     const allocText = af.mode === 'percent'
-      ? `🌊 ${(+sharePct.toFixed(1))}% (${fmt(Math.round(target),goalCurr)})`
-      : `🔒 ${fmt(Math.round(target),goalCurr)} (${(+sharePct.toFixed(1))}%)`;
+      ? `🌊 ${(+sharePct.toFixed(1))}% (${fmt(target,goalCurr)})`
+      : `🔒 ${fmt(target,goalCurr)} (${(+sharePct.toFixed(1))}%)`;
     const riskLvl = _bucketRisk(b);
     const riskBadge = riskLvl==='insured' ? '🛡️' : riskLvl==='low' ? '🟢' : riskLvl==='high' ? '🔴' : '🟡';
-    const subLine = `${riskBadge} ${rateLabel} · ${allocText} · ${fmt(Math.round(perMonth),goalCurr)}/mo`;
+    const subLine = `${riskBadge} ${rateLabel} · ${allocText} · ${fmt(perMonth,goalCurr)}/mo`;
     // Inline % slider (edit mode, % buckets only) — dragging rebalances the other % buckets to 100%.
     const pctSlider = (editMode && af.mode==='percent') ? `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -18933,7 +19069,7 @@ function renderContractTab() {
         <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">🗑</button>
       </div>` : '';
     const dragHandle = editMode ? `<div draggable="true" ondragstart="bucketDragStart(event,'${b.id}')" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')" style="cursor:grab;color:var(--text4);font-size:14px;padding:0 6px 0 0;user-select:none" title="Drag to reorder">⋮⋮</div>` : '';
-    return `<div class="card" style="margin-bottom:8px${editMode?';border:1px dashed var(--border2)':''}" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
+    return `<div class="card" style="margin-bottom:8px;${editMode?'border:1px dashed var(--border2)':'border:0'}" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0">
           ${dragHandle}
@@ -18945,8 +19081,8 @@ function renderContractTab() {
         </div>
         ${editControls}
         <div style="text-align:right;margin-left:8px">
-          <div style="font-family:var(--mono);font-size:14px;font-weight:600">${isLinked?fmt(Math.round(val),goalCurr):'—'}</div>
-          <div style="font-size:10px;color:var(--text4)">of ${fmt(Math.round(target),goalCurr)}</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:600">${isLinked?fmt(val,goalCurr):'—'}</div>
+          <div style="font-size:10px;color:var(--text4)">of ${fmt(target,goalCurr)}</div>
           <div style="font-size:11px;color:${statusColor}">${statusTxt}</div>
         </div>
       </div>
@@ -18976,7 +19112,7 @@ function renderContractTab() {
   const gapColor = gap>=0?'var(--green)':'var(--red)';
   // -- PERSONAL LOGIC SET #233 -- Say what the gap is measured AGAINST. "behind" on its own reads
   // as "behind the goal", when it is actually the distance from today's target PACE.
-  const gapLabel = gap>=0?`+${fmt(Math.round(gap),goalCurr)} ahead of pace`:`${fmt(Math.round(Math.abs(gap)),goalCurr)} behind pace`;
+  const gapLabel = gap>=0?`+${fmt(gap,goalCurr)} ahead of pace`:`${fmt(Math.abs(gap),goalCurr)} behind pace`;
   const toGoal = Math.max(0, safeGoal - totalActual);
 
   // Milestones
@@ -18999,22 +19135,20 @@ function renderContractTab() {
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
-        <div style="font-size:16px;font-weight:700">${active.location}</div>
+        <div style="font-size:15px;font-weight:600">${_esc(active.location)}</div>
         <div style="font-size:11px;color:var(--text3)">${fmtDFull(active.startDate)} → ${fmtDFull(active.endDate)}</div>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-ghost btn-sm" onclick="openEditContract('${activeId}')">Edit</button>
-        <button class="btn btn-ghost btn-sm" onclick="openContractWizard()">+ New</button>
-      </div>
+
     </div>
 
-    <div class="metric-grid g3" style="margin-bottom:14px">
-      <div class="metric-card"><div class="metric-label">Day</div><div class="metric-value" style="font-size:22px">${daysSince}</div><div class="metric-sub">of ${totalDays}</div></div>
-      <div class="metric-card"><div class="metric-label">Days Left</div><div class="metric-value" style="font-size:22px">${daysLeft}</div><div class="metric-sub">${Math.round(totalMonths-monthsElapsed)}mo left</div></div>
-      <div class="metric-card"><div class="metric-label">Months</div><div class="metric-value" style="font-size:22px">${monthsElapsed.toFixed(1)}</div><div class="metric-sub">of ${Math.round(totalMonths)}</div></div>
+    <!-- PLS #308: two summary tiles (the list-page pattern) replace three stat boxes, the third of
+         which sat alone on its own row. -->
+    <div class="lp-tiles" style="margin-bottom:6px">
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Saved</div><div class="lp-tile-amt">${fmt(totalActual,goalCurr)}</div><div class="lp-tile-sub">${overallPct.toFixed(1)}% of ${fmt(safeGoal,goalCurr)}</div></div>
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Day ${daysSince} of ${totalDays}</div><div class="lp-tile-amt">${daysLeft} days left</div><div class="lp-tile-sub">${monthsElapsed.toFixed(1)} of ${Math.round(totalMonths)} months</div></div>
     </div>
-
-    <div class="card" style="margin-bottom:16px">
+    <div class="lp-sec">Progress</div>
+    <div class="card" style="margin-bottom:16px;border:0">
       <!-- PLS #233: two UNRELATED figures used to sit stacked in one right-hand column with no
            label on either — a big percentage (progress toward the goal) directly above small red
            text ending in "behind". Read top to bottom that says "18.2% behind", so adding money
@@ -19037,24 +19171,25 @@ function renderContractTab() {
         <div style="height:100%;background:var(--accent);width:${overallPct.toFixed(1)}%;transition:width 0.4s"></div>
         <div style="position:absolute;left:${targetPct.toFixed(1)}%;top:-2px;bottom:-2px;width:2px;background:var(--text);opacity:0.5" title="Target pace today"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
-        <span style="color:var(--text2)">Saved</span><span style="font-family:var(--mono);font-weight:500">${fmt(Math.round(totalActual),goalCurr)}</span>
+      <div style="display:none">
+        <span style="color:var(--text2)">Saved</span><span style="font-family:var(--mono);font-weight:500">${fmt(totalActual,goalCurr)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
-        <span style="color:var(--text2)">Target today</span><span style="font-family:var(--mono)">${fmt(Math.round(targetToday),goalCurr)}</span>
+        <span style="color:var(--text2)">Target today</span><span style="font-family:var(--mono)">${fmt(targetToday,goalCurr)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
-        <span style="color:var(--text2)">Still needed</span><span style="font-family:var(--mono)">${fmt(Math.round(toGoal),goalCurr)}</span>
+        <span style="color:var(--text2)">Still needed</span><span style="font-family:var(--mono)">${fmt(toGoal,goalCurr)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;padding:7px 0 2px;border-top:1px solid var(--border)">
-        <span>Goal</span><span style="font-family:var(--mono);color:var(--accent)">${fmt(safeGoal,goalCurr)}</span>
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;padding:5px 0 2px;border-top:1px solid var(--border)">
+        <span>Goal</span><span style="font-family:var(--mono)">${fmt(safeGoal,goalCurr)}</span>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    <div class="lp-sec">Goal</div>
+    <div class="card" style="margin-bottom:16px;border:0">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:13px;font-weight:600">Total savings target</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent)">${fmt(safeGoal,goalCurr)}</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:600">${fmt(safeGoal,goalCurr)}</div>
       </div>
       <input type="range" min="${_sliderMin}" max="${_sliderMax}" step="${_sliderStep}" value="${_sliderVal}" style="width:100%;margin-bottom:8px" oninput="saveContractTarget('${activeId}',this.value)">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:10px">
@@ -19073,7 +19208,7 @@ function renderContractTab() {
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:8px">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4)">Balance per bucket</div>
+      <div style="font-size:11.5px;color:var(--text3);font-weight:500">Buckets</div>
       <div style="display:flex;gap:6px">
         ${(window._bucketEditMode===activeId && active.bucketManualOrder)?`<button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="resortBucketsAZ('${activeId}')" title="Re-sort alphabetically">A→Z</button>`:''}
         <button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:11px" onclick="openBucketSheet('${activeId}',null)">+ Add</button>
@@ -19082,12 +19217,12 @@ function renderContractTab() {
       </div>
     </div>
     ${BUCKET_DEFS.length>0?`<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:8px 12px;margin-bottom:10px;font-size:11px">
-      <span style="color:var(--text3)">Allocated <span style="font-family:var(--mono);color:var(--text)">${fmt(Math.round(_allocSum),goalCurr)}</span> (${(+_allocPct.toFixed(0))}%) / <span style="font-family:var(--mono)">${fmt(Math.round(safeGoal),goalCurr)}</span></span>
+      <span style="color:var(--text3)">Allocated <span style="font-family:var(--mono);color:var(--text)">${fmt(_allocSum,goalCurr)}</span> (${(+_allocPct.toFixed(0))}%) / <span style="font-family:var(--mono)">${fmt(safeGoal,goalCurr)}</span></span>
       ${Math.abs(_over) <= Math.max(1, safeGoal*0.005)
         ? `<span style="color:var(--green);font-weight:500">✓ 100% allocated</span>`
         : (_over > 0
-          ? `<span style="color:var(--amber);font-weight:500">Over by ${fmt(Math.round(_over),goalCurr)}</span>`
-          : `<span style="color:var(--text3);font-weight:500">${fmt(Math.round(-_over),goalCurr)} left</span>`)}
+          ? `<span style="color:var(--amber);font-weight:500">Over by ${fmt(_over,goalCurr)}</span>`
+          : `<span style="color:var(--text3);font-weight:500">${fmt(-_over,goalCurr)} left</span>`)}
     </div>`:''}
     ${BUCKET_DEFS.length===0
       ? `<div class="card" style="text-align:center;padding:24px 16px;margin-bottom:16px">
@@ -19097,8 +19232,8 @@ function renderContractTab() {
         </div>`
       : bucketsHTML}
 
-    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);margin-bottom:8px;margin-top:8px">Milestones</div>
-    <div class="card" style="margin-bottom:16px">${milestonesHTML||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No milestones set</div>'}</div>
+    <div class="lp-sec">Milestones</div>
+    <div class="card" style="margin-bottom:16px;border:0;padding-top:6px;padding-bottom:6px">${milestonesHTML||'<div style="font-size:13px;color:var(--text3);padding:8px 0">No milestones set</div>'}</div>
 
     ${renderContractArchive()}
   </div>`;
@@ -20442,66 +20577,79 @@ function confirmDeleteFxHistory(currency, idx) {
 }
 
 
+// -- PERSONAL LOGIC SET #306 -- Planning > Budgets reads like a budgeting app (YNAB / Copilot):
+// STATUS first, settings second. Two tiles (one per budget) show what is LEFT this month and act
+// as the switch; the chosen budget lists its sub-budgets with spent-of-limit and a thin bar; the
+// settings sit below as an iOS settings group (limit opens an editor, rollover and active are
+// switches). Before, the tab was an always-open form (limit field, toggles, AI button) and the
+// status lived on another page ("View budget status"). Spend is counted exactly as the Dashboard
+// budget line and the Budgets card count it, so all three agree.
+var _bgtSel = null;
+function setBgtSel(id) { _bgtSel = id; renderPlanning(); }
+function _bgtSpent(b, mk) {
+  const txs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
+    t.date && t.date.startsWith(mk) && (t.type==='expense' || t.type==='shared') && t.currency === b.currency);
+  const amt = t => t.type==='shared' ? (t.myShare || t.amount) : t.amount;
+  const keys = new Set(Object.keys(b.allocations || {}));
+  const byCat = {};
+  for (const k of keys) byCat[k] = txs.reduce((s,t) => s + (_txMatchesAlloc(t, k, keys) ? amt(t) : 0), 0);
+  return { total: txs.reduce((s,t) => s + amt(t), 0), byCat };
+}
+function openBudgetLimitDlg(id) {
+  const b = db.budgets.find(x => x.id === id); if (!b) return;
+  openDlg('Monthly limit', `<div class="form-group"><label class="form-label" for="bgt-lim">${_esc(b.location)} · ${b.currency}</label>
+    <input class="form-input numpad-input" id="bgt-lim" type="number" value="${b.limit}" inputmode="none"></div>`,
+    `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button>
+     <button class="btn btn-primary" onclick="updateBudgetLimit('${id}', document.getElementById('bgt-lim').value); closeDlg(); renderPlanning()">Save</button>`);
+}
 function renderBudgetsTab() {
-  return `<div class="page-pad">
-    ${db.budgets.length === 0 ? `<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No budgets yet</div><div class="empty-sub" style="margin-bottom:16px">Set a monthly spending limit per currency, then let AI split it across your categories.</div></div>` : ''}
-    ${db.budgets.map(b=>{
-      const allocs = b.allocations || {};
-      const allocCount = Object.keys(allocs).length;
-      const totalAllocated = Object.values(allocs).reduce((s,v)=>s+(parseFloat(v)||0),0);
-      const allocPct = b.limit > 0 ? (totalAllocated/(b.limit + (b.rollover?(b.rolloverAmount||0):0))*100) : 0;
-      // PLS #133: Settings → Budgets is CONFIGURATION-ONLY. Sub-budget rows show the allocation
-      // cap per category (a setting), never live spend/progress — budget STATUS lives on the
-      // dashboard Budget view alone, so the same number never has two homes.
-      const subRows = allocCount > 0 ? Object.entries(allocs).map(([catId, limit])=>{
-        const limAmt = parseFloat(limit) || 0;
-        const cat = getCategoryDisplay(catId);
-        const _isTopP = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId); // PLS #134
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${cat.icon}</span><span>${_esc(_isTopP ? cat.name : _stripIcon(cat.name))}</span></div>
-          <div style="font-size:11px;font-family:var(--mono);color:var(--text3)">${sym(b.currency)}${limAmt.toFixed(0)}</div>
-        </div>`;
-      }).join('') : '';
-
-      const rollAmt = b.rollover ? (b.rolloverAmount||0) : 0;
-      const effectiveLimit = b.limit + rollAmt;
-      return `<div class="card" style="margin-bottom:12px;padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div><div style="font-size:15px;font-weight:600">${getFlag(b.location)} ${b.location}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">${b.currency} budget</div></div>
-        <label class="toggle"><input type="checkbox" ${b.active?'checked':''} onchange="toggleBudget('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
-      </div>
-      <div style="margin-bottom:12px">
-        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600;display:block;margin-bottom:6px">Monthly Limit (${sym(b.currency)})</label>
-        <input class="form-input numpad-input" type="number" value="${b.limit}" onchange="updateBudgetLimit('${b.id}',this.value,this)" inputmode="none">
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg3);border-radius:var(--r-md);margin-bottom:12px">
-        <div>
-          <div style="font-size:13px;color:var(--text2);font-weight:500">Rollover unspent</div>
-          <div style="font-size:11px;color:var(--text4);margin-top:1px">Carry leftover to next month</div>
-        </div>
-        <label class="toggle"><input type="checkbox" ${b.rollover?'checked':''} onchange="toggleBudgetRollover('${b.id}',this.checked)"><div class="toggle-slider"></div></label>
-      </div>
-      ${b.rollover && b.rolloverAmount > 0 ? `<div style="font-size:11px;color:var(--accent);margin:-6px 0 12px;font-family:var(--mono)">+ ${fmt(b.rolloverAmount||0, b.currency)} carried over from last month</div>` : ''}
-      <div style="display:flex;gap:8px;${allocCount?'margin-bottom:16px':''}">
-        <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="openAiAllocate('${b.id}')">🤖 ${allocCount?'Re-allocate':'AI Allocate'}</button>
-        ${allocCount?`<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="clearAllocations('${b.id}')">Clear</button>`:''}
-      </div>
-      ${allocCount > 0 ? `<div style="border-top:1px solid var(--border);padding-top:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);font-weight:600">Sub-budgets (${allocCount})</div>
-          <div style="font-size:11px;color:${allocPct>100?'var(--red)':'var(--text3)'};font-family:var(--mono)">${sym(b.currency)}${totalAllocated.toFixed(0)} / ${sym(b.currency)}${effectiveLimit.toFixed(0)} <span style="color:var(--text4)">(${allocPct.toFixed(0)}%)</span></div>
-        </div>
-        ${subRows}
-      </div>` : ''}
-    </div>`;}).join('')}
-    <button class="pool-add-btn" onclick="openAddBudget()">+ Add Budget</button>
-    <div style="margin-top:24px">
-      <div class="quiet-row" onclick="nav('dashboard')">
-        <div>View budget status</div><div style="color:var(--text4)">›</div>
-      </div>
-    </div>
-  </div>`;
+  if (db.budgets.length === 0) return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No budgets yet</div><div class="empty-sub" style="margin-bottom:16px">Set a monthly spending limit per currency, then split it by category.</div><button class="btn btn-primary btn-sm" onclick="openAddBudget()">+ Add Budget</button></div></div>`;
+  const mk = currMonthKey();
+  const monthLbl = new Date(mk + '-01T12:00').toLocaleString('en', {month:'long'});
+  if (!db.budgets.some(b => b.id === _bgtSel)) _bgtSel = (db.budgets.find(b => b.active) || db.budgets[0]).id;
+  const tiles = db.budgets.map(b => {
+    const lim = b.limit + (b.rollover ? (b.rolloverAmount||0) : 0);
+    const sp = _bgtSpent(b, mk).total, left = lim - sp, pct = lim > 0 ? sp / lim * 100 : 0;
+    return `<button class="lp-tile ${b.id===_bgtSel?'on':''}" onclick="setBgtSel('${b.id}')" aria-pressed="${b.id===_bgtSel}">
+      <div class="lp-tile-lbl">${getFlag(b.location)} ${_esc(b.location)}</div>
+      <div class="lp-tile-amt" style="color:${left<0?'var(--red)':'var(--text)'}">${fmt(Math.abs(left), b.currency)}</div>
+      <div class="lp-tile-sub">${b.active ? `${left<0?'over':'left'} · ${pct.toFixed(0)}% of ${fmt(lim, b.currency)}` : 'Paused'}</div></button>`;
+  }).join('');
+  const b = db.budgets.find(x => x.id === _bgtSel);
+  const allocs = b.allocations || {};
+  const sp = _bgtSpent(b, mk);
+  const lim = b.limit + (b.rollover ? (b.rolloverAmount||0) : 0);
+  const allocTotal = Object.values(allocs).reduce((s,v) => s + (parseFloat(v)||0), 0);
+  const rows = Object.entries(allocs).map(([catId, l]) => ({ catId, lim: parseFloat(l)||0, spent: sp.byCat[catId]||0 }))
+    .filter(r => r.lim > 0).sort((x,y) => (y.spent/y.lim) - (x.spent/x.lim));
+  let html = `<div class="page-pad">${_tilesRow(tiles, db.budgets.length)}`;
+  setTimeout(() => { const t = document.querySelector('.lp-swipe .lp-tile.on'); if (t) { t.scrollIntoView({ block: 'nearest', inline: 'nearest' }); _tilesArrows(t.parentElement.id); } }, 0);
+  html += `<div class="lp-sec" style="display:flex;justify-content:space-between"><span>${monthLbl}</span><span style="font-family:var(--mono)">${fmt(allocTotal, b.currency)} planned</span></div>`;
+  if (rows.length) {
+    html += `<div class="lp-grp">` + rows.map(r => {
+      const cat = getCategoryDisplay(r.catId);
+      const isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === r.catId);
+      const pct = r.spent / r.lim * 100, over = r.spent > r.lim;
+      const col = over ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)';
+      return `<div class="lp-row" style="cursor:default">
+        <div class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${cat.icon}</div>
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(isTop ? cat.name : _stripIcon(cat.name))}</span></div>
+          <div class="lp-meta">${fmt(r.spent, b.currency)} of ${fmt(r.lim, b.currency)} · ${pct.toFixed(0)}%</div>
+          <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:7px;overflow:hidden"><div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;background:${col};border-radius:2px"></div></div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${over?'var(--red)':'var(--text)'}">${fmt(Math.abs(r.lim - r.spent), b.currency)}</div><div class="lp-amt2">${over?'over':'left'}</div></div></div>`;
+    }).join('') + `</div>`;
+  } else {
+    html += `<div class="lp-empty">No categories planned yet.<br><span style="color:var(--text4);font-size:12px">Use Allocate with AI below, or set them by hand.</span></div>`;
+  }
+  const sw = (on, fn) => `<label class="toggle" onclick="event.stopPropagation()"><input type="checkbox" ${on?'checked':''} onchange="${fn}"><div class="toggle-slider"></div></label>`;
+  html += `<div class="lp-sec">Settings</div><div class="lp-grp">
+    <div class="lp-row" onclick="openBudgetLimitDlg('${b.id}')"><div style="flex:1" class="lp-name">Monthly limit</div><div class="lp-amt">${fmt(b.limit, b.currency)}</div><span class="lp-chev">›</span></div>
+    <div class="lp-row" style="cursor:default"><div style="flex:1"><div class="lp-name">Rollover unspent</div><div class="lp-meta">${b.rollover && b.rolloverAmount > 0 ? `+${fmt(b.rolloverAmount, b.currency)} carried from last month` : 'Carry leftover to next month'}</div></div>${sw(b.rollover, `toggleBudgetRollover('${b.id}',this.checked);renderPlanning()`)}</div>
+    <div class="lp-row" style="cursor:default"><div style="flex:1"><div class="lp-name">Active</div><div class="lp-meta">Shown on Dashboard and in alerts</div></div>${sw(b.active, `toggleBudget('${b.id}',this.checked);renderPlanning()`)}</div>
+    <div class="lp-row" onclick="openAiAllocate('${b.id}')"><div style="flex:1" class="lp-name" >${rows.length ? 'Re-allocate with AI' : 'Allocate with AI'}</div><span class="lp-chev">›</span></div>
+    ${rows.length ? `<div class="lp-row" onclick="clearAllocations('${b.id}')"><div style="flex:1;color:var(--red)" class="lp-name">Clear categories</div></div>` : ''}
+  </div></div>`;
+  return html;
 }
 
 function toggleBudgetRollover(bgtId, enabled) {
@@ -22784,16 +22932,16 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
     }
     // PLS #13: Loan tx direction
     if (tx.isLoanTx) {
-      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const loanAmtInAcctCurr = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       if (tx.loanDirection === 'lent' && tx.accountId === acctId) bal -= loanAmtInAcctCurr;
       else if (tx.loanDirection === 'borrowed' && tx.accountId === acctId) bal += loanAmtInAcctCurr;
     }
     else if (tx.type === 'expense' && tx.accountId === acctId) {
-      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const amt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       bal -= amt;
     }
     else if (tx.type === 'income' && tx.accountId === acctId) {
-      const amt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const amt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       bal += amt;
     }
     // PLS #14: shared deducts totalBill (unless isFeeReimbursable)
@@ -22803,25 +22951,25 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
       // PHP account took PHP 100 off, and Bank Reconciliation / month-end net worth disagreed with the
       // account card. (0 such bills in the Sep 2026 data, latent until one is logged.)
       const billAmt = tx.totalBill || tx.amount;
-      bal -= tx.currency === acct.currency ? billAmt : convert(billAmt, tx.currency, acct.currency); // PLS #278
+      bal -= tx.currency === acct.currency ? billAmt : _txConv(billAmt, tx, acct.currency); // PLS #278
     }
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) {
-        const deductAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        const deductAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
         bal -= deductAmt;
       }
       if (tx.toAccountId === acctId) {
         if (tx.toAmount != null) {
           bal += tx.toAmount;
         } else {
-          const addAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+          const addAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
           bal += addAmt;
         }
       }
     }
     else if (tx.type === 'remittance') {
       if (tx.fromAccountId === acctId) {
-        const fromAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+        const fromAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
         bal -= fromAmt;
       }
       if (tx.toAccountId === acctId) {
@@ -22833,7 +22981,7 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
     else if (tx.type === 'external-in' && tx.accountId === acctId) bal += tx.amount;
     else if (tx.type === 'external-out' && tx.accountId === acctId) bal -= tx.amount;
     else if (tx.type === 'correction' && tx.accountId === acctId) {
-      const corrAmt = tx.currency === acct.currency ? tx.amount : convert(tx.amount, tx.currency, acct.currency);
+      const corrAmt = tx.currency === acct.currency ? tx.amount : _txConv(tx.amount, tx, acct.currency);
       if (tx.direction === 'up') bal += corrAmt;
       else if (tx.direction === 'down') bal -= corrAmt;
     }
@@ -24500,6 +24648,7 @@ function autoPurgeArchived() {
 // DETECT RECURRING FROM HISTORY
 // ════════════════════════════════════════════════════════════
 function detectRecurring() {
+  return; // PLS #305: auto-detection removed
   const catGroups = {};
   for (const tx of db.transactions) {
     if (tx.type !== 'expense' && tx.type !== 'income') continue;
@@ -24771,6 +24920,34 @@ function ensureDBIntegrity() {
       fixedFx++;
     });
     if (fixedFx > 0) issues.push(`re-measured forex on ${fixedFx} transfer${fixedFx===1?'':'s'} at their own rate`);
+
+    // -- PERSONAL LOGIC SET #304 -- one-time repair of ONE known record, at the owner's request
+    // (Sep 2026): the Sep 9 swap GCash PHP 3,500 -> Kina Bank was saved with no received amount
+    // (the gap PLS #276 now blocks), so the app guessed K265.59; K280 actually arrived and the
+    // PHP 14.41-kina gap was patched on Sep 14 with a Balance Correction. This does exactly what
+    // the in-app edit would: received = K280 (actual), forex gain measured at the swap's own rate
+    // (PHP 189.90, PLS #273), and the patch correction removed. Kina Bank ends where it is now.
+    // Guarded on BOTH records' ids AND exact stored values: if either was touched, it does nothing.
+    if (!db.settings._pls304) {
+      const sw = (db.transactions||[]).find(t => t.id === 'mtuphcbm86jy');
+      const cr = (db.transactions||[]).find(t => t.id === 'mu0nenkpn34x');
+      if (sw && cr && sw.type === 'transfer' && !sw.toAmountIsActual && sw.amount === 3500 && sw.currency === 'PHP'
+          && Math.abs(sw.toAmount - 265.5898792954705) < 1e-9 && cr.type === 'correction'
+          && Math.abs(cr.amount - 14.410120704529163) < 1e-9 && cr.accountId === sw.toAccountId) {
+        const r = _txSnapRate('PGK', sw.date, sw.time, sw.fxSnapshot);
+        sw.toAmount = 280; sw.toAmountIsActual = true;
+        const diff = (280 - sw.amount / r) * r; // home -> foreign, same formula as saveEditTransfer
+        db.transactions.push({ id: genId(), parentId: sw.id, isAutoForex: true, createdAt: new Date().toISOString(),
+          type: diff >= 0 ? 'income' : 'expense', amount: Math.abs(diff), currency: _homeBase(),
+          accountId: sw.fromAccountId, categoryId: diff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
+          date: sw.date, time: sw.time || '00:00', notes: `Forex ${diff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+          fxSnapshot: sw.fxSnapshot, forexSnapRate: r });
+        db.transactions = db.transactions.filter(t => t.id !== cr.id);
+        db.settings._pls304 = true;
+        issues.push('Sep 9 swap set to K280 received; Sep 14 correction removed');
+        setTimeout(() => { try { saveDBWithSync(); } catch(e) {} }, 1500); // persist the repair once the app is up
+      }
+    }
 
     if (issues.length > 0) {
       console.log('[Integrity] Patched:', issues.join(' · '));
@@ -25362,6 +25539,7 @@ function aiSavingsPace() {
 }
 
 function aiRecurringDetector() {
+  return []; // PLS #305: its only action was "Add to recurring", a feature that no longer exists
   const insights = []; const groups = {};
   // Skip auto-generated children (settlement gain/loss, fees, forex) — false positives sa recurring detection
   for (const t of db.transactions.filter(t=>t.type==='expense'&&!t.archived&&t.date&&!t.isSettlement&&!t.isAutoForex&&!t.isAutoReimb&&!t.isAutoFee&&!t.isLoanSettlementGain&&!t.isLoanSettlementLoss&&!t.isReimbSettlementGain&&!t.isReimbSettlementLoss&&!t.isLoanTx&&!t.isLoanPayment&&!t.isFeeReimbursable&&!t.isInvestmentFund)) {
@@ -26044,7 +26222,6 @@ function aiNavigate(insId) {
     'Consider reallocating': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
     'Go to Reimbursements': ()=>{ nav('reimbursements'); },
-    'Add to recurring': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('recurring'); },150); },
     'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
     'Review budget limit': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'Review allocation': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
@@ -26358,12 +26535,19 @@ function renderAnalyticsCrossCurrency() {
 
   // FX gains/losses YTD
   const ytdStart = `${new Date().getFullYear()}-01-01`;
-  const fxGL = db.transactions.filter(t => !t.archived && t.date >= ytdStart &&
-    (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss));
-  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
-  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
-  const ytdGains = fxGL.filter(t => t.isLoanSettlementGain || t.isReimbSettlementGain).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
-  const ytdLosses = fxGL.filter(t => t.isLoanSettlementLoss || t.isReimbSettlementLoss).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
+  // -- PERSONAL LOGIC SET #296 -- FX Activity = money made or lost ON THE EXCHANGE RATE only.
+  // It counted every settlement loss, and a write-off is booked as one, so the card showed
+  // -PHP 20,297.30 of "FX losses" that were 100% write-offs (Bibi PHP 18,288.60, Celso reimb
+  // PHP 2,008.69) and 0 FX. It also left out the forex on currency swaps (transfers with an
+  // actual received amount, PLS #273): +PHP 3,669.24 / -PHP 207.02 YTD. Write-offs are their own
+  // category (a loss, not FX) and stay counted everywhere else as losses (PLS #277).
+  const _isWO = t => !!(t.isBatchWriteOff || t.categoryId === 'sc-writeoff' || t.writeOffReason);
+  const fxGL = db.transactions.filter(t => !t.archived && t.date >= ytdStart && !_isWO(t) &&
+    (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex));
+  // PLS #245: txAmtIn, not convert/toPhp -- valued at the rate that was live when it happened.
+  const _isGain = t => t.isLoanSettlementGain || t.isReimbSettlementGain || (t.isAutoForex && t.type === 'income');
+  const ytdGains = fxGL.filter(_isGain).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
+  const ytdLosses = fxGL.filter(t => !_isGain(t)).reduce((s,t)=>s+txAmtIn(t.amount, t),0);
   const netFX = ytdGains - ytdLosses;
 
   let html = `<div class="page-pad">
@@ -26377,7 +26561,10 @@ function renderAnalyticsCrossCurrency() {
       <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Currency Exposure</div>`;
   sortedCurr.forEach(([curr, data]) => {
     const pct = total > 0 ? (data.equiv / total) * 100 : 0;
-    const rate = data.native > 0 ? data.equiv / data.native : 0;
+    // PLS #294: show the rate AS ENTERED. equiv / native rebuilt it by division and printed float
+    // noise (13.207881700000002 for an entered 13.2078817). The balance is valued at the current
+    // rate, so the current rate is exactly the entered one.
+    const rate = curr === _homeBase() ? 1 : (Number(db.fxRates?.[curr]) > 0 ? Number(db.fxRates[curr]) : (data.native > 0 ? data.equiv / data.native : 0));
     html += `<div style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
         <div><b style="font-size:14px">${curr}</b> <span style="font-size:11px;color:var(--text3)">· ${data.count} ${aiPlural(data.count,'account')}</span></div>
@@ -26409,7 +26596,7 @@ function renderAnalyticsCrossCurrency() {
       <b style="font-size:13px">Net FX P/L</b>
       <b style="color:${netFX>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(_inDisplay(netFX), dc, true)}</b>
     </div>
-    <div style="font-size:10px;color:var(--text4);margin-top:6px">From loan/reimb settlements with FX changes</div>
+    <div style="font-size:10px;color:var(--text4);margin-top:6px">From currency swaps and loan/reimb settlements · write-offs excluded</div>
   </div>`;
 
   html += `</div>`;
@@ -26770,7 +26957,7 @@ function renderAnalyticsBudget() {
 // ───────────────────────────────────────────────────────────
 function renderAnalyticsSubs() {
   const dc = _displayCurrency();
-  const subs = (db.recurringTxs || []).filter(r => r.active !== false && !r.archived && r.type === 'expense');
+  const subs = _recurringList().filter(r => r.active !== false && !r.archived && r.type === 'expense');
   if (subs.length === 0) {
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🔁</div><div class="empty-text">No active subscriptions</div><div class="empty-sub">Set recurring expenses in Planning tab</div></div></div>`;
   }
@@ -27332,7 +27519,7 @@ function renderAnalyticsAISummary() {
   }
 
   // Recurring load — the part of next month that is already spoken for before you decide anything.
-  const rec = (db.recurringTxs || []).filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
+  const rec = _recurringList().filter(r => r.active && (r.type === 'expense' || r.type === 'shared'));
   const recPerMonth = rec.reduce((s,r) => {
     const a = r.currency === dc ? r.amount : convert(r.amount, r.currency, dc);
     const mult = r.frequency === 'weekly' ? 4.33 : r.frequency === 'biweekly' ? 2.17
