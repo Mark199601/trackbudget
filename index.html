@@ -438,8 +438,9 @@ option{background:var(--bg3);color:var(--text)}
 .fr2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.fr2-always{display:grid;gap:10px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .fr3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
 .fr4-resp{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+/* PLS #282: .fr4-resp goes 2x2 at <=480px (was forced to 4 across with a 5px gap, which cut "UNREALIZED" to "UNREALIZE" and split PHP 14,925.27 mid-number on phones). Only user: the Investments KPI row. Same 2x2 as the Dashboard 4-metric grid. */
 .stat-month-grid{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:480px){.fr2,.fr3{grid-template-columns:minmax(0,1fr)}.fr2-always{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}.fr4-resp{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important}.stat-month-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}}
+@media(max-width:480px){.fr2,.fr3{grid-template-columns:minmax(0,1fr)}.fr2-always{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}.fr4-resp{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:10px!important}.stat-month-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}}
 .form-hint{font-size:11px;color:var(--text3);margin-top:5px}
 
 .type-toggle{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
@@ -937,6 +938,42 @@ option{background:var(--bg3);color:var(--text)}
 @media(min-width:768px) and (max-width:1023px){.hero-amount{font-size:42px;letter-spacing:-2px}}
 .quiet-row{display:flex;justify-content:space-between;align-items:center;padding:12px 8px;cursor:pointer;color:var(--text3);font-size:13px;border-radius:var(--r-sm);transition:background var(--transition)}
 .quiet-row + .quiet-row{border-top:0.5px solid var(--border)}
+/* PLS #287: list-page pattern (Loans first). Summary TILES that double as the Lent out / Borrowed
+   switch, Active / Settled CHIPS so settled items never mix into the live list, SECTION labels,
+   and GROUPED lists (one surface, inset hairlines) like iOS Settings / Mail. */
+.lp-tiles{display:flex;gap:10px}
+.lp-tile{flex:1;min-width:0;background:var(--bg2);border-radius:14px;padding:12px 14px;border:1.5px solid transparent;cursor:pointer;text-align:left;color:var(--text);font:inherit;transition:border-color var(--transition)}
+.lp-tile.on{border-color:var(--accent)}
+.lp-tile-lbl{font-size:12px;color:var(--text3);font-weight:500}
+.lp-tile-amt{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-tile-sub{font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lp-chips{display:flex;gap:8px;margin:14px 0 2px}
+.lp-chip{font:inherit;font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:999px;background:var(--bg3);color:var(--text3);border:0;cursor:pointer}
+.lp-chip.on{background:var(--text);color:var(--bg)}
+.lp-sec{font-size:12px;color:var(--text3);font-weight:500;margin:20px 4px 8px}
+.lp-grp{background:var(--bg2);border-radius:14px;overflow:hidden}
+.lp-grp > .reimb-person-card{border:0!important;border-radius:0!important;margin:0!important;background:transparent!important}
+.lp-grp > * + *{box-shadow:inset 58px 0 0 var(--bg2),inset 0 1px 0 var(--border)}
+.lp-row{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
+.lp-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0}
+.lp-meta{font-size:11.5px;color:var(--text3);margin-top:2px}
+.lp-amt{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
+.lp-amt2{font-family:var(--mono);font-size:10.5px;color:var(--text4);margin-top:2px;white-space:nowrap}
+.lp-chev{color:var(--text4);font-size:18px;line-height:1;transition:transform var(--transition);flex-shrink:0}
+.lp-chev.open{transform:rotate(90deg)}
+.lp-pill{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
+.lp-pill.due{background:rgba(217,119,6,.16);color:#f59e0b}
+.lp-pill.over{background:rgba(220,38,38,.15);color:#f87171}
+.lp-pill.wo{background:rgba(220,38,38,.15);color:#f87171}
+.lp-pill.gain{background:var(--green-bg);color:var(--green)}
+.lp-empty{text-align:center;color:var(--text3);font-size:13px;padding:28px 12px}
+/* header: iOS nav-bar actions, "..." page menu then "+" add, far right */
+.hdr-act{width:34px;height:34px;min-width:34px;border-radius:50%;background:var(--bg3);color:var(--accent)}
+.hdr-act svg{width:18px;height:18px}
+.pg-menu{position:fixed;z-index:9000;min-width:200px;background:var(--bg4);border:1px solid var(--border2);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);overflow:hidden}
+.pg-menu button{display:flex;justify-content:space-between;gap:16px;width:100%;padding:11px 14px;background:none;border:0;color:var(--text);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.pg-menu button + button{border-top:1px solid var(--border)}
+.pg-menu .n{color:var(--text3)}
 .quiet-row:active{background:var(--bg3)}
 @media(hover:hover){.quiet-row:hover{background:var(--bg3)}}
 @media(min-width:1024px){.hero-amount{font-size:46px;letter-spacing:-2.2px}}
@@ -1593,6 +1630,11 @@ function roundMoney(amt, code) {
   const f = Math.pow(10, d);
   return Math.round(amt * f) / f;
 }
+// -- PERSONAL LOGIC SET #283 -- fmt() prints the ABSOLUTE value unless sign=true. 19 call sites wrote
+// `${v>=0?'+':''}${fmt(v)}`, which labels gains "+" and prints losses with NO sign at all, so a
+// PHP 14,925 loss read as "PHP 14,925.27" and was told apart from a gain by colour alone (invisible
+// to colour-blind users and in screenshots). They now call fmt(v, code, true). Use that for any
+// figure that can go either way.
 function fmt(amt, code, sign=false) {
   amt = Number(amt);
   if (!Number.isFinite(amt)) amt = 0;
@@ -2709,7 +2751,7 @@ function avgMonthlyExpense6mo() {
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if (_floor && key < _floor) continue; // PLS #215: skip the partial start month
     const t = getMonthTotals(key); // returns display-currency totals
-    if (t.expense > 0) { total += t.expense; months++; }
+    if (t.spending > 0) { total += t.spending; months++; } // PLS #277: usual spending, one-time losses out
   }
   return months > 0 ? total / months : 0;
 }
@@ -2760,6 +2802,14 @@ function txAmtIn(amount, tx, toCurr) {
 function getMonthTotals(monthKey) {
   const txs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(monthKey));
   let income=0, expense=0;
+  // -- PERSONAL LOGIC SET #277 -- oneTimeLoss: the part of `expense` that is a LOSS, not spending
+  // (investment sold below cost, loan/reimbursement write-offs and settlement losses). It stays IN
+  // expense and net, since it is real money gone from your wealth and your month. Only the
+  // "usual behaviour" averages subtract it (Runway burn, Pace/Velocity baseline, next-month
+  // forecast): the Aug Binance loss (PHP 14,925) and Sep Bibi write-off (PHP 18,289) are not
+  // monthly habits, yet they were inflating the average spend by 7.5% and shortening runway.
+  // Measured inside this same loop, so it can never subtract something expense did not count.
+  let oneTimeLoss = 0;
   const dispCurr = _displayCurrency();
   for (const t of txs) {
     // 📖 USER STORY: Pag nag-open ka ng Analytics, yung income at expense totals mo ay malinis —
@@ -2799,6 +2849,7 @@ function getMonthTotals(monthKey) {
     if (t.isInvestmentReturn) {
       const _g = _investmentGL(t, dispCurr); // PLS #221: one shared decision
       income += _g.income; expense += _g.expense;
+      oneTimeLoss += _g.expense; // PLS #277: a sale below cost is a loss, not spending
       continue; // the capital portion is never income
     }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
@@ -2807,10 +2858,16 @@ function getMonthTotals(monthKey) {
     // was live when it happened. Using a live rate here lets a rate update rewrite the past.
     const converted = t.currency === dispCurr ? amt : txAmtIn(amt, t, dispCurr);
     if (t.type==='income') income += converted;
-    else if (t.type==='expense' || t.type==='shared') expense += converted;
+    else if (t.type==='expense' || t.type==='shared') {
+      expense += converted;
+      // PLS #277: write-offs and settlement losses are losses, not spending habits
+      if (t.type === 'expense' && (t.isLoanSettlementLoss || t.isReimbSettlementLoss ||
+          t.categoryId === 'sc-writeoff' || t.writeOffReason !== undefined)) oneTimeLoss += converted;
+    }
     // Remittance, transfer, lend, borrow excluded from monthly income/expense totals
   }
-  return { income, expense, net: income-expense, currency: dispCurr };
+  return { income, expense, net: income-expense, currency: dispCurr, oneTimeLoss,
+           spending: expense - oneTimeLoss }; // PLS #277: `spending` = usual behaviour, for averages only
 }
 
 // DEBUG_SCANNER_NOTE: function signature uses `date, time` as parameters.
@@ -3019,6 +3076,48 @@ const DASH_SECTION_ICONS = {
 
 // Maps a dashboard widget-section id → its builder call. Each returns '' on no data (auto-hide).
 // Reuses the EXACT same builders as Analytics → Overview, so numbers always match.
+// -- PERSONAL LOGIC SET #285 -- On the Dashboard a widget already sits under its section header, so
+// a card title that merely repeats that header ("Income vs Expense" twice) is dropped. Only when the
+// card's FIRST text element IS the title and matches the header word for word (emoji/punctuation
+// ignored): a label that sits beside a figure deeper in the card ("Cash Runway 7.2mo") is content,
+// not a title, and is kept. The same builders render in Analytics Overview, where no header exists
+// above them, so this runs in the Dashboard wrapper only. If the title shares a row with something
+// else (a legend), it is emptied instead of removed so that row keeps its layout.
+function _dropEchoTitle(html, label) {
+  if (!html || !label) return html;
+  try {
+    const norm = t => String(t).replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    const want = norm(label);
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    // the card's FIRST visible text, as a text node (a title often shares its div with an info icon)
+    const tw = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+    let t; while ((t = tw.nextNode()) && !t.textContent.trim()) {}
+    if (!t) return html;
+    const got = norm(t.textContent);
+    // an echo is the header word for word, or the header plus one trailing word ("Day-of-Week Pattern")
+    if (!(got === want || (got.startsWith(want + ' ') && got.split(' ').length === want.split(' ').length + 1))) return html;
+    const el = t.parentElement;
+    let icons = '';
+    if (el.children.length) {
+      // the title carries an info icon: lift the icon up beside the section header instead of
+      // leaving it floating alone where the title was
+      icons = [...el.children].map(c => c.outerHTML).join('');
+      [...el.children].forEach(c => c.remove());
+    }
+    let up = el.parentElement;
+    if (up && up.children.length > 1) el.textContent = ''; // keep the row (legend / badge stays right)
+    else el.remove();
+    // climb out of any wrapper that is now empty, so no blank band is left at the top of the card
+    const empty = n => !n.textContent.trim() && !n.querySelector('svg,img,canvas,button');
+    while (up && up.parentNode && !up.classList.contains('card') && empty(up)) { const next = up.parentElement; up.remove(); up = next; }
+    // a right-hand block (e.g. "7.2mo / 218 days") that lost its left partner keeps its right alignment
+    if (up && up.children.length === 1 && /flex/.test(up.getAttribute('style') || '') && /space-between/.test(up.getAttribute('style') || ''))
+      up.firstElementChild.style.marginLeft = 'auto';
+    return { html: tpl.innerHTML, icons };
+  } catch (e) { return html; } // never break a widget over a cosmetic
+}
+
 function _dashWidgetHTML(id, mk, disp) {
   let inner = '';
   switch(id) {
@@ -3043,7 +3142,10 @@ function _dashWidgetHTML(id, mk, disp) {
     case 'w_concentration': inner = buildConcentrationRisk(disp); break;
   }
   if (!inner) return ''; // auto-hide when widget has no data
-  return `<div style="margin-bottom:16px"><div class="section-hdr"><div class="section-title">${DASH_SECTION_LABELS[id]||''}</div><span class="section-action" onclick="nav('analytics')">Open</span></div>${inner}</div>`;
+  let _hdrIcons = '';
+  { const r = _dropEchoTitle(inner, DASH_SECTION_LABELS[id] || ''); // PLS #285
+    if (r && typeof r === 'object') { inner = r.html; _hdrIcons = r.icons; } }
+  return `<div style="margin-bottom:16px"><div class="section-hdr"><div class="section-title">${DASH_SECTION_LABELS[id]||''}${_hdrIcons}</div><span class="section-action" onclick="nav('analytics')">Open</span></div>${inner}</div>`;
 }
 
 function nav(page) {
@@ -3097,28 +3199,60 @@ function renderPageHeader(page) {
   const syncHTML = `<div id="sync-indicator" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text4);cursor:default;white-space:nowrap"><span id="sync-icon" style="display:flex;align-items:center"></span><span id="sync-label">–</span></div>`;
   const themeHTML = `<button id="theme-toggle-btn" class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">${isLight ? SVG_MOON : SVG_SUN}</button>`;
   let pageHTML = '';
+  // -- PERSONAL LOGIC SET #287 -- iOS nav bar: the page's own actions sit at the far right as
+  // round glyph buttons, "..." (rarely used things: archive) then "+" (add). The theme toggle left
+  // the header (it lives in Settings, and a page header is for that page), and the sync badge now
+  // only appears while it needs attention (unsaved / saving); a quiet "Saved 3m ago" on every
+  // page was chrome, not information.
+  const _svgPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+  const _svgMore = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`;
+  const _plus = (fn, label) => `<button class="icon-btn hdr-act" aria-label="${label}" title="${label}" onclick="${fn}">${_svgPlus}</button>`;
+  const _more = pg => `<button class="icon-btn hdr-act" aria-label="More" title="More" onclick="openPageMenu(event,'${pg}')">${_svgMore}</button>`;
   if (page==='dashboard') {
     pageHTML = renderDeviceIndicator();
   } else if (page==='accounts') {
-    pageHTML = `<button class="btn-text" onclick="openAddAccount()">+ Account</button>`
-      + `<button aria-label="Archived accounts" class="icon-btn" title="Archived accounts" onclick="openArchivedAccountsSheet()">${svgArchive}</button>`;
+    pageHTML = _more('accounts') + _plus('openAddAccount()', 'Add account'); // PLS #287
   } else if (page==='targets') {
-    pageHTML = `<button class="btn-text" onclick="openAddTarget()">+ Target</button>`;
+    pageHTML = _plus('openAddTarget()', 'Add target'); // PLS #287
   } else if (page==='loans') {
-    pageHTML = `<button class="btn-text" onclick="openAddLoan(_loanTab)">+ Loan</button>`; // PLS #132: preset follows active Lent/Borrowed tab
+    pageHTML = _more('loans') + _plus('openAddLoan(_loanTab)', 'Add loan'); // PLS #132: preset follows active Lent/Borrowed tab; PLS #287 glyphs
   } else if (page==='investments') {
-    pageHTML = `<button class="btn-text" onclick="openAddInv()">+ Investment</button>`;
+    pageHTML = _more('investments') + _plus('openAddInv()', 'Add investment'); // PLS #287
+  } else if (page==='reimbursements') {
+    pageHTML = _more('reimbursements') + _plus("openAddSheet({type:'shared'})", 'Add shared expense'); // PLS #289
   } else if (page==='installments') {
     // -- PERSONAL LOGIC SET #236 -- Installments was the ONE list page with no header action, so
     // it carried a full-width gradient button at the bottom of the list instead. That pushed the
     // Completed toggle into the middle of the page and gave the same action two different shapes
     // in two places. Every list page now states its add action in the same spot, the same way.
-    pageHTML = `<button class="btn-text" onclick="openAddInstallment()">+ Installment</button>`;
+    pageHTML = _more('installments') + _plus('openAddInstallment()', 'Add installment'); // PLS #287
   }
-  // sync first, then page actions, then theme
-  r.innerHTML = syncHTML + pageHTML + themeHTML;
+  // sync first (shown only when it needs attention), then page actions. PLS #287: theme toggle left the header.
+  r.innerHTML = syncHTML + pageHTML;
   updateSyncIndicator();
 }
+
+// PLS #287: the "..." page menu. Only things that already exist on that page, rarely used ones.
+function openPageMenu(ev, page) {
+  ev && ev.stopPropagation();
+  closePageMenu();
+  const items = [];
+  if (page === 'loans') items.push(['Archive', (db.archivedLoans||[]).length, 'openLoanArchiveSheet()']);
+  if (page === 'accounts') items.push(['Archived accounts', db.accounts.filter(a=>a.archived).length, 'openArchivedAccountsSheet()']);
+  if (page === 'reimbursements') items.push(['Archive', (db.archivedTransactions||[]).filter(t => t.type === 'shared').length, 'openTxArchiveSheet()']);
+  if (page === 'installments') items.push(['Archive', (db.installments||[]).filter(i=>i.archived).length, 'openInstArchiveSheet()']);
+  if (page === 'investments') items.push(['Archive', (db.investments||[]).filter(i=>i.archived).length, 'openInvArchiveSheet()']);
+  if (!items.length) return;
+  const m = document.createElement('div');
+  m.className = 'pg-menu'; m.id = 'pg-menu';
+  m.innerHTML = items.map(([t, n, fn]) => `<button onclick="closePageMenu();${fn}"><span>${t}</span><span class="n">${n===''?'':n}</span></button>`).join('');
+  document.body.appendChild(m);
+  const b = (ev && ev.currentTarget) ? ev.currentTarget.getBoundingClientRect() : { right: window.innerWidth - 12, bottom: 56 };
+  m.style.top = (b.bottom + 6) + 'px';
+  m.style.right = Math.max(8, window.innerWidth - b.right) + 'px';
+  setTimeout(() => document.addEventListener('click', closePageMenu, { once: true }), 0);
+}
+function closePageMenu() { const m = document.getElementById('pg-menu'); if (m) m.remove(); }
 
 // ════════════════════════════════════════════════════════════
 // SHEET / DIALOG SYSTEM
@@ -6004,6 +6138,17 @@ function updateRemittancePhpPreview(source) {
   el.innerHTML = `${fmt(amt, fromCurr)} × ${fmtRate(rate)} = <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toCurr)}</strong>${extra}`;
 }
 
+// -- PERSONAL LOGIC SET #273 -- The fair rate for ONE transaction is the rate of ITS moment, never
+// "the latest". Forex gain/loss on a cross-currency transfer = actual received vs this rate. Using
+// getLatestFxRate here re-valued a Sep 9 transfer at a Sep 11 remittance rate: K280 for PHP 3,500
+// logged a PHP 198.21 gain instead of the true PHP 189.90. Order: the tx's own stored fxSnapshot
+// (what it was recorded at), else the dated history lookup for that date and time.
+function _txSnapRate(currency, date, time, snap) {
+  if (currency === _homeBase()) return 1;
+  const r = snap && snap[currency];                        // PLS #273: the tx's own frozen rate wins
+  return (r > 0) ? r : getSnapshotRate(currency, date, time); // PLS #273: else the rate AT that moment
+}
+
 function getLatestFxRate(currency) {
   if (currency === _homeBase()) return 1; // home is implicit rate 1
   const history = db.fxHistory?.[currency] || [];
@@ -6568,7 +6713,10 @@ function updateTransferPreview() {
     const home = _homeBase();
     // Compute snapshot rate (foreign side — the one that's NOT home)
     const foreignCurr = fromCurr !== home ? fromCurr : toCurr;
-    const snapRate = getLatestFxRate(foreignCurr);
+    // PLS #273: preview at the rate of the date/time on the form, same source submitTransfer saves with
+    const _tfD = parseInputDate(document.getElementById('tf-date')?.value) || today();
+    const _tfT = document.getElementById('tf-time')?.value || nowTime();
+    const snapRate = _txSnapRate(foreignCurr, _tfD, _tfT);
     if (fxPair) fxPair.textContent = fromCurr + ' → ' + toCurr;
     if (fxRate) fxRate.textContent = '1 ' + foreignCurr + ' = ' + sym(home) + fmtRate(snapRate || 0);
 
@@ -6757,13 +6905,18 @@ function submitTransfer() {
   const isCross = fromAcct2 && toAcct2 && currency !== toAcct2.currency;
   let toAmount = null;
   let forexDiff = 0; // in PHP — for child forex tx
+  let _fxRateUsed = null; // PLS #275: the rate forexDiff was measured at, stamped on the child
   if (isCross) {
     if (!useSnapshot && (customRate > 0 || userToAmount > 0)) {
       // Batch B #4: parent.toAmount = ACTUAL received (user's input)
       // Snapshot toAmount = what would be received at fair (snapshot) rate
       const home = _homeBase();
       const foreignCurr = currency !== home ? currency : toAcct2.currency;
-      const snapshotRate = getLatestFxRate(foreignCurr);
+      // PLS #273: forex gain/loss measured against the rate of THIS transfer's date/time, not the latest
+      const _tfD = parseInputDate(document.getElementById('tf-date')?.value) || today();
+      const _tfT = document.getElementById('tf-time')?.value || nowTime();
+      const snapshotRate = _txSnapRate(foreignCurr, _tfD, _tfT);
+      _fxRateUsed = snapshotRate; // PLS #275
       const snapshotToAmount = currency === home
         ? amount / snapshotRate           // home → foreign
         : amount * snapshotRate;          // foreign → home
@@ -6801,6 +6954,12 @@ function submitTransfer() {
   if (!amount || amount <= 0) { showToast('Enter amount'); return; }
   if (!fromId || !toId) { showToast('Select both accounts'); return; }
   if (fromId === toId) { showToast('Select different accounts'); return; }
+  // -- PERSONAL LOGIC SET #276 -- A cross-currency transfer needs what actually arrived. Left blank,
+  // the app silently guessed from the rate: Sep 9, PHP 3,500 was logged as K265.59 while K280 hit
+  // the bank, and the K14.41 gap surfaced days later as an unexplained shortfall. The destination is
+  // your own account, so the real figure is always knowable. Either box satisfies this: the amount
+  // received, or the rate (which derives it). Same-currency transfers are untouched.
+  if (isCross && !(customRate > 0 || userToAmount > 0)) { showToast('Enter the amount received or the rate'); return; } // PLS #276
 
   const fxSnapshot = buildFxSnapshot(date, time);
   const parentId = genId();
@@ -6817,8 +6976,12 @@ function submitTransfer() {
 
   // Auto-create forex gain/loss child transaction if cross-currency
   // Skip if using custom rate — forexDiff block below handles it instead
+  // PLS #274: `forex` is read by the toast at the end of this function, OUTSIDE this block. Declared
+  // with const inside, it never existed there -> every transfer threw "forex is not defined" right
+  // after saving. Data was always saved (saveDBWithSync runs first); only the confirmation toast died.
+  let forex = null;
   if (useSnapshot) {
-    const forex = computeTransferForex();
+    forex = computeTransferForex(); // PLS #274: assign, don't redeclare
     if (forex && forex.direction !== 'none' && Math.abs(forex.gainLossPhp) >= 0.01) {
       const isGain = forex.direction === 'gain';
       const fromAcctF = db.accounts.find(a=>a.id===fromId);
@@ -6870,6 +7033,7 @@ function submitTransfer() {
         fxSnapshot: buildFxSnapshot(date, time),
         parentId,
         isAutoForex: true,
+        forexSnapRate: _fxRateUsed, // PLS #275: measured at the tx's own rate (PLS #273)
         createdAt: new Date().toISOString()
       });
     }
@@ -8331,6 +8495,7 @@ function saveEditTx(txId) {
   tx.currency = document.getElementById('edit-currency')?.value || tx.currency;
   tx.accountId = document.getElementById('edit-account')?.value || tx.accountId;
   tx.notes = document.getElementById('edit-notes')?.value?.trim() || '';
+  const _oldTime279 = tx.time; // PLS #279: remember before the edit overwrites it
   tx.time = document.getElementById('edit-time')?.value || tx.time;
 
   if (isShared) {
@@ -8417,9 +8582,11 @@ function saveEditTx(txId) {
     if (document.getElementById('edit-duedate')) tx.dueDate = document.getElementById('edit-duedate').value;
   }
 
-  if (newDate && newDate !== tx.date) {
-    tx.date = newDate;
-    tx.fxSnapshot = buildFxSnapshot(newDate);
+  if ((newDate && newDate !== tx.date) || tx.time !== _oldTime279) {
+    if (newDate) tx.date = newDate;
+    // PLS #279: snapshot follows date AND time. A rate logged mid-day (PLS #118, e.g. the Sep 11
+  // 09:31 remittance) must not reach a tx made earlier that day, and moving only the time must re-anchor too.
+    tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
   }
   // -- PERSONAL LOGIC SET #228 -- An investment sale carries a DERIVED figure: realizedGL is
   // proceeds minus cost basis. Editing the proceeds here used to leave realizedGL untouched, so a
@@ -8532,7 +8699,13 @@ function updateEditTransferPreview() {
   const toCurr = toAcct.currency;
   const isCross = txCurr !== toCurr;
   const foreignCurr = txCurr !== home ? txCurr : toCurr;
-  const snapRate = getLatestFxRate(foreignCurr);
+  // PLS #273: preview the tx's OWN rate (or the new date's rate if the date was changed), so the
+  // forex figure shown here is the one saveEditTransfer will actually log
+  const _etx = db.transactions.find(t => t.id === window._etfEditId);
+  const _etD = document.getElementById('etf-date')?.value || _etx?.date || today();
+  const snapRate = (_etx && _etD === _etx.date)
+    ? _txSnapRate(foreignCurr, _etx.date, _etx.time, _etx.fxSnapshot)
+    : _txSnapRate(foreignCurr, _etD, _etx?.time);
   let toAmt;
   if (!useSnapshot && isCross) {
     const customRate = userRate;
@@ -8654,6 +8827,7 @@ function saveEditRemittance(txId) {
   const rate = parseFloat(document.getElementById('erm-rate')?.value);
   const newDate = parseInputDate(document.getElementById('erm-date')?.value);
   const oldDate = tx.date;
+  const oldTime = tx.time; // PLS #279
 
   if (!fromId) { showToast('Select source account'); return; }
   if (!toId) { showToast('Select destination account'); return; }
@@ -8676,7 +8850,9 @@ function saveEditRemittance(txId) {
   delete tx.accountId; // PLS #150: remittances never carry a single accountId — from/to only
   // PLS #154: rebuild the FX snapshot when the date moves — mirrors saveEditTransfer,
   // so the snapshot rate anchor always matches the transaction's actual date.
-  if (isCross && tx.date && tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
+  // PLS #279: snapshot follows date AND time. A rate logged mid-day (PLS #118, e.g. the Sep 11
+  // 09:31 remittance) must not reach a tx made earlier that day, and moving only the time must re-anchor too.
+  if (isCross && tx.date && (tx.date !== oldDate || tx.time !== oldTime)) tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
 
   // PLS #155: linked remittance fee (amount + which account it's deducted from) is editable
   // right here instead of being a dead end — the generic edit form refuses isAutoFee children.
@@ -8711,11 +8887,15 @@ function openEditTransfer(txId) {
   // Detect if existing tx used custom rate (toAmount differs from snapshot conversion)
   const toAcct = accts.find(a=>a.id===tx.toAccountId);
   const foreignCurr = tx.currency !== _homeBase() ? tx.currency : toAcct?.currency;
-  const snapRate = getLatestFxRate(foreignCurr || (db.trackedCurrencies.find(c=>c!==_homeBase()) || _homeBase()));
+  window._etfEditId = txId; // PLS #273: lets the edit preview read this tx's own snapshot
+  // PLS #273: "was a custom rate used?" is judged against the tx's own rate, not today's
+  const snapRate = _txSnapRate(foreignCurr || (db.trackedCurrencies.find(c=>c!==_homeBase()) || _homeBase()), tx.date, tx.time, tx.fxSnapshot);
   let existingCustomRate = '';
   if (tx.toAmount != null && toAcct && tx.currency !== toAcct.currency) {
     const derivedRate = tx.currency === _homeBase() ? tx.amount / tx.toAmount : tx.toAmount / tx.amount;
-    if (Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = String(derivedRate);
+    // PLS #276: toAmountIsActual always reopens with its figures, so a correct transfer is never
+    // blocked by #276 just because its rate happened to sit within 0.001 of the snapshot
+    if (tx.toAmountIsActual || Math.abs(derivedRate - snapRate) > 0.001) existingCustomRate = String(derivedRate);
   }
   const hasCustomRate = existingCustomRate !== '';
   // Initial visibility: show paired-input row whenever cross-currency (since checkbox is gone)
@@ -8765,6 +8945,7 @@ function saveEditTransfer(txId) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
   const oldDate = tx.date;
+  const oldTime = tx.time; // PLS #279
   const customRate = parseFloat(document.getElementById('etf-custom-rate')?.value) || 0;
   const userToAmountEdit = parseFloat(document.getElementById('etf-toamount')?.value) || 0;
   // Derive useSnapshot from actual input values (no checkbox dependency)
@@ -8775,6 +8956,13 @@ function saveEditTransfer(txId) {
   const etfAmt = parseFloat(etfAmtRaw);
   if (etfAmtRaw !== '' && !(etfAmt > 0)) { showToast('Enter a valid amount'); return; }
   if (etfFrom === etfTo) { showToast('Select different accounts'); return; }
+  // PLS #276: same rule on edit, checked BEFORE anything is written to tx. Currency and accounts
+  // are read from the form, since either may have just been changed to make it cross-currency.
+  { const _eTo = db.accounts.find(a => a.id === etfTo);
+    const _eCurr = document.getElementById('etf-currency')?.value || tx.currency;
+    if (_eTo && _eCurr !== _eTo.currency && !(customRate > 0 || userToAmountEdit > 0)) {
+      showToast('Enter the amount received or the rate'); return; // PLS #276
+    } }
   tx.fromAccountId = etfFrom;
   tx.toAccountId = etfTo;
   tx.amount = (etfAmt > 0) ? etfAmt : tx.amount;
@@ -8784,14 +8972,18 @@ function saveEditTransfer(txId) {
   if (newTfDate) tx.date = newTfDate;
   if (newTfTime) tx.time = newTfTime;
   tx.notes = document.getElementById('etf-notes').value.trim();
-  if (tx.date && tx.date !== oldDate) tx.fxSnapshot = buildFxSnapshot(tx.date);
+  // PLS #279: snapshot follows date AND time. A rate logged mid-day (PLS #118, e.g. the Sep 11
+  // 09:31 remittance) must not reach a tx made earlier that day, and moving only the time must re-anchor too.
+  if (tx.date && (tx.date !== oldDate || tx.time !== oldTime)) tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
 
   const toAcct2 = db.accounts.find(a=>a.id===tx.toAccountId);
   const isCross = toAcct2 && tx.currency !== toAcct2.currency;
   if (isCross) {
     const home = _homeBase();
     const foreignCurr2 = tx.currency !== home ? tx.currency : toAcct2.currency;
-    const snapRate2 = getLatestFxRate(foreignCurr2);
+    // PLS #273: the tx's own rate (fxSnapshot is rebuilt above when the date changes, so this
+    // follows a date edit too). getLatestFxRate made Sep 9 read the Sep 11 remittance rate.
+    const snapRate2 = _txSnapRate(foreignCurr2, tx.date, tx.time, tx.fxSnapshot);
     if (!useSnapshot && (customRate > 0 || userToAmountEdit > 0)) {
       // Batch B #4: parent.toAmount = ACTUAL received (user input)
       const snapshotToAmount = tx.currency === home
@@ -8828,9 +9020,16 @@ function saveEditTransfer(txId) {
         date: tx.date, time: tx.time||nowTime(),
         notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
         fxSnapshot: tx.fxSnapshot,
+        forexSnapRate: snapRate2, // PLS #275: measured at the tx's own rate (PLS #273)
       });
     } else {
-      tx.toAmount = convert(tx.amount, tx.currency, toAcct2.currency);
+      // PLS #273: snapshot mode converts at THIS tx's own rates, never today's. convert() used live
+      // rates, so merely opening and saving the untouched Sep 9 transfer moved Kina Bank by -K0.60
+      // (PHP 3,500 re-read at 13.2078817 instead of its own 13.178213). Works for any pair:
+      // amount x rate(from) / rate(to), each side from the tx's snapshot (home = 1).
+      const _rFrom = _txSnapRate(tx.currency, tx.date, tx.time, tx.fxSnapshot);
+      const _rTo   = _txSnapRate(toAcct2.currency, tx.date, tx.time, tx.fxSnapshot);
+      tx.toAmount = tx.amount * _rFrom / _rTo; // PLS #68: store raw
       delete tx.toAmountIsActual; // snapshot mode — forex child handles diff
       db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
     }
@@ -8906,7 +9105,7 @@ function recomputeTransferForexChild(parentId) {
     date: parent.date,
     time: parent.time,
     notes: `Auto from transfer (${fromAcct.currency}→${toAcct.currency} @ ${fmtRate(actualRate)} vs snapshot ${fmtRate(snapshotRate) || 'N/A'})`,
-    fxSnapshot: parent.fxSnapshot || buildFxSnapshot(parent.date),
+    fxSnapshot: parent.fxSnapshot || buildFxSnapshot(parent.date, parent.time), // PLS #279
     parentId,
     isAutoForex: true
   };
@@ -9362,27 +9561,30 @@ function renderReimbTab() {
   }
 
   // Count settled and archived shared txs for the buttons (compute once)
-  const settledCount = db.transactions.filter(t => t.type === 'shared' && !t.archived && t.settled).length;
-  const archivedCount = (db.archivedTransactions||[]).filter(t => t.type === 'shared').length;
-  // PLS #132: Settled & Archive are quiet FOOTER rows (Reminders pattern), same as Loans.
-
-  if (Object.keys(persons).length === 0) {
-    return `<div class="empty-state page-pad"><div class="empty-icon">🤝</div><div class="empty-text">No pending reimbursements</div><div class="empty-sub">Add a "Shared" transaction to track split expenses</div></div><div class="page-pad" style="padding-top:0"><div style="margin-top:24px"><div class="quiet-row" onclick="openSettledReimbSheet()"><div>✓ Settled${settledCount>0?` <span style="color:var(--text4)">(${settledCount})</span>`:''}</div><div style="color:var(--text4)">›</div></div><div class="quiet-row" onclick="openTxArchiveSheet()"><div>🗃️ Archive${archivedCount>0?` <span style="color:var(--text4)">(${archivedCount})</span>`:''}</div><div style="color:var(--text4)">›</div></div></div></div>`;
-  }
-
-  let html = '';
-  html += '<div class="page-pad">'; // PLS #132: full top padding (the removed top-button block used to supply it)
-  for (const [person, entries] of Object.entries(persons)) {
-    // Aggregate totals per currency for this person
+  // -- PERSONAL LOGIC SET #289 -- Reimbursements on the list-page pattern (PLS #287): one summary
+  // tile (what people owe you, in PHP, exact), Active / Settled chips with settled items drawn IN
+  // the page (not a sheet) by month, one grouped list of people with neutral amounts and a turning
+  // chevron. Archive moved to the header "..." menu; "+" opens Add straight on Shared.
+  const home = _homeBase();
+  const settled = db.transactions.filter(t => t.type === 'shared' && !t.archived && t.settled);
+  const names = Object.keys(persons);
+  const owedHome = names.reduce((s, n) => s + persons[n].reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0), 0);
+  const items = names.reduce((s, n) => s + persons[n].length, 0);
+  let html = `<div class="page-pad"><div class="lp-tiles"><div class="lp-tile" style="cursor:default">
+      <div class="lp-tile-lbl">Owed to you</div><div class="lp-tile-amt">${fmt(owedHome, home)}</div>
+      <div class="lp-tile-sub">${names.length ? `${names.length} ${names.length>1?'people':'person'} · ${items} ${items>1?'items':'item'}` : 'All settled'}</div></div></div>
+    <div class="lp-chips"><button class="lp-chip ${_reimbView!=='settled'?'on':''}" onclick="setReimbView('active')">Active</button><button class="lp-chip ${_reimbView==='settled'?'on':''}" onclick="setReimbView('settled')">Settled${settled.length?` · ${settled.length}`:''}</button></div>`;
+  if (_reimbView === 'settled') return html + _reimbSettledView(settled) + `</div>`;
+  if (!names.length) return html + `<div class="lp-empty">Nobody owes you right now.<br><span style="color:var(--text4);font-size:12px">Log a Shared expense to split a bill.</span></div></div>`;
+  html += `<div class="lp-sec">Active</div><div class="lp-grp">`;
+  for (const person of names.sort()) {
+    const entries = persons[person];
     const byCurr = {};
-    for (const e of entries) {
-      const c = e.tx.currency || _homeBase();
-      byCurr[c] = (byCurr[c] || 0) + e.remaining;
-    }
+    for (const e of entries) { const c = e.tx.currency || home; byCurr[c] = (byCurr[c] || 0) + e.remaining; }
     const totalLabel = Object.entries(byCurr).map(([c,v]) => fmt(v, c)).join(' + ');
-    const primaryCurr = entries[0]?.tx.currency || _homeBase();
-    const primaryTotal = byCurr[primaryCurr] || 0;
-
+    const showHome = Object.keys(byCurr).some(c => c !== home);
+    const pHome = entries.reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0);
+    const rid = 'rp-' + person.replace(/\s/g,'_');
     const rowsHTML = entries.map(e => {
       const tx = e.tx;
       const catDisp = getCategoryDisplay(tx.categoryId);
@@ -9390,29 +9592,24 @@ function renderReimbTab() {
       return `<div class="tx-item" style="cursor:pointer" onclick="openTxDetail('${tx.id}')">
         <div class="tx-icon tx-icon-shared">${catDisp.icon}</div>
         <div class="tx-meta">
-          <div class="tx-name">${_stripIcon(catDisp.name)}${tx.isFeeReimbursable?` <span style="font-size:9.5px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense — collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
+          <div class="tx-name">${_stripIcon(catDisp.name)}${tx.isFeeReimbursable?` <span class="lp-pill due" title="Fee already counted as an expense">fee</span>`:''}</div>
           <div class="tx-detail">${fmtD(tx.date)} · Total ${fmt(tx.totalBill||tx.amount, tx.currency)}${paidLabel}</div>
         </div>
         <div class="tx-right">
-          <div style="font-size:13px;font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
+          <div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(e.remaining, tx.currency)}</div>
           <div class="tx-date-small">owes</div>
         </div>
       </div>`;
     }).join('');
-
     html += `<div class="reimb-person-card">
-      <div class="reimb-person-hdr" onclick="toggleReimbPerson('rp-${person.replace(/\s/g,'_')}')">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="pool-avatar">${person.slice(0,2).toUpperCase()}</div>
-          <div><div style="font-size:14px;font-weight:600">${person}</div>
-          <div style="font-size:11px;color:var(--text3)">${entries.length} tx · owes ${totalLabel}</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-family:var(--mono);font-size:14px;color:var(--green)">${fmt(primaryTotal, primaryCurr)}</div>
-          <span style="color:var(--text4)">▾</span>
-        </div>
+      <div class="lp-row" onclick="toggleReimbPerson('${rid}')">
+        <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(person.slice(0,2).toUpperCase())}</div>
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(person)}</span></div>
+          <div class="lp-meta">${entries.length} ${entries.length>1?'items':'item'}</div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${totalLabel}</div>${showHome?`<div class="lp-amt2">≈ ${fmt(pHome, home)}</div>`:''}</div>
+        <span class="lp-chev" id="${rid}-chev">›</span>
       </div>
-      <div id="rp-${person.replace(/\s/g,'_')}" style="display:none;border-top:1px solid var(--border)">
+      <div id="${rid}" style="display:none;border-top:1px solid var(--border)">
         ${rowsHTML}
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
           <button class="btn btn-success btn-sm" onclick="settleReim('${person.replace(/'/g,"\\'")}')">Receive Payment</button>
@@ -9420,13 +9617,69 @@ function renderReimbTab() {
       </div>
     </div>`;
   }
-  html += `<div style="margin-top:24px"><div class="quiet-row" onclick="openSettledReimbSheet()"><div>✓ Settled${settledCount>0?` <span style="color:var(--text4)">(${settledCount})</span>`:''}</div><div style="color:var(--text4)">›</div></div><div class="quiet-row" onclick="openTxArchiveSheet()"><div>🗃️ Archive${archivedCount>0?` <span style="color:var(--text4)">(${archivedCount})</span>`:''}</div><div style="color:var(--text4)">›</div></div></div>` + '</div>';
+  return html + `</div></div>`;
+}
+var _reimbView = 'active';
+function setReimbView(v) { _reimbView = v; renderReimbursementsPage(); }
+// PLS #289: settled shared expenses, in the page, newest month first; a batch settlement is one row
+// (tap for its items and Edit), the rest one row each.
+function _reimbSettledView(settled) {
+  if (!settled.length) return `<div class="lp-empty">Nothing settled yet.</div>`;
+  const batches = db.transactions.filter(t => !t.archived && t.isBatchReimbSettlement);
+  const inBatch = new Set(), cards = [];
+  for (const bp of batches) {
+    const txs = (bp.batchTxIds||[]).map(id => settled.find(t => t.id === id)).filter(Boolean);
+    if (!txs.length) continue;
+    txs.forEach(t => inBatch.add(t.id));
+    cards.push({ batch: bp, txs, d: bp.date || '' });
+  }
+  for (const t of settled) if (!inBatch.has(t.id)) cards.push({ tx: t, d: (t.settledAt || t.date || '').slice(0,10) });
+  cards.sort((x,y) => (y.d||'').localeCompare(x.d||''));
+  const groups = [];
+  for (const c of cards) {
+    const k = (c.d||'').slice(0,7);
+    let g = groups.find(g => g.k === k);
+    if (!g) { const dt = c.d ? new Date(c.d.slice(0,10) + 'T00:00:00') : new Date(); g = { k, label: dt.toLocaleString('en', {month:'long', year:'numeric'}), rows: [] }; groups.push(g); }
+    g.rows.push(c);
+  }
+  const ic = x => `<div class="pool-avatar" style="width:34px;height:34px;font-size:16px;background:var(--bg3)">${x}</div>`;
+  let html = '';
+  for (const g of groups) {
+    html += `<div class="lp-sec">${g.label}</div><div class="lp-grp">`;
+    for (const c of g.rows) {
+      if (c.batch) {
+        const bp = c.batch, rid = 'rsb-' + bp.id;
+        const who = bp.batchPerson || bp.reimbPerson || 'Unknown';
+        const gain = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isReimbSettlementGain);
+        html += `<div class="reimb-person-card"><div class="lp-row" onclick="toggleReimbPerson('${rid}')">
+          <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(who.slice(0,2).toUpperCase())}</div>
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(who)}</span>${gain?`<span class="lp-pill gain">+${fmt(gain.amount, gain.currency)}</span>`:''}</div>
+          <div class="lp-meta">${c.txs.length} ${c.txs.length>1?'items':'item'} · paid ${fmtD(bp.date)}</div></div>
+          <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev" id="${rid}-chev">›</span></div>
+          <div id="${rid}" style="display:none;border-top:1px solid var(--border)">` + c.txs.map(tx => { const cat = getCategoryDisplay(tx.categoryId); return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
+              <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_stripIcon(cat.name)}</div><div class="tx-detail">${fmtD(tx.date)}</div></div>
+              <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(tx.totalBill||tx.amount, tx.currency)}</div></div></div>`; }).join('')
+          + `<div style="padding:10px 16px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button></div></div></div>`;
+      } else {
+        const tx = c.tx, cat = getCategoryDisplay(tx.categoryId);
+        const ns = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
+        const who = ns.length === 1 ? ns[0] : ns.length === 2 ? ns.join(' & ') : `${ns[0]} +${ns.length-1}`;
+        html += `<div class="lp-row" onclick="openTxDetail('${tx.id}')">${ic(cat.icon)}
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_stripIcon(cat.name)}</span></div>
+          <div class="lp-meta">${_esc(who)} · ${fmtD(tx.date)}</div></div>
+          <div class="lp-amt">${fmt(tx.totalBill || tx.amount, tx.currency)}</div><span class="lp-chev">›</span></div>`;
+      }
+    }
+    html += `</div>`;
+  }
   return html;
 }
 
 function toggleReimbPerson(id) {
   const el = document.getElementById(id);
   if (el) el.style.display = el.style.display==='none'?'block':'none';
+  const ch = document.getElementById(id + '-chev'); // PLS #289: chevron turns with the row
+  if (ch && el) ch.classList.toggle('open', el.style.display !== 'none');
 }
 
 // 📖 USER STORY: Pag na-settle na ang isang shared txn (fully paid by all persons), hindi na siya
@@ -10475,9 +10728,13 @@ function renderAfterInvChange() {
 }
 
 function renderInvestments() {
+  // -- PERSONAL LOGIC SET #290 -- Investments on the list-page pattern (PLS #287): two summary tiles
+  // (portfolio value / unrealized gain or loss, both signed and exact), the allocation bar kept,
+  // Active / Sold chips with sold positions drawn IN the page (they were a footer row opening a
+  // sheet), rows grouped under their type as a section label. Archive is in the header "..." menu.
+  // Row G/L now always carries its sign (it printed a loss with no minus, PLS #283 class).
   const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
   const sold = db.investments.filter(i=>!i.archived && i.status === 'sold');
-  const archived = db.investments.filter(i=>i.archived);
   const totalInvested = invs.reduce((s,i)=>s+toPhp(i.amount,i.currency),0);
   const totalCurrent  = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
   const totalGL = totalCurrent - totalInvested;
@@ -10487,16 +10744,24 @@ function renderInvestments() {
   const typeMap = {};
   invs.forEach(i=>{ const k=i.type||'Other'; typeMap[k]=(typeMap[k]||0)+toPhp(i.currentValue||i.amount,i.currency); });
   const typeEntries = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]);
-  let html = `<div class="page-pad">`;
-  html += `<div class="hero-card" style="margin-bottom:16px;padding:20px">
-    <div class="hero-label">Total Portfolio Value</div>
-    <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:var(--text);margin:4px 0">${fmt(fromPhp(totalCurrent,dc),dc)}</div>
-    ${totalGL!==0?`<div style="font-size:13px;color:${totalGL>0?'var(--green)':'var(--red)'};margin-top:2px">${totalGL>0?'▲':'▼'} ${fmt(fromPhp(Math.abs(totalGL),dc),dc)} (${totalGL>0?'+':''}${totalGLPct.toFixed(1)}%) unrealized</div>`:''}
-    <div style="font-size:12px;color:var(--text3);margin-top:6px">Invested: ${fmt(fromPhp(totalInvested,dc),dc)}</div>
-  </div>`;
-  // -- PERSONAL LOGIC SET #238 -- An allocation bar needs something to allocate BETWEEN. With one
-  // holding it is a single full-width block reading "100.0%", which states nothing and takes the
-  // space of a real chart. Show it only when there are at least two types to compare.
+  const glCol = v => v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--text)';
+  let html = `<div class="page-pad"><div class="lp-tiles">
+    <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Portfolio</div><div class="lp-tile-amt">${fmt(fromPhp(totalCurrent,dc),dc)}</div><div class="lp-tile-sub">Invested ${fmt(fromPhp(totalInvested,dc),dc)}</div></div>
+    <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Unrealized</div><div class="lp-tile-amt" style="color:${glCol(totalGL)}">${fmt(fromPhp(totalGL,dc),dc,true)}</div><div class="lp-tile-sub">${totalGL>0?'+':''}${totalGLPct.toFixed(1)}% · ${invs.length} holding${invs.length===1?'':'s'}</div></div>
+  </div>
+  <div class="lp-chips"><button class="lp-chip ${_invView!=='sold'?'on':''}" onclick="setInvView('active')">Active</button><button class="lp-chip ${_invView==='sold'?'on':''}" onclick="setInvView('sold')">Sold${sold.length?` · ${sold.length}`:''}</button></div>`;
+  const ic = (type) => `<div class="pool-avatar" style="width:34px;height:34px;font-size:16px;border-radius:10px;background:${typeColors[type]||'#94a3b8'}22">${invTypeIcon(type)}</div>`;
+  if (_invView === 'sold') {
+    html += sold.length ? `<div class="lp-sec">Sold</div><div class="lp-grp">` + sold.slice().sort((x,y)=>(y.soldDate||'').localeCompare(x.soldDate||'')).map(inv => {
+      const gl = Number(inv.realizedGL) || 0;
+      return `<div class="lp-row" onclick="openInvDetail('${inv.id}')">${ic(inv.type||'Other')}
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(inv.name)}</span></div>
+        <div class="lp-meta">Sold ${inv.soldDate?fmtD(inv.soldDate):''}</div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${glCol(gl)}">${fmt(gl, inv.currency, true)}</div><div class="lp-amt2">${inv.currency && inv.currency !== dc ? `≈ ${fmt(convert(gl, inv.currency, dc), dc, true)}` : 'realized'}</div></div><span class="lp-chev">›</span></div>`; }).join('') + `</div>`
+      : `<div class="lp-empty">Nothing sold yet.</div>`;
+    return html + `</div>`;
+  }
+  html += `<div style="margin-top:14px"></div>`;
   if (typeEntries.length > 1) {
     html += `<div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin-bottom:10px">PORTFOLIO ALLOCATION</div>
@@ -10509,54 +10774,28 @@ function renderInvestments() {
     </div>`;
   }
   if (invs.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-text">No investments yet</div><div class="empty-sub">Track stocks, crypto, mutual funds, and more.</div><button class="btn btn-primary btn-sm" onclick="openAddInv()">+ Add Investment</button></div>`;
-  } else {
-    html += `<div class="list-section-header">ACTIVE (${invs.length})</div>`;
-    const grouped = {};
-    invs.forEach(i=>{ const k=i.type||'Other'; if(!grouped[k])grouped[k]=[]; grouped[k].push(i); });
-    for (const [type, items] of Object.entries(grouped)) {
-      html += `<div class="list-card">`;
-      items.forEach(inv => {
-        const gl = (inv.currentValue||inv.amount) - inv.amount;
-        const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
-        const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
-        const glClass = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
-        html += `<div class="list-row" onclick="openInvDetail('${inv.id}')">
-          <div style="width:36px;height:36px;border-radius:var(--r-md);background:${typeColors[type]||'#94a3b8'}22;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${invTypeIcon(type)}</div>
-          <div class="list-row-meta">
-            <div class="list-row-title">${_esc(inv.name)}</div>
-            <div class="list-row-sub">${type}${srcAcct?' · from '+srcAcct.name:''}</div>
-          </div>
-          <div class="list-row-right">
-            <div class="list-row-amt">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
-            ${gl!==0?`<div class="list-row-date ${glClass}">${gl>0?'+':''}${fmt(gl,inv.currency)} (${gl>0?'+':''}${glPct.toFixed(1)}%)</div>`:`<div class="list-row-date">No change</div>`}
-          </div>
-          <div style="color:var(--text4);font-size:16px">&#8250;</div>
-        </div>`;
-      });
-      html += `</div>`;
-    }
+    return html + `<div class="lp-empty">No active investments.<br><span style="color:var(--text4);font-size:12px">Tap + to add one.</span></div></div>`;
   }
-  // -- PERSONAL LOGIC SET #241 -- SUPERSEDES the inline collapsible of PLS #237. Finished items
-  // use the SAME footer on every page: quiet-rows at the end of the list opening a sheet, exactly
-  // as Reimbursements and Loans do for Settled and Archive. An inline accordion here was a third
-  // shape for one idea. Closed positions are history and belong off the main list entirely.
-  html += `</div><div style="margin-top:24px">
-    <div class="quiet-row" onclick="openSoldInvSheet()">
-      <div>✓ Closed / Sold${sold.length>0?` <span style="color:var(--text4)">(${sold.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
-    </div>
-    <div class="quiet-row" onclick="openInvArchiveSheet()">
-      <div>🗃️ Archive${archived.length>0?` <span style="color:var(--text4)">(${archived.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
-    </div>
-  </div><div>`;
-  // PLS #241: the archived list moved into openInvArchiveSheet(), reached from the footer row
-  // above. The old chip toggled an inline list in the middle of the page — a fourth shape.
-
-  // PLS #236: the header already carries "+ Investment". A second add button at the foot of the
-  // list gave one action two shapes on one screen; the header is the single place for it.
-  html += `</div>`;
-  return html;
+  const grouped = {};
+  invs.forEach(i=>{ const k=i.type||'Other'; (grouped[k] = grouped[k] || []).push(i); });
+  for (const [type, items] of Object.entries(grouped)) {
+    html += `<div class="lp-sec">${_esc(type)}</div><div class="lp-grp">`;
+    items.forEach(inv => {
+      const gl = (inv.currentValue||inv.amount) - inv.amount;
+      const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
+      const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
+      html += `<div class="lp-row" onclick="openInvDetail('${inv.id}')">${ic(type)}
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(inv.name)}</span></div>
+        <div class="lp-meta">${srcAcct ? 'from ' + _esc(srcAcct.name) : _esc(type)}</div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+        <div class="lp-amt2" style="color:${gl?glCol(gl):'var(--text4)'}">${gl ? `${fmt(gl,inv.currency,true)} (${gl>0?'+':''}${glPct.toFixed(1)}%)` : 'No change'}</div></div><span class="lp-chev">›</span></div>`;
+    });
+    html += `</div>`;
+  }
+  return html + `</div>`;
 }
+var _invView = 'active';
+function setInvView(v) { _invView = v; renderInvestmentsPage(); }
 
 function invTypeIcon(type) {
   const map = { Stocks:'📊', Crypto:'₿', Bonds:'📜', 'Treasury Bond':'🏛️', 'MP2 (Pag-IBIG)':'🪙', REITs:'🏬', 'Mutual Fund':'🏦', 'Time Deposit':'🔒', 'Real Estate':'🏠', Cooperative:'🤝', Corporation:'🏢', 'Land Ownership':'🌏', 'Insurance/VUL':'☂️', Other:'📈' };
@@ -10577,7 +10816,7 @@ function openSoldInvSheet() {
         <div class="list-row-sub">${inv.type} &middot; Sold ${inv.soldDate?fmtD(inv.soldDate):''}</div>
       </div>
       <div class="list-row-right">
-        <div class="list-row-amt ${cls}">${gl>=0?'+':''}${fmt(gl, inv.currency)}</div>
+        <div class="list-row-amt ${cls}">${fmt(gl, inv.currency, true)}</div>
         <div class="list-row-date">realized</div>
       </div>
     </div>`;
@@ -10678,7 +10917,7 @@ function openInvDetail(invId) {
       <button class="btn btn-success" onclick="openSellInv('${invId}')">💰 Sell / Close</button>
     </div>
     <button class="btn btn-outline btn-full" style="margin-bottom:8px" onclick="openEditInv('${invId}')">Edit Details</button>
-    `:`<div style="background:${(inv.realizedGL||0)>=0?'var(--green-bg)':'var(--red-bg)'};border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:${(inv.realizedGL||0)>=0?'var(--green)':'var(--red)'};text-align:center">&#10003; Closed &mdash; Realized ${(inv.realizedGL||0)>=0?'+':''}${fmt(inv.realizedGL||0,inv.currency)}</div>`}
+    `:`<div style="background:${(inv.realizedGL||0)>=0?'var(--green-bg)':'var(--red-bg)'};border-radius:var(--r-md);padding:10px 14px;margin-bottom:8px;font-size:13px;color:${(inv.realizedGL||0)>=0?'var(--green)':'var(--red)'};text-align:center">&#10003; Closed &mdash; Realized ${fmt(inv.realizedGL||0, inv.currency, true)}</div>`}
     <details style="margin-top:4px">
       <summary style="font-size:12px;color:var(--text4);text-align:center;cursor:pointer;list-style:none;padding:6px 0">&#8943; more options</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
@@ -11180,22 +11419,10 @@ function getLoanOverdueDays(loan) {
 }
 
 function renderLoans() {
-  const pendingLent = db.loans.lent.filter(l=>!l.settled).length;
-  const pendingBorrowed = db.loans.borrowed.filter(l=>!l.settled).length;
   // Migrate old archive tab state
   if (_loanTab==='archive') _loanTab='lent';
-  // PLS #132 family: two-option pages use the iOS segmented control (same pattern as the
-  // Budget period picker), not Material underline tabs.
-  const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
-    <div class="seg">
-      <button class="seg-btn ${_loanTab==='lent'?'active':''}" onclick="setLoanTab('lent')">Lent Out${pendingLent>0?` <span class="seg-badge" style="background:var(--amber)">${pendingLent}</span>`:''}</button>
-      <button class="seg-btn ${_loanTab==='borrowed'?'active':''}" onclick="setLoanTab('borrowed')">Borrowed${pendingBorrowed>0?` <span class="seg-badge" style="background:var(--red)">${pendingBorrowed}</span>`:''}</button>
-    </div>
-  </div>`;
-  let content = '';
-  if (_loanTab==='lent') content = renderLoanList('lent');
-  else content = renderLoanList('borrowed');
-  document.getElementById('page-content').innerHTML = tabsHTML + content;
+  // PLS #287: the Lent out / Borrowed segmented control became the two summary tiles
+  document.getElementById('page-content').innerHTML = renderLoanList(_loanTab === 'borrowed' ? 'borrowed' : 'lent');
 }
 
 function setLoanTab(t) { _loanTab=t; renderLoans(); }
@@ -11245,35 +11472,10 @@ function getLoanPayments(loanId) {
   );
 }
 
-function renderLoanList(direction) {
-  const loans = db.loans[direction];
-  const active = loans.filter(l=>!l.settled);
-  const settled = loans.filter(l=>l.settled);
-  const totalPhp = active.reduce((s,l)=>s+loanHomeValue(l),0);
-  const archivedCount = (db.archivedLoans||[]).length;
-
-  let html = `<div class="page-pad">`;
-  if (active.length > 0) {
-    html += `<div style="background:var(--bg3);border-radius:var(--r-md);padding:12px 15px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:12px;color:var(--text3)">${active.length} active ${direction==='lent'?'loans out':'debts'}</div>
-      <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'}">${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div>
-    </div>`;
-  }
-  if (active.length === 0 && settled.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">${direction==='lent'?'🤲':'🤏'}</div><div class="empty-text">No ${direction==='lent'?'loans out':'debts'} yet</div><div class="empty-sub">${direction==='lent'?'Track money you\'ve lent to others.':'Track money you\'ve borrowed.'}</div><button class="btn btn-primary btn-sm" onclick="openAddLoan('${direction}')">+ Add ${direction==='lent'?'Loan Out':'Debt'}</button></div>`;
-  }
-
-  // Group active loans by person
-  const byPerson = {};
-  for (const loan of active) {
-    const key = (loan.personName||'Unknown').trim();
-    if (!byPerson[key]) byPerson[key] = [];
-    byPerson[key].push(loan);
-  }
-  const personNames = Object.keys(byPerson).sort();
-
-  for (const person of personNames) {
-    const personLoans = byPerson[person];
+// PLS #287: one person's card (row + in-place expansion). Split out of renderLoanList so the
+// Due soon and Active sections draw the same card.
+function _loanPersonCard(direction, person, personLoans) {
+  let html = '';
     // Sum total per currency
     const byCurr = {};
     for (const loan of personLoans) {
@@ -11301,24 +11503,28 @@ function renderLoanList(direction) {
     // .reimb-person-card with .tx-item rows. The Reimbursements one is the better card, so Loans
     // now uses THE SAME classes rather than a copy of its measurements: change .tx-item once and
     // both screens move together, which is the whole point of having the class.
-    html += `<div class="reimb-person-card ${urgent?'border-warning':''}" style="${urgent?'border-color:var(--amber)':''}">
-      <div class="reimb-person-hdr" onclick="toggleLoanPersonGroup('${direction}','${person.replace(/'/g,"\\'")}')">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1">
-          <div class="pool-avatar">${person.slice(0,2).toUpperCase()}</div>
-          <div style="min-width:0;flex:1">
-            <div style="font-size:14px;font-weight:600">${person}</div>
-            <div style="font-size:11px;color:var(--text3)">${personLoans.length} ${direction==='lent'?'loan':'debt'}${personLoans.length>1?'s':''}${earliestDue?` · earliest due ${fmtD(earliestDue)}${urgent?` <span style="color:var(--amber)">(${dueDays===0?'today':dueDays+'d'})</span>`:''}`:''}</div>
-            ${totalPayments>0?`<div style="font-size:10px;color:var(--text4);margin-top:2px">${totalPayments} payment${totalPayments>1?'s':''} recorded</div>`:''}
-            ${expectedHtml?`<div style="font-size:10px;color:var(--accent);margin-top:2px">expecting ${expectedHtml}</div>`:''}
-          </div>
+    // PLS #287: row header in the grouped-list style. Due state is a pill (not an amber border
+    // + amber amounts); amounts are plain text colour, colour is kept for meaning only; the
+    // chevron turns down when the row is open. Tap still expands in place (payments + action).
+    const _pEsc = person.replace(/'/g,"\\'");
+    const _duePill = (dueDays === null || dueDays > 7) ? ''
+      : dueDays < 0 ? `<span class="lp-pill over">Overdue</span>`
+      : dueDays === 0 ? `<span class="lp-pill due">Due today</span>`
+      : `<span class="lp-pill due">Due in ${dueDays}d</span>`;
+    const _open = !!_loanPersonExpanded[direction+':'+person];
+    const _showHome = Object.keys(byCurr).length>1 || (Object.keys(byCurr)[0] && Object.keys(byCurr)[0] !== _homeBase());
+    html += `<div class="reimb-person-card">
+      <div class="lp-row" onclick="toggleLoanPersonGroup('${direction}','${_pEsc}')">
+        <div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc(person.slice(0,2).toUpperCase())}</div>
+        <div style="min-width:0;flex:1">
+          <div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(person)}</span>${_duePill}</div>
+          <div class="lp-meta">${personLoans.length} loan${personLoans.length>1?'s':''}${totalPayments>0?` · ${totalPayments} payment${totalPayments>1?'s':''}`:''}${expectedHtml?` · <span style="color:var(--accent)">expecting ${expectedHtml}</span>`:''}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
-          <div>
-          <div style="font-family:var(--mono);font-weight:600;color:${direction==='lent'?'var(--amber)':'var(--red)'};font-size:14px">${totalsHtml}</div>
-          ${Object.keys(byCurr).length>1||(Object.keys(byCurr)[0]&&Object.keys(byCurr)[0]!==(_homeBase()))?`<div style="font-size:10px;color:var(--text4);font-family:var(--mono)">≈ ${fmt(Math.round(totalPersonPhp), _homeBase())}</div>`:''}
-          </div>
-          <span style="color:var(--text4);font-size:11px">${_loanPersonExpanded[direction+':'+person]?'▼':'▶'}</span>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="lp-amt">${totalsHtml}</div>
+          ${_showHome?`<div class="lp-amt2">≈ ${fmt(totalPersonPhp, _homeBase())}</div>`:''}
         </div>
+        <span class="lp-chev ${_open?'open':''}">›</span>
       </div>
       ${_loanPersonExpanded[direction+':'+person] ? `
       <div style="border-top:1px solid var(--border)">
@@ -11342,7 +11548,7 @@ function renderLoanList(direction) {
               <div class="tx-detail">${fmtD(loan.date)}${loan.dueDate?` · Due ${fmtD(loan.dueDate)}`:''}${pl.length>0?` · ${pl.length} payment${pl.length>1?'s':''}`:''}</div>
             </div>
             <div class="tx-right">
-              <div style="font-size:13px;font-family:var(--mono);color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
+              <div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(loan.remaining||loan.amount, loan.currency)}</div>
               <div class="tx-date-small">${direction==='lent'?'owes':'I owe'}</div>
             </div>
           </div>`;
@@ -11372,19 +11578,108 @@ function renderLoanList(direction) {
         </div>
       </div>` : ''}
     </div>`;
-  }
+  return html;
+}
 
-  // ── PERSONAL LOGIC SET #132 ── Loans page layout: Settled & Archive are QUIET FOOTER ROWS
-  // (iOS Reminders pattern) at the end of the list — never a top button pair. Single add entry
-  // point = header "+ Loan"; no in-list dashed add row (empty state keeps its own CTA).
-  html += `<div style="margin-top:24px">
-    <div class="quiet-row" onclick="openSettledLoansSheet('${direction}')">
-      <div>✓ Settled${settled.length>0?` <span style="color:var(--text4)">(${settled.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
-    </div>
-    <div class="quiet-row" onclick="openLoanArchiveSheet()">
-      <div>🗃️ Archive${archivedCount>0?` <span style="color:var(--text4)">(${archivedCount})</span>`:''}</div><div style="color:var(--text4)">›</div>
-    </div>
-  </div></div>`;
+// -- PERSONAL LOGIC SET #287 -- Loans page, list-page pattern. Two summary tiles (Lent out /
+// Borrowed) are both the totals and the switch; Active / Settled chips keep settled loans out of
+// the live list entirely (they were a footer row that opened a sheet); people due within 7 days
+// (or overdue) get their own "Due soon" section; Archive moved to the header "..." menu.
+var _loanView = 'active';
+function setLoanView(v) { _loanView = v; renderLoans(); }
+function _loanTilesHTML() {
+  const t = d => { const act = db.loans[d].filter(l => !l.settled);
+    return { total: act.reduce((s,l) => s + loanHomeValue(l), 0), n: act.length,
+             ppl: new Set(act.map(l => (l.personName||'Unknown').trim())).size }; };
+  const L = t('lent'), B = t('borrowed');
+  const sub = x => x.n ? `${x.n} loan${x.n>1?'s':''} · ${x.ppl} ${x.ppl>1?'people':'person'}` : 'None active';
+  const tile = (d, label, x) => `<button class="lp-tile ${_loanTab===d?'on':''}" onclick="setLoanTab('${d}')" aria-pressed="${_loanTab===d}">
+      <div class="lp-tile-lbl">${label}</div><div class="lp-tile-amt">${fmt(x.total, _homeBase())}</div><div class="lp-tile-sub">${sub(x)}</div></button>`;
+  return `<div class="lp-tiles">${tile('lent','Lent out',L)}${tile('borrowed','Borrowed',B)}</div>`;
+}
+function renderLoanList(direction) {
+  const loans = db.loans[direction];
+  const active = loans.filter(l=>!l.settled);
+  const settled = loans.filter(l=>l.settled);
+  let html = `<div class="page-pad">` + _loanTilesHTML()
+    + `<div class="lp-chips"><button class="lp-chip ${_loanView!=='settled'?'on':''}" onclick="setLoanView('active')">Active</button><button class="lp-chip ${_loanView==='settled'?'on':''}" onclick="setLoanView('settled')">Settled${settled.length?` · ${settled.length}`:''}</button></div>`;
+  if (_loanView === 'settled') return html + _loanSettledView(direction, settled) + `</div>`;
+  if (active.length === 0) {
+    return html + `<div class="lp-empty">${direction==='lent' ? 'No money lent out right now.' : 'You don\'t owe anyone right now.'}<br><span style="color:var(--text4);font-size:12px">Tap + to add one.</span></div></div>`;
+  }
+  const byPerson = {};
+  for (const loan of active) { const k = (loan.personName||'Unknown').trim(); (byPerson[k] = byPerson[k] || []).push(loan); }
+  const soon = [], rest = [];
+  for (const person of Object.keys(byPerson).sort()) {
+    const due = byPerson[person].map(l=>l.dueDate).filter(Boolean).sort()[0];
+    const dd = due ? daysUntil(due) : null;
+    (dd !== null && dd <= 7 ? soon : rest).push([person, dd]);
+  }
+  soon.sort((x,y) => x[1] - y[1]); // most urgent first
+  if (soon.length) html += `<div class="lp-sec">Due soon</div><div class="lp-grp">${soon.map(([p]) => _loanPersonCard(direction, p, byPerson[p])).join('')}</div>`;
+  if (rest.length) html += `<div class="lp-sec">Active</div><div class="lp-grp">${rest.map(([p]) => _loanPersonCard(direction, p, byPerson[p])).join('')}</div>`;
+  return html + `</div>`;
+}
+// PLS #287: settled loans, in the page (not a sheet), newest month first. A batch is one row
+// (tap to see its loans and to Edit / Undo); a write-off says "Written off" instead of posing
+// as a settlement (PLS #269's batch write-off used to show as "Batch Settlement").
+function _loanSettledView(direction, settled) {
+  if (!settled.length) return `<div class="lp-empty">Nothing settled yet.</div>`;
+  const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && t.batchDirection === direction);
+  const inBatch = new Set();
+  const cards = [];
+  for (const bp of batchParents) {
+    const ls = (bp.batchLoanIds||[]).map(id => settled.find(l => l.id === id)).filter(Boolean);
+    if (!ls.length) continue;
+    ls.forEach(l => inBatch.add(l.id));
+    cards.push({ batch: bp, loans: ls, d: bp.date || '' });
+  }
+  for (const l of settled) if (!inBatch.has(l.id)) cards.push({ loan: l, d: l.settledDate || l.date || '' });
+  cards.sort((x,y) => (y.d||'').localeCompare(x.d||''));
+  const groups = [];
+  for (const c of cards) {
+    const k = (c.d||'').slice(0,7);
+    let g = groups.find(g => g.k === k);
+    if (!g) { const dt = c.d ? new Date(c.d + 'T00:00:00') : new Date(); g = { k, label: dt.toLocaleString('en', {month:'long', year:'numeric'}), rows: [] }; groups.push(g); }
+    g.rows.push(c);
+  }
+  const av = n => `<div class="pool-avatar" style="width:34px;height:34px;font-size:12px">${_esc((n||'?').slice(0,2).toUpperCase())}</div>`;
+  let html = '';
+  for (const g of groups) {
+    html += `<div class="lp-sec">${g.label}</div><div class="lp-grp">`;
+    for (const c of g.rows) {
+      if (c.batch) {
+        const bp = c.batch, key = 'S:' + bp.id, open = !!_loanPersonExpanded[direction + ':' + key];
+        const people = [...new Set(c.loans.map(l => (l.personName||'Unknown').trim()))];
+        const gain = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementGain);
+        const loss = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementLoss);
+        const pill = bp.isBatchWriteOff ? `<span class="lp-pill wo">Written off</span>`
+          : gain ? `<span class="lp-pill gain">+${fmt(gain.amount, gain.currency)}</span>`
+          : loss ? `<span class="lp-pill wo">-${fmt(loss.amount, loss.currency)}</span>` : '';
+        html += `<div class="reimb-person-card"><div class="lp-row" onclick="toggleLoanPersonGroup('${direction}','${key}')">
+          ${av(people.length === 1 ? people[0] : '+' + people.length)}
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(people.length === 1 ? people[0] : people.length + ' people')}</span>${pill}</div>
+          <div class="lp-meta">${c.loans.length} loan${c.loans.length>1?'s':''} · ${bp.isBatchWriteOff ? 'written off' : 'paid'} ${fmtD(bp.date)}</div></div>
+          <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev ${open?'open':''}">›</span></div>`;
+        if (open) {
+          html += `<div style="border-top:1px solid var(--border)">` + c.loans.map(l => `<div class="tx-item" onclick="event.stopPropagation();openLoanDetail('${l.id}','${direction}')">
+              <div class="tx-meta"><div class="tx-name">${_esc((l.notes||'').trim() || (l.personName||'Loan'))}</div><div class="tx-detail">${fmtD(l.date)}</div></div>
+              <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(l.amount, l.currency)}</div></div></div>`).join('')
+            + `<div style="padding:10px 16px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)">${bp.isBatchWriteOff
+                ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();undoBatchWriteOff('${bp.id}')">Undo write-off</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>`}</div></div>`;
+        }
+        html += `</div>`;
+      } else {
+        const l = c.loan;
+        html += `<div class="lp-row" onclick="openLoanDetail('${l.id}','${direction}')">${av(l.personName)}
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(l.personName||'Unknown')}</span></div>
+          <div class="lp-meta">1 loan · paid ${fmtD(l.settledDate || l.date)}</div></div>
+          <div class="lp-amt">${fmt(l.amount, l.currency)}</div><span class="lp-chev">›</span></div>`;
+      }
+    }
+    html += `</div>`;
+  }
   return html;
 }
 
@@ -11555,7 +11850,7 @@ function confirmBatchSettleEdit(txId, direction) {
 
   // Compute what the correct total owed was (sum of settled loans in tx.currency)
   // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
-  const snap = tx.fxSnapshot || buildFxSnapshot(newDate);
+  const snap = tx.fxSnapshot || buildFxSnapshot(newDate, newTime); // PLS #279
   const loans = (tx.batchLoanIds||[]).map(id => db.loans[direction].find(l=>l.id===id)).filter(Boolean);
   const totalOwed = loans.reduce((s,l) => {
     const c = l.currency || _homeBase();
@@ -11669,7 +11964,7 @@ function confirmBatchReimbSettleEdit(txId) {
   const newNotes = document.getElementById('brse-notes')?.value?.trim() || tx.notes;
 
   // Compute total owed
-  const snap = tx.fxSnapshot || buildFxSnapshot(newDate);
+  const snap = tx.fxSnapshot || buildFxSnapshot(newDate, newTime); // PLS #279
   const entries = getReimbEntriesForPerson(tx.batchPerson||tx.reimbPerson||'');
   const settledEntries = (tx.batchTxIds||[]).map(id => {
     const sharedTx = db.transactions.find(t=>t.id===id);
@@ -12539,14 +12834,21 @@ function saveLoanFull(loanId, direction) {
 function editLoanPayment(paymentId, loanId, direction) {
   const payment = db.transactions.find(t => t.id === paymentId);
   if (!payment) return;
-  const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===payment.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===payment.currency?'selected':''}>${c}</option>`).join('');
+  // -- PERSONAL LOGIC SET #286 -- the payment's currency is its ACCOUNT's currency, never picked
+  // separately. A K100 payment filed under GCash (PHP) had no stated rate, so balances converted it
+  // at whatever the rate was on each render and GCash drifted every time the rate moved (the Sep 9
+  // silent-guess class). The currency box now mirrors the account and cannot be set on its own.
+  // The payment's own account stays in the list even if archived: before, it was filtered out, the
+  // select fell back to the FIRST account, and Save quietly moved the payment there.
+  const acctOpts = db.accounts.filter(a=>!a.archived || a.id===payment.accountId).map(a=>`<option value="${a.id}" ${a.id===payment.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
+  const _ep2Curr = db.accounts.find(a=>a.id===payment.accountId)?.currency || payment.currency;
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===_ep2Curr?'selected':''}>${c}</option>`).join('');
   openDlg('Edit Payment',
     `<div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="ep2-amount">Amount</label><input class="form-input numpad-input" type="number" id="ep2-amount" value="${payment.amount}" step="any" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="ep2-currency">Currency</label><select class="form-input" id="ep2-currency">${currOpts}</select></div>
+      <div class="form-group"><label class="form-label" for="ep2-currency">Currency</label><select class="form-input" id="ep2-currency" disabled title="Follows the account">${currOpts}</select></div>
     </div>
-    <div class="form-group"><label class="form-label" for="ep2-acct">Account</label><select class="form-input" id="ep2-acct">${acctOpts}</select></div>
+    <div class="form-group"><label class="form-label" for="ep2-acct">Account</label><select class="form-input" id="ep2-acct" onchange="(function(){const a=db.accounts.find(x=>x.id===document.getElementById('ep2-acct').value);if(a)document.getElementById('ep2-currency').value=a.currency})()">${acctOpts}</select></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="ep2-date">Date</label>${dtField('ep2-date','date','Date',payment.date)}</div>
       <div class="form-group"><label class="form-label" for="ep2-time">Time</label>${dtField('ep2-time','time','Time',payment.time||'')}</div>
@@ -12563,12 +12865,16 @@ function saveLoanPayment(paymentId, loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!payment || !loan) return;
   const oldAmt = payment.amount;
-  payment.amount = parseFloat(document.getElementById('ep2-amount')?.value) || payment.amount;
-  payment.currency = document.getElementById('ep2-currency')?.value || payment.currency;
-  payment.amount = roundMoney(payment.amount, payment.currency); // PLS #122
+  const _oldDate = payment.date, _oldTime = payment.time; // PLS #286
   payment.accountId = document.getElementById('ep2-acct')?.value || payment.accountId;
+  // PLS #286: currency comes from the account, not from a separate picker
+  payment.currency = db.accounts.find(a=>a.id===payment.accountId)?.currency || payment.currency;
+  payment.amount = parseFloat(document.getElementById('ep2-amount')?.value) || payment.amount;
+  payment.amount = roundMoney(payment.amount, payment.currency); // PLS #122
   payment.date = document.getElementById('ep2-date')?.value || payment.date;
   payment.time = document.getElementById('ep2-time')?.value || payment.time;
+  // PLS #286 (+#279): a new date or time re-anchors the rate this payment is valued at
+  if (payment.date !== _oldDate || payment.time !== _oldTime) payment.fxSnapshot = buildFxSnapshot(payment.date, payment.time);
   payment.notes = document.getElementById('ep2-notes')?.value?.trim() || payment.notes;
   // Recalculate loan remaining
   const allPayments = getLoanPayments(loanId);
@@ -13327,43 +13633,62 @@ function installCard(inst) {
   </div>`;
 }
 
+// -- PERSONAL LOGIC SET #288 -- Installments on the list-page pattern (PLS #287): two summary tiles
+// (what is left to pay, what it costs per month), Active / Completed chips so finished plans never
+// share the live list, one grouped list with a thin progress bar per row. Archive is in the header
+// "..." menu. "Done" has ONE definition here: flagged completed, OR every month paid. Before, the
+// page used the flag and the Completed sheet used the payment count, so a plan paid in full but
+// not flagged showed in both places at once ("Paid off!" in the active list).
+var _instView = 'active';
+function setInstView(v) { _instView = v; renderInstallments(); }
+function _instNums(inst) {
+  const total = inst.totalMonths || 12, paid = (inst.alreadyPaid || 0) + (inst.paidMonths || 0);
+  const left = Math.max(0, total - paid), mo = inst.monthlyAmount || 0;
+  return { total, paid, left, mo, remaining: left * mo, pct: Math.min(paid / total * 100, 100) };
+}
+function _instDone(inst) { return !!inst.completed || _instNums(inst).left <= 0 || (inst.linkedTxIds||[]).length >= (inst.totalMonths||12); }
+function _instMonthLbl(d) { return d ? new Date(d.length===7 ? d+'-01T12:00' : d+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : ''; }
 function renderInstallments() {
-  // ── DEBUG-SCAN NOTE ── Uses `paidMonths` (derived from linkedTxIds[].length elsewhere). Naive regex scans flagging missing `linkedTxIds` are false positives.
   const installs = db.installments || [];
-  const active = installs.filter(i => !i.completed && !i.archived);
-  const completed = installs.filter(i => i.completed && !i.archived);
-  const archived = installs.filter(i => i.archived);
-
+  const live = installs.filter(i => !i.archived);
+  const active = live.filter(i => !_instDone(i));
+  const done = live.filter(i => _instDone(i));
   if (installs.length === 0) {
     document.getElementById('page-content').innerHTML = `<div class="empty-state page-pad">
-      <div class="empty-icon">💳</div>
+      <div class="empty-icon">🧾</div>
       <div class="empty-text">No installments yet</div>
       <div class="empty-sub" style="margin-bottom:16px">Track your monthly payment plans</div>
       <button class="btn btn-primary btn-sm" onclick="openAddInstallment()">+ Add Installment</button>
     </div>`;
     return;
   }
-
-
-  const html = `<div class="page-pad">
-    ${active.map(installCard).join('')}
-    ${/* -- PERSONAL LOGIC SET #241 -- Finished items use the SAME footer everywhere: quiet-rows at
-         the end of the list that open a sheet, exactly as Reimbursements and Loans do for Settled
-         and Archive. This page had two shapes for one idea -- an inline collapsible with a chevron
-         for Completed, and a full-width ghost BUTTON for Archive -- so the same concept looked like
-         two features and neither matched the rest of the app. Inline expansion also pushed finished
-         items into the middle of the list, competing with the active ones. */''}
-    <div style="margin-top:24px">
-      <div class="quiet-row" onclick="openCompletedInstSheet()">
-        <div>✓ Completed${completed.length>0?` <span style="color:var(--text4)">(${completed.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
-      </div>
-      <div class="quiet-row" onclick="openInstArchiveSheet()">
-        <div>🗃️ Archive${archived.length>0?` <span style="color:var(--text4)">(${archived.length})</span>`:''}</div><div style="color:var(--text4)">›</div>
-      </div>
+  const home = _homeBase();
+  const left = active.reduce((s,i) => s + _instNums(i).remaining, 0);
+  const monthly = active.reduce((s,i) => s + _instNums(i).mo, 0);
+  const lastEnd = active.map(i => i.endDate).filter(Boolean).sort().pop();
+  const tile = (lbl, amt, sub) => `<div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">${lbl}</div><div class="lp-tile-amt">${amt}</div><div class="lp-tile-sub">${sub}</div></div>`;
+  let html = `<div class="page-pad"><div class="lp-tiles">
+      ${tile('Left to pay', fmt(left, home), `${active.length} plan${active.length===1?'':'s'}`)}
+      ${tile('Per month', fmt(monthly, home), lastEnd ? `until ${_instMonthLbl(lastEnd)}` : 'Nothing due')}
     </div>
-  </div>`;
-
-  document.getElementById('page-content').innerHTML = html;
+    <div class="lp-chips"><button class="lp-chip ${_instView!=='done'?'on':''}" onclick="setInstView('active')">Active</button><button class="lp-chip ${_instView==='done'?'on':''}" onclick="setInstView('done')">Completed${done.length?` · ${done.length}`:''}</button></div>`;
+  const icon = i => `<div class="pool-avatar" style="width:34px;height:34px;font-size:17px;background:var(--bg3)">${i.icon || '🧾'}</div>`;
+  if (_instView === 'done') {
+    html += done.length ? `<div class="lp-sec">Paid off</div><div class="lp-grp">` + done.map(i => { const n = _instNums(i); return `<div class="lp-row" onclick="openInstallmentDetail('${i.id}')">${icon(i)}
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(i.name)}</span></div>
+        <div class="lp-meta">${_instMonthLbl(i.startDate)} – ${_instMonthLbl(i.endDate)}</div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt(n.total * n.mo, home)}</div><div class="lp-amt2">${n.total} × ${fmt(n.mo, home)}</div></div><span class="lp-chev">›</span></div>`; }).join('') + `</div>`
+      : `<div class="lp-empty">Nothing paid off yet.</div>`;
+  } else {
+    const sorted = active.slice().sort((x,y) => _instNums(x).left - _instNums(y).left); // closest to done first
+    html += sorted.length ? `<div class="lp-sec">Active</div><div class="lp-grp">` + sorted.map(i => { const n = _instNums(i); return `<div class="lp-row" onclick="openInstallmentDetail('${i.id}')">${icon(i)}
+        <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(i.name)}</span></div>
+        <div class="lp-meta">${n.paid} of ${n.total} paid · ${fmt(n.mo, home)}/mo</div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:7px;overflow:hidden"><div style="height:100%;width:${n.pct.toFixed(1)}%;background:var(--accent);border-radius:2px"></div></div></div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt(n.remaining, home)}</div><div class="lp-amt2">${n.left} ${aiPlural(n.left,'month')} left</div></div><span class="lp-chev">›</span></div>`; }).join('') + `</div>`
+      : `<div class="lp-empty">No active plans.<br><span style="color:var(--text4);font-size:12px">Tap + to add one.</span></div>`;
+  }
+  document.getElementById('page-content').innerHTML = html + `</div>`;
 }
 
 function openAddTarget() {
@@ -14594,7 +14919,8 @@ function buildVelocityGauge(metricMk, dispCurr) {
     const d = new Date(y, m-1-i, 1);
     const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const t = getMonthTotals(k);
-    if (t.expense > 0) { baseline += t.expense; count++; }
+    // PLS #277: this month's pace (above) already excludes losses, so the baseline must too
+    if (t.spending > 0) { baseline += t.spending; count++; }
   }
   const avgMonthly = count > 0 ? baseline / count : 0;
   const projVsAvg = avgMonthly > 0 ? (projection / avgMonthly) : 1;
@@ -15626,23 +15952,18 @@ function buildGoalProgress(dispCurr) {
   // Saved pace since contract start → projected finish date
   let paceMo = null, etaLabel = null, etaOnTime = null;
   if (startDate && !isNaN(startDate)) {
-    // PLS #215: pace used to divide by calendar months since the CONTRACT start, which counts
-    // months before any logging existed and any partial start month — both drag the pace down
-    // and push the finish date out. Divide by COMPLETE logged months instead, so this reads as
-    // the rate actually being sustained. Falls back to elapsed time until a complete month exists.
+    // -- PERSONAL LOGIC SET #280 (supersedes #215b for this card) -- Pace = saved so far / months
+    // since CONTRACT START. #215b divided by complete LOGGED months (4) while the numerator is the
+    // full balance of the linked savings accounts, which already held PHP 140,387 on Apr 30, saved
+    // in PNG before logging moved into this app. Numerator and divisor covered different periods,
+    // so the pace read PHP 101,713/mo and the ETA Aug 2027, while the true pace was PHP 59,256/mo
+    // and the ETA Mar 2028. The same card said "behind" (correctly) and "early" (wrongly). User's
+    // call (Sep 2026): money in the ledger since arriving counts toward the pace. This now matches
+    // the time-elapsed marker on this card and the Savings page, which both run from contract start.
     const _now2 = new Date();
-    const _fc = firstCompleteMonthKey();
-    let monthsElapsed;
-    if (_fc) {
-      const [cy, cm] = _fc.split('-').map(Number);
-      // whole months from the first complete month up to (not including) the current one
-      const complete = (_now2.getFullYear() - cy) * 12 + (_now2.getMonth() - (cm - 1));
-      monthsElapsed = Math.max(1, complete);
-    } else {
-      monthsElapsed = Math.max(0.25, (_now2 - startDate) / (1000*60*60*24*30.44));
-    }
+    const monthsElapsed = Math.max(0.25, (_now2 - startDate) / (1000*60*60*24*30.44)); // PLS #280
     paceMo = actual / monthsElapsed;
-    var _paceBasis = _fc ? `${monthsElapsed} complete month${monthsElapsed===1?'':'s'}` : 'time since start';
+    var _paceBasis = `${monthsElapsed.toFixed(1)}mo since start`; // PLS #280: say the real basis
     const rem0 = target - actual;
     if (rem0 > 0 && paceMo > 0) {
       const monthsToGo = rem0 / paceMo;
@@ -16076,7 +16397,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
         const d = new Date(y, m-1-i, 1);
         const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         const tt = getMonthTotals(k);
-        if (tt.expense > 0) { baseline += tt.expense; count++; }
+        if (tt.spending > 0) { baseline += tt.spending; count++; } // PLS #277: like-for-like with this month's pace
       }
       const avgMonthly = count > 0 ? baseline / count : 0;
       const ratio = avgMonthly > 0 ? projection / avgMonthly : 1;
@@ -16239,7 +16560,7 @@ function buildNetWorthTrend(metricMk, dispCurr) {
       <div style="font-size:11px;color:var(--text3)">Current</div>
       <div style="text-align:right">
         <span style="font-family:var(--mono);font-size:16px;font-weight:700">${fmt(cur, dispCurr)}</span>
-        <span style="font-size:11px;color:${trendColor};margin-left:6px">${trendIcon} ${fmt(Math.abs(change), dispCurr)} (${Math.abs(changePct).toFixed(0)}%)</span>
+        <span style="font-size:11px;color:${trendColor};margin-left:6px;white-space:nowrap;display:inline-block">${trendIcon} ${fmt(Math.abs(change), dispCurr)} (${Math.abs(changePct).toFixed(0)}%)</span>${''/* PLS #284: nowrap + inline-block keep the arrow and its figure together; in the narrow Overview column the line broke right after the arrow, stranding it beside the balance */}
       </div>
     </div>
   </div>`;
@@ -16302,7 +16623,7 @@ function buildIncomeExpenseBars(metricMk, dispCurr) {
     </div>
     <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text4);border-top:1px solid var(--border);margin-top:12px;padding-top:8px">
       <span>${lastMo.label} net</span>
-      <span style="font-family:var(--mono);font-weight:600;color:${lastNet>=0?'var(--green)':'var(--red)'}">${lastNet>=0?'+':''}${fmt(lastNet, dispCurr)}</span>
+      <span style="font-family:var(--mono);font-weight:600;color:${lastNet>=0?'var(--green)':'var(--red)'}">${fmt(lastNet, dispCurr, true)}</span>
     </div>
   </div>`;
 }
@@ -17544,6 +17865,7 @@ function renderAnalyticsInvestments() {
 
   // ── Compute totals (display currency) ──
   let totalInvested = 0, totalCurrent = 0, totalRealizedGL = 0;
+  let soldCostBasis = 0; // PLS #281: capital that went into positions already sold
   active.forEach(i => {
     const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
     const curVal = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
@@ -17554,10 +17876,19 @@ function renderAnalyticsInvestments() {
     const gl = i.realizedGL || 0;
     const glConv = i.currency === dispCurr ? gl : convert(gl, i.currency, dispCurr);
     totalRealizedGL += glConv;
+    // PLS #281: the sold position's own cost, converted the same way as its G/L so both sides match
+    const cb = Number.isFinite(Number(i.costBasisAtSale)) && i.costBasisAtSale !== null ? Number(i.costBasisAtSale) : (Number(i.amount) || 0);
+    soldCostBasis += i.currency === dispCurr ? cb : convert(cb, i.currency, dispCurr);
   });
   const unrealizedGL = totalCurrent - totalInvested;
   const unrealizedPct = totalInvested > 0 ? (unrealizedGL / totalInvested * 100) : 0;
-  const totalReturnPct = totalInvested > 0 ? ((unrealizedGL + totalRealizedGL) / totalInvested * 100) : 0;
+  // -- PERSONAL LOGIC SET #281 -- Total return = (paper G/L + realized G/L) / EVERYTHING ever put in.
+  // The divisor used to be only what is still held, so a sold position's loss was measured against
+  // capital that never touched it: a PHP 14,925 Binance loss / PHP 5,400 still in ICTSI = -276.4%,
+  // an impossible figure (you cannot lose more than 100% of cash-bought positions). Sold positions'
+  // cost basis now joins the divisor: -14,925 / (5,400 + 30,571) = -41.5%.
+  const _allCapital = totalInvested + soldCostBasis; // PLS #281
+  const totalReturnPct = _allCapital > 0 ? ((unrealizedGL + totalRealizedGL) / _allCapital * 100) : 0;
 
   // ── By-type allocation ──
   const byType = {};
@@ -17649,12 +17980,12 @@ function renderAnalyticsInvestments() {
     <div class="fr4-resp" style="margin-bottom:14px">
       <div class="metric-card">
         <div class="metric-label">UNREALIZED G/L</div>
-        <div class="metric-value ${unrealizedGL > 0 ? 'tx-pos' : unrealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${unrealizedGL >= 0 ? '+' : ''}${fmt(unrealizedGL, dispCurr)}</div>
+        <div class="metric-value ${unrealizedGL > 0 ? 'tx-pos' : unrealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${fmt(unrealizedGL, dispCurr, true)}${''/* PLS #283: fmt() drops the sign of negatives unless asked; the old code added '+' for gains and nothing for losses, so a PHP 14,925 loss showed as a bare "PHP 14,925.27" */}</div>
         <div style="font-size:11px;color:var(--text4)">${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(1)}% paper</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">REALIZED G/L</div>
-        <div class="metric-value ${totalRealizedGL > 0 ? 'tx-pos' : totalRealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${totalRealizedGL >= 0 ? '+' : ''}${fmt(totalRealizedGL, dispCurr)}</div>
+        <div class="metric-value ${totalRealizedGL > 0 ? 'tx-pos' : totalRealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${fmt(totalRealizedGL, dispCurr, true)}${''/* PLS #283: fmt() drops the sign of negatives unless asked; the old code added '+' for gains and nothing for losses, so a PHP 14,925 loss showed as a bare "PHP 14,925.27" */}</div>
         <div style="font-size:11px;color:var(--text4)">${sold.length} sold</div>
       </div>
       <div class="metric-card">
@@ -17699,7 +18030,7 @@ function renderAnalyticsInvestments() {
               <div class="list-row-sub">${s.type} · Sold ${s.soldDate ? fmtD(s.soldDate) : ''}</div>
             </div>
             <div class="list-row-right">
-              <div class="list-row-amt ${glClass}">${gl >= 0 ? '+' : ''}${fmt(gl, s.currency)}</div>
+              <div class="list-row-amt ${glClass}">${fmt(gl, s.currency, true)}</div>
               <div class="list-row-date">realized</div>
             </div>
           </div>`;
@@ -18309,6 +18640,7 @@ function finalizeRecurringLog(r, acctId, date) {
   for (const cat of db.categories.income) {
     if (cat.id === r.categoryId || (cat.subcats||[]).some(sc=>sc.id===r.categoryId)) { txType = 'income'; break; }
   }
+  const _recTime = nowTime(); // PLS #279: the tx and its snapshot share ONE time
   const tx = {
     id: 'tx-' + genId(),
     type: txType,
@@ -18317,10 +18649,10 @@ function finalizeRecurringLog(r, acctId, date) {
     categoryId: r.categoryId,
     accountId: acctId,
     date: date || today(),
-    time: nowTime(),
+    time: _recTime,
     notes: `Recurring: ${_esc(r.name)}`,
     recurringId: r.id,
-    fxSnapshot: buildFxSnapshot(date || today()),
+    fxSnapshot: buildFxSnapshot(date || today(), _recTime), // PLS #279
     createdAt: new Date().toISOString(),
     archived: false
   };
@@ -22466,7 +22798,12 @@ function getAcctBalanceAsOf(acctId, asOfDate) {
     }
     // PLS #14: shared deducts totalBill (unless isFeeReimbursable)
     else if (tx.type === 'shared' && tx.accountId === acctId && !tx.isFeeReimbursable) {
-      bal -= (tx.totalBill || tx.amount);
+      // -- PERSONAL LOGIC SET #278 -- mirror getAcctBalance: a shared bill in another currency must be
+      // converted to the account's currency. This copy subtracted the raw figure, so a K100 bill on a
+      // PHP account took PHP 100 off, and Bank Reconciliation / month-end net worth disagreed with the
+      // account card. (0 such bills in the Sep 2026 data, latent until one is logged.)
+      const billAmt = tx.totalBill || tx.amount;
+      bal -= tx.currency === acct.currency ? billAmt : convert(billAmt, tx.currency, acct.currency); // PLS #278
     }
     else if (tx.type === 'transfer') {
       if (tx.fromAccountId === acctId) {
@@ -22554,7 +22891,7 @@ function renderBankReconBody() {
 
         <div style="background:${isMatch ? 'var(--green-bg)' : (absDiff < 1 ? 'var(--amber-bg)' : 'var(--red-bg)')};border-radius:var(--r-md);padding:12px;border:1px solid ${isMatch ? 'var(--green-border)' : (absDiff < 1 ? 'var(--amber-border)' : 'var(--red-border)')}">
           <div style="font-size:11px;color:${isMatch ? 'var(--green)' : (absDiff < 1 ? 'var(--amber)' : 'var(--red)')};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;font-weight:600">${isMatch ? '✅ Match!' : (diff > 0 ? '⚠ Bank is higher' : '⚠ App is higher')}</div>
-          <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:${isMatch ? 'var(--green)' : (absDiff < 1 ? 'var(--amber)' : 'var(--red)')}">${diff >= 0 ? '+' : ''}${fmt(diff, acct.currency || _homeBase())}</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:${isMatch ? 'var(--green)' : (absDiff < 1 ? 'var(--amber)' : 'var(--red)')}">${fmt(diff, acct.currency || _homeBase(), true)}</div>
           ${!isMatch ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">${tolPct.toFixed(2)}% variance</div>` : ''}
         </div>
       </div>
@@ -22745,7 +23082,7 @@ function openReconHistory() {
             <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:6px;font-size:11px">
               <div><div style="color:var(--text3)">App</div><div style="font-family:var(--mono);font-weight:600">${fmt(r.appBalance, r.currency)}</div></div>
               <div><div style="color:var(--text3)">Bank</div><div style="font-family:var(--mono);font-weight:600">${fmt(r.realBalance, r.currency)}</div></div>
-              <div><div style="color:var(--text3)">Diff</div><div style="font-family:var(--mono);font-weight:600;color:${color}">${r.diff >= 0?'+':''}${fmt(r.diff, r.currency)}</div></div>
+              <div><div style="color:var(--text3)">Diff</div><div style="font-family:var(--mono);font-weight:600;color:${color}">${fmt(r.diff, r.currency, true)}</div></div>
             </div>
           </div>`;
         }).join('')}
@@ -23696,6 +24033,10 @@ function updateSyncIndicator() {
   const icon = document.getElementById('sync-icon');
   const label = document.getElementById('sync-label');
   if (!icon || !label) return;
+  // PLS #287: the badge is shown only while it needs attention (unsaved changes, saving now).
+  // Idle / saved / no-Drive states stay out of the header; Settings shows the Drive status.
+  const _ind = document.getElementById('sync-indicator');
+  if (_ind) _ind.style.display = (db.settings.googleDriveConnected && (_syncStatus === 'unsaved' || _syncStatus === 'saving')) ? 'flex' : 'none';
   // PLS #132 family: sync states are themed SVGs (emoji render inconsistently across
   // platforms and don't tint). Cloud = idle/no Drive, dot = unsaved, spinning arrows =
   // saving, cloud-check = saved.
@@ -24398,6 +24739,38 @@ function ensureDBIntegrity() {
       fixedInvReturns++;
     });
     if (fixedInvReturns > 0) issues.push(`recomputed gain/loss on ${fixedInvReturns} investment sale${fixedInvReturns===1?'':'s'}`);
+
+    // -- PERSONAL LOGIC SET #275 -- Re-measure forex gain/loss logged BEFORE PLS #273. Those were
+    // computed against "the latest rate" at the moment of saving, not the transfer's own rate, so a
+    // May 8 transfer (PHP 635.20 -> K50, own rate 13.0197929) logged a PHP 28.37 gain instead of
+    // PHP 15.79. The forex child is APP-computed, not user input (PLS #113 does not apply), so the
+    // app corrects its own figure. Scope is deliberately narrow: only the amount/direction of an
+    // EXISTING isAutoForex child of a transfer with an actual received amount. Never creates a
+    // child, never touches the parent, a balance, an amount you typed or a rate. Skips any pair
+    // with no home side (no anchor, no guessing). Guarded by forexSnapRate: runs once per child.
+    let fixedFx = 0;
+    (db.transactions || []).forEach(tx => {
+      if (tx.type !== 'transfer' || !tx.toAmountIsActual || tx.toAmount == null) return;
+      const child = db.transactions.find(c => c.parentId === tx.id && c.isAutoForex);
+      if (!child || child.forexSnapRate != null) return;              // PLS #275: none, or already done
+      const toA = db.accounts.find(a => a.id === tx.toAccountId);
+      if (!toA || toA.currency === tx.currency) return;
+      const home = _homeBase();
+      if (tx.currency !== home && toA.currency !== home) return;      // PLS #275: no home anchor, leave it
+      const foreign = tx.currency !== home ? tx.currency : toA.currency;
+      const r = _txSnapRate(foreign, tx.date, tx.time, tx.fxSnapshot); // PLS #275: the tx's OWN rate
+      if (!(r > 0)) return;
+      const snapTo = tx.currency === home ? tx.amount / r : tx.amount * r;
+      const diff = toA.currency === home ? (tx.toAmount - snapTo) : (tx.toAmount - snapTo) * r; // same formula as saveEditTransfer
+      const old = (child.type === 'income' ? 1 : -1) * (Number(child.amount) || 0);
+      child.forexSnapRate = r;                                         // PLS #275: stamp = done
+      if (Math.abs(diff - old) < 0.005) return;                         // already right, stamp only
+      child.type = diff >= 0 ? 'income' : 'expense';
+      child.categoryId = diff >= 0 ? 'sc-forexgain' : 'sc-forexloss';
+      child.amount = Math.abs(diff);                                    // PLS #68: store raw
+      fixedFx++;
+    });
+    if (fixedFx > 0) issues.push(`re-measured forex on ${fixedFx} transfer${fixedFx===1?'':'s'} at their own rate`);
 
     if (issues.length > 0) {
       console.log('[Integrity] Patched:', issues.join(' · '));
@@ -25569,8 +25942,8 @@ function aiWeeklyRecap() {
     id: 'weekly-recap', type: 'recap',
     priority: 'low', icon: '📊',
     title: aiPick([
-      `Week recap: Net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
-      `Sunday recap — net ${net >= 0 ? '+' : ''}${fmt(net, currency)}`,
+      `Week recap: Net ${fmt(net, currency, true)}`,
+      `Sunday recap — net ${fmt(net, currency, true)}`,
       `Your week in numbers`,
       `Weekly snapshot`,
     ], 'weekly-recap'),
@@ -25903,7 +26276,7 @@ function renderAnalyticsCashflow() {
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">${current.label} · This Month</div>
       <div style="font-size:13px;color:var(--text2)">Income: <b style="color:var(--green)">${fmt(current.income, dc)}</b></div>
       <div style="font-size:13px;color:var(--text2)">Expenses: <b style="color:var(--red)">${fmt(current.expense, dc)}</b></div>
-      <div style="font-size:22px;font-weight:700;margin-top:8px;color:${current.net>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${current.net>=0?'+':''}${fmt(current.net, dc)}</div>
+      <div style="font-size:22px;font-weight:700;margin-top:8px;color:${current.net>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(current.net, dc, true)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.net>=0?'Net Saved':'Net Deficit'}</div>
     </div>`;
 
@@ -25922,7 +26295,7 @@ function renderAnalyticsCashflow() {
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
         <div style="width:${pct}%;height:100%;background:${color};border-radius:var(--r-sm)"></div>
       </div>
-      <div style="width:84px;text-align:right;font-family:var(--mono);font-size:11px;color:${color};font-weight:600">${m.net>=0?'+':''}${fmt(m.net, dc)}</div>
+      <div style="width:84px;text-align:right;font-family:var(--mono);font-size:11px;color:${color};font-weight:600">${fmt(m.net, dc, true)}</div>
       <div>${emoji}</div>
     </div>`;
   });
@@ -25934,7 +26307,7 @@ function renderAnalyticsCashflow() {
       <!-- PLS #232: this label must show _basisN, the REAL divisor, not a hardcoded 6. It read
            "6-Mo Avg Net" while dividing by whatever months existed — a stated basis that was false. -->
       <div class="metric-label">Avg Net · ${_basisN}mo</div>
-      <div class="metric-value mfit" style="color:${avgNet>=0?'var(--green)':'var(--red)'}">${avgNet>=0?'+':''}${fmt(avgNet, dc)}</div>
+      <div class="metric-value mfit" style="color:${avgNet>=0?'var(--green)':'var(--red)'}">${fmt(avgNet, dc, true)}</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Savings Rate</div>
@@ -26034,7 +26407,7 @@ function renderAnalyticsCrossCurrency() {
     </div>
     <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between">
       <b style="font-size:13px">Net FX P/L</b>
-      <b style="color:${netFX>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${netFX>=0?'+':''}${fmt(_inDisplay(netFX), dc)}</b>
+      <b style="color:${netFX>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(_inDisplay(netFX), dc, true)}</b>
     </div>
     <div style="font-size:10px;color:var(--text4);margin-top:6px">From loan/reimb settlements with FX changes</div>
   </div>`;
@@ -26113,7 +26486,7 @@ function renderAnalyticsPeople() {
       </div>
       <div class="metric-card">
         <div class="metric-label">Net Position</div>
-        <div class="metric-value mfit" style="color:${netPosition>=0?'var(--green)':'var(--red)'}">${netPosition>=0?'+':''}${fmt(_inDisplay(netPosition), dc)}</div>
+        <div class="metric-value mfit" style="color:${netPosition>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(netPosition), dc, true)}</div>
       </div>
       <div class="metric-card">
         <div class="metric-label">People</div>
@@ -26185,7 +26558,7 @@ function renderAnalyticsPeople() {
         <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${escapeAttr(initials)}</div>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:600">${escapeAttr(p.name)}</div>
-          <div style="font-size:11px;color:var(--text3)">Net: <span style="color:${netColor};font-weight:600">${p.netOwedToMe>=0?'+':''}${fmt(_inDisplay(Math.abs(p.netOwedToMe)), dc)}</span> · ${direction}</div>
+          <div style="font-size:11px;color:var(--text3)">Net: <span style="color:${netColor};font-weight:600">${fmt(_inDisplay(p.netOwedToMe), dc, true)}</span> · ${direction}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px">
@@ -26666,8 +27039,8 @@ function renderAnalyticsYoY() {
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Net Saved</div>
       <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <div style="font-size:18px;font-weight:700;color:${netCur>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${netCur>=0?'+':''}${fmt(netCur, dc)}</div>
-        <div style="font-size:11px;color:var(--text3)">vs ${netPrev>=0?'+':''}${fmt(netPrev, dc)}</div>
+        <div style="font-size:18px;font-weight:700;color:${netCur>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(netCur, dc, true)}</div>
+        <div style="font-size:11px;color:var(--text3)">vs ${fmt(netPrev, dc, true)}</div>
       </div>
       ${netChg !== null ? `<div style="font-size:11px;color:${netChg>=0?'var(--green)':'var(--red)'};font-weight:600;margin-top:2px">${netChg>=0?'↑':'↓'} ${Math.abs(netChg).toFixed(1)}% YoY</div>` : ''}
     </div>
@@ -26690,7 +27063,7 @@ function renderAnalyticsYoY() {
         <div style="font-size:13px;font-weight:600">${escapeAttr(c.cat)}</div>
         <div style="font-size:10px;color:var(--text4);font-family:var(--mono)">${fmt(_inDisplay(c.prev), dc)} → ${fmt(_inDisplay(c.cur), dc)}</div>
       </div>
-      <div style="font-size:11px;color:${color};font-weight:600;font-family:var(--mono)">${c.diff>=0?'+':''}${fmt(_inDisplay(Math.abs(c.diff)), dc)}<br><span style="font-size:10px">${pct>=0?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span></div>
+      <div style="font-size:11px;color:${color};font-weight:600;font-family:var(--mono)">${fmt(_inDisplay(c.diff), dc, true)}<br><span style="font-size:10px">${pct>=0?'↑':'↓'} ${Math.abs(pct).toFixed(0)}%</span></div>
     </div>`;
   });
 
@@ -26852,7 +27225,8 @@ function renderAnalyticsAISummary() {
     const _k = mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1));
     if (_fcFloor && _k < _fcFloor) continue; // PLS #215
     const t = getMonthTotals(_k);
-    if ((t.income||0) || (t.expense||0)) { predNet += (t.income||0) - (t.expense||0); predMonths++; }
+    // PLS #277: a forecast of next month projects usual behaviour, so one-time losses stay out
+    if ((t.income||0) || (t.expense||0)) { predNet += (t.income||0) - (t.spending||0); predMonths++; }
   }
   predNet = predMonths > 0 ? predNet / predMonths : net;
 
@@ -27495,7 +27869,7 @@ function confirmDeleteInstallment(instId) {
 // openSettledLoansSheet. Same card renderer as the active list, so a finished plan looks like
 // itself — only the surface it sits on changes.
 function openCompletedInstSheet() {
-  const done = (db.installments || []).filter(i => !i.archived && (i.completed || (i.linkedTxIds||[]).length >= i.totalMonths));
+  const done = (db.installments || []).filter(i => !i.archived && _instDone(i)); // PLS #288: one definition of done
   const body = done.length
     ? `<div style="padding:4px 4px 12px">${done.map(installCard).join('')}</div>`
     : `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing completed yet</div><div class="empty-sub">Plans you finish paying off collect here</div></div>`;
