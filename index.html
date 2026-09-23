@@ -949,6 +949,16 @@ option{background:var(--bg3);color:var(--text)}
 .lp-tile-amt{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-tile-sub{font-size:11px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-chips{display:flex;gap:8px;margin:14px 0 2px}
+/* PLS #319: inside an Analytics report every section header and small label reads like the rest
+   of the app (the .lp-sec look: sentence case, 11.5px, medium, muted). They were a mix of
+   UPPERCASE letter-spaced labels at 9.5-11px written inline in each report. */
+#analytics-swipe-pane [style*="text-transform:uppercase"],
+#analytics-swipe-pane [style*="text-transform: uppercase"],
+#analytics-swipe-pane .metric-label,
+#analytics-swipe-pane .kpi-label{text-transform:none!important;letter-spacing:normal!important}
+#analytics-swipe-pane [style*="text-transform:uppercase"],
+#analytics-swipe-pane [style*="text-transform: uppercase"]{font-size:11.5px!important;font-weight:500!important;color:var(--text3)!important}
+#analytics-swipe-pane .metric-label{font-size:11px!important;font-weight:500!important}
 /* PLS #309: more than two tiles become a swipe row (2 in view, the next one peeking), like Apple
    Wallet / Stocks. On a mouse-driven screen it also gets arrow buttons and a thin scrollbar,
    since a desktop user cannot swipe. */
@@ -1676,6 +1686,8 @@ function fmt(amt, code, sign=false) {
 // Example: 0.07680613721589995 stays as-is, not "0.0768".
 // For amounts (₱, ¥), continue using fmt() which uses 2-decimal display.
 // Per PLS #113: display exactly what user input — no cleanup, no transformation.
+// PLS #314: money in sentences gets 2 decimals and separators, same as fmt() without a symbol
+function _money2(n) { return Number(n || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtRate(rate) {
   if (typeof rate !== 'number' || isNaN(rate)) return '—';
   if (rate === 0) return '0';
@@ -2589,7 +2601,10 @@ function getNetWorth() {
 
   for (const acct of db.accounts) {
     if (acct.archived) continue;
-    const bal = getAcctBalance(acct.id);
+    // PLS #316: sub-centavo float residue (e.g. -0.000000001 after many adds and subtracts) is zero.
+    // It was filed as a LIABILITY, so three emptied savings accounts showed as "Savings PHP 0.00" debt.
+    let bal = getAcctBalance(acct.id);
+    if (Math.abs(bal) < 0.005) bal = 0;
     const phpBal = toPhp(bal, acct.currency);
     // 📖 USER STORY: Pag may overdrawn savings account ka (naging negative dahil walang initial
     // balance o mas malaki ang gastos), tinatrato siya as liability — hindi asset. Same sa credit
@@ -3035,7 +3050,7 @@ const DASH_SECTIONS_DEFAULT = ['alerts','budget','recent'];
 // Full set of reorderable sections (used by Customize screen so hidden ones can be re-added).
 const DASH_SECTIONS_ALL = ['alerts','metrics','pulse','insights','budget','recent',
   'w_networth','w_inexp','w_waterfall',
-  'w_savings','w_runway','w_velocity','w_forecast','w_anomaly','w_subs','w_fixeddisc',
+  'w_savings','w_runway','w_velocity','w_forecast','w_anomaly','w_fixeddisc', /* PLS #315: w_subs removed with Recurring */
   'w_pareto','w_dow','w_frequent','w_timeofday','w_distribution','w_yoy','w_incomediv',
   'w_goals','w_concentration'];
 const DASH_SECTION_LABELS = {
@@ -3186,6 +3201,8 @@ function nav(page) {
     _txQuickFilter = null;
   }
   currentPage = page;
+  { const _b = document.getElementById('ph-back'); if (_b) _b.remove(); } // PLS #317: back chevron belongs to an open report only
+  if (page === 'analytics') _anHome = true; // PLS #317: the Analytics tab opens on Browse; deep links then call setAnalyticsTab()
   try { localStorage.setItem('tb_last_page', page); } catch(e) {}
   const titles = {dashboard:'Dashboard',analytics:'Analytics',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',investments:'Investments',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
@@ -3873,7 +3890,7 @@ function generateInsights() {
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
     const effLimit = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
     const pct = spent / effLimit;
-    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${sym(bgt.currency)}${spent.toFixed(0)} of ${sym(bgt.currency)}${effLimit.toFixed(0)} limit this month.`});
+    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${fmt(spent, bgt.currency)} of ${fmt(effLimit, bgt.currency)} limit this month.`});
     else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
   }
 
@@ -5523,8 +5540,8 @@ function renderUnifiedAmountForm() {
     <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
          the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date')}</div>
-      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time')}</div>
+      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date', today())}</div>
+      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time', nowTime())}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -5637,8 +5654,8 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
     <!-- Date + Time split row — plain native inputs (PLS #192: matches the Loans form pattern;
          the custom GZ overlay picker kept breaking on this screen) -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date')}</div>
-      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time')}</div>
+      <div class="field-row-wrap fw-date">${dtField('add-date','date','Date', today())}</div>
+      <div class="field-row-wrap fw-time">${dtField('add-time','time','Time', nowTime())}</div>
     </div>
 
     <!-- Split With section -->
@@ -6046,8 +6063,8 @@ function renderRemittanceForm() {
 
     <!-- Date + Time split row -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">${dtField('rem-date','date','Date')}</div>
-      <div class="field-row-wrap fw-time">${dtField('rem-time','time','Time')}</div>
+      <div class="field-row-wrap fw-date">${dtField('rem-date','date','Date', today())}</div>
+      <div class="field-row-wrap fw-time">${dtField('rem-time','time','Time', nowTime())}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -6506,8 +6523,8 @@ function renderTransferForm() {
 
     <!-- Date + Time split row -->
     <div class="field-row-split">
-      <div class="field-row-wrap fw-date">${dtField('tf-date','date','Date')}</div>
-      <div class="field-row-wrap fw-time">${dtField('tf-time','time','Time')}</div>
+      <div class="field-row-wrap fw-date">${dtField('tf-date','date','Date', today())}</div>
+      <div class="field-row-wrap fw-time">${dtField('tf-time','time','Time', nowTime())}</div>
     </div>
 
     <!-- Notes always visible -->
@@ -7422,7 +7439,7 @@ function renderTxLog() {
       if (t.type==='shared') return s - txAmtIn(t.myShare || t.amount, t);
       return s;
     }, 0);
-    txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:10px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${dayNet>=0?'+':''}${dayNet.toFixed(0)}</span></div>`;
+    txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:10px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(dayNet), _displayCurrency(), true)}</span></div>`; // PLS #314: day net with its currency and centavos (was "-283" for -PHP 282.64)
     txHTML += dayTxs.map(tx=>renderTxRow(tx)).join('');
     _rendered += dayTxs.length;
   }
@@ -13953,44 +13970,53 @@ document.addEventListener('click', e => {
 // Renders ‹ [month] › arrows + dropdown once at the top of Overview, Spending, Income and
 // Budget (the only tabs that read window._analyticsOverviewPeriod), so month context can be
 // changed from any of them. Non-period tabs return '' (no nav).
+// -- PERSONAL LOGIC SET #318 -- Analytics period picker, iOS style (Apple Health / Screen Time):
+// a Month | Year segmented control picks the SIZE of the period and the arrows step one period
+// back or forward, so they always mean the same thing. Before, arrows stepped months while a
+// dropdown also listed "Year to Date" and every month, "<" from Year to Date jumped to a single
+// month, and Budget read the same "Year to Date" value as "this month". Year = Jan-Dec, or Jan to
+// today for the current year. Year is offered where a year total makes sense (Spending, Income);
+// Overview and Budget are monthly views and show Month only. Periods: 'YYYY-MM' or 'Y:YYYY'
+// ('ytd' is still read as the current year, for saved state).
+function _anIsYear(p) { return p === 'ytd' || /^Y:\d{4}$/.test(p || ''); }
+function _anYear(p) { return p === 'ytd' ? new Date().getFullYear() : Number(String(p).slice(2)); }
+function _anYearMonths(y) {
+  const now = new Date(); const last = y === now.getFullYear() ? now.getMonth() : 11;
+  return Array.from({ length: last + 1 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+}
+function _anSetPeriod(p) { window._analyticsOverviewPeriod = p; setAnalyticsTab(_analyticsTab); }
 function _analyticsMonthNav() {
-  const PERIOD_TABS = ['overview','spending','income','budget'];
+  const PERIOD_TABS = ['overview','spending','income'];
   if (!PERIOD_TABS.includes(_analyticsTab)) return '';
-  const sharedPeriod = window._analyticsOverviewPeriod || 'ytd';
-  const now = new Date();
-  const curMk = currMonthKey();
-  const isYtd = sharedPeriod === 'ytd';
-  const baseMk = isYtd ? curMk : sharedPeriod;
-  const [by, bm] = baseMk.split('-').map(Number);
-  const prevMk = (() => { const d = new Date(by, bm-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
-  const nextMkRaw = (() => { const d = new Date(by, bm, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
-  const nextDisabled = isYtd || nextMkRaw > curMk;
-  const nextVal = nextMkRaw;
-  // Overview/Spending/Income genuinely aggregate Jan→now on 'ytd'; only Budget treats 'ytd' as the current month.
-  const ovYtd = ['overview','spending','income'].includes(_analyticsTab);
-  const label = isYtd ? (ovYtd ? `Year to Date · ${now.getFullYear()}` : fmtMonth(curMk+'-01')) : fmtMonth(baseMk+'-01');
-
-  const txDates = db.transactions.filter(t=>!t.archived&&t.date).map(t=>t.date.slice(0,7));
-  const uniq = [...new Set(txDates)].sort().reverse();
-  if (!uniq.includes(curMk)) uniq.unshift(curMk);
-  // ytdTabs get an explicit current-month option (July ≠ YTD there); Budget treats curMk ≡ 'ytd'.
-  const _ytdSel = isYtd || (!ovYtd && sharedPeriod === curMk);
-  const opts = [
-    `<option value="ytd" ${_ytdSel?'selected':''}>${ovYtd?'Year to Date':'This month'}</option>`,
-    ...uniq.filter(m=>ovYtd || m!==curMk).map(m=>{ const [y,mo]=m.split('-').map(Number); const lbl=new Date(y,mo-1,1).toLocaleString('en',{month:'long',year:'numeric'}); return `<option value="${m}" ${sharedPeriod===m?'selected':''}>${lbl}</option>`; })
-  ].join('');
-
-  const navBtn = 'background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:17px;line-height:1;flex-shrink:0';
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;margin:2px 0 12px">
-    <div style="display:flex;align-items:center;gap:6px;min-width:0">
-      <button style="${navBtn}" onclick="window._analyticsOverviewPeriod='${prevMk}';setAnalyticsTab('${_analyticsTab}')" aria-label="Previous month">‹</button>
-      <div style="font-size:14px;font-weight:600;text-align:center;min-width:104px">${label}</div>
-      <button style="${navBtn};${nextDisabled?'opacity:0.35;pointer-events:none':''}" ${nextDisabled?'disabled':''} onclick="window._analyticsOverviewPeriod='${nextVal}';setAnalyticsTab('${_analyticsTab}')" aria-label="Next month">›</button>
-    </div>
-    <select class="form-input" style="width:auto;padding:6px 32px 6px 10px;font-size:13px" onchange="window._analyticsOverviewPeriod=this.value;setAnalyticsTab('${_analyticsTab}')">
-      ${opts}
-    </select>
-  </div>`;
+  const yearOK = ['spending','income'].includes(_analyticsTab);
+  const curMk = currMonthKey(), curY = new Date().getFullYear();
+  let p = window._analyticsOverviewPeriod || curMk;
+  if (!yearOK && _anIsYear(p)) p = curMk;                       // monthly views read a year as this month
+  const isYear = yearOK && _anIsYear(p);
+  const firstMk = db.transactions.filter(t => !t.archived && t.date).map(t => t.date.slice(0,7)).sort()[0] || curMk;
+  let label, prevP, nextP;
+  if (isYear) {
+    const y = _anYear(p);
+    label = y === curY ? `${y} · to date` : String(y);
+    prevP = y - 1 >= Number(firstMk.slice(0,4)) ? 'Y:' + (y - 1) : null;
+    nextP = y + 1 <= curY ? 'Y:' + (y + 1) : null;
+  } else {
+    const [by, bm] = p.split('-').map(Number);
+    const mk = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const pv = mk(new Date(by, bm - 2, 1)), nx = mk(new Date(by, bm, 1));
+    label = new Date(by, bm - 1, 1).toLocaleString('en', { month:'long', year:'numeric' });
+    prevP = pv >= firstMk ? pv : null;
+    nextP = nx <= curMk ? nx : null;
+  }
+  const arrow = (dir, to) => `<button class="icon-btn" aria-label="${dir<0?'Previous':'Next'}" ${to?`onclick="_anSetPeriod('${to}')"`:'disabled'} style="width:32px;height:32px;min-width:32px;border-radius:50%;background:var(--bg3);color:var(--accent);${to?'':'opacity:.3;pointer-events:none'}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${dir<0?'M15 18l-6-6 6-6':'M9 18l6-6-6-6'}"/></svg></button>`;
+  const seg = yearOK ? `<div class="seg" style="display:flex;background:var(--bg3);border-radius:9px;padding:2px;gap:2px;margin-bottom:10px">
+      <button class="lp-chip ${!isYear?'on':''}" style="flex:1;border-radius:7px" onclick="_anSetPeriod('${isYear ? (_anYear(p) === curY ? curMk : _anYear(p) + '-12') : p}')">Month</button>
+      <button class="lp-chip ${isYear?'on':''}" style="flex:1;border-radius:7px" onclick="_anSetPeriod('Y:${isYear ? _anYear(p) : p.slice(0,4)}')">Year</button></div>` : '';
+  return `<div style="padding:0 16px;margin:4px 0 12px">${seg}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      ${arrow(-1, prevP)}<div style="font-size:14px;font-weight:600;text-align:center;flex:1">${label}</div>${arrow(1, nextP)}
+    </div></div>`;
 }
 
 function renderAnalytics() {
@@ -14018,7 +14044,8 @@ function renderAnalytics() {
     income:     {label:'Income',         icon:'💵', section:'in', desc:'Where your money comes from, broken down by source.'},
     trends:     {label:'Trends',         icon:'📈', section:'patterns', desc:'How your spending shifts over the months, shown as a heatmap.'},
     yoy:        {label:'Year-over-Year', icon:'🗓', section:'patterns', desc:'This year vs last year, month by month.'},
-    budget:     {label:'Budget',         icon:'🎯', section:'out', desc:'How your spending tracks against your monthly limit per category.'},
+    // PLS #320: 'budget' removed. Planning > Budgets (PLS #306) shows the same status per category;
+    // two screens for one thing drifted apart. Its pace line moved to Planning.
     wealth:     {label:'Wealth',         icon:'💎', section:'wealth', desc:'Your net worth over time and how assets and debt stack up.'},
     investments:{label:'Investments',    icon:'📊', section:'wealth', desc:'Your portfolio by type, cost vs current value, and gains.'},
     accthealth: {label:'Account Health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
@@ -14026,14 +14053,29 @@ function renderAnalytics() {
     people:     {label:'People',         icon:'👥', section:'in', desc:'Who you send money to or receive from, with running balances.'},
     // PLS #220: 'out' — a subscription is a recurring EXPENSE, not a person. It sat under
     // section:'people' only because subscriptions are often paid to people.
-    subs:       {label:'Subscriptions',  icon:'🔁', section:'out', desc:'Your recurring payments and what they cost per month and per year.'},
+    // PLS #315: Subscriptions tab removed. It only listed Planning > Recurring templates, which #305
+    // removed, so it could never show anything again (it told users to set them up in Planning).
     forex:      {label:'Forex Rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
     crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
     external:   {label:'External',       icon:'🔄', section:'currency', desc:'Money moving in and out of accounts you do not fully track.'},
   };
   window._TAB_REGISTRY = TAB_REGISTRY;
   const currTab = TAB_REGISTRY[_analyticsTab] || TAB_REGISTRY.overview;
-  const tabsHTML = `<div class="analytics-picker" onclick="openAnalyticsPicker()">
+  if (_anHome) { // PLS #317: the Browse list
+    let h = `<div class="page-pad">`;
+    for (const sec of _AN_SECTIONS) {
+      const ks = sec.keys.filter(k => TAB_REGISTRY[k]);
+      if (!ks.length) continue;
+      h += (sec.title ? `<div class="lp-sec">${sec.title}</div>` : `<div style="height:6px"></div>`) + `<div class="lp-grp">` + ks.map(k =>
+        `<div class="lp-row" onclick="setAnalyticsTab('${k}')"><div class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${TAB_REGISTRY[k].icon}</div>
+          <div style="flex:1;min-width:0"><div class="lp-name">${TAB_REGISTRY[k].label}</div><div class="lp-meta">${_AN_SHORT[k] || ''}</div></div><span class="lp-chev">›</span></div>`).join('') + `</div>`;
+    }
+    document.getElementById('page-content').innerHTML = h + `</div>`;
+    _analyticsHeader();
+    return;
+  }
+  const tabsHTML = ''; // PLS #317: the report's name is in the header now; the dropdown pill is gone
+  const _legacyPicker = `<div class="analytics-picker" onclick="openAnalyticsPicker()">
     <div class="analytics-picker-inner">
       <span class="analytics-picker-icon">${currTab.icon}</span>
       <span class="analytics-picker-label">${currTab.label}</span>
@@ -14047,12 +14089,13 @@ function renderAnalytics() {
   else if (_analyticsTab==='cashflow') content = renderAnalyticsCashflow();
   else if (_analyticsTab==='spending') content = renderAnalyticsSpending();
   else if (_analyticsTab==='income') content = renderAnalyticsIncome();
-  else if (_analyticsTab==='budget') content = renderAnalyticsBudget();
+  // PLS #320: 'budget' now opens Planning > Budgets
+  else if (_analyticsTab==='budget') { _analyticsTab = 'overview'; setTimeout(() => { nav('planning'); setPlanTab('budgets'); }, 0); return; }
   else if (_analyticsTab==='trends') content = renderAnalyticsTrends();
   else if (_analyticsTab==='dayofweek') content = renderAnalyticsDayOfWeek();
   else if (_analyticsTab==='wealth') content = renderAnalyticsWealth();
   else if (_analyticsTab==='people') content = renderAnalyticsPeople();
-  else if (_analyticsTab==='subs') content = renderAnalyticsSubs();
+  // PLS #315: 'subs' removed
   else if (_analyticsTab==='accthealth') content = renderAnalyticsAccountHealth();
   else if (_analyticsTab==='yoy') content = renderAnalyticsYoY();
   else if (_analyticsTab==='investments') content = renderAnalyticsInvestments();
@@ -14072,11 +14115,11 @@ function renderAnalytics() {
     cashflow:   ['overview','income','spending','calendar'],
     calendar:   ['overview','cashflow','dayofweek'],
     dayofweek:  ['overview','spending','calendar'],
-    spending:   ['overview','dayofweek','budget','subs'],
+    spending:   ['overview','dayofweek'],
     income:     ['overview','cashflow','people'],
     trends:     ['overview','spending','yoy'],
     yoy:        ['overview','trends','spending'],
-    budget:     ['overview','spending','subs'],
+    budget:     ['overview','spending'],
     wealth:     ['overview','investments','accthealth'],
     investments:['overview','wealth','crosscurr'],
     accthealth: ['overview','wealth','forex'],
@@ -14105,6 +14148,7 @@ function renderAnalytics() {
   const animClass = dir === 'left' ? 'tab-anim-from-right' : dir === 'right' ? 'tab-anim-from-left' : 'tab-content-anim';
   const monthNav = _analyticsMonthNav();
   document.getElementById('page-content').innerHTML = tabsHTML + monthNav + `<div class="${animClass}" id="analytics-swipe-pane">${content}${relatedStrip}</div>`;
+  _analyticsHeader(); // PLS #317
   if (_analyticsTab==='overview') { requestAnimationFrame(() => { packMasonry(); setTimeout(packMasonry, 60); }); }
   // Reset swipe direction after one render
   window._analyticsSwipeDir = 'none';
@@ -14129,7 +14173,43 @@ function attachAnalyticsSwipe() {
 
 function setAnalyticsTab(t) {
   _analyticsTab = t;
+  _anHome = false; // PLS #317: opening a report leaves the Browse list
   renderAnalytics();
+}
+// -- PERSONAL LOGIC SET #317 -- Analytics opens on a BROWSE list (Apple Health > Browse, iOS
+// Settings): every report, grouped by what it answers, with one line on what is inside. Tapping a
+// report opens it with a back chevron in the header ("< Analytics"). It replaces the dropdown
+// picker, which hid all 17 reports behind one pill. Deep links (dashboard doors, Related chips,
+// "View AI Summary") still go straight to their report, since they call setAnalyticsTab().
+var _anHome = true;
+function analyticsBack() { _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0); }
+const _AN_SECTIONS = [
+  { title:'',          keys:['overview','aisummary'] },
+  { title:'Money in',  keys:['income','people'] },
+  { title:'Money out', keys:['spending'] },
+  { title:'Patterns',  keys:['cashflow','calendar','dayofweek','trends','yoy'] },
+  { title:'Wealth',    keys:['wealth','investments','accthealth'] },
+  { title:'Currency',  keys:['forex','crosscurr','external'] },
+];
+const _AN_SHORT = { overview:'This month at a glance', aisummary:'Your month in plain words', income:'Where your money comes from',
+  people:'Who owes you, and who you owe', spending:'By category and by currency', budget:'Spent against what you planned',
+  cashflow:'Money in vs out, month by month', calendar:'Spending day by day', dayofweek:'Which days cost the most',
+  trends:'Twelve months at a glance', yoy:'This month against last year', wealth:'Net worth, assets and liabilities',
+  investments:'Holdings, gains and losses', accthealth:'Activity and balance per account', forex:'Exchange rates over time',
+  crosscurr:'What you hold in each currency, FX gains', external:'Money from outside your accounts' };
+function _analyticsHeader() {
+  const t = document.getElementById('ph-title'); if (!t) return;
+  let back = document.getElementById('ph-back');
+  if (_anHome || currentPage !== 'analytics') { t.textContent = currentPage === 'analytics' ? 'Analytics' : t.textContent; if (back) back.remove(); return; }
+  t.textContent = (window._TAB_REGISTRY?.[_analyticsTab] || {}).label || 'Analytics';
+  if (!back) {
+    back = document.createElement('button');
+    back.id = 'ph-back'; back.className = 'icon-btn'; back.setAttribute('aria-label', 'Back to Analytics');
+    back.style.cssText = 'color:var(--accent);width:auto;padding:0 4px 0 0;gap:2px;font-size:15px;display:flex;align-items:center;background:none;border:0';
+    back.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
+    back.onclick = analyticsBack;
+    t.parentElement.insertBefore(back, t);
+  }
 }
 
 // ── PERSONAL LOGIC SET #89 ── iOS Health-style analytics picker sheet.
@@ -14145,7 +14225,7 @@ function openAnalyticsPicker() {
   const sections = [
     { id:'home',     title:'',                 keys:['overview','aisummary'] },
     { id:'in',       title:'Money In',         keys:['income','people'] },
-    { id:'out',      title:'Money Out',        keys:['spending','budget','subs'] },
+    { id:'out',      title:'Money Out',        keys:['spending'] },
     { id:'patterns', title:'Patterns',         keys:['cashflow','calendar','dayofweek','trends','yoy'] },
     { id:'wealth',   title:'Wealth',           keys:['wealth','investments','accthealth'] },
     { id:'currency', title:'Currency',         keys:['forex','crosscurr','external'] },
@@ -14512,7 +14592,8 @@ function renderAnalyticsOverview() {
   // State: selected period ('ytd' or 'YYYY-MM')
   // PLS #190: default to the current month instead of YTD on first load — YTD still selectable via the dropdown.
   if (!window._analyticsOverviewPeriod) window._analyticsOverviewPeriod = currMonthKey();
-  const period = window._analyticsOverviewPeriod;
+  let period = window._analyticsOverviewPeriod;
+  if (_anIsYear(period)) period = currMonthKey(); // PLS #318: Overview is a monthly view
 
   // Build YTD months (Jan to Dec — all 12, future months shown as empty)
   const ytdMonths = [];
@@ -14705,7 +14786,7 @@ function renderAnalyticsOverview() {
     // tinted strip flush to the card edges, pulled out with negative margins and rounded to match
     // the corner. Same treatment here, so one pattern ends every Overview card.
     const link = `<div style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
-      <span onclick="event.stopPropagation();nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)"
+      <span onclick="event.stopPropagation();${tab==='budget' ? "nav('planning');setPlanTab('budgets')" : `nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)`}"
         style="color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:500"
         role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1">→</span></span></div>`;
     const i = html.lastIndexOf('</div>');
@@ -14946,7 +15027,7 @@ function renderAnalyticsOverview() {
     })(), _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')])}
     ${_ovSection('Commitments & history', 'Recurring costs and how this year compares', [
       _ovRow([
-        _ovDoor(buildSubscriptionPanel(dispCurr), 'subs', 'Subscription detail'),
+
         _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year')
       ])
     ])}
@@ -17121,10 +17202,8 @@ function renderAnalyticsSpending() {
 
   // Determine month key(s) to show
   let mks = [];
-  if (period === 'ytd') {
-    for (let i = 0; i <= now.getMonth(); i++) {
-      mks.push(`${now.getFullYear()}-${String(i+1).padStart(2,'0')}`);
-    }
+  if (_anIsYear(period)) { // PLS #318: any year, to date for the current one
+    mks = _anYearMonths(_anYear(period));
   } else {
     mks = [period];
   }
@@ -17185,10 +17264,10 @@ function renderAnalyticsSpending() {
   const dispCurr = _displayCurrency();
   const totalInDisp = view === dispCurr ? total : convert(total, view, dispCurr);
   // YTD has too many txs to expand; only monthly view shows the tx breakdown
-  const isYTD = period === 'ytd';
+  const isYTD = _anIsYear(period); // PLS #318: any year period
 
-  const periodLabel = period === 'ytd'
-    ? `YTD ${now.getFullYear()}`
+  const periodLabel = _anIsYear(period)
+    ? (_anYear(period) === now.getFullYear() ? `${_anYear(period)} to date` : String(_anYear(period)))
     : new Date(period+'-01T12:00').toLocaleString('en',{month:'long',year:'numeric'});
 
   // iOS-style segmented control — dynamic from user's budgets
@@ -17320,8 +17399,8 @@ function renderAnalyticsIncome() {
   const now = new Date();
 
   let mks = [];
-  if (period === 'ytd') {
-    for (let i = 0; i <= now.getMonth(); i++) mks.push(`${now.getFullYear()}-${String(i+1).padStart(2,'0')}`);
+  if (_anIsYear(period)) { // PLS #318
+    mks = _anYearMonths(_anYear(period));
   } else {
     mks = [period];
   }
@@ -17369,9 +17448,9 @@ function renderAnalyticsIncome() {
   const colors = ['var(--green)','var(--teal)','var(--accent)','var(--blue)','var(--amber)','var(--purple)','var(--red)'];
   const dispCurr = _displayCurrency();
   const totalInDisp = view === dispCurr ? total : convert(total, view, dispCurr);
-  const isYTD = period === 'ytd';
-  const periodLabel = period === 'ytd'
-    ? `YTD ${now.getFullYear()}`
+  const isYTD = _anIsYear(period); // PLS #318: any year period
+  const periodLabel = _anIsYear(period)
+    ? (_anYear(period) === now.getFullYear() ? `${_anYear(period)} to date` : String(_anYear(period)))
     : new Date(period+'-01T12:00').toLocaleString('en',{month:'long',year:'numeric'});
 
   const _getCurrInfo = (code) => {
@@ -20623,6 +20702,11 @@ function renderBudgetsTab() {
   const rows = Object.entries(allocs).map(([catId, l]) => ({ catId, lim: parseFloat(l)||0, spent: sp.byCat[catId]||0 }))
     .filter(r => r.lim > 0).sort((x,y) => (y.spent/y.lim) - (x.spent/x.lim));
   let html = `<div class="page-pad">${_tilesRow(tiles, db.budgets.length)}`;
+  { // PLS #320: month-end pace, moved here from the removed Analytics > Budget tab
+    const now = new Date(), dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(), d = now.getDate();
+    const proj = d > 0 ? sp.total / d * dim : 0;
+    if (b.active && d < dim && sp.total > 0) html += `<div class="lp-meta" style="margin:8px 4px 0;color:${proj > lim ? 'var(--red)' : 'var(--text3)'}">At this pace: ${fmt(proj, b.currency)} by month-end${proj > lim ? ` · ${fmt(proj - lim, b.currency)} over` : ''}</div>`;
+  }
   setTimeout(() => { const t = document.querySelector('.lp-swipe .lp-tile.on'); if (t) { t.scrollIntoView({ block: 'nearest', inline: 'nearest' }); _tilesArrows(t.parentElement.id); } }, 0);
   html += `<div class="lp-sec" style="display:flex;justify-content:space-between"><span>${monthLbl}</span><span style="font-family:var(--mono)">${fmt(allocTotal, b.currency)} planned</span></div>`;
   if (rows.length) {
@@ -20870,7 +20954,7 @@ function aiAllocateBudget(bgtId, results, totalLimit) {
     // Needs alone exceed budget — proportionally scale needs, zero wants
     const scale = usableBudget / needsTotal;
     needs.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
-    warning = `⚠ Your essential spending (${sym(db.budgets.find(b=>b.id===bgtId)?.currency||_homeBase())}${needsTotal.toFixed(0) /* display-only, not stored in db */}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
+    warning = `⚠ Your essential spending (${fmt(needsTotal, db.budgets.find(b=>b.id===bgtId)?.currency||_homeBase())}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
   } else {
     // Needs at full
     needs.forEach(r => { allocations[r.catId] = r.predicted; });
@@ -20958,7 +21042,7 @@ function openAiAllocate(bgtId) {
             </div>
           </div>
           <div style="font-size:10px;color:var(--text4);margin-left:24px;line-height:1.4">
-            ${r._noData ? 'No recent spending — set manually' : `Past avg: ${sym(bgt.currency)}${r.avg.toFixed(0)} · median: ${sym(bgt.currency)}${r.median.toFixed(0)} · ${r.lookbackLabel} · ${r.reason}${Math.abs(r.trendPct)>15?` · ${r.trendPct>0?'↑':'↓'} ${Math.abs(r.trendPct).toFixed(0)}%`:''}`}
+            ${r._noData ? 'No recent spending — set manually' : `Past avg: ${fmt(r.avg, bgt.currency)} · median: ${fmt(r.median, bgt.currency)} · ${r.lookbackLabel} · ${r.reason}${Math.abs(r.trendPct)>15?` · ${r.trendPct>0?'↑':'↓'} ${Math.abs(r.trendPct).toFixed(0)}%`:''}`}
           </div>
         </div>`;
       }).join('');
@@ -20972,9 +21056,9 @@ function openAiAllocate(bgtId) {
         ${warning ? `<div style="font-size:11px;color:var(--amber);background:var(--amber-bg);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:10px;line-height:1.4">${warning}</div>` : ''}
         <div style="background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;max-height:50dvh;overflow-y:auto;margin-bottom:10px">${rows}</div>
         <div id="alloc-summary" style="display:flex;justify-content:space-between;font-size:12px;padding:8px 10px;background:var(--bg3);border-radius:var(--r-sm);font-family:var(--mono)">
-          <span>Allocated: <strong>${sym(bgt.currency)}${totalAlloc.toFixed(0)}</strong></span>
-          <span>Budget: ${sym(bgt.currency)}${effLimitAlloc.toFixed(0)}</span>
-          <span>Buffer: <strong style="color:${remaining<0?'var(--red)':'var(--green)'}">${remaining>=0?'+':''}${sym(bgt.currency)}${remaining.toFixed(0)}</strong></span>
+          <span>Allocated: <strong>${fmt(totalAlloc, bgt.currency)}</strong></span>
+          <span>Budget: ${fmt(effLimitAlloc, bgt.currency)}</span>
+          <span>Buffer: <strong style="color:${remaining<0?'var(--red)':'var(--green)'}">${remaining>=0?'+':''}${fmt(remaining, bgt.currency)}</strong></span>
         </div>`,
         `<span id="alloc-saved" style="font-size:11px;color:var(--green);opacity:0;transition:opacity var(--transition);margin-right:auto;align-self:center"></span>
          <button class="btn btn-ghost btn-sm" onclick="flushAllocSave('${bgtId}');closeDlg()">Close</button>
@@ -21031,10 +21115,10 @@ function openAiAllocate(bgtId) {
           document.querySelectorAll('.alloc-input').forEach(i => { total += parseFloat(i.value)||0; });
           const remain = _effLim - total;
           const summ = document.getElementById('alloc-summary');
-          if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span>`
-            + `<span>Budget: ${sym_}${_effLim.toFixed(0)}</span>`
+          if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${Number(total).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span>`
+            + `<span>Budget: ${sym_}${Number(_effLim).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
             + `<span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">`
-            + `${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
+            + `${remain>=0?'+':''}${sym_}${Number(remain).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span>`;
         }
 
         document.querySelectorAll('.alloc-input').forEach(inp => {
@@ -21070,7 +21154,7 @@ function openAiAllocate(bgtId) {
             const effLim_ = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
             const remain = effLim_ - total;
             const summ = document.getElementById('alloc-summary');
-            if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${total.toFixed(0)}</strong></span><span>Budget: ${sym_}${effLim_.toFixed(0)}</span><span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">${remain>=0?'+':''}${sym_}${remain.toFixed(0)}</strong></span>`;
+            if (summ) summ.innerHTML = `<span>Allocated: <strong>${sym_}${Number(total).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span><span>Budget: ${sym_}${Number(effLim_).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span>Buffer: <strong style="color:${remain<0?'var(--red)':'var(--green)'}">${remain>=0?'+':''}${sym_}${Number(remain).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span>`;
           });
         });
       }, 50);
@@ -24256,6 +24340,8 @@ function autoSaveTrigger() {
 //                  _gzDatePick / _gzTimePick now dispatch a real change event.
 //   opts.max/min   forwarded to the native input, e.g. max=today() to block future dates.
 // Quote-safety: onchange lands inside a double-quoted attribute, so it must not contain ".
+// PLS #313: the Add forms (expense, income, shared, transfer, remittance) open on TODAY and NOW,
+// like every finance app; they used to open blank and refuse to save until a date was picked.
 function dtField(inputId, type, placeholder, initialValue, opts) {
   opts = opts || {};
   // PLS #198: chrome uses line art, never emoji
@@ -25327,9 +25413,9 @@ function aiBudgetIntelligence() {
             `Past your ${catName} cap`,
           ];
           const bodies = [
-            `${sym}${spent.toFixed(0)} spent of ${sym}${limAmt.toFixed(0)} allocated (${(subRatio*100).toFixed(0)}%) for ${bgt.location}.`,
-            `${catName} is at ${(subRatio*100).toFixed(0)}% of allocation — ${sym}${(spent-limAmt).toFixed(0)} over.`,
-            `Crossed the ${catName} line: ${sym}${spent.toFixed(0)} vs ${sym}${limAmt.toFixed(0)} allowed.`,
+            `${sym}${_money2(spent)} spent of ${sym}${_money2(limAmt)} allocated (${(subRatio*100).toFixed(0)}%) for ${bgt.location}.`,
+            `${catName} is at ${(subRatio*100).toFixed(0)}% of allocation — ${sym}${_money2(spent-limAmt)} over.`,
+            `Crossed the ${catName} line: ${sym}${_money2(spent)} vs ${sym}${_money2(limAmt)} allowed.`,
           ];
           insights.push({id,type:'budget',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review allocation'});
         }
@@ -25368,10 +25454,10 @@ function aiAnomalyDetection() {
         `Spending more on ${catName} than usual`,
       ];
       const bodies = [
-        `${sev} above your norm — ${sym(_homeBase())}${curAmt.toFixed(0)} this month vs ${sym(_homeBase())}${avg.toFixed(0)} average. That's ${pctOver}% higher.`,
-        `${catName} jumped to ${sym(_homeBase())}${curAmt.toFixed(0)} — ${pctOver}% above your typical ${sym(_homeBase())}${avg.toFixed(0)}.`,
-        `Your ${catName} expenses are ${sev} elevated: ${sym(_homeBase())}${curAmt.toFixed(0)} vs the usual ${sym(_homeBase())}${avg.toFixed(0)}.`,
-        `${pctOver}% spike in ${catName} — ${sym(_homeBase())}${(curAmt-avg).toFixed(0)} more than your historical average.`,
+        `${sev} above your norm — ${fmt(curAmt, _homeBase())} this month vs ${fmt(avg, _homeBase())} average. That's ${pctOver}% higher.`,
+        `${catName} jumped to ${fmt(curAmt, _homeBase())} — ${pctOver}% above your typical ${fmt(avg, _homeBase())}.`,
+        `Your ${catName} expenses are ${sev} elevated: ${fmt(curAmt, _homeBase())} vs the usual ${fmt(avg, _homeBase())}.`,
+        `${pctOver}% spike in ${catName} — ${fmt(curAmt-avg, _homeBase())} more than your historical average.`,
       ];
       insights.push({id,type:'anomaly',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -25473,7 +25559,7 @@ function aiSavingsPace() {
   const monthlyGoal = parseFloat(activeContract.monthlyGoal) || parseFloat(plan?.monthlyGoal) || 45000;
   const remainingMonths = Math.max(0, (endDate-today)/(1000*60*60*24*30));
   const projected = actualTotal + monthlyGoal*remainingMonths;
-  const fmtPHP = (n) => n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const fmtPHP = (n) => _money2(n); // PLS #314
   // Pace percentages for relative thresholds (more meaningful than absolute pesos)
   const expectedPct = progress * 100;
   const actualPct = targetAmount > 0 ? (actualTotal / targetAmount) * 100 : 0;
@@ -25647,7 +25733,7 @@ function aiCategoryTrends() {
         `+${Math.round(change)}% over 3 months.`,
         `${catName} grew ${Math.round(change)}% across the last 3 months.`,
         `Trajectory shows +${Math.round(change)}% on ${catName} over 3 months.`,
-        `${catName} is up ${sym(_homeBase())}${(vals[vals.length-1]-vals[0]).toFixed(0)} vs 3 months ago.`,
+        `${catName} is up ${fmt(vals[vals.length-1]-vals[0], _homeBase())} vs 3 months ago.`,
       ];
       insights.push({id,type:'trend',priority:change>50?'medium':'low',icon:'📊',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -25690,9 +25776,9 @@ function aiCashFlowForecast() {
         `Trajectory: ${aiAmt(overshoot)} over budget`,
       ];
       const bodies = [
-        `At ${sym(_homeBase())}${daily.toFixed(0)}/day, projected ${sym(_homeBase())}${projected.toFixed(0)} vs budget ${sym(_homeBase())}${bgt.limit}. ${sev} above plan.`,
-        `Burning ${sym(_homeBase())}${daily.toFixed(0)}/day — at this pace, you'll close at ${sym(_homeBase())}${projected.toFixed(0)} (budget ${sym(_homeBase())}${bgt.limit}).`,
-        `${daysPassed} ${aiPlural(daysPassed,'day')} in, daily rate of ${sym(_homeBase())}${daily.toFixed(0)} projects ${sym(_homeBase())}${projected.toFixed(0)} — that's ${aiAmt(overshoot)} over.`,
+        `At ${fmt(daily, _homeBase())}/day, projected ${fmt(projected, _homeBase())} vs budget ${sym(_homeBase())}${bgt.limit}. ${sev} above plan.`,
+        `Burning ${fmt(daily, _homeBase())}/day — at this pace, you'll close at ${fmt(projected, _homeBase())} (budget ${sym(_homeBase())}${bgt.limit}).`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, daily rate of ${fmt(daily, _homeBase())} projects ${fmt(projected, _homeBase())} — that's ${aiAmt(overshoot)} over.`,
         `Current trajectory ends ${aiAmt(overshoot)} past your ${sym(_homeBase())}${bgt.limit} cap. ${daysLeft} ${aiPlural(daysLeft,'day')} left to adjust.`,
       ];
       insights.push({id,type:'cashflow',priority:'high',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review spending'});
@@ -25706,9 +25792,9 @@ function aiCashFlowForecast() {
         'Budget pace looking good',
       ];
       const bodies = [
-        `Projected month-end: ${sym(_homeBase())}${projected.toFixed(0)} (budget: ${sym(_homeBase())}${bgt.limit}). Daily rate: ${sym(_homeBase())}${daily.toFixed(0)}.`,
-        `${daysPassed} ${aiPlural(daysPassed,'day')} in, ${sym(_homeBase())}${daily.toFixed(0)}/day average — projected to finish at ${sym(_homeBase())}${projected.toFixed(0)}, ${sym(_homeBase())}${headroom.toFixed(0)} under budget.`,
-        `Daily burn ${sym(_homeBase())}${daily.toFixed(0)} — month-end estimate ${sym(_homeBase())}${projected.toFixed(0)}. ${headroom.toFixed(0)} room to spare.`,
+        `Projected month-end: ${fmt(projected, _homeBase())} (budget: ${sym(_homeBase())}${bgt.limit}). Daily rate: ${fmt(daily, _homeBase())}.`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, ${fmt(daily, _homeBase())}/day average — projected to finish at ${fmt(projected, _homeBase())}, ${fmt(headroom, _homeBase())} under budget.`,
+        `Daily burn ${fmt(daily, _homeBase())} — month-end estimate ${fmt(projected, _homeBase())}. ${headroom.toFixed(0)} room to spare.`,
       ];
       insights.push({id,type:'cashflow',priority:'low',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -26779,7 +26865,7 @@ function renderAnalyticsBudget() {
   // months the day-fraction pace projection ("at pace …") is suppressed since the month is
   // already fully elapsed.
   const sharedPeriod = window._analyticsOverviewPeriod || 'ytd';
-  const mk = (sharedPeriod === 'ytd') ? currMonthKey() : sharedPeriod;
+  const mk = _anIsYear(sharedPeriod) ? currMonthKey() : sharedPeriod; // PLS #318
   const [vy, vm] = mk.split('-').map(Number);
   const isCurrentMonth = mk === currMonthKey();
   const daysInMonth = new Date(vy, vm, 0).getDate();
@@ -26896,7 +26982,7 @@ function renderAnalyticsBudget() {
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(br.catName)}</span>
             ${brBadge}
           </div>
-          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${sym(r.currency)}${br.spent.toFixed(0)}<span style="color:var(--text4)"> / ${sym(r.currency)}${br.allocLim.toFixed(0)}</span></div>
+          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${fmt(br.spent, r.currency)}<span style="color:var(--text4)"> / ${fmt(br.allocLim, r.currency)}</span></div>
         </div>
         <div style="height:7px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden;position:relative">
           <div style="height:100%;width:${brBarWidth}%;background:${brBarColor};border-radius:var(--r-full);transition:width 0.3s"></div>
