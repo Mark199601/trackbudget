@@ -4584,6 +4584,7 @@ const APP_VERSION_DATE = 'September 2026';
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.1.9', date: 'September 2026', changes: [
+    '📊 Cashflow, Account Health, Investments and People in Analytics now use the same tiles and grouped lists as the rest of the app, and tapping a month or an account opens it', // PLS #326-#330
     '🗂️ Loans, Installments, Reimbursements, Investments and Accounts have a new layout: summary tiles on top, and Active and Settled kept apart so finished items never mix into your live list',
     '➕ Every page puts its actions top right. Tap + to add, and ⋯ for rarely used things like Archive. Accounts can switch between list and grid there too',
     '🎯 Budgets now show what is left in each category first, with the settings underneath. With three or more budgets you can swipe through them',
@@ -18226,29 +18227,15 @@ function renderAnalyticsInvestments() {
       </div>
     </div>
 
-    <!-- Metric cards -->
-    <div class="fr4-resp" style="margin-bottom:14px">
-      <div class="metric-card">
-        <div class="metric-label">UNREALIZED G/L</div>
-        <div class="metric-value ${unrealizedGL > 0 ? 'tx-pos' : unrealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${fmt(unrealizedGL, dispCurr, true)}${''/* PLS #283: fmt() drops the sign of negatives unless asked; the old code added '+' for gains and nothing for losses, so a PHP 14,925 loss showed as a bare "PHP 14,925.27" */}</div>
-        <div style="font-size:11px;color:var(--text4)">${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(1)}% paper</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">REALIZED G/L</div>
-        <div class="metric-value ${totalRealizedGL > 0 ? 'tx-pos' : totalRealizedGL < 0 ? 'tx-neg' : 'tx-neu'}">${fmt(totalRealizedGL, dispCurr, true)}${''/* PLS #283: fmt() drops the sign of negatives unless asked; the old code added '+' for gains and nothing for losses, so a PHP 14,925 loss showed as a bare "PHP 14,925.27" */}</div>
-        <div style="font-size:11px;color:var(--text4)">${sold.length} sold</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">TOTAL RETURN</div>
-        <div class="metric-value ${totalReturnPct > 0 ? 'tx-pos' : totalReturnPct < 0 ? 'tx-neg' : 'tx-neu'}">${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(1)}%</div>
-        <div style="font-size:11px;color:var(--text4)">paper + realized</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">DIVERSITY</div>
-        <div class="metric-value">${typeEntries.length}</div>
-        <div style="font-size:11px;color:var(--text4)">asset types</div>
-      </div>
+    <!-- PLS #329: tiles + line, same pattern as People (#323) and Cashflow (#326), owner's pick (A).
+         Four metric boxes became two tiles; Total return and Diversity moved to one line under them,
+         so every figure stays visible at once. Total return now names its divisor (_allCapital,
+         PLS #281) so the % has a yardstick. fmt(..., true) keeps the loss sign (PLS #283). -->
+    <div class="lp-tiles">
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Unrealized</div><div class="lp-tile-amt" style="color:${unrealizedGL > 0 ? 'var(--green)' : unrealizedGL < 0 ? 'var(--red)' : 'var(--text)'}">${fmt(unrealizedGL, dispCurr, true)}</div><div class="lp-tile-sub">${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(1)}% on ${fmt(totalInvested, dispCurr)} held</div></div>
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Realized</div><div class="lp-tile-amt" style="color:${totalRealizedGL > 0 ? 'var(--green)' : totalRealizedGL < 0 ? 'var(--red)' : 'var(--text)'}">${fmt(totalRealizedGL, dispCurr, true)}</div><div class="lp-tile-sub">${sold.length} sold</div></div>
     </div>
+    <div class="lp-meta" style="margin:10px 4px 16px">Total return <b style="font-family:var(--mono);color:${totalReturnPct > 0 ? 'var(--green)' : totalReturnPct < 0 ? 'var(--red)' : 'var(--text)'}">${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(1)}%</b> on ${fmt(_allCapital, dispCurr)} ever put in · ${typeEntries.length} asset ${typeEntries.length===1?'type':'types'}</div>
 
     <!-- Allocation by type -->
     ${typeEntries.length > 0 ? `<div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Allocation by Type</div>
@@ -26557,10 +26544,13 @@ function renderAnalyticsCashflow() {
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">${current.label} · This Month</div>
-      <div style="font-size:13px;color:var(--text2)">Income: <b style="color:var(--green)">${fmt(current.income, dc)}</b></div>
-      <div style="font-size:13px;color:var(--text2)">Expenses: <b style="color:var(--red)">${fmt(current.expense, dc)}</b></div>
-      <div style="font-size:22px;font-weight:700;margin-top:8px;color:${current.net>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(current.net, dc, true)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.net>=0?'Net Saved':'Net Deficit'}</div>
+      <!-- PLS #327: font scale matched to the tiles below. Amounts are mono 600 like every other
+           figure on the page (they were 13px bold sans), labels 12px text3, the net 20px/600 so it
+           leads without outweighing the tiles (was 22px/700). Layout unchanged. -->
+      <div style="font-size:12px;color:var(--text3);line-height:1.7">Income <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(current.income, dc)}</span></div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.7">Expenses <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(current.expense, dc)}</span></div>
+      <div style="font-size:20px;font-weight:600;margin-top:8px;color:${current.net>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(current.net, dc, true)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.net>=0?'Net saved':'Net deficit'}</div>
     </div>`;
 
   // 6-month bar chart
@@ -26584,28 +26574,25 @@ function renderAnalyticsCashflow() {
   });
   html += `</div>`;
 
-  // Stats
-  html += `<div class="metric-grid fr2-always" style="margin-bottom:14px">
-    <div class="metric-card">
-      <!-- PLS #232: this label must show _basisN, the REAL divisor, not a hardcoded 6. It read
-           "6-Mo Avg Net" while dividing by whatever months existed — a stated basis that was false. -->
-      <div class="metric-label">Avg Net · ${_basisN}mo</div>
-      <div class="metric-value mfit" style="color:${avgNet>=0?'var(--green)':'var(--red)'}">${fmt(avgNet, dc, true)}</div>
+  // -- PERSONAL LOGIC SET #326 -- tiles + grouped section, same pattern as People (#323).
+  // Four boxed metric cards became two tiles (Avg net, Savings rate) + a basis line + a
+  // "Best and worst" group. Every figure is still from _statMonths (PLS #232), never `months`.
+  const _sign = v => v >= 0 ? 'var(--green)' : 'var(--red)'; // colour = meaning (sign) only
+  // PLS #326: each month row taps through to that month's transactions, like the bars above.
+  // Sub-line gives the yardstick (PLS #205): how far this month sits from the average.
+  const _mRow = (label, m) => `<div class="lp-row" role="link" tabindex="0" onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions">
+      <div style="flex:1;min-width:0"><div class="lp-name" style="font-weight:500">${label}</div><div class="lp-meta">${m.label}</div></div>
+      <div style="text-align:right"><div class="lp-amt" style="color:${_sign(m.net)}">${fmt(m.net, dc, true)}</div><div class="lp-amt2">${Math.abs(m.net - avgNet) < 0.005 ? 'same as avg' : `${fmt(m.net - avgNet, dc, true)} vs avg`}</div></div>
+    </div>`;
+  html += `<div class="lp-tiles">
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Avg net</div><div class="lp-tile-amt" style="color:${_sign(avgNet)}">${fmt(avgNet, dc, true)}</div><div class="lp-tile-sub">per month</div></div>
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Savings rate</div><div class="lp-tile-amt" style="color:${_sign(savingsRate)}">${savingsRate.toFixed(1)}%</div><div class="lp-tile-sub">of ${fmt(totalInc6, dc)} income</div></div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Savings Rate</div>
-      <div class="metric-value mfit">${savingsRate.toFixed(1)}%</div>
-      <div style="font-size:10px;color:var(--text4);margin-top:2px">${_basisTxt}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Best Month</div>
-      <div class="metric-value mfit" style="color:var(--green);font-size:13px">${best.label}<br><span style="font-size:11px;font-weight:500">${fmt(best.net, dc)}</span></div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Worst Month</div>
-      <div class="metric-value mfit" style="color:var(--red);font-size:13px">${worst.label}<br><span style="font-size:11px;font-weight:500">${fmt(worst.net, dc)}</span></div>
-    </div>
-  </div>`;
+    <div class="lp-meta" style="margin:10px 4px 0">Averaged ${_basisTxt}</div>
+    ${_basisN > 1 && best.mk !== worst.mk ? `<div class="lp-sec">Best and worst</div><div class="lp-grp">
+      ${_mRow('Best month', best)}
+      ${_mRow('Worst month', worst)}
+    </div>` : ''}`; // PLS #326: with one month (or all months equal) best IS worst IS the average, so the group says nothing and is dropped
 
   html += `</div>`;
   return html;
@@ -27379,11 +27366,14 @@ function renderAnalyticsAccountHealth() {
     const totalIn = txs.filter(t => (t.type === 'income' || (t.type === 'transfer' && t.toAccountId === a.id))).reduce((s,t)=>s+txAmtIn(t.toAmount||t.amount||0, t),0);
     const totalOut = txs.filter(t => t.type === 'expense' || t.type === 'shared' || (t.type === 'transfer' && t.fromAccountId === a.id)).reduce((s,t)=>s+txAmtIn(t.amount||0, t),0);
     const txCount = txs.length;
+    // PLS #328: counts per direction for the breakdown lines (same predicates as totalIn/totalOut)
+    const inCount = txs.filter(t => (t.type === 'income' || (t.type === 'transfer' && t.toAccountId === a.id))).length;
+    const outCount = txs.filter(t => t.type === 'expense' || t.type === 'shared' || (t.type === 'transfer' && t.fromAccountId === a.id)).length;
     const lastTxDate = txs.map(t => t.date).filter(Boolean).sort().pop() || null;
     const dormantDays = lastTxDate ? Math.floor((Date.parse(todayStr) - Date.parse(lastTxDate)) / 86400000) : null;
     const avgTx = txCount > 0 ? (totalIn + totalOut) / txCount : 0;
     const bal = getAcctBalance(a.id);
-    return { ...a, balance: bal, totalIn, totalOut, txCount, lastTxDate, dormantDays, avgTx };
+    return { ...a, balance: bal, totalIn, totalOut, txCount, inCount, outCount, lastTxDate, dormantDays, avgTx }; // PLS #328: + in/outCount
   }).sort((a,b) => b.txCount - a.txCount);
 
   const dormantList = enriched.filter(a => a.dormantDays !== null && a.dormantDays > 60);
@@ -27402,12 +27392,9 @@ function renderAnalyticsAccountHealth() {
     const active = enriched.filter(a => a.dormantDays !== null && a.dormantDays <= 14).length;
     const busiest = enriched.slice().sort((a,b) => b.txCount - a.txCount)[0];
     const totalTx = enriched.reduce((s,a) => s + a.txCount, 0);
-    const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
-      <span style="font-size:12.5px;color:var(--text2)">${label}</span>
-      <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
-    </div>`;
-    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Estate summary</div>
+    // PLS #328: same row as People's Exposure profile (#323): label + sub left, figure right, in a grouped list
+    const row = (label, val, sub) => `<div class="lp-row" style="cursor:default;align-items:center"><div style="flex:1;min-width:0"><div class="lp-name" style="font-weight:500">${label}</div>${sub?`<div class="lp-meta">${sub}</div>`:''}</div><div class="lp-amt">${val}</div></div>`;
+    return `<div class="lp-sec" style="margin-top:4px">Estate summary</div><div class="lp-grp" style="margin-bottom:14px">
       ${row('Across all accounts', fmt(_inDisplay(totalPhp), dc), `${enriched.length} account${enriched.length===1?'':'s'} in ${currencies.length} ${currencies.length===1?'currency':'currencies'}`)}
       ${row('Holding a balance', `${positives.length} of ${enriched.length}`, `${enriched.length-positives.length} at zero or below`)}
       ${row('Recently used', `${active} of ${enriched.length}`, `activity within 14 days`)}
@@ -27415,33 +27402,39 @@ function renderAnalyticsAccountHealth() {
       ${busiest && busiest.txCount ? row('Busiest account', `${busiest.txCount} tx`, `${escapeAttr(busiest.name)} · ${totalTx>0?((busiest.txCount/totalTx)*100).toFixed(0):0}% of all activity`) : ''}
     </div>`;
   })();
-  if (dormantList.length > 0) {
-    html += `<div style="background:rgba(255,159,10,0.08);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)">
-      <b>💤 ${dormantList.length} dormant ${aiPlural(dormantList.length,'account')}</b>, no activity in 60+ days
-    </div>`;
-  }
-  html += `<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center">Per Account${_infoBtn('accthealth')}</div>`;
+  // -- PERSONAL LOGIC SET #330 -- the "N dormant accounts" banner was removed (owner's pick, C).
+  // The Estate summary's "Sitting idle" row above already shows the same count plus the amount
+  // and share, so the banner only restated a figure already on screen. dormantList is still used there.
+  // -- PERSONAL LOGIC SET #328 -- Per account: one grouped list in the People breakdown style
+  // (#324/#325) instead of a boxed card per account with three pills. Row = initials avatar, name,
+  // balance on the right with the activity status under it (colour = meaning: green active, amber
+  // idle 60d+, grey otherwise). Under it, dot + label + count lines with the amount right-aligned,
+  // so the figures line up account to account. Tapping the row opens the account.
+  html += `<div class="lp-sec" style="display:flex;align-items:center">Per account${_infoBtn('accthealth')}</div><div class="lp-grp">`;
   enriched.forEach(a => {
-    const dormantBadge = a.dormantDays === null ? '<span class="pill pill-gray">No activity</span>' :
-                        a.dormantDays > 60 ? `<span class="pill pill-amber">💤 ${a.dormantDays}d idle</span>` :
-                        a.dormantDays > 14 ? `<span class="pill pill-gray">${a.dormantDays}d ago</span>` :
-                        `<span class="pill pill-green">Active</span>`;
-    html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600">${escapeAttr(a.name)}</div>
-        <div style="font-family:var(--mono);font-size:12px;font-weight:600">${fmt(a.balance, a.currency||dc)}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:10px">
-        ${dormantBadge}
-        <span class="pill pill-gray">${a.txCount} ${aiPlural(a.txCount,'tx')}</span>
-        ${a.avgTx > 0 ? `<span class="pill pill-gray">Avg ${fmt(_inDisplay(a.avgTx), dc)}</span>` : ''}
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text4);font-family:var(--mono)">
-        <span style="color:var(--green)">↓ ${fmt(_inDisplay(a.totalIn), dc)}</span>
-        <span style="color:var(--red)">↑ ${fmt(_inDisplay(a.totalOut), dc)}</span>
-      </div>
-    </div>`;
+    const st = a.dormantDays === null ? ['No activity', 'var(--text4)'] :
+               a.dormantDays > 60 ? [`💤 ${a.dormantDays}d idle`, 'var(--amber)'] :
+               a.dormantDays > 14 ? [`${a.dormantDays}d ago`, 'var(--text4)'] :
+               ['Active', 'var(--green)'];
+    const initials = (a.name || '?').replace(/[^\p{L}\p{N} ]/gu, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    const line = (dot, lbl, n, amt) => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11.5px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+        <span style="flex:1;color:var(--text2)">${lbl} <span style="color:var(--text4)">· ${n}</span></span>
+        <span style="font-family:var(--mono);color:var(--text2)">${amt}</span></div>`;
+    html += `<div role="link" tabindex="0" onclick="openAcctDetail('${a.id}')" style="padding:11px 16px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="pool-avatar" style="width:32px;height:32px;font-size:11px;flex-shrink:0">${escapeAttr(initials)}</div>
+          <div style="flex:1;min-width:0"><div class="lp-name">${escapeAttr(a.name)}</div><div class="lp-meta">${escapeAttr(a.type || 'Other')}</div></div>
+          <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${a.balance < 0 ? 'var(--red)' : 'var(--text)'}">${fmt(a.balance, a.currency||dc, a.balance < 0)}</div><div class="lp-amt2" style="color:${st[1]}">${st[0]}</div></div>
+        </div>
+        ${a.txCount > 0 ? `<div style="margin:6px 0 0 44px">`
+          + (a.inCount > 0 ? line('var(--green)', 'In', a.inCount, fmt(_inDisplay(a.totalIn), dc)) : '')
+          + (a.outCount > 0 ? line('var(--red)', 'Out', a.outCount, fmt(_inDisplay(a.totalOut), dc)) : '')
+          + line('var(--text4)', 'Avg per tx', a.txCount, fmt(_inDisplay(a.avgTx), dc))
+          + `</div>` : ''}
+      </div>`;
   });
+  html += `</div>`;
   html += `</div>`;
   return html;
 }
