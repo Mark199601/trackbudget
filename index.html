@@ -202,7 +202,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .sb-item:hover{background:var(--bg3);color:var(--text)}
 .sb-item.active{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-border);font-weight:600}
 .sb-item.active::before{content:'';position:absolute;left:-8px;top:6px;bottom:6px;width:3px;background:var(--accent);border-radius:0 2px 2px 0;box-shadow:0 0 8px var(--accent-glow)}
-.sb-item .si-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+/* PLS #332: sidebar icons sit on the same soft accent tile as the Analytics list (#331). The row
+   padding drops 8px -> 5px so the taller tile keeps each row close to its old height. The active
+   row is already accent-bg, so its tile turns solid accent with a white glyph to stay visible. */
+.sb-item{padding:5px 12px}
+.sb-item .si-icon{width:28px;height:28px;border-radius:8px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:background var(--transition),color var(--transition)}
+.sb-item.active .si-icon{background:var(--accent);color:#fff}
 .sb-item .si-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:var(--r-full);min-width:18px;text-align:center}
 .sb-divider{height:1px;background:var(--border);margin:6px 16px}
 
@@ -722,6 +727,7 @@ option{background:var(--bg3);color:var(--text)}
 .settings-row:active{transform:scale(0.98);background:var(--accent-bg)}
 .settings-row:last-child{border-bottom:none}
 .sr-left{display:flex;align-items:center;gap:12px}
+.an-ico{width:32px;height:32px;border-radius:10px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0} /* PLS #331 */
 .sr-icon{width:34px;height:34px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .sr-text{font-size:14px;font-weight:500}
 .sr-sub{font-size:11px;color:var(--text3);margin-top:2px}
@@ -1750,6 +1756,13 @@ const _ICONS = {
   inbox:    '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   scale:    '<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7 2 14h6z"/><path d="M19 7l-3 7h6z"/><path d="M8 21h8"/>',
   trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  // PLS #331: icons for the Analytics list (bars, heatmap grid, history, pulse, globe, coins)
+  barChart: '<line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="16" x2="7" y2="12"/><line x1="12" y1="16" x2="12" y2="6"/><line x1="17" y1="16" x2="17" y2="9"/>',
+  grid:     '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  history:  '<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15.5 14"/>',
+  activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  globe:    '<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+  coins:    '<circle cx="9" cy="9" r="6.5"/><path d="M15.48 8.52A6.5 6.5 0 1 1 8.52 15.48"/>', // two overlapping coins
   list:     '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
 };
 function _ico(name, size, style) {
@@ -4584,6 +4597,7 @@ const APP_VERSION_DATE = 'September 2026';
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.1.9', date: 'September 2026', changes: [
+    '🎨 Analytics and the sidebar use clean line icons on soft tiles. Category emojis in your transactions stay the same', // PLS #331-#332
     '📊 Cashflow, Account Health, Investments and People in Analytics now use the same tiles and grouped lists as the rest of the app, and tapping a month or an account opens it', // PLS #326-#330
     '🗂️ Loans, Installments, Reimbursements, Investments and Accounts have a new layout: summary tiles on top, and Active and Settled kept apart so finished items never mix into your live list',
     '➕ Every page puts its actions top right. Tap + to add, and ⋯ for rarely used things like Archive. Accounts can switch between list and grid there too',
@@ -14074,7 +14088,7 @@ function renderAnalytics() {
       const ks = sec.keys.filter(k => TAB_REGISTRY[k]);
       if (!ks.length) continue;
       h += (sec.title ? `<div class="lp-sec">${sec.title}</div>` : `<div style="height:6px"></div>`) + `<div class="lp-grp">` + ks.map(k =>
-        `<div class="lp-row" onclick="setAnalyticsTab('${k}')"><div class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${TAB_REGISTRY[k].icon}</div>
+        `<div class="lp-row" onclick="setAnalyticsTab('${k}')"><div class="an-ico">${_AN_ICO[k] ? _ico(_AN_ICO[k], 17) : TAB_REGISTRY[k].icon}</div>
           <div style="flex:1;min-width:0"><div class="lp-name">${TAB_REGISTRY[k].label}</div><div class="lp-meta">${_AN_SHORT[k] || ''}</div></div><span class="lp-chev">›</span></div>`).join('') + `</div>`;
     }
     document.getElementById('page-content').innerHTML = h + `</div>`;
@@ -14198,6 +14212,12 @@ const _AN_SECTIONS = [
   { title:'Wealth',    keys:['wealth','investments','accthealth'] },
   { title:'Currency',  keys:['forex','crosscurr','external'] },
 ];
+// -- PERSONAL LOGIC SET #331 -- Analytics list icons are line icons on a soft accent tile, not
+// emoji on a grey circle (owner's ask). Only this list changes: TAB_REGISTRY.icon (emoji) stays for
+// anything else that reads it, and category emojis (cat.icon) in the transaction forms are untouched.
+const _AN_ICO = { overview:'gauge', aisummary:'sparkle', income:'inCircle', people:'users', spending:'outCircle',
+  cashflow:'exchange', calendar:'calendar', dayofweek:'barChart', trends:'grid', yoy:'history',
+  wealth:'layers', investments:'trend', accthealth:'activity', forex:'globe', crosscurr:'coins', external:'inbox' };
 const _AN_SHORT = { overview:'This month at a glance', aisummary:'Your month in plain words', income:'Where your money comes from',
   people:'Who owes you, and who you owe', spending:'By category and by currency', budget:'Spent against what you planned',
   cashflow:'Money in vs out, month by month', calendar:'Spending day by day', dayofweek:'Which days cost the most',
