@@ -949,6 +949,9 @@ option{background:var(--bg3);color:var(--text)}
 .lp-tile-amt{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-tile-sub{font-size:11px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-chips{display:flex;gap:8px;margin:14px 0 2px}
+.pp-pills .pill{font-size:10px!important;padding:2px 8px!important;line-height:1.4!important;border-radius:999px!important;font-weight:500!important} /* PLS #324 */
+/* PLS #322: the period row lines up with the report column (page-pad: max 1200px, 24px sides on wide screens) */
+@media (min-width:769px){ .an-period{padding:0 24px!important} }
 /* PLS #319: inside an Analytics report every section header and small label reads like the rest
    of the app (the .lp-sec look: sentence case, 11.5px, medium, muted). They were a mix of
    UPPERCASE letter-spaced labels at 9.5-11px written inline in each report. */
@@ -13988,7 +13991,7 @@ function _anSetPeriod(p) { window._analyticsOverviewPeriod = p; setAnalyticsTab(
 function _analyticsMonthNav() {
   const PERIOD_TABS = ['overview','spending','income'];
   if (!PERIOD_TABS.includes(_analyticsTab)) return '';
-  const yearOK = ['spending','income'].includes(_analyticsTab);
+  const yearOK = ['overview','spending','income'].includes(_analyticsTab); // PLS #321: Overview has Year again
   const curMk = currMonthKey(), curY = new Date().getFullYear();
   let p = window._analyticsOverviewPeriod || curMk;
   if (!yearOK && _anIsYear(p)) p = curMk;                       // monthly views read a year as this month
@@ -14008,15 +14011,18 @@ function _analyticsMonthNav() {
     prevP = pv >= firstMk ? pv : null;
     nextP = nx <= curMk ? nx : null;
   }
-  const arrow = (dir, to) => `<button class="icon-btn" aria-label="${dir<0?'Previous':'Next'}" ${to?`onclick="_anSetPeriod('${to}')"`:'disabled'} style="width:32px;height:32px;min-width:32px;border-radius:50%;background:var(--bg3);color:var(--accent);${to?'':'opacity:.3;pointer-events:none'}">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${dir<0?'M15 18l-6-6 6-6':'M9 18l6-6-6-6'}"/></svg></button>`;
-  const seg = yearOK ? `<div class="seg" style="display:flex;background:var(--bg3);border-radius:9px;padding:2px;gap:2px;margin-bottom:10px">
-      <button class="lp-chip ${!isYear?'on':''}" style="flex:1;border-radius:7px" onclick="_anSetPeriod('${isYear ? (_anYear(p) === curY ? curMk : _anYear(p) + '-12') : p}')">Month</button>
-      <button class="lp-chip ${isYear?'on':''}" style="flex:1;border-radius:7px" onclick="_anSetPeriod('Y:${isYear ? _anYear(p) : p.slice(0,4)}')">Year</button></div>` : '';
-  return `<div style="padding:0 16px;margin:4px 0 12px">${seg}
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      ${arrow(-1, prevP)}<div style="font-size:14px;font-weight:600;text-align:center;flex:1">${label}</div>${arrow(1, nextP)}
-    </div></div>`;
+  // PLS #322: ONE compact row, as budgeting apps do (Monarch, Copilot, YNAB web; a Power BI slicer):
+  // [Month | Year] on the left, "<  September 2026  >" on the right. The #318/#321 version stacked the
+  // switch over a full-width arrow row and cost two rows of height.
+  const arrow = (dir, to) => `<button class="icon-btn" aria-label="${dir<0?'Previous':'Next'}" ${to?`onclick="_anSetPeriod('${to}')"`:'disabled'} style="width:28px;height:28px;min-width:28px;border-radius:50%;background:var(--bg3);color:var(--accent);${to?'':'opacity:.3;pointer-events:none'}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${dir<0?'M15 18l-6-6 6-6':'M9 18l6-6-6-6'}"/></svg></button>`;
+  const segBtn = (on, lbl, to) => `<button onclick="_anSetPeriod('${to}')" style="border:0;border-radius:7px;padding:5px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;background:${on?'var(--bg2)':'transparent'};color:${on?'var(--text)':'var(--text3)'};${on?'box-shadow:0 1px 3px rgba(0,0,0,.18)':''}">${lbl}</button>`;
+  const seg = yearOK ? `<div style="display:inline-flex;background:var(--bg3);border-radius:9px;padding:2px;gap:2px;flex-shrink:0">
+      ${segBtn(!isYear, 'Month', isYear ? (_anYear(p) === curY ? curMk : _anYear(p) + '-12') : p)}${segBtn(isYear, 'Year', 'Y:' + (isYear ? _anYear(p) : p.slice(0,4)))}</div>` : '<span></span>';
+  return `<div class="an-period" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px;margin:6px auto 10px;max-width:1200px;box-sizing:border-box">
+    ${seg}
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">${arrow(-1, prevP)}<div style="font-size:13px;font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:center">${label}</div>${arrow(1, nextP)}</div>
+  </div>`;
 }
 
 function renderAnalytics() {
@@ -14593,7 +14599,11 @@ function renderAnalyticsOverview() {
   // PLS #190: default to the current month instead of YTD on first load — YTD still selectable via the dropdown.
   if (!window._analyticsOverviewPeriod) window._analyticsOverviewPeriod = currMonthKey();
   let period = window._analyticsOverviewPeriod;
-  if (_anIsYear(period)) period = currMonthKey(); // PLS #318: Overview is a monthly view
+  // PLS #321: Overview gets Year back (owner's call). Year = the chart shows every month of that year
+  // and the four headline cards show the YEAR's totals (was: "Year to Date" chart over cards that
+  // quietly showed this month). Month-only widgets below keep reading the current month.
+  const _ovYear = _anIsYear(period) ? _anYear(period) : null;
+  if (_ovYear) period = 'ytd';
 
   // Build YTD months (Jan to Dec — all 12, future months shown as empty)
   const ytdMonths = [];
@@ -14617,11 +14627,19 @@ function renderAnalyticsOverview() {
     metricLabel = new Date(y,mo-1,1).toLocaleString('en',{month:'long',year:'numeric'});
   }
 
-  const curr = getMonthTotals(metricMk);
-  const prevDate = new Date(metricMk + '-01');
-  prevDate.setMonth(prevDate.getMonth()-1);
-  const prevMk = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
-  const prev = getMonthTotals(prevMk);
+  let curr, prev;
+  if (_ovYear) { // PLS #321: year totals, compared with the same stretch of the year before
+    const sum = mks => mks.reduce((a, k) => { const t = getMonthTotals(k); a.income += t.income; a.expense += t.expense; a.net += t.net; return a; }, { income:0, expense:0, net:0 });
+    const ms = _anYearMonths(_ovYear);
+    curr = sum(ms); prev = sum(ms.map(k => (Number(k.slice(0,4)) - 1) + k.slice(4)));
+    metricLabel = _ovYear === currentYear ? `${_ovYear} to date` : String(_ovYear);
+  } else {
+    curr = getMonthTotals(metricMk);
+    const prevDate = new Date(metricMk + '-01');
+    prevDate.setMonth(prevDate.getMonth()-1);
+    const prevMk = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+    prev = getMonthTotals(prevMk);
+  }
   const incomeChg = prev.income > 0 ? ((curr.income-prev.income)/prev.income*100) : null;
   const expChg = prev.expense > 0 ? ((curr.expense-prev.expense)/prev.expense*100) : null;
 
@@ -14632,7 +14650,9 @@ function renderAnalyticsOverview() {
   // shift the window fully backward when centering would spill into the future.
   let chartMonths;
   if (period === 'ytd') {
-    chartMonths = ytdMonths;
+    chartMonths = (_ovYear && _ovYear !== currentYear)
+      ? Array.from({length:12}, (_, i) => { const key = `${_ovYear}-${String(i+1).padStart(2,'0')}`; return { key, label: new Date(_ovYear, i, 1).toLocaleString('en',{month:'short'}), year:_ovYear, ...getMonthTotals(key) }; })
+      : ytdMonths;
   } else {
     chartMonths = [];
     const [selY, selMo] = period.split('-').map(Number);
@@ -14819,7 +14839,7 @@ function renderAnalyticsOverview() {
              one you are editing. -->
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'INCOME — '+metricLabel.toUpperCase() : period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(incomeChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -14829,7 +14849,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'EXPENSES — '+metricLabel.toUpperCase() : period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
             ${chgBadge(expChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -26748,24 +26768,15 @@ function renderAnalyticsPeople() {
   const netPosition = totalOwedToMe - totalIOwe;
 
   let html = `<div class="page-pad">
-    <div class="metric-grid fr2-always" style="margin-bottom:14px">
-      <div class="metric-card">
-        <div class="metric-label">Owed to Me</div>
-        <div class="metric-value mfit" style="color:var(--green)">${fmt(_inDisplay(totalOwedToMe), dc)}</div>
+    <!-- PLS #323: tiles + grouped sections (owner's pick, Sep 2026). Two tiles replace four boxes;
+         net position is a line under them; colours, emoji and pills are kept (Analytics is meant to
+         read like a Power BI report). -->
+    ${(() => { const owe = list.filter(p => (p.lent||0) + (p.sharedOwed||0) > 0).length, iowe = list.filter(p => (p.borrowed||0) > 0).length;
+      return `<div class="lp-tiles">
+        <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Owed to me</div><div class="lp-tile-amt" style="color:var(--green)">${fmt(_inDisplay(totalOwedToMe), dc)}</div><div class="lp-tile-sub">${owe} ${owe===1?'person':'people'}</div></div>
+        <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">I owe</div><div class="lp-tile-amt" style="color:${totalIOwe>0?'var(--red)':'var(--text)'}">${fmt(_inDisplay(totalIOwe), dc)}</div><div class="lp-tile-sub">${iowe ? `${iowe} ${iowe===1?'person':'people'}` : 'Nobody'}</div></div>
       </div>
-      <div class="metric-card">
-        <div class="metric-label">I Owe</div>
-        <div class="metric-value mfit" style="color:var(--red)">${fmt(_inDisplay(totalIOwe), dc)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Net Position</div>
-        <div class="metric-value mfit" style="color:${netPosition>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(netPosition), dc, true)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">People</div>
-        <div class="metric-value mfit">${list.length}</div>
-      </div>
-    </div>
+      <div class="lp-meta" style="margin:10px 4px 0">Net position <b style="font-family:var(--mono);color:${netPosition>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(netPosition), dc, true)}</b> · ${list.length} ${list.length===1?'person':'people'}</div>`; })()}
 
     ${(() => {
       // PLS #206: the People tab showed four totals and a list — the same shape as a summary.
@@ -26797,12 +26808,12 @@ function renderAnalyticsPeople() {
       const overdueOut = overdueAll.filter(l => l.dir === 'borrowed');
       const overdueInAmt  = sumPhp(overdueIn);
       const overdueOutAmt = sumPhp(overdueOut);
-      const row = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
+      const row = (label, val, sub) => `<div class="lp-row" style="cursor:default;align-items:center"><div style="flex:1;min-width:0"><div class="lp-name" style="font-weight:500">${label}</div>${sub?`<div class="lp-meta">${sub}</div>`:''}</div><div class="lp-amt">${val}</div></div>`;
+      const _rowOld = (label, val, sub) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
         <span style="font-size:12.5px;color:var(--text2)">${label}</span>
         <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
       </div>`;
-      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
-        <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Exposure profile</div>
+      return `<div class="lp-sec">Exposure profile</div><div class="lp-grp">
         ${ages.length ? row('Oldest open item', `${oldest} day${oldest===1?'':'s'}`, oldestLoan ? `${_esc(oldestLoan.personName||'—')} · ${fmt(_inDisplay(toPhp(oldestLoan.remaining||oldestLoan.amount, oldestLoan.currency)), dc)}` : '') : ''}
         ${ages.length ? row('Average age', `${avgAge} day${avgAge===1?'':'s'}`, `${ages.length} dated item${ages.length===1?'':'s'}`) : ''}
         ${topP && topExposure > 0 ? row('Largest single exposure', `${topShare.toFixed(0)}%`, `${_esc(topP.name)} · ${fmt(_inDisplay(topExposure), dc)}`) : ''}
@@ -26820,29 +26831,36 @@ function renderAnalyticsPeople() {
         })()}
       </div>`;
     })()}
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Person</div>`;
+    <div class="lp-sec">Per person</div><div class="lp-grp">`;
 
   list.forEach(p => {
     const initials = p.name.slice(0,2).toUpperCase();
     const netColor = p.netOwedToMe >= 0 ? 'var(--green)' : 'var(--red)';
     const direction = p.netOwedToMe >= 0 ? 'owes me' : 'I owe';
-    html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${escapeAttr(initials)}</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:600">${escapeAttr(p.name)}</div>
-          <div style="font-size:11px;color:var(--text3)">Net: <span style="color:${netColor};font-weight:600">${fmt(_inDisplay(p.netOwedToMe), dc, true)}</span> · ${direction}</div>
+    // PLS #324: pills sit on their own line starting at the row edge (not indented behind the
+    // avatar), and are pill-sized (10px, tight padding) so they no longer outweigh the name.
+    html += `<div style="padding:11px 16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="pool-avatar" style="width:32px;height:32px;font-size:11px;flex-shrink:0">${escapeAttr(initials)}</div>
+          <div class="lp-name" style="flex:1;min-width:0">${escapeAttr(p.name)}</div>
+          <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${netColor}">${fmt(_inDisplay(p.netOwedToMe), dc, true)}</div><div class="lp-amt2">${direction}</div></div>
         </div>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px">
-        ${p.lentCount>0?`<span class="pill pill-amber">📤 Lent ${p.lentCount} · ${fmt(_inDisplay(p.lent), dc)}</span>`:''}
-        ${p.borrowedCount>0?`<span class="pill pill-red">📥 Borrowed ${p.borrowedCount} · ${fmt(_inDisplay(p.borrowed), dc)}</span>`:''}
-        ${p.sharedCount>0?`<span class="pill pill-gray">🤝 Shared ${p.sharedCount} · ${fmt(_inDisplay(p.sharedOwed), dc)}</span>`:''}
-      </div>
-    </div>`;
+      ${(() => { // PLS #325: a small breakdown table instead of wrapping pills. Coloured dot + label +
+        // count on the left, amount right-aligned under the net figure, so nothing crosses into the
+        // amount column and the three kinds line up person to person.
+        const line = (dot, lbl, n, amt) => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11.5px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+            <span style="flex:1;color:var(--text2)">${lbl} <span style="color:var(--text4)">· ${n}</span></span>
+            <span style="font-family:var(--mono);color:var(--text2)">${amt}</span></div>`;
+        return `<div style="margin:6px 0 0 44px">`
+          + (p.lentCount>0 ? line('var(--amber)', '📤 Lent', p.lentCount, fmt(_inDisplay(p.lent), dc)) : '')
+          + (p.borrowedCount>0 ? line('var(--red)', '📥 Borrowed', p.borrowedCount, fmt(_inDisplay(p.borrowed), dc)) : '')
+          + (p.sharedCount>0 ? line('var(--text4)', '🤝 Shared', p.sharedCount, fmt(_inDisplay(p.sharedOwed), dc)) : '')
+          + `</div>`; })()}
+      </div>`;
   });
 
-  html += `</div>`;
+  html += `</div></div>`;
   return html;
 }
 
