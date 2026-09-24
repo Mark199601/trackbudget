@@ -34,7 +34,7 @@
     document.head.appendChild(preconnect2);
     var fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
     document.head.appendChild(fontLink);
     document.documentElement.classList.add('non-apple');
   }
@@ -78,13 +78,17 @@
   --icon-xs:16px;--icon-sm:20px;--icon-md:28px;--icon-lg:40px;
   /* iOS-style spacing scale */
   /* spacing scale removed — never adopted in stylesheet */
-  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;--mono:ui-monospace,'SF Mono','Menlo','Monaco',monospace;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;--mono:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;
   --nav-h:64px;--header-h:56px;--sidebar-w:240px;--page-max:1200px;
   --transition:0.2s cubic-bezier(0.32,0.72,0,1);
   --spring:0.34s cubic-bezier(0.34,1.3,0.64,1);
 }
 /* ── Non-Apple devices (Windows/Android/Linux) use Inter (Apple-style font) ── */
-html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Fira Code','Inter','Helvetica Neue',sans-serif; }
+html.non-apple { --font:'Inter','Helvetica Neue',sans-serif; --mono:'Inter','Helvetica Neue',sans-serif; }
+/* PLS #335: one typeface for the whole app (owner's ask). --mono now points at the same family as
+   --font, so the 320+ figures that use var(--mono) stop switching to a typewriter face (SF Mono on
+   iPhone, Fira Code on PC). Digits stay equal-width through tabular-nums, so amounts still line up. */
+body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 @keyframes slideUp { from { transform:translateY(20%); opacity:0 } to { transform:translateY(0); opacity:1 } }
 
 /* Unified Add Transaction form */
@@ -422,17 +426,17 @@ body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(360p
 #tb-numpad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 .np-btn{background:var(--bg3);border:none;color:var(--text);font-size:22px;font-weight:500;padding:0;height:54px;border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.08s ease,background 0.12s cubic-bezier(0.32,0.72,0,1);font-family:var(--mono);user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .np-btn:active,.np-btn.pressed{transform:scale(0.94);background:var(--bg4)}
-.np-btn.np-fn{background:var(--bg4);color:var(--text2);font-size:16px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;letter-spacing:-0.2px}
+.np-btn.np-fn{background:var(--bg4);color:var(--text2);font-size:16px;font-weight:600;font-family:var(--font)"SF Pro Text",system-ui,sans-serif;letter-spacing:-0.2px}
 .np-btn.np-fn:active{background:var(--bg2);transform:scale(0.94)}
 .np-btn.np-op{background:rgba(124,77,255,0.15);color:var(--accent);font-size:24px;font-weight:600}
 .np-btn.np-op:active{background:rgba(124,77,255,0.28);transform:scale(0.94)}
 .np-btn.np-eq{background:var(--accent);color:#fff;font-size:24px;font-weight:700}
 .np-btn.np-eq:active{background:var(--accent-dark,#5b3fa8);transform:scale(0.94)}
-.np-btn.np-del{color:var(--red);font-size:22px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+.np-btn.np-del{color:var(--red);font-size:22px;font-weight:600;font-family:var(--font)"SF Pro Text",system-ui,sans-serif}
 .np-btn.np-zero{grid-column:span 2}
 input.numpad-input[readonly]{cursor:pointer;background:var(--input-bg,var(--bg3));color:var(--text);opacity:1}
 input.numpad-input[readonly]:focus{outline:none;border-color:var(--accent)}
-.np-btn.np-ok{background:var(--accent);color:#fff;font-size:16px;font-weight:600;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro","Segoe UI",Roboto,system-ui,sans-serif;letter-spacing:-0.2px;height:48px;margin-top:2px;box-shadow:0 2px 8px rgba(124,77,255,0.25)}
+.np-btn.np-ok{background:var(--accent);color:#fff;font-size:16px;font-weight:600;padding:14px;font-family:var(--font)"SF Pro Text","SF Pro","Segoe UI",Roboto,system-ui,sans-serif;letter-spacing:-0.2px;height:48px;margin-top:2px;box-shadow:0 2px 8px rgba(124,77,255,0.25)}
 .np-btn.np-ok:active{background:var(--accent-dark,#5b3fa8);transform:scale(0.97);box-shadow:0 1px 4px rgba(124,77,255,0.25)}
 .form-input:focus{border-color:var(--accent)}
 .form-input::placeholder{color:var(--text4)}
@@ -532,7 +536,7 @@ option{background:var(--bg3);color:var(--text)}
 .analytics-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid var(--border);scrollbar-width:none;-webkit-overflow-scrolling:touch;background:var(--bg);flex-wrap:nowrap}
 .analytics-tabs::-webkit-scrollbar{display:none}
 .analytics-picker{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);cursor:pointer;user-select:none}
-.analytics-picker-inner{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);color:var(--text);font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;transition:background 0.15s}
+.analytics-picker-inner{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);color:var(--text);font-size:14px;font-weight:600;font-family:var(--font)"SF Pro Text","Helvetica Neue",sans-serif;transition:background 0.15s}
 .analytics-picker:active .analytics-picker-inner{background:var(--bg3)}
 .analytics-picker-icon{font-size:16px;line-height:1}
 .analytics-picker-label{letter-spacing:-0.2px}
@@ -642,7 +646,7 @@ option{background:var(--bg3);color:var(--text)}
 .ov-acc.open .ov-acc-chev{transform:rotate(180deg)}
 .ov-acc-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
 .ov-acc.open .ov-acc-body{display:block}
-.atab{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;padding:8px 14px;border-radius:var(--r-lg);cursor:pointer;white-space:nowrap;transition:background 0.15s,color 0.15s,border-color 0.15s;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
+.atab{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:500;padding:8px 14px;border-radius:var(--r-lg);cursor:pointer;white-space:nowrap;transition:background 0.15s,color 0.15s,border-color 0.15s;font-family:var(--font)"SF Pro Text","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
 .atab:hover{background:var(--bg3)}
 .atab.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 @media(max-width:480px){
@@ -728,7 +732,27 @@ option{background:var(--bg3);color:var(--text)}
 .settings-row:last-child{border-bottom:none}
 .sr-left{display:flex;align-items:center;gap:12px}
 .an-ico{width:32px;height:32px;border-radius:10px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0} /* PLS #331 */
-.sr-icon{width:34px;height:34px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+/* PLS #336 (hybrid, over #334): larger text and rows, bold sentence-case headers, fintech profile header. */
+.set-ios .lp-row{padding:9px 16px;min-height:50px;box-sizing:border-box}
+.set-ios .lp-grp{border-radius:14px}
+.set-ios .lp-sec{font-size:13.5px!important;font-weight:600!important;color:var(--text2)!important;text-transform:none!important;letter-spacing:0!important;margin:24px 6px 8px!important}
+.page-pad.set-ios,.page-pad.set-top{max-width:640px;margin-left:auto!important;margin-right:auto!important;box-sizing:border-box} /* PLS #336: no stretched rows on PC */
+.set-hero{text-align:center;padding:12px 0 2px}
+.set-av{width:76px;height:76px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:600;color:#fff;background:linear-gradient(135deg,#9d90ff,var(--accent))}
+.set-name{font-size:21px;font-weight:700;letter-spacing:-0.3px;color:var(--text)}
+.set-sub{font-size:13px;color:var(--text3);margin-top:3px}
+.set-pill{margin-top:12px;border:0;border-radius:999px;padding:8px 18px;background:var(--accent-bg);color:var(--accent);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.set-ver{text-align:center;font-size:12.5px;color:var(--text4);margin:14px 0 6px}
+.set-back{background:none;border:0;padding:6px 0;color:var(--accent);font:inherit;font-size:15px;font-weight:500;cursor:pointer}
+.set-h1{font-size:26px;font-weight:700;letter-spacing:-0.5px;color:var(--text);margin:2px 2px 0}
+.set-ios .lp-row:active{background:var(--bg3)}
+.set-ios .lp-sec:first-child{margin-top:6px}
+.set-lbl{font-size:15.5px;font-weight:500;color:var(--text)}
+.set-val{font-size:14.5px;color:var(--text3);text-align:right;white-space:nowrap;flex-shrink:0}
+.set-foot{font-size:11.5px;color:var(--text4);line-height:1.5;margin:8px 16px 0}
+.set-link{background:none;border:0;padding:4px 0;color:var(--accent);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+.set-sub > *{box-shadow:inset 60px 0 0 var(--bg2),inset 0 1px 0 var(--border)}
+.sr-icon{width:32px;height:32px;border-radius:10px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0} /* PLS #333: soft accent tile, line icons (was bare emoji) */
 .sr-text{font-size:14px;font-weight:500}
 .sr-sub{font-size:11px;color:var(--text3);margin-top:2px}
 .sr-right{color:var(--text4);font-size:12px;display:flex;align-items:center;gap:6px}
@@ -798,7 +822,7 @@ option{background:var(--bg3);color:var(--text)}
 .cat-tile:hover{background:var(--accent-bg);border-color:var(--accent);transform:scale(1.03)}
 .cat-tile:active{transform:scale(0.97)}
 .cat-tile-icon{font-size:32px;line-height:1;margin-bottom:4px}
-.cat-tile-name{font-size:10px;font-weight:500;color:var(--text);text-align:center;line-height:1.25;word-break:normal;overflow-wrap:break-word;hyphens:none;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
+.cat-tile-name{font-size:10px;font-weight:500;color:var(--text);text-align:center;line-height:1.25;word-break:normal;overflow-wrap:break-word;hyphens:none;font-family:var(--font)"SF Pro Text","SF Pro Display","Helvetica Neue",sans-serif;letter-spacing:-0.1px}
 .cat-group{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:6px;overflow:hidden}
 .cat-group-header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
 .cat-group.open .cat-group-header{background:var(--bg3)}
@@ -1191,7 +1215,7 @@ option{background:var(--bg3);color:var(--text)}
 // ════════════════════════════════════════════════════════════
 // EARLY GLOBALS — declared first to avoid TDZ errors if mid-file code throws
 // ════════════════════════════════════════════════════════════
-var _settingsTab = 'profile';
+var _settingsTab = 'home'; // PLS #336: 'home' = the main list
 var _planTab = 'budgets';
 var _txFilter = 'all';
 var _analyticsTab = 'overview';
@@ -1756,6 +1780,29 @@ const _ICONS = {
   inbox:    '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   scale:    '<path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7 2 14h6z"/><path d="M19 7l-3 7h6z"/><path d="M8 21h8"/>',
   trash:    '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  // PLS #333: Settings rows and default major categories
+  flag:     '<path d="M5 22V4"/><path d="M5 4h12l-2.5 4L17 12H5"/>',
+  user:     '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  pin:      '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  home:     '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+  cloud:    '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>',
+  camera:   '<path d="M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z"/><circle cx="12" cy="13" r="3.5"/>',
+  save:     '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  upload:   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  file:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>',
+  fileUp:   '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>',
+  sheet:    '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="10" y1="3" x2="10" y2="21"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><polyline points="8 12.5 11 15.5 16 9.5"/>',
+  utensils: '<path d="M3 2v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V2"/><line x1="7" y1="2" x2="7" y2="22"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3zm0 0v7"/>',
+  car:      '<path d="M19 17h2v-5l-2.2-5.1A2 2 0 0 0 17 5.7H7a2 2 0 0 0-1.8 1.2L3 12v5h2"/><line x1="9" y1="17" x2="15" y2="17"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><line x1="3" y1="12" x2="21" y2="12"/>',
+  phone:    '<rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/>',
+  card:     '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>',
+  bag:      '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+  gift:     '<rect x="3" y="8" width="18" height="4" rx="1"/><line x1="12" y1="8" x2="12" y2="21"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+  briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="2" y1="13" x2="22" y2="13"/>',
   // PLS #331: icons for the Analytics list (bars, heatmap grid, history, pulse, globe, coins)
   barChart: '<line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="16" x2="7" y2="12"/><line x1="12" y1="16" x2="12" y2="6"/><line x1="17" y1="16" x2="17" y2="9"/>',
   grid:     '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -4597,6 +4644,8 @@ const APP_VERSION_DATE = 'September 2026';
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.1.9', date: 'September 2026', changes: [
+    '⚙️ Settings is one simple list with your profile on top. Rates, Categories, Export and Audit open as their own pages', // PLS #333, #336
+    '🔤 One font across the whole app, numbers included. Amounts still line up', // PLS #335
     '🎨 Analytics and the sidebar use clean line icons on soft tiles. Category emojis in your transactions stay the same', // PLS #331-#332
     '📊 Cashflow, Account Health, Investments and People in Analytics now use the same tiles and grouped lists as the rest of the app, and tapping a month or an account opens it', // PLS #326-#330
     '🗂️ Loans, Installments, Reimbursements, Investments and Accounts have a new layout: summary tiles on top, and Active and Settled kept apart so finished items never mix into your live list',
@@ -14257,7 +14306,7 @@ function openAnalyticsPicker() {
     { id:'wealth',   title:'Wealth',           keys:['wealth','investments','accthealth'] },
     { id:'currency', title:'Currency',         keys:['forex','crosscurr','external'] },
   ];
-  let html = `<div style="padding:4px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif">`;
+  let html = `<div style="padding:4px 0;font-family:var(--font)">`;
   sections.forEach((sec, secIdx) => {
     // ── PERSONAL LOGIC SET #90 ── Visual divider before each non-first section
     // for clear category separation (Money / Spending / People / Wealth / Other).
@@ -20029,29 +20078,19 @@ function renderSettings() {
     if (!db.categories) db.categories = { expense:[], income:[] };
     if (!db.budgets) db.budgets = [];
     if (!db.transactions) db.transactions = [];
-    if (_settingsTab==='budgets') _settingsTab='profile'; // PLS #133: budgets config moved to Planning
-
-    // PLS #132 family: Settings tabs use the iOS segmented control inside page-pad — aligned
-    // with the cards below at every breakpoint (the old underline strip ran full-bleed).
-    const tabsHTML = `<div class="page-pad" style="padding-bottom:0">
-    <div class="seg">
-    <button class="seg-btn ${_settingsTab==='profile'?'active':''}" onclick="setSettingsTab('profile')">Profile</button>
-    <button class="seg-btn ${_settingsTab==='fx'?'active':''}" onclick="setSettingsTab('fx')">Rates</button>
-    <button class="seg-btn ${_settingsTab==='cats'?'active':''}" onclick="setSettingsTab('cats')">Categories</button>
-    <button class="seg-btn ${_settingsTab==='data'?'active':''}" onclick="setSettingsTab('data')">Data</button>
-    </div>
-  </div>`;
+    // PLS #336: no tabs. Old ids from links elsewhere ('profile', 'data', 'budgets') land on the list.
+    if (!_SET_PAGES[_settingsTab]) _settingsTab = 'home';
     let content = '';
     try {
-      if (_settingsTab==='profile') content = renderProfileTab();
-      else if (_settingsTab==='fx') content = renderFXTab();
-      else if (_settingsTab==='cats') content = renderCatsTab();
-      else content = renderDataTab();
+      const page = { currencies:renderCurrenciesPage, fx:renderFXTab, cats:renderCatsTab, export:renderExportPage, import:renderImportPage, audit:renderAuditPage }[_settingsTab];
+      content = page
+        ? `<div class="page-pad set-top" style="padding-bottom:0"><button class="set-back" onclick="setSettingsTab('home')">‹ Settings</button><div class="set-h1">${_SET_PAGES[_settingsTab]}</div></div>` + page()
+        : renderSettingsHome();
     } catch(tabErr) {
-      console.error('[TB] Settings tab "' + _settingsTab + '" failed:', tabErr);
-      content = `<div class="page-pad"><div class="card" style="padding:20px"><div style="color:var(--red);font-weight:600;margin-bottom:8px">⚠ Tab error</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">${(tabErr && tabErr.message) || 'Unknown error'}</div><button class="btn btn-sm" onclick="setSettingsTab('data')">Try Data tab</button></div></div>`;
+      console.error('[TB] Settings page "' + _settingsTab + '" failed:', tabErr);
+      content = `<div class="page-pad"><div class="card" style="padding:20px"><div style="color:var(--red);font-weight:600;margin-bottom:8px">Page error</div><div style="font-size:12px;color:var(--text2);margin-bottom:12px">${_esc(String(tabErr && tabErr.message || tabErr))}</div><button class="btn btn-ghost btn-sm" onclick="setSettingsTab('home')">Back to Settings</button></div></div>`;
     }
-    document.getElementById('page-content').innerHTML = tabsHTML + content;
+    document.getElementById('page-content').innerHTML = content;
   } catch(e) {
     console.error('[TB] renderSettings failed:', e);
     const pc = document.getElementById('page-content');
@@ -20059,89 +20098,177 @@ function renderSettings() {
   }
 }
 
-function setSettingsTab(t) { _settingsTab=t; renderSettings(); }
+function setSettingsTab(t) { _settingsTab=t; renderSettings(); const pc=document.getElementById('page-content'); if (pc) pc.scrollTop=0; window.scrollTo && window.scrollTo(0,0); }
 
-function renderProfileTab() {
-  const p = db.profile;
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===db.displayCurrency?'selected':''}>${c}</option>`).join('');
-  return `<div class="page-pad">
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-hdr"><div class="section-title">Personal Info</div></div>
-      <div class="settings-row" onclick="openEditProfile()">
-        <div class="sr-left"><div class="sr-icon">👤</div><div><div class="sr-text">${_esc(p.nickname)||'Set nickname'}</div><div class="sr-sub">🏠 ${_esc(p.nationality)||'Set nationality'}</div></div></div>
-        <div class="sr-right">Edit →</div>
-      </div>
-      <div class="settings-row" onclick="openEditProfile()">
-        <div class="sr-left"><div class="sr-icon">📍</div><div><div class="sr-text">Current Location</div><div class="sr-sub">${_esc(p.country)||'Not set'}</div></div></div>
-        <div class="sr-right">Edit →</div>
-      </div>
-      <div class="settings-row" style="cursor:default;opacity:0.85">
-        <div class="sr-left"><div class="sr-icon">🏠</div><div><div class="sr-text">Home Base</div><div class="sr-sub">From nationality · drives FX math</div></div></div>
-        <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(_homeBase())} ${_homeBase()}</div>
-      </div>
-      <div class="settings-row" style="cursor:pointer" onclick="openDisplayCurrencyPicker()">
-        <div class="sr-left"><div class="sr-icon">💱</div><div><div class="sr-text">Display Currency</div><div class="sr-sub">View totals in this currency · display only</div></div></div>
-        <div class="sr-right" style="font-family:var(--mono);font-weight:600;color:var(--accent)">${sym(_displayCurrency())} ${_displayCurrency()}</div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">Appearance</div>
-      <div class="seg" style="max-width:340px">
-        ${[
-          ['auto','Auto'],
-          ['light','Light'],
-          ['dark','Dark']
-        ].map(([val,label])=>{
-          const active = (db.settings.themeMode==='auto'&&val==='auto') || (db.settings.themeMode!=='auto'&&db.settings.theme===val);
-          return `<button class="seg-btn ${active?'active':''}" onclick="setThemeMode('${val}')">${label}</button>`;
-        }).join('')}
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">Tracked Currencies</div>
-      <div class="tracked-chips" style="margin-bottom:12px">
-        ${db.trackedCurrencies.map(c=>{
-          const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵',code:c};
-          return `<div class="tracked-chip">${info.flag} ${c} ${c!==(_homeBase())?`<span class="tracked-chip-remove" onclick="removeTrackedCurr('${c}')">×</span>`:''}
-          </div>`;
-        }).join('')}
-      </div>
-      <button class="pool-add-btn" onclick="openAddCurrencyDlg()">+ Add Currency</button>
-    </div>
-    <div class="card">
-      <div class="section-title">Google Drive Sync</div>
-      <div class="settings-row" onclick="openDriveSheet()">
-        <div class="sr-left"><div class="sr-icon">☁️</div><div><div class="sr-text">${db.settings.googleDriveConnected?'Drive Connected':'Connect Google Drive'}</div><div class="sr-sub">${db.settings.lastDriveSync?'Last: '+fmtDFull(db.settings.lastDriveSync.split('T')[0]):'Not synced yet'}</div></div></div>
-        <div class="sr-right">→</div>
-      </div>
-    </div>
-    <div class="card" style="margin-top:16px">
-      <div class="section-title">Snapshots & Storage</div>
-      <div class="settings-row" onclick="showSnapshotPicker()">
-        <div class="sr-left"><div class="sr-icon">📸</div><div><div class="sr-text">Snapshots</div><div class="sr-sub">${db.settings.googleDriveConnected?'Labeled restore points · max 20':'Connect Drive to enable'}</div></div></div>
-        <div class="sr-right">→</div>
-      </div>
-      ${db.settings.googleDriveConnected?`<div class="settings-row" onclick="openSnapshotSavePrompt()">
-        <div class="sr-left"><div class="sr-icon">📸</div><div><div class="sr-text">Save Snapshot Now</div><div class="sr-sub">Create a restore point with a label</div></div></div>
-        <div class="sr-right">→</div>
-      </div>`:''}
-      ${(()=>{ 
-        const u = getStorageUsage();
-        const color = u.pct >= 80 ? 'var(--red)' : u.pct >= 60 ? 'var(--amber)' : 'var(--green)';
-        return `<div style="padding:12px 14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-size:13px;font-weight:500">Local storage</div>
-            <div style="font-size:12px;color:${color};font-family:var(--mono)">${u.pct.toFixed(0)}% · ${u.mb.toFixed(2)} MB</div>
-          </div>
-          <div style="height:6px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden">
-            <div style="height:100%;background:${color};width:${u.pct.toFixed(1)}%;transition:width 0.4s;border-radius:var(--r-sm)"></div>
-          </div>
-          <div style="font-size:11px;color:var(--text4);margin-top:6px">${u.pct >= 80 ? '⚠ Auto-saves to Drive when over 80%' : '~5 MB browser limit · safe headroom'}</div>
-        </div>`;
-      })()}
-    </div>
+// -- PERSONAL LOGIC SET #334 -- Settings follows iOS Settings conventions (owner's ask). Every tab is
+// built from the same three pieces, reusing the app's grouped list (lp-sec / lp-grp / lp-row):
+//   _sSec  section title OUTSIDE the group (no titles inside cards any more)
+//   _sRow  icon tile + label left, grey value right, a chevron only when the row OPENS something.
+//          Rows that act immediately (export, import) carry no chevron, as on iOS.
+//   _sGrp  the group, plus an optional grey footer underneath that holds the explanation that used
+//          to sit in each row's sub-line, so rows read as one clean line.
+// Destructive Reset sits alone in its own group as centred red text, like iOS.
+function _sRow(o) {
+  const tap = !!o.onclick;
+  return `<div class="lp-row"${tap ? ` onclick="${o.onclick}"` : ' style="cursor:default"'}>
+    <div class="sr-icon"${o.icoStyle ? ` style="${o.icoStyle}"` : ''}>${o.ico}</div>
+    <div style="flex:1;min-width:0"><div class="set-lbl"${o.lblStyle ? ` style="${o.lblStyle}"` : ''}>${o.label}</div>${o.sub ? `<div class="lp-meta">${o.sub}</div>` : ''}</div>
+    ${o.value !== undefined && o.value !== '' ? `<div class="set-val"${o.valStyle ? ` style="${o.valStyle}"` : ''}>${o.value}</div>` : ''}
+    ${o.chev ? '<span class="lp-chev">›</span>' : ''}
   </div>`;
 }
+const _sSec = (t, right) => `<div class="lp-sec"${right ? ' style="display:flex;align-items:center;justify-content:space-between"' : ''}>${t}${right || ''}</div>`;
+const _sGrp = (rows, foot) => `<div class="lp-grp">${rows}</div>${foot ? `<div class="set-foot">${foot}</div>` : ''}`;
+
+// -- PERSONAL LOGIC SET #336 -- Settings "B + C hybrid" (owner's pick over #334's tabbed version).
+// One scroll list, no tabs: a big centred profile header (avatar, name, Edit profile pill), then
+// lavender icon-tile rows grouped under sentence-case headers. Rates, Categories, Currencies,
+// Export, Import and Audit open as their own pages (drill-in) with a "‹ Settings" back link.
+// Old tab ids still work for links elsewhere: 'profile' and 'data' land on the main list.
+const _SET_PAGES = { currencies:'Tracked currencies', fx:'Exchange rates', cats:'Categories', export:'Export and backup', import:'Import', audit:'Audit' };
+function renderSettingsHome() {
+  const p = db.profile, hb = _homeBase(), dcur = _displayCurrency();
+  const conn = db.settings.googleDriveConnected;
+  const u = getStorageUsage();
+  const uCol = u.pct >= 80 ? 'var(--red)' : u.pct >= 60 ? 'var(--amber)' : 'var(--green)';
+  const mode = db.settings.themeMode === 'auto' ? 'Auto' : (db.settings.theme === 'light' ? 'Light' : 'Dark');
+  const foreign = db.trackedCurrencies.filter(c => c !== hb).length;
+  const majors = db.categories.expense.filter(c => !c.archived).length + db.categories.income.filter(c => !c.archived).length;
+  const g = (typeof scanInvestmentLedger === 'function') ? scanInvestmentLedger() : [];
+  const initials = (p.nickname || '').trim().split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+  let h = `<div class="page-pad set-ios">`;
+  h += `<div class="set-hero">
+      <div class="set-av">${initials ? escapeAttr(initials) : _ico('user', 30)}</div>
+      <div class="set-name">${_esc(p.nickname) || 'Set your name'}</div>
+      <div class="set-sub">${_esc(p.nationality) || 'Nationality not set'} · Home base ${sym(hb)} ${hb}</div>
+      <button class="set-pill" onclick="openEditProfile()">Edit profile</button>
+    </div>`;
+  h += _sSec('General') + _sGrp(
+      _sRow({ ico:_ico('exchange',17), label:'Display currency', value:`${sym(dcur)} ${dcur}`, onclick:'openDisplayCurrencyPicker()', chev:true })
+    + _sRow({ ico:_ico('sparkle',17), label:'Appearance', value:mode, onclick:'openAppearancePicker()', chev:true })
+    + _sRow({ ico:_ico('coins',17), label:'Tracked currencies', value:`${db.trackedCurrencies.length}`, onclick:"setSettingsTab('currencies')", chev:true }));
+  h += _sSec('Money') + _sGrp(
+      _sRow({ ico:_ico('globe',17), label:'Exchange rates', value:`${foreign}`, onclick:"setSettingsTab('fx')", chev:true })
+    + _sRow({ ico:_ico('tag',17), label:'Categories', value:`${majors}`, onclick:"setSettingsTab('cats')", chev:true }));
+  h += _sSec('Sync and storage') + _sGrp(
+      _sRow({ ico:_ico('cloud',17), label:'Google Drive', value:conn ? 'On' : 'Off', onclick:'openDriveSheet()', chev:true })
+    + _sRow({ ico:_ico('camera',17), label:'Snapshots', value:conn ? 'Up to 20' : 'Needs Drive', onclick:'showSnapshotPicker()', chev:true })
+    + (conn ? _sRow({ ico:_ico('save',17), label:'Save snapshot now', onclick:'openSnapshotSavePrompt()', chev:true }) : '')
+    + _sRow({ ico:_ico('archive',17), label:'Storage', value:`${u.pct.toFixed(0)}% used`, valStyle:`color:${uCol}` }),
+    db.settings.lastDriveSync ? 'Last synced ' + fmtDFull(db.settings.lastDriveSync.split('T')[0]) + '.' : '');
+  h += _sSec('Data') + _sGrp(
+      _sRow({ ico:_ico('download',17), label:'Export and backup', onclick:"setSettingsTab('export')", chev:true })
+    + _sRow({ ico:_ico('upload',17), label:'Import', onclick:"setSettingsTab('import')", chev:true })
+    + _sRow({ ico:_ico(g.length ? 'alert' : 'checkCircle',17), icoStyle:g.length ? 'background:var(--amber-bg);color:var(--amber)' : '',
+        label:'Audit', value:g.length ? `${g.length} to fix` : 'All good', valStyle:g.length ? 'color:var(--amber)' : '', onclick:"setSettingsTab('audit')", chev:true }));
+  h += _sSec('About') + _sGrp(
+      _sRow({ ico:_ico('sparkle',17), label:"What's new", value:`v${APP_VERSION}`, onclick:'openWhatsNew()', chev:true })
+    + _sRow({ ico:_ico('activity',17), label:'Diagnostics', onclick:'openDiagnostics()', chev:true }));
+  h += `<div style="height:22px"></div>` + _sGrp(`<div class="lp-row" onclick="confirmResetApp()" style="justify-content:center;color:var(--red);font-size:15.5px;font-weight:500">Reset app</div>`);
+  h += `<div class="set-ver">TrackBudget v${APP_VERSION} · ${APP_VERSION_DATE}</div>`;
+  return h + `</div>`;
+}
+function openAppearancePicker() {
+  const cur = db.settings.themeMode === 'auto' ? 'auto' : db.settings.theme;
+  openDlg('Appearance', `<div class="lp-grp" style="margin:0">${[['auto','Auto','Follows your device'],['light','Light',''],['dark','Dark','']].map(([v,l,s]) =>
+    `<div class="lp-row" onclick="setThemeMode('${v}');closeDlg();renderSettings()"><div style="flex:1"><div class="set-lbl">${l}</div>${s?`<div class="lp-meta">${s}</div>`:''}</div>${cur===v?`<span style="color:var(--accent)">${_ico('checkCircle',18)}</span>`:''}</div>`).join('')}</div>`, '');
+}
+function renderCurrenciesPage() {
+  const hb = _homeBase();
+  return `<div class="page-pad set-ios">` + _sGrp(
+      db.trackedCurrencies.map(c => {
+        const info = CURRENCIES.find(x => x.code === c) || { flag:'', code:c, name:c };
+        return _sRow({ ico:info.flag || c.slice(0,1), label:c, sub:_esc(info.name || ''),
+          value: c === hb ? 'Home' : `<button class="set-link" style="color:var(--red)" onclick="event.stopPropagation();removeTrackedCurr('${c}')">Remove</button>` });
+      }).join('')
+    + _sRow({ ico:'+', icoStyle:'font-size:20px;font-weight:500', label:'Add currency', lblStyle:'color:var(--accent)', onclick:'openAddCurrencyDlg()' }),
+    'Tracked currencies show up in forms and rates. Your home base cannot be removed.') + `</div>`;
+}
+function renderExportPage() {
+  const kb = `${(new Blob([JSON.stringify(db)]).size/1024).toFixed(1)} KB`, txCount = db.transactions.length;
+  return `<div class="page-pad set-ios">` + _sGrp(
+      _sRow({ ico:_ico('download',17), label:'Backup (JSON)', value:kb, onclick:'exportJSON()' })
+    + _sRow({ ico:_ico('fileText',17), label:'Backup (TXT)', value:kb, onclick:'exportTXT()' })
+    + _sRow({ ico:_ico('sheet',17), label:'Excel (.xlsx)', value:`${txCount} ${aiPlural(txCount,'txn')}`, onclick:'exportXLSX()' })
+    + _sRow({ ico:_ico('file',17), label:'CSV', value:'Txns only', onclick:'exportCSV()' }),
+    'JSON and TXT are full backups. Excel has 6 sheets; CSV is transactions only, for Google Sheets or Excel.') + `</div>`;
+}
+function renderImportPage() {
+  return `<div class="page-pad set-ios">
+    <input type="file" id="import-file" accept=".json,.txt" style="display:none" onchange="importJSON(event);this.value=''">
+    <input type="file" id="import-csv-file" accept=".csv" style="display:none" onchange="importCSV(event);this.value=''">` + _sGrp(
+      _sRow({ ico:_ico('upload',17), label:'Import backup', onclick:"document.getElementById('import-file').click()" })
+    + _sRow({ ico:_ico('fileUp',17), label:'Import from CSV', onclick:"document.getElementById('import-csv-file').click()" }),
+    'A backup can be merged with your data or replace it. CSV import takes a bank statement.') + `</div>`;
+}
+function renderAuditPage() {
+  const g = (typeof scanInvestmentLedger === 'function') ? scanInvestmentLedger() : []; // PLS #223/#227: read-only, cheap
+  const recs = (db.reconciliations || []).length;
+  return `<div class="page-pad set-ios">` + _sGrp(
+      _sRow({ ico:_ico('bank',17), label:'Bank reconciliation', onclick:'openBankRecon()', chev:true })
+    + _sRow({ ico:_ico(g.length ? 'alert' : 'checkCircle',17), icoStyle:g.length ? 'background:var(--amber-bg);color:var(--amber)' : '',
+        label:'Investment ledger', value:g.length ? `${g.length} missing` : 'All counted', valStyle:g.length ? 'color:var(--amber)' : '', onclick:'openInvLedgerRepair()', chev:true })
+    + (recs ? _sRow({ ico:_ico('history',17), label:'Reconciliation history', value:`${recs}`, onclick:'openReconHistory()', chev:true }) : ''),
+    g.length ? `${g.length} investment ${g.length===1?'sale is':'sales are'} missing from your totals.` : 'Compare app balances with your real bank balances.') + `</div>`;
+}
+
+
+function renderFXTab() {
+  const home = _homeBase();
+  const currencies = db.trackedCurrencies.filter(c => c !== home);
+  const nat = db.profile?.nationality;
+  const natFlag = nat && typeof getFlag === 'function' ? getFlag(nat) : '';
+  // PLS #109 still holds: always "1 [foreign] = [home symbol][rate]", full precision via fmtRate().
+  let h = `<div class="page-pad set-ios">`;
+  h += _sSec('Home base') + _sGrp(
+      _sRow({ ico:natFlag || _ico('home',17), label:`${sym(home)} ${home}`, value:nat ? _esc(nat) : 'Fallback' }),
+    'Every rate below is shown as 1 foreign = ' + sym(home) + ' home. To change home base, update your nationality in Edit profile.');
+  if (currencies.length) {
+    h += _sSec('Rates') + _sGrp(currencies.map(c => {
+      const info = CURRENCIES.find(x => x.code === c) || { flag:'', name:c };
+      const history = (db.fxHistory[c] || []).slice().sort((a,b) => b.date.localeCompare(a.date));
+      const current = db.fxRates[c] || 1;
+      const prev = history[1]?.rate;
+      const chg = prev ? ((current - prev) / prev * 100) : null;
+      return _sRow({ ico:info.flag || c.slice(0,1), label:c,
+        sub:`1 ${c} = <span style="font-family:var(--mono);color:var(--text2)">${sym(home)}${fmtRate(current)}</span>`,
+        value: chg !== null ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : `${history.length} ${aiPlural(history.length,'rate')}`,
+        valStyle: chg === null ? '' : `color:${chg >= 0 ? 'var(--green)' : 'var(--red)'};font-family:var(--mono)`,
+        onclick:`openFxHistoryPage('${c}')`, chev:true });
+    }).join(''), 'Rates are snapshotted on each transaction. Tap a currency for its history and trend.');
+  } else {
+    h += `<div class="set-foot" style="margin-top:14px">Add a currency in Profile to see its rate here.</div>`;
+  }
+  return h + `</div>`;
+}
+
+function renderCatsTab() {
+  let h = `<div class="page-pad set-ios">`;
+  for (const forType of ['expense','income']) {
+    const cats = db.categories[forType].filter(c => !c.archived);
+    // "Add" lives on the section header, as iOS puts the add action next to the list it adds to.
+    h += _sSec(forType === 'expense' ? 'Expense categories' : 'Income categories',
+      `<button class="set-link" onclick="openAddMajorCat('${forType}')">Add</button>`);
+    h += _sGrp(cats.map(cat => {
+      const subcats = (cat.subcats || []).filter(sc => !sc.archived);
+      // Tapping a major expands its subcategories in place; the chevron turns down while open.
+      return _sRow({ ico:_CAT_MAJOR_ICO[cat.id] ? _ico(_CAT_MAJOR_ICO[cat.id],17) : cat.icon, label:_esc(cat.name),
+          value:`${subcats.length}`, onclick:`toggleCatExpand('cat-${cat.id}')`, chev:true })
+        + `<div id="cat-${cat.id}" class="set-sub" style="display:none">
+          ${subcats.map(sc => `<div class="lp-row" style="cursor:default"><span style="width:32px;text-align:center;font-size:16px;flex-shrink:0">${sc.icon}</span>
+            <div style="flex:1;min-width:0;font-size:13px">${_esc(sc.name)}</div>
+            <button class="set-link" onclick="openEditSubCat('${cat.id}','${sc.id}','${forType}')">Edit</button></div>`).join('')}
+          <div class="lp-row" style="cursor:default;justify-content:flex-end;gap:18px">
+            <button class="set-link" onclick="openEditCat('${cat.id}','${forType}')">Edit category</button>
+            <button class="set-link" onclick="openAddSubCat('${cat.id}','${forType}')">Add subcategory</button>
+          </div>
+        </div>`;
+    }).join(''));
+  }
+  h += `<div style="height:22px"></div>` + _sGrp(_sRow({ ico:_ico('archive',17), label:'Archived categories', onclick:'showArchivedCatsPage()', chev:true }));
+  return h + `</div>`;
+}
+
 
 function openEditProfile() {
   const p = db.profile;
@@ -20294,60 +20421,6 @@ function addTrackedCurr(code) {
   }
 }
 
-function renderFXTab() {
-  const home = _homeBase();
-  const currencies = db.trackedCurrencies.filter(c=>c!==home);
-  const nat = db.profile?.nationality;
-  const natFlag = nat && typeof getFlag === 'function' ? getFlag(nat) : '';
-
-  // ── PERSONAL LOGIC SET #109 ── FX Rates page convention:
-  //   Always display "1 [foreign] = [home_symbol][rate]" — foreign on left, home on right.
-  //   Full precision via fmtRate() — no rounding visible to user.
-  //   Header shows home base derived from NATIONALITY (PLS #111).
-  let html = `<div class="page-pad">
-    <div style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px">Home base</div>
-    <div class="card" style="margin-bottom:14px;padding:12px 14px;background:linear-gradient(135deg,var(--accent-bg) 0%,transparent 100%)">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div>
-          <div style="font-size:16px;font-weight:700;letter-spacing:-0.3px">${sym(home)} ${home}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${natFlag} ${nat ? `From your nationality (${nat})` : 'From STORED_BASE fallback'} · "1 foreign = ${sym(home)}home"</div>
-        </div>
-      </div>
-    </div>
-    <div style="font-size:12px;color:var(--text4);margin-bottom:14px;line-height:1.5">Rates are used for FX snapshots on transactions. Tap a currency to view history &amp; trend. To change home base, update your nationality in Profile.</div>`;
-
-  for (const c of currencies) {
-    const info = CURRENCIES.find(x=>x.code===c)||{flag:'💵',name:c};
-    const history = (db.fxHistory[c] || []).slice().sort((a,b)=>b.date.localeCompare(a.date));
-    const current = db.fxRates[c] || 1;
-    const prev = history[1]?.rate;
-    const chg = prev ? ((current-prev)/prev*100) : null;
-    const chgColor = chg === null ? 'var(--text4)' : chg >= 0 ? 'var(--green)' : 'var(--red)';
-    const chgTxt = chg !== null ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : '';
-
-    html += `<div class="card tap-shrink" style="margin-bottom:10px;cursor:pointer" onclick="openFxHistoryPage('${c}')">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:22px">${info.flag}</span>
-          <div>
-            <div style="font-size:14px;font-weight:600;letter-spacing:-0.3px">${c}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:1px">1 ${c} = <span style="font-family:var(--mono);font-weight:600;color:var(--text)">${sym(home)}${fmtRate(current)}</span></div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="text-align:right">
-            ${chgTxt ? `<div style="font-size:12px;font-weight:600;color:${chgColor}">${chgTxt}</div>` : ''}
-            <div style="font-size:10px;color:var(--text4);margin-top:1px">Rate History (${history.length})</div>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  html += `</div>`;
-  return html;
-}
 
 // Legacy: kept for back-compat but auto-sync now handles drift in ensureDBIntegrity
 // DEBUG_SCANNER_NOTE: resetHomeToNationality() is orphaned — its "Reset to nationality"
@@ -21253,60 +21326,19 @@ function saveAddBudget() {
 // ── CATEGORIES MANAGER ──
 var _showArchivedCats = false;
 
-function renderCatsTab() {
-  let html = `<div class="page-pad">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div class="section-title">Categories</div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
-        <button class="btn btn-ghost btn-sm" onclick="showArchivedCatsPage()" style="font-size:12px">Archived →</button>
-      </label>
-    </div>`;
-
-  for (const forType of ['expense','income']) {
-    const cats = db.categories[forType].filter(c=>!c.archived);
-    html += `<div style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent)">${forType} Categories</div>
-        <button class="btn btn-ghost btn-sm" onclick="openAddMajorCat('${forType}')">+ Add</button>
-      </div>`;
-    for (const cat of cats) {
-      const subcats = (cat.subcats||[]).filter(sc=>!sc.archived);
-      html += `<div style="margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer" onclick="toggleCatExpand('cat-${cat.id}')">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:20px">${cat.icon}</span>
-            <span style="font-size:13px;font-weight:600">${_esc(cat.name)}</span>
-            ${cat.archived?`<span class="pill pill-gray">Archived</span>`:''}
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="color:var(--text4)">▾</span>
-          </div>
-        </div>
-        <div id="cat-${cat.id}" style="display:none;border-top:1px solid var(--border);padding:6px 0">
-          ${subcats.map(sc=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 7px 32px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:16px">${sc.icon}</span>
-              <span style="font-size:12px">${_esc(sc.name)}</span>
-              ${sc.archived?`<span class="pill pill-gray" style="font-size:10px">Archived</span>`:''}
-            </div>
-            <button class="btn btn-ghost btn-sm" onclick="openEditSubCat('${cat.id}','${sc.id}','${forType}')">Edit</button>
-          </div>`).join('')}
-          <div style="display:flex;justify-content:flex-end;gap:4px;padding:8px 14px 4px;${subcats.length?'border-top:1px solid var(--border);margin-top:4px':''}">
-            <button class="btn-text" style="font-size:13px;padding:8px 12px" onclick="openEditCat('${cat.id}','${forType}')">Edit</button>
-            <button class="btn-text" style="font-size:13px;padding:8px 12px" onclick="openAddSubCat('${cat.id}','${forType}')">+ Subcategory</button>
-          </div>
-        </div>
-      </div>`;
-    }
-    html += '</div>';
-  }
-  html += '</div>';
-  return html;
-}
+// -- PERSONAL LOGIC SET #333 -- Settings > Categories: the 12 default MAJOR categories show a line
+// icon on the soft tile (owner's ask: "major lang"). A custom major keeps its own emoji, on the same
+// tile. Subcategories, and every category emoji in the transaction forms, stay emoji.
+const _CAT_MAJOR_ICO = { 'c-food':'utensils', 'c-transport':'car', 'c-housing':'home', 'c-subs':'phone',
+  'c-obligations':'card', 'c-shopping':'bag', 'c-personal':'scissors', 'c-social':'gift', 'c-financial':'coins',
+  'c-employment':'briefcase', 'c-returns':'trend', 'c-otherincome':'cash' };
 
 function toggleCatExpand(id) {
   const el = document.getElementById(id);
-  if (el) el.style.display = el.style.display==='none'?'block':'none';
+  if (!el) return;
+  el.style.display = el.style.display==='none'?'block':'none';
+  const chev = el.previousElementSibling?.querySelector('.lp-chev'); // PLS #334: chevron turns while open
+  if (chev) chev.classList.toggle('open', el.style.display === 'block');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -21926,82 +21958,6 @@ function toggleArchiveSubCat(catId, subId, forType) {
 }
 
 // ── DATA TAB (Export/Import/Debug) ──
-function renderDataTab() {
-  const dbSize = new Blob([JSON.stringify(db)]).size;
-  const txCount = db.transactions.length;
-  return `<div class="page-pad">
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">Export</div>
-      <div class="settings-row" onclick="exportJSON()">
-        <div class="sr-left"><div class="sr-icon">💾</div><div><div class="sr-text">Export Backup (JSON)</div><div class="sr-sub">For cloud backup · ${(dbSize/1024).toFixed(1)} KB</div></div></div>
-        <div class="sr-right">↓</div>
-      </div>
-      <div class="settings-row" onclick="exportTXT()">
-        <div class="sr-left"><div class="sr-icon">📝</div><div><div class="sr-text">Export Backup (TXT)</div><div class="sr-sub">For manual backup · ${(dbSize/1024).toFixed(1)} KB</div></div></div>
-        <div class="sr-right">↓</div>
-      </div>
-      <div class="settings-row" onclick="exportXLSX()">
-        <div class="sr-left"><div class="sr-icon">📊</div><div><div class="sr-text">Export to Excel (.xlsx)</div><div class="sr-sub">${txCount} ${aiPlural(txCount,'transaction')} · 6 sheets</div></div></div>
-        <div class="sr-right">↓</div>
-      </div>
-      <div class="settings-row" onclick="exportCSV()">
-        <div class="sr-left"><div class="sr-icon">📄</div><div><div class="sr-text">Export to CSV</div><div class="sr-sub">Transactions only · for Google Sheets / Excel</div></div></div>
-        <div class="sr-right">↓</div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">Import</div>
-      <div class="settings-row" onclick="document.getElementById('import-file').click()">
-        <div class="sr-left"><div class="sr-icon">📥</div><div><div class="sr-text">Import Backup</div><div class="sr-sub">Merge or replace data</div></div></div>
-        <div class="sr-right">↑</div>
-      </div>
-      <input type="file" id="import-file" accept=".json,.txt" style="display:none" onchange="importJSON(event);this.value=''">
-      <div class="settings-row" onclick="document.getElementById('import-csv-file').click()">
-        <div class="sr-left"><div class="sr-icon">📄</div><div><div class="sr-text">Import from CSV</div><div class="sr-sub">Bulk import transactions from bank statement</div></div></div>
-        <div class="sr-right">↑</div>
-      </div>
-      <input type="file" id="import-csv-file" accept=".csv" style="display:none" onchange="importCSV(event);this.value=''">
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">Audit</div>
-      <div class="settings-row" onclick="openBankRecon()">
-        <div class="sr-left"><div class="sr-icon">🏦</div><div><div class="sr-text">Bank Reconciliation</div><div class="sr-sub">Compare app balance vs real bank balance</div></div></div>
-        <div class="sr-right">→</div>
-      </div>
-      ${/* PLS #223/#227: the scan runs on every render of this tab. It is READ-ONLY and cheap
-             (two array passes), so it is safe here — but never call it from a hot render path.
-             The typeof guard exists because this template is also reached during early boot,
-             before the function is defined. */''}
-      ${(()=>{ const g = (typeof scanInvestmentLedger==='function') ? scanInvestmentLedger() : [];
-        return `<div class="settings-row" onclick="openInvLedgerRepair()">
-        <div class="sr-left"><div class="sr-icon">${g.length?'⚠️':'✅'}</div><div><div class="sr-text">Investment Ledger Check</div><div class="sr-sub">${g.length ? g.length+' investment '+(g.length===1?'sale is':'sales are')+' missing from your totals' : 'All sold investments are counted'}</div></div></div>
-        <div class="sr-right">→</div>
-      </div>`; })()}
-      ${(db.reconciliations || []).length > 0 ? `
-      <div class="settings-row" onclick="openReconHistory()">
-        <div class="sr-left"><div class="sr-icon">📜</div><div><div class="sr-text">Reconciliation History</div><div class="sr-sub">${(db.reconciliations || []).length} past ${aiPlural((db.reconciliations || []).length,'check')}</div></div></div>
-        <div class="sr-right">→</div>
-      </div>` : ''}
-    </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="section-title">About</div>
-      <div class="settings-row" onclick="openWhatsNew()">
-        <div class="sr-left"><div class="sr-icon">✨</div><div><div class="sr-text">What's New</div><div class="sr-sub">v${APP_VERSION} · ${APP_VERSION_DATE}</div></div></div>
-        <div class="sr-right">→</div>
-      </div>
-      <div class="settings-row" onclick="openDiagnostics()">
-        <div class="sr-left"><div class="sr-icon">🔬</div><div><div class="sr-text">Diagnostics</div><div class="sr-sub">FX math tests · DB integrity · run before reporting bugs</div></div></div>
-        <div class="sr-right">→</div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-title">Danger Zone</div>
-      <div class="settings-row" onclick="confirmResetApp()" style="cursor:pointer">
-        <div class="sr-left"><div class="sr-icon" style="background:var(--red-bg)">⚠️</div><div><div class="sr-text" style="color:var(--red)">Reset App</div><div class="sr-sub">Clears all data permanently</div></div></div>
-      </div>
-    </div>
-  </div>`;
-}
 
 function exportJSON() {
   const blob = new Blob([JSON.stringify(db,null,2)], {type:'application/json'});
@@ -23397,7 +23353,7 @@ function openDriveSheet() {
       <button class="btn btn-ghost btn-full" onclick="loadFromDrive()">📥 Load from Drive</button>
     </div>
     <div class="settings-row" onclick="disconnectDrive()" style="cursor:pointer">
-      <div class="sr-left"><div class="sr-icon" style="background:var(--red-bg)">🔌</div><div><div class="sr-text" style="color:var(--red)">Disconnect Drive</div></div></div>
+      <div class="sr-left"><div class="sr-icon" style="background:var(--red-bg);color:var(--red)">${_ico('x',17)}</div><div><div class="sr-text" style="color:var(--red)">Disconnect Drive</div></div></div>
     </div>`}
   `);
 }
