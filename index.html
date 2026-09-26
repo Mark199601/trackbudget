@@ -111,6 +111,14 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .field-row-wrap select{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;cursor:pointer}
 /* big amount hero spacing refinements */
 .big-amt-wrap .big-amt-input{font-weight:600;letter-spacing:-1.5px}
+/* PLS #371 (his pick "C"): the currency sign sits right beside the number, no box, and a small line under it
+   says which currency and account the amount is in ("PGK · Kina Bank"). */
+.big-amt-wrap .big-amt-row{align-items:baseline!important;gap:6px;max-width:100%}
+.big-amt-wrap .big-amt-row .big-amt-curr{margin:0!important;vertical-align:baseline;font-size:30px;font-weight:600;color:var(--text3);line-height:1}
+.big-amt-wrap .big-amt-row .big-amt-input{width:auto;min-width:24px;max-width:calc(100vw - 120px);text-align:left;padding:0;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important}
+.big-amt-sub{font-size:12px;color:var(--text3);margin-top:6px;text-align:center}
+/* PLS #374: the Add transaction main button uses the same pill as the Revolut-style popups */
+#add-body .btn-primary.btn-full{height:50px;border-radius:999px!important;font-size:15px;font-weight:600;background:var(--accent)!important;box-shadow:none}
 
 /* ── UTILITY CLASSES — replaces common inline-style patterns ── */
 .u-flex{display:flex}
@@ -785,8 +793,8 @@ option{background:var(--bg3);color:var(--text)}
 .set-2p .lp-row.set-on .sr-icon{background:var(--accent)!important;color:#fff!important}
 .set-2p .set-back{display:none}
 /* PLS #365: phone Settings pages start right under the header (the old in-page title used to fill this gap) */
-.set-sub > .page-pad:first-child{padding-top:6px}
-.set-sub > .page-pad:first-child > .lp-sec:first-child{margin-top:4px}
+.set-page > .page-pad:first-child{padding-top:6px}
+.set-page > .page-pad:first-child > .lp-sec:first-child{margin-top:4px}
 .set-val{font-size:13px;color:var(--text3);text-align:right;white-space:nowrap;flex-shrink:0}
 .set-foot{font-size:11px;color:var(--text4);line-height:1.5;margin:8px 16px 0}
 .set-link{background:none;border:0;padding:4px 0;color:var(--accent);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
@@ -3592,7 +3600,7 @@ function attachSwipeDismiss(sheetId) {
       // Dismiss if dragged more than 25% OR fast flick down
       if (deltaY > sheetHeight * 0.25 || velocity > 0.6) {
         sheet.style.transform = '';
-        closeSheet(sheetId);
+        if (sheetId === 'add') _addUserClose(); else closeSheet(sheetId); // PLS #373
       } else {
         sheet.style.transform = '';
       }
@@ -3616,7 +3624,7 @@ function _rvApply(shell, body, isDlg, sheetId) {
           || /^(Cancel|Save|Add|Settle|Update|Confirm|Record|Create|Archive|Delete|Write off|Undo)/i.test(b.textContent.trim().replace(/^[^A-Za-z]+/, ''))));
   if (!pool.length) return;
   const T = b => b.textContent.trim().replace(/^[^A-Za-z]+/, '');
-  const isCancel = b => /^Cancel$/i.test(T(b));
+  const isCancel = b => /^(Cancel|Keep editing)$/i.test(T(b));
   const isDel = b => !isCancel(b) && (/\b(btn-danger|btn-warning)\b/.test(b.className) || /^(Archive|Delete|Write off|Undo|Remove)/i.test(T(b)));
   const pri = pool.filter(b => !isCancel(b) && !isDel(b) && (/\bbtn-primary\b/.test(b.className) || /^(Save|Add|Settle|Update|Confirm|Record|Create)/i.test(T(b))));
   const other = pool.filter(b => !isCancel(b) && !isDel(b) && !pri.includes(b));
@@ -3977,10 +3985,10 @@ function wireEvents() {
       if (arrow) arrow.style.transform = '';
     }
   });
-  document.getElementById('add-close').addEventListener('click', () => closeSheet('add'));
+  document.getElementById('add-close').addEventListener('click', () => _addUserClose()); // PLS #373
   document.getElementById('gen-close').addEventListener('click', () => closeSheet('gen'));
   document.getElementById('gen2-close').addEventListener('click', () => closeSheet('gen2'));
-  document.getElementById('add-overlay').addEventListener('click', () => closeSheet('add'));
+  document.getElementById('add-overlay').addEventListener('click', () => _addUserClose()); // PLS #373
   // PLS #367: a form popup closes only through Cancel or its own action -- a tap outside does nothing
   document.getElementById('gen-overlay').addEventListener('click', () => { if (!document.getElementById('gen-sheet').classList.contains('rv-shell')) closeSheet('gen'); });
   document.getElementById('gen2-overlay').addEventListener('click', () => { if (!document.getElementById('gen2-sheet').classList.contains('rv-shell')) closeSheet('gen2'); });
@@ -4888,6 +4896,12 @@ const APP_CHANGELOG = [
     '✨ The monthly summary is now its own page, Insights, in the sidebar (it was "AI Summary" inside Analytics)', // PLS #353
     '🗓 One month switcher everywhere: Month | Year plus month tabs on Insights, Analytics and Calendar. Swipe the months on your phone; on a computer you see the whole year', // PLS #358
     '🗓 The month switcher on Insights and Analytics now spans the full width; Needs attention sits right after the Summary', // PLS #357
+    '💊 Add transaction: the main button is a big pill, like the other popups', // PLS #374
+    '🛟 Add transaction asks before closing if you already typed something, so a stray tap does not lose it', // PLS #373
+    '🏷️ Add transaction: the button says what you are adding, like "Add expense", "Add income" or "Add transfer"', // PLS #372
+    '💱 Add transaction: the currency sign sits next to the amount, and a line under it shows the currency and account', // PLS #371
+    '🔁 Add transaction: every type shows its name, and switching type keeps the amount, date and notes you typed', // PLS #370
+    '🩹 Fixed a white strip down the left of Settings pages on the phone', // PLS #369
     '✍️ Forms read the same everywhere: "Save changes" to edit, "Add …" to add, plain titles and labels, no asterisks', // PLS #368
     '🪟 Forms open as rounded popups with big buttons at the bottom (Save, Cancel). A tap outside no longer closes them by accident', // PLS #367
     '🔤 Easier to read: no text smaller than 11px, fewer font sizes, and the last ALL CAPS labels are gone', // PLS #366
@@ -5759,22 +5773,23 @@ function wireQuickAddLongPress() {
 }
 
 
-function renderAddSheet() {
+function renderAddSheet() { const _r = _renderAddSheetInner(); try { _bigAmtDecorate(); } catch(e) {} return _r; } // PLS #371
+function _renderAddSheetInner() {
   const s = _addState;
   const body = document.getElementById('add-body');
 
   // Type list — Lend/Borrow excluded (use Loans page instead)
   const types = ['expense','income','shared','transfer','remittance','external-in','external-out'];
-  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance','external-in':'External In','external-out':'External Out'};
+  const typeLabels = {expense:'Expense',income:'Income',shared:'Shared',transfer:'Transfer',remittance:'Remittance','external-in':'External in','external-out':'External out'}; // PLS #370: every type shows its name
   const typeIcons  = {expense:'receipt',income:'cash',shared:'users',transfer:'transfer',remittance:'exchange','external-in':'inCircle','external-out':'outCircle'};
 
   // Horizontal scrollable pill row — single tap to switch type
-  const typePillsHTML = `<div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 12px 0;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+  const typePillsHTML = `<div id="add-type-row" style="display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;padding:0 0 12px 0;margin-bottom:12px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
     ${types.map(t => {
       const active = s.type === t;
-      return `<div onclick="setAddType('${t}')" style="display:inline-flex;align-items:center;gap:${active?'5px':'0'};padding:6px ${active?'11px':'9px'};background:${active?'var(--accent-bg)':'var(--bg2)'};border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:var(--r-full);cursor:pointer;font-size:12px;font-weight:${active?'600':'500'};color:${active?'var(--accent)':'var(--text2)'};white-space:nowrap;flex-shrink:0;-webkit-tap-highlight-color:transparent;letter-spacing:-0.1px;transition:all 0.15s">
+      return `<div onclick="setAddType('${t}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;white-space:nowrap;flex-shrink:0;background:${active?'var(--accent-bg)':'var(--bg2)'};border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:var(--r-full);cursor:pointer;font-size:12px;font-weight:${active?'600':'500'};color:${active?'var(--accent)':'var(--text2)'};white-space:nowrap;flex-shrink:0;-webkit-tap-highlight-color:transparent;letter-spacing:-0.1px;transition:all 0.15s">
         <span style="display:inline-flex;align-items:center">${_ico(typeIcons[t],15)}</span>
-        ${active?`<span>${typeLabels[t]}</span>`:''}
+        <span>${typeLabels[t]}</span>
       </div>`;
     }).join('')}
   </div>`;
@@ -5887,10 +5902,55 @@ function renderUnifiedAmountForm() {
     <!-- Currency hidden — auto-derived -->
     <select id="add-currency" style="display:none">${currOpts}</select>
 
-    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-top:12px;margin-bottom:12px">Save transaction</button>
+    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-top:12px;margin-bottom:12px">${s.type === 'income' ? 'Add income' : 'Add expense'}</button><!-- PLS #372 -->
   </div>`;
 }
 
+// -- PERSONAL LOGIC SET #371 -- Add transaction amount hero: "₱ 250" side by side (the input is sized to its
+// number so the sign stays next to it) and a caption with the currency + account being used.
+function _bigAmtFit(inp) {
+  // Measure with a real span in the same font settings (tabular digits, letter-spacing), not a canvas guess
+  const cs = getComputedStyle(inp);
+  const sp = _bigAmtFit._s || (_bigAmtFit._s = Object.assign(document.createElement('span'), { style: 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0' }));
+  if (!sp.isConnected) document.body.appendChild(sp);
+  for (const k of ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','fontVariantNumeric','fontFeatureSettings']) sp.style[k] = cs[k];
+  sp.textContent = String(inp.value || inp.placeholder || '0');
+  inp.style.width = Math.ceil(Math.max(28, sp.getBoundingClientRect().width + 18)) + 'px'; // + room the number box keeps for itself
+}
+function _bigAmtDecorate() {
+  document.querySelectorAll('#add-body .big-amt-input').forEach(inp => {
+    const row = inp.parentElement; row.classList.add('big-amt-row');
+    const hero = row.parentElement;
+    let sub = hero.querySelector(':scope > .big-amt-sub');
+    if (!sub) { sub = document.createElement('div'); sub.className = 'big-amt-sub'; hero.appendChild(sub); }
+    const acctSel = ['add-account','tf-from','rem-from-acct','ext-account'].map(id => document.getElementById(id)).find(Boolean);
+    const curSel  = ['tf-currency','ext-currency','add-currency'].map(id => document.getElementById(id)).find(e => e && e.offsetParent);
+    const acct = acctSel && db.accounts.find(a => a.id === acctSel.value);
+    const cur = (curSel && curSel.value) || (acct && acct.currency) || _homeBase();
+    sub.textContent = acct ? `${cur} · ${acct.name}` : `${cur} · choose an account`;
+    _bigAmtFit(inp);
+    if (!hero._npTap) { hero._npTap = true; hero.style.cursor = 'text'; // the whole amount area opens the keypad, not just the digits
+      hero.addEventListener('click', e => { if (e.target !== inp && !e.target.closest('button,select,a')) { e.stopPropagation(); /* else the "tap outside closes the keypad" handler shuts it again */ if (typeof NP_IS_MOBILE !== 'undefined' && NP_IS_MOBILE) npOpen(inp); else inp.focus(); } }); }
+  });
+}
+document.addEventListener('input', e => { if (e.target && e.target.classList && e.target.classList.contains('big-amt-input')) _bigAmtFit(e.target); });
+document.addEventListener('change', e => { if (e.target && /^(add-account|tf-from|rem-from-acct|ext-account|tf-currency|ext-currency|add-currency)$/.test(e.target.id || '')) setTimeout(_bigAmtDecorate, 0); });
+// -- PERSONAL LOGIC SET #373 -- Add transaction: once something is typed (an amount, notes or a category),
+// closing it by the X, a tap outside or a swipe down asks first, so a stray tap doesn't lose the entry.
+// Saving still closes it straight away, and an untouched form closes like before.
+function _addIsDirty() {
+  if (!document.getElementById('add-sheet')?.classList.contains('open')) return false;
+  const amt = [...document.querySelectorAll('#add-body .big-amt-input')].some(i => parseFloat(i.value) > 0);
+  const notes = ['add-notes','tf-notes','rem-notes','ext-notes'].some(id => (document.getElementById(id)?.value || '').trim());
+  return amt || notes || !!(_addState && _addState.catId);
+}
+function _addUserClose() {
+  if (!_addIsDirty()) { closeSheet('add'); return; }
+  window._rvPending = 'dlg'; // same rounded popup + pill buttons as the forms
+  openDlg('Discard this transaction?', `<div style="font-size:13px;color:var(--text2);line-height:1.5">What you typed will be lost.</div>`,
+    `<button class="btn btn-ghost" onclick="closeDlg()">Keep editing</button>
+     <button class="btn btn-danger" onclick="closeDlg();closeSheet('add')">Discard</button>`);
+}
 function updateBigAmtCurr() {
   const acctId = document.getElementById('add-account')?.value;
   const acct = db.accounts.find(a=>a.id===acctId);
@@ -5899,6 +5959,7 @@ function updateBigAmtCurr() {
 }
 
 function updateAcctDisplay() {
+  setTimeout(_bigAmtDecorate, 0); // PLS #371: caption follows the chosen account
   const acctId = document.getElementById('add-account')?.value;
   const acct = db.accounts.find(a=>a.id===acctId);
   const dispEl = document.getElementById('add-acct-display');
@@ -6034,7 +6095,7 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-bottom:12px">Save transaction</button>
+    <button class="btn btn-primary btn-full" onclick="submitAddTx()" style="margin-bottom:12px">Add shared expense</button><!-- PLS #372 -->
   </div>`;
 }
 
@@ -6044,6 +6105,7 @@ function setAddType(type) {
   const arrow = document.getElementById('type-dd-arrow');
   if (menu) menu.style.display = 'none';
   if (arrow) arrow.style.transform = '';
+  const _keep = _addCaptureCommon(); // PLS #370: switching type keeps what you already typed
   _addState.type = type;
   _addState.step = 1;
   _addState.catId = null;
@@ -6051,6 +6113,41 @@ function setAddType(type) {
   window._catGroupOpen = null;
   _sharedPersons = [];
   renderAddSheet();
+  _addRestoreCommon(_keep);
+  const _row = document.getElementById('add-type-row'); // keep the chosen type in view
+  if (_row) { const on = [..._row.children].find(c => (c.getAttribute('onclick') || '').includes(`'${type}'`)); if (on) { const r = _row.getBoundingClientRect(), b = on.getBoundingClientRect(); if (b.left < r.left) _row.scrollLeft += b.left - r.left - 4; else if (b.right > r.right) _row.scrollLeft += b.right - r.right + 4; } }
+}
+// -- PERSONAL LOGIC SET #370 -- Add transaction: changing the type (Expense -> Income, -> Transfer...) only swaps
+// the form. The amount, currency, account, date, time and notes you already entered carry over to the
+// new form's matching fields. Category is cleared on purpose (expense and income categories differ).
+const _ADD_FIELDS = {
+  amount:   ['add-amount','add-total-bill','tf-amount','rem-amount','ext-amount'],
+  currency: ['add-currency','tf-currency','ext-currency'],
+  account:  ['add-account','tf-from','rem-from-acct','ext-account'],
+  date:     ['add-date','tf-date','rem-date','ext-date'],
+  time:     ['add-time','tf-time','rem-time','ext-time'],
+  notes:    ['add-notes','tf-notes','rem-notes','ext-notes'],
+};
+function _addCaptureCommon() {
+  const out = {};
+  for (const [k, ids] of Object.entries(_ADD_FIELDS)) {
+    for (const id of ids) { const el = document.getElementById(id); if (el && el.type !== 'hidden' && String(el.value || '').trim() !== '') { out[k] = el.value; break; } }
+  }
+  return out;
+}
+function _addRestoreCommon(v) {
+  if (!v) return;
+  const order = ['currency','account','date','time','notes','amount']; // currency first: it can reset the amount box
+  for (const k of order) {
+    if (v[k] === undefined) continue;
+    const el = _ADD_FIELDS[k].map(id => document.getElementById(id)).find(e => e && e.type !== 'hidden');
+    if (!el) continue;
+    if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v[k])) continue; // that account/currency isn't offered here
+    if (String(el.value) === String(v[k])) continue;
+    el.value = v[k];
+    el.dispatchEvent(new Event('input', { bubbles:true })); el.dispatchEvent(new Event('change', { bubbles:true }));
+    if ((k === 'date' || k === 'time') && typeof dtUpdate === 'function') { try { dtUpdate(el.id, el.type); } catch(e) {} } // PLS #374: pass the type, else a date is formatted as a time
+  }
 }
 
 function renderCatPicker(forType) {
@@ -6435,7 +6532,7 @@ function renderRemittanceForm() {
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full" onclick="submitRemittance()">Save remittance</button>
+    <button class="btn btn-primary btn-full" onclick="submitRemittance()">Add remittance</button>
   </div>`;
 }
 
@@ -6745,7 +6842,7 @@ function renderExternalForm(type) {
     <!-- Currency hidden — auto from account -->
     <select id="ext-currency" style="display:none">${currOpts}</select>
 
-    <button class="btn btn-primary btn-full" onclick="submitExternal('${type}')">Save</button>
+    <button class="btn btn-primary btn-full" onclick="submitExternal('${type}')">${type === 'external-in' ? 'Add external in' : 'Add external out'}</button>
   </div>`;
 }
 
@@ -6923,7 +7020,7 @@ function renderTransferForm() {
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full" onclick="submitTransfer()">Save transfer</button>
+    <button class="btn btn-primary btn-full" onclick="submitTransfer()">Add transfer</button>
   </div>`;
 }
 
@@ -20356,7 +20453,7 @@ function renderSettings() {
         content = `<div class="set-2p"><div class="set-L">${renderSettingsHome()}</div><div class="set-R">`
           + `<div class="page-pad set-top" style="padding-bottom:0"><div class="set-h1" style="font-size:18px">${_SET_PAGES[_settingsTab]}</div></div>` + page() + `</div></div>`;
       } else content = page
-        ? `<div class="set-sub">${page()}</div>` // PLS #364: page name + back chevron live in the header now; #365 tighter top
+        ? `<div class="set-page">${page()}</div>` // PLS #369: was "set-sub", a class name already used for grouped rows (it painted a white strip down the left) // PLS #364: page name + back chevron live in the header now; #365 tighter top
         : renderSettingsHome();
     } catch(tabErr) {
       console.error('[TB] Settings page "' + _settingsTab + '" failed:', tabErr);
