@@ -619,26 +619,9 @@ option{background:var(--bg3);color:var(--text)}
 @media(max-width:640px){.ov-row3,.ov-heroA{grid-template-columns:1fr}.ov-heroA>.ov-tall{grid-column:auto;grid-row:auto}.ov-row4 .kpi-val{padding-right:58px}.ov-row4 .metric-value{font-size:15px}.ov-row4 .kpi-spark svg{width:52px;height:17.3px}}
 .ov-row3 .stat-month-grid,.ov-heroA .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:480px){.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card{padding:12px}}
-.ov-mas{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;grid-auto-flow:dense;align-items:start;position:relative}
-.ov-mas>div{min-width:0;grid-column:span 12}
-.ov-mas>div>.card{box-sizing:border-box}
-.ov-mas>div.ov-c12{grid-column:span 12!important}
-.ov-mas .card{margin-bottom:0!important;box-sizing:border-box}
-.ov-mas .metric-card{margin-bottom:0!important}
-@media(min-width:640px){.ov-mas>div{grid-column:span 6}}
-@media(min-width:900px){.ov-mas>div{grid-column:span 6}.ov-mas>div.ov-c4{grid-column:span 4}.ov-mas>div.ov-c3{grid-column:span 3}}
-.ov-mas.ov-packed{display:block}
-.ov-mas.ov-packed>div{position:absolute!important;margin:0!important}
 /* cards hug their own content — no height:100% stretch, so a short card can never show an
    internal void; masonry packs the next card tight beneath it instead. */
-.ov-mas .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(min-width:760px){.ov-mas .stat-month-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:480px){.ov-mas .card{padding:12px}}
 /* ── PLS #168: dense PC overview — one masonry for everything; KPI strip on top ── */
-.ov-mas .card,.ov-mas .metric-card{border-radius:var(--r-lg)!important;background:#15151f!important;border:1px solid #232334!important;box-shadow:inset 0 1px 0 0 rgba(255,255,255,0.04)!important;transition:border-color .15s,background .15s}
-.ov-mas .card:hover,.ov-mas .metric-card:hover{border-color:#2d2d4a!important;background:#1a1a24!important}
-[data-theme="light"] .ov-mas .card,[data-theme="light"] .ov-mas .metric-card{background:var(--bg2)!important;border:1px solid var(--border)!important;box-shadow:none!important}
-[data-theme="light"] .ov-mas .card:hover,[data-theme="light"] .ov-mas .metric-card:hover{background:var(--bg2)!important;border-color:var(--border2)!important}
 .ov-acc-hdr{display:flex;align-items:center;gap:10px;padding:14px 14px;cursor:pointer;user-select:none}
 .ov-acc-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
 .ov-acc-title{flex:1;font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
@@ -1063,6 +1046,7 @@ option{background:var(--bg3);color:var(--text)}
 .fs-row{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
 .fs-feed > * + *{box-shadow:inset 64px 0 0 var(--bg3),inset 0 1px 0 var(--border)}
 .fs-rw{display:flex;align-items:center}
+.be-card{padding:12px 14px;margin-top:8px;border:1px dashed var(--border2)} /* PLS #350 edit-list bucket card */
 .fs-mo{display:inline-block;padding:2px 9px;border-radius:var(--r-full);font-size:11px;font-weight:600;margin:2px}.fs-rw > .fs-row{flex:1;min-width:0}
 .fs-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
 .fs-t{font-size:13px;font-weight:600;color:var(--text)}.fs-s{font-size:11px;color:var(--text3);margin-top:2px}.fs-a{font-size:13px;font-weight:600;white-space:nowrap}
@@ -2245,6 +2229,16 @@ let db = (() => {
     parsed.onboarded = true;
   }
   try {
+    // PLS #350: one-time tidy of auto-notes written before #347 -- "(0 full + 1 partial)" reads as
+    // "(1 partial)". Only batch parents, only that exact generated shape; runs on every load but
+    // changes nothing once clean, so it is safe to repeat and never touches a note you typed.
+    for (const list of [parsed.transactions, parsed.archivedTransactions]) {
+      if (!Array.isArray(list)) continue;
+      for (const t of list) {
+        if ((t.isBatchSettlement || t.isBatchReimbSettlement) && typeof t.notes === 'string')
+          t.notes = t.notes.replace(/^((?:Batch settled with|Batch reimbursement from) .+) \(0 full \+ (\d+) partial\)$/, '$1 ($2 partial)');
+      }
+    }
     // Ensure new fields exist
     if (!parsed.fxHistory) parsed.fxHistory = {};
         // ── PERSONAL LOGIC SET #8 ── inside IIFE, db is not yet initialized — cannot call _homeBase().
@@ -3080,7 +3074,19 @@ function txCategoryDisplay(tx) {
   if (tx.isDividend)             return {icon:'💵', name:'Dividend'};
   // PLS #299: a sale below cost points down. The up-chart on a loss read as a gain at a glance.
   if (tx.isInvestmentReturn)     return {icon: Number(tx.realizedGL) < 0 ? '\u{1F4C9}' : '📈', name:'Investment Return'};
-  return getCategoryDisplay(tx.categoryId);
+  // PLS #350: an automatic entry whose category no longer exists (old versions stamped ids such as
+  // 'sc-reimbreceived' that were later removed) is named by what it is, not "Deleted Category". A
+  // real, existing category always wins; this only replaces the missing-category fallback.
+  const _c = getCategoryDisplay(tx.categoryId);
+  const _missing = !tx.categoryId || /^(Deleted Category|Uncategorized)$/.test(_c.name || '');
+  if (_missing) {
+    if (tx.isAutoReimb)    return {icon:'💰', name:'Reimbursement Received'};
+    if (tx.isCorrection || tx.type === 'correction') return {icon:'⚖️', name:'Balance Correction'};
+    if (tx.isAutoForex)    return {icon:'💱', name:tx.type === 'income' ? 'Forex Gain' : 'Forex Loss'};
+    if (tx.isAutoFee)      return {icon:'🧾', name:'Remittance Fee'};
+    if (tx.isSettlement && tx.parentId) return {icon:'🤝', name:'Loan Payment'};
+  }
+  return _c;
 }
 
 function getAccountDisplay(acctId) {
@@ -3511,11 +3517,6 @@ function showBucketInfo(key) {
     alloc: ['Allocation type', '🔒 <b>Fixed</b> — a locked amount. Counted as its % of the target and excluded from auto-distribute.<br><br>🌊 <b>Dynamic</b> — fluid. Shares the remaining pool and rebalances to 100% with other Dynamic buckets.']
   };
   const e = m[key]; if (e) showInfo(e[0], e[1]);
-}
-function showAnalyticsTabInfo() {
-  const reg = window._TAB_REGISTRY || {};
-  const t = reg[_analyticsTab] || reg.overview;
-  if (t) showInfo(t.icon + ' ' + t.label, t.desc || 'No description.');
 }
 
 // ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap (i) icon shows plain-English definition
@@ -4700,6 +4701,9 @@ const APP_VERSION_DATE = 'September 2026';
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.1.9', date: 'September 2026', changes: [
+    '🧾 Analytics reports share one headline size and drop the ALL CAPS; Investments and Cashflow use the same rows and tiles as the other reports (Overview unchanged)', // PLS #350
+    '🔧 Old batch notes lose the "0 full", every automatic entry shows a real name, bucket editing is tidier, and PC lists no longer stretch', // PLS #350
+    '🏷️ Batch reimbursements, loan settlements and other automatic entries show their real name in the detail view instead of "Deleted Category"', // PLS #349
     '🧹 Headings and labels outside Analytics drop the ALL CAPS, filter chips share one style, and "txns" is spelled out', // PLS #348
     '✏️ Forms read the same everywhere: plain labels, calmer date and time fields, dates with the year, and clearer wording. A part-payment on a loan now shows what it paid, not the whole loan', // PLS #347
     '💳 Loan, investment, reimbursement, account, installment and transaction details have a cleaner look: a progress ring, quick actions, and dates that always show the year', // PLS #339-#341
@@ -7496,7 +7500,7 @@ function renderTxLog() {
       const toAcct = db.accounts.find(a=>a.id===t.toAccountId);
       const acctName = (acct?.name || fromAcct?.name || '').toLowerCase();
       const toAcctName = (toAcct?.name || '').toLowerCase();
-      const cat = getCategoryDisplay(t.categoryId);
+      const cat = txCategoryDisplay(t); // PLS #349
       const catName = (cat?.name || '').toLowerCase();
       const subName = (cat?.subName || '').toLowerCase();
       // Numeric match: tolerance of ±0.5 for amount comparisons
@@ -8006,9 +8010,11 @@ function openTxDetail(txId) {
   const acct = tx.type==='transfer' ? null : getAccountDisplay(tx.accountId);
 
   // Override label for auto-children with dedicated display
-  const dispCat = (tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain || tx.isReimbSettlementLoss)
-    ? txCategoryDisplay(tx)
-    : cat;
+  // PLS #349: use txCategoryDisplay for every transaction (it falls back to the plain category). Only
+  // gain/loss rows used it, so a batch reimbursement, loan settlement, write-off, investment fund or
+  // dividend -- none of which carries a category -- read "Deleted Category" here while the list
+  // already showed "Reimbursement Received".
+  const dispCat = txCategoryDisplay(tx);
 
   let rows = '';
   // -- PERSONAL LOGIC SET #260 -- A write-off is not an ordinary transaction: its amount, its date
@@ -8168,8 +8174,8 @@ function openTxDetail(txId) {
       // Find source info from fxHistory
       const info = getSnapshotInfo(tx.currency, tx.date);
       const srcIcon = info.source === 'remittance' ? '📤' : info.source === 'manual' ? '✏️' : info.source === 'baseline' ? '🌱' : '📸';
-      const srcLabel = info.source === 'remittance' ? `from ${info.sourceDate} remittance` :
-                       info.source === 'manual' ? `manual entry ${info.sourceDate||''}` :
+      const srcLabel = info.source === 'remittance' ? `from ${fmtDFull(info.sourceDate)} remittance` : // PLS #349: not ISO
+                       info.source === 'manual' ? `manual entry${info.sourceDate ? ' ' + fmtDFull(info.sourceDate) : ''}` :
                        info.source === 'baseline' ? 'baseline' : '';
       fxBadge = `<div style="margin-top:12px"><div class="form-label">FX Snapshot</div>
         <div class="fx-snapshot-badge" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="closeDlg();nav('settings');setTimeout(()=>setSettingsTab('fx'),50)">
@@ -8281,7 +8287,7 @@ function openTxDetail(txId) {
     fsHeadHTML = _fsHead({ badge:_ico('transfer', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:null, title:'Transfer',
       sub:`${_esc(fromAcctD.name || '')} → ${_esc(toAcctD.name || '')} · ${fmtDFull(tx.date)}`,
       hero:fmt(tx.amount, fromCurr), heroCol:'var(--text)',
-      heroLbl:isCross ? `→ ${fmt(toAmt, toCurr)} · 1 ${foreignCurr} = ${sym(home)}${fmtRate(actualRate)}` : '' });
+      heroLbl:isCross ? `→ ${fmt(toAmt, toCurr)} · 1 ${foreignCurr} = ${sym(home)}${(+actualRate.toFixed(4)).toLocaleString('en-US',{maximumFractionDigits:4})}` : '' }); // PLS #350: header rounds to 4dp (a derived rate printed 15 digits); full precision stays on the Rates page, #109
   } else {
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${dispCat.icon}</div>
@@ -9768,11 +9774,11 @@ function openTxArchiveSheet() {
   }
 
   function buildParentRow(tx) {
-    const cat = getCategoryDisplay(tx.categoryId);
+    const cat = txCategoryDisplay(tx); // PLS #349
     const {cls, str} = txAmountDisplay(tx);
     const children = all.filter(c => c.cascadedFrom === tx.id);
     const childRows = children.map(c => {
-      const cCat = getCategoryDisplay(c.categoryId);
+      const cCat = txCategoryDisplay(c); // PLS #349
       const {cls:cCls, str:cStr} = txAmountDisplay(c);
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 44px;border-bottom:1px solid var(--border);opacity:0.7">
         <span style="font-size:13px">${cCat?.icon||'↳'}</span>
@@ -10490,7 +10496,7 @@ function confirmReimbSettlement(person) {
   const parentTxId = 'tx-'+genId();
   const fullyPaid = settledNow.filter(s=>s.full).length;
   const partialPaid = settledNow.filter(s=>!s.full).length;
-  const parentNotes = notes || `Batch reimbursement from ${person} (${fullyPaid} full${partialPaid?` + ${partialPaid} partial`:''})`;
+  const parentNotes = notes || `Batch reimbursement from ${person} (${[fullyPaid ? fullyPaid + ' full' : '', partialPaid ? partialPaid + ' partial' : ''].filter(Boolean).join(' + ')})`; // PLS #350: no "0 full" (same as #347 for loans)
   const primaryTxId = settledNow[0]?.entry.tx.id || entries[0].tx.id;
   // DEBUG_SCANNER_NOTE: this isAutoReimb tx is the BATCH PARENT (isBatchReimbSettlement:true),
   // NOT a child. It legitimately credits the account with the actual cash received (e.g. +K200).
@@ -14175,7 +14181,7 @@ function renderAnalytics() {
   // Tap the title to open a categorized bottom sheet for tab switching.
   // ── PERSONAL LOGIC SET #220 ── The `section` values below are NOT arbitrary labels — they are
   // the DIRECTION of money, and they must stay in sync with the `sections` array in
-  // openAnalyticsPicker(); a value with no matching section id silently drops that tab out of the
+  // Analytics list; a value with no matching section id silently drops that tab out of the
   // picker entirely. 'in' = money arriving · 'out' = money leaving · 'patterns' = views that read
   // BOTH sides over time. Income used to sit in 'spending', which read as if earnings were a kind
   // of expense; Trends/YoY/Calendar/By Day sat there too though they describe both directions;
@@ -14222,14 +14228,6 @@ function renderAnalytics() {
     return;
   }
   const tabsHTML = ''; // PLS #317: the report's name is in the header now; the dropdown pill is gone
-  const _legacyPicker = `<div class="analytics-picker" onclick="openAnalyticsPicker()">
-    <div class="analytics-picker-inner">
-      <span class="analytics-picker-icon">${currTab.icon}</span>
-      <span class="analytics-picker-label">${currTab.label}</span>
-      <span onclick="event.stopPropagation();showAnalyticsTabInfo()" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);opacity:0.45;margin-left:5px;display:inline-flex;align-items:center;vertical-align:middle;flex-shrink:0;text-transform:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4.5"/><circle cx="12" cy="7.8" r="0.6" fill="currentColor" stroke="currentColor" stroke-width="1.2"/></svg></span>
-      <svg width="10" height="6" viewBox="0 0 12 8" fill="none" style="margin-left:6px;opacity:0.6"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-  </div>`;
   let content = '';
   if (_analyticsTab==='overview') content = renderAnalyticsOverview();
   else if (_analyticsTab==='calendar') content = renderAnalyticsCalendar();
@@ -14368,45 +14366,6 @@ function _analyticsHeader() {
 // ── PERSONAL LOGIC SET #89 ── iOS Health-style analytics picker sheet.
 // Tap header → opens bottom sheet → categorized list of all 17 tabs.
 // Tap any item → closes sheet, swaps content.
-function openAnalyticsPicker() {
-  const reg = window._TAB_REGISTRY || {};
-  // -- PERSONAL LOGIC SET #220 -- Analytics picker regrouped. Income used to sit under
-  // "Spending", which read as if earnings were a kind of expense. Groups now follow the
-  // direction of money: Money In / Money Out / Patterns. Trends, Year-over-Year, Calendar
-  // and By Day are pattern views over BOTH sides, so they no longer live under Spending.
-  // Subscriptions moved People -> Money Out (a recurring expense, not a person).
-  const sections = [
-    { id:'home',     title:'',                 keys:['overview','aisummary'] },
-    { id:'in',       title:'Money In',         keys:['income','people'] },
-    { id:'out',      title:'Money Out',        keys:['spending'] },
-    { id:'patterns', title:'Patterns',         keys:['cashflow','calendar','dayofweek','trends','yoy'] },
-    { id:'wealth',   title:'Wealth',           keys:['wealth','investments','accthealth'] },
-    { id:'currency', title:'Currency',         keys:['forex','crosscurr','external'] },
-  ];
-  let html = `<div style="padding:4px 0;font-family:var(--font)">`;
-  sections.forEach((sec, secIdx) => {
-    // ── PERSONAL LOGIC SET #90 ── Visual divider before each non-first section
-    // for clear category separation (Money / Spending / People / Wealth / Other).
-    if (sec.title && secIdx > 0) {
-      html += `<div style="height:1px;background:var(--border);margin:8px 16px"></div>`;
-    }
-    if (sec.title) {
-      html += `<div style="font-size:13px;font-weight:700;color:var(--text);padding:14px 16px 6px;letter-spacing:-0.1px">${sec.title}</div>`;
-    }
-    sec.keys.forEach(k => {
-      const t = reg[k];
-      if (!t) return;
-      const active = _analyticsTab === k;
-      html += `<div onclick="pickAnalyticsTab('${k}')" style="display:flex;align-items:center;gap:10px;padding:8px 16px 8px ${sec.title?'32px':'16px'};cursor:pointer;${active?'background:var(--accent-bg)':''};transition:background 0.12s">
-        <span style="font-size:14px;width:18px;text-align:center">${t.icon}</span>
-        <span style="flex:1;font-size:12px;color:var(--text2);font-weight:${active?'600':'400'};letter-spacing:-0.1px">${t.label}</span>
-        ${active?`<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
-      </div>`;
-    });
-  });
-  html += `</div>`;
-  openSheet('gen', 'Choose analytics view', html);
-}
 
 function pickAnalyticsTab(k) {
   closeSheet('gen');
@@ -14532,15 +14491,15 @@ function renderAnalyticsCalendar() {
   const monthCount = Object.values(byDate).reduce((s, d) => s + d.count, 0);
   html += `<div class="card" style="margin-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:8px;text-align:center">
     <div>
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Income</div>
+      <div style="font-size:10px;color:var(--text3)">Income</div>
       <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(monthIncome, dc)}</div>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Expense</div>
+      <div style="font-size:10px;color:var(--text3)">Expense</div>
       <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(monthExpense, dc)}</div>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase">Txs</div>
+      <div style="font-size:10px;color:var(--text3)">Txs</div>
       <div style="font-family:var(--mono);font-size:13px;font-weight:600">${monthCount}</div>
     </div>
   </div>`;
@@ -14625,7 +14584,7 @@ function renderAnalyticsCalendar() {
       <span style="text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)">${val}</span>${sub?`<span style="font-size:10.5px;color:var(--text4);font-family:var(--mono);display:block">${sub}</span>`:''}</span>
     </div>`;
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Month rhythm</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;padding:12px 0 2px">Month rhythm</div>
       ${row('Days you spent', `${spendDays.length} of ${daysInMonth}`, `${quietDays} quiet day${quietDays===1?'':'s'}`)}
       ${row('Cost of a spending day', fmt(perSpendDay, dc), `spread over every day it is ${fmt(perCalendarDay, dc)}`)}
       ${row('Heaviest day', fmt(byDate[peakKey].expense, dc), `${fmtD(peakKey)} · ${totalSpent>0?((byDate[peakKey].expense/totalSpent)*100).toFixed(0):0}% of the month`)}
@@ -17525,12 +17484,12 @@ function renderAnalyticsSpending() {
   return `<div class="page-pad">
     ${segmentedHTML}
     <div style="background:var(--bg2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;border:1px solid var(--border)">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} EXPENSES — ${periodLabel.toUpperCase()}</div>
+      <div style="font-size:10px;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} EXPENSES — ${periodLabel.toUpperCase()}</div>
       <div style="font-size:22px;font-weight:600;color:var(--red);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
       ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:10px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
-    <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Category · ${sorted.length}</div>
+    <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px">By Category · ${sorted.length}</div>
     <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">${bars.join('')}</div>
     ${renderInlineInsights(['velocity','anomaly','atm'])}
   </div>`;
@@ -17705,7 +17664,7 @@ function renderAnalyticsIncome() {
   return `<div class="page-pad">
     ${segmentedHTML}
     <div style="background:var(--bg2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;border:1px solid var(--border)">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} INCOME — ${periodLabel.toUpperCase()}</div>
+      <div style="font-size:10px;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} INCOME — ${periodLabel.toUpperCase()}</div>
       <div style="font-size:22px;font-weight:600;color:var(--green);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
       ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:10px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:10px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
@@ -17737,7 +17696,7 @@ function renderAnalyticsIncome() {
       // "best/worst" showing the same figure twice. Only surface them once there are 2+.
       const multi = n >= 2;
       return `<div style="background:var(--bg2);border-radius:var(--r-md);padding:4px 14px 10px;margin-bottom:16px;border:1px solid var(--border)">
-        <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;padding:12px 0 2px">Income profile${multi?` · ${n} months`:''}</div>
+        <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;padding:12px 0 2px">Income profile${multi?` · ${n} months`:''}</div>
         ${multi ? row('Monthly average', fmt(avg, view), `over ${n} months`) : ''}
         ${multi ? row('Best / worst month', `${_fmtK(hi, view)} / ${_fmtK(lo, view)}`, `spread ${_fmtK(hi-lo, view)}`) : ''}
         ${multi ? row('Stability', `<span style="color:${steadyColor}">${cv.toFixed(0)}% swing</span>`, steady) : ''}
@@ -17746,7 +17705,7 @@ function renderAnalyticsIncome() {
         ${sorted.length > 1 ? row('Sources beyond the top', `${(100-topShare).toFixed(0)}%`, `${sorted.length-1} other source${sorted.length===2?'':'s'}`) : ''}
       </div>`;
     })()}
-    <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Source · ${sorted.length}</div>
+    <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px">By Source · ${sorted.length}</div>
     <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">${bars.join('')}</div>
   </div>`;
 }
@@ -17978,7 +17937,7 @@ function renderSpendingHeatmap(disp) {
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:2px">Spending Heatmap</div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:2px">Spending heatmap</div>
         <div style="font-size:11px;color:var(--text3)">Last 12 months · darker = higher spend</div>
       </div>
       <div style="display:flex;gap:14px;font-size:10px">
@@ -18201,13 +18160,13 @@ function renderAnalyticsWealth() {
     ? Math.max(0, Math.min(100, totalAssets / (totalAssets + Math.abs(totalLiab)) * 100))
     : 100;
   const nwAbs = Math.abs(nw);
-  const nwSize = nwAbs > 99999999 ? 22 : nwAbs > 9999999 ? 26 : 30;
+  const nwSize = nwAbs > 99999999 ? 20 : 22; // PLS #350: one hero size across Analytics reports (was 22/26/30)
 
   return `<div style="padding:0 0 40px;background:var(--bg)">
 
     <!-- Hero NW -->
     <div style="text-align:center;padding:22px 16px 18px">
-      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px;letter-spacing:-0.1px;text-transform:uppercase">Total Net Worth</div>
+      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">Total net worth</div>
       <div style="font-size:${nwSize}px;font-weight:700;color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums">${fmt(fromPhp(nw,disp),disp)}</div>
       <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${nwPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:var(--r-full);font-size:10px;font-weight:600;color:${nwPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
         ${nwPositive?'▲':'▼'} ${(ratio).toFixed(1)}% asset ratio
@@ -18236,13 +18195,13 @@ function renderAnalyticsWealth() {
 
     <!-- Assets section -->
     <div style="padding:0 12px;margin-bottom:22px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px;padding:0">Assets · ${assetGroups.length}</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px;padding:0">Assets · ${assetGroups.length}</div>
       ${iosGroupedList(assetGroups, 'var(--green)', totalAssets, 'a')}
     </div>
 
     <!-- Liabilities section -->
     ${liabGroups.length > 0 ? `<div style="padding:0 12px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px;padding:0">Liabilities · ${liabGroups.length}</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px;padding:0">Liabilities · ${liabGroups.length}</div>
       ${iosGroupedList(liabGroups, 'var(--red)', Math.abs(totalLiab), 'l')}
     </div>` : ''}
 
@@ -18319,13 +18278,14 @@ function renderAnalyticsInvestments() {
     const glClass = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
     const glPct = v.invested > 0 ? (gl / v.invested * 100) : 0;
     const allocPct = totalCurrent > 0 ? (v.total / totalCurrent * 100) : 0;
-    return `<div class="card" style="padding:12px;border-left:3px solid ${color}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600">${t}</div>
-        <div style="font-size:11px;color:var(--text4)">${v.count} · ${allocPct.toFixed(0)}%</div>
-      </div>
-      <div style="font-family:var(--mono);font-size:14px;font-weight:600">${fmt(v.total, dispCurr)}</div>
-      ${gl !== 0 ? `<div class="${glClass}" style="font-size:11px;font-family:var(--mono);margin-top:2px">${fmt(gl, dispCurr, true)} (${gl > 0 ? '+' : ''}${glPct.toFixed(1)}%)</div>` : `<div style="font-size:11px;color:var(--text4);margin-top:2px">No change</div>`}
+    // PLS #350: allocation as grouped rows (was boxed cards with a coloured left border)
+    return `<div class="lp-row" style="cursor:default">
+      <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+      <div style="flex:1;min-width:0"><div class="lp-name">${_esc(t)}</div>
+        <div class="lp-meta">${v.count} · ${allocPct.toFixed(0)}% of portfolio</div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:5px;overflow:hidden;max-width:220px"><div style="height:100%;width:${allocPct.toFixed(1)}%;background:${color}"></div></div></div>
+      <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt(v.total, dispCurr)}</div>
+        <div class="lp-amt2 ${glClass}">${gl !== 0 ? `${fmt(gl, dispCurr, true)} (${gl > 0 ? '+' : ''}${glPct.toFixed(1)}%)` : 'no change'}</div></div>
     </div>`;
   }).join('');
 
@@ -18343,25 +18303,20 @@ function renderAnalyticsInvestments() {
   const topGainers = performers.filter(p => p._gl > 0).slice(0, 3);
   const topLosers = performers.filter(p => p._gl < 0).slice(-3).reverse();
 
-  const perfRow = (p) => {
-    const glClass = p._gl > 0 ? 'tx-pos' : 'tx-neg';
-    return `<div class="list-row" onclick="openInvDetail('${p.id}')">
-      <div class="list-row-meta">
-        <div class="list-row-title">${_esc(p.name)}</div>
-        <div class="list-row-sub">${p.type}</div>
-      </div>
-      <div class="list-row-right">
-        <div class="list-row-amt ${glClass}">${p._gl > 0 ? '+' : ''}${p._pct.toFixed(1)}%</div>
-        <div class="list-row-date">${fmt(p._gl, dispCurr, true)}</div>
-      </div>
+  const perfRow = (p) => { // PLS #350: same row as the rest of the report
+    const col = p._gl > 0 ? 'var(--green)' : 'var(--red)';
+    return `<div class="lp-row" onclick="openInvDetail('${p.id}')">
+      <div style="flex:1;min-width:0"><div class="lp-name">${_esc(p.name)}</div><div class="lp-meta">${_esc(p.type || '')}</div></div>
+      <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${col}">${p._gl > 0 ? '+' : ''}${p._pct.toFixed(1)}%</div><div class="lp-amt2">${fmt(p._gl, dispCurr, true)}</div></div>
+      <span class="lp-chev">›</span>
     </div>`;
   };
 
   return `<div class="page-pad">
     <!-- Hero summary card -->
     <div class="card" style="margin-bottom:16px">
-      <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:6px">Portfolio Value</div>
-      <div style="font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-0.02em">${fmt(totalCurrent, dispCurr)}</div>
+      <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:6px">Portfolio value</div>
+      <div style="font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-0.02em">${fmt(totalCurrent, dispCurr)}</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px">Invested ${fmt(totalInvested, dispCurr)} · ${active.length} active</div>
       ${totalCurrent > 0 ? `<div style="display:flex;height:8px;border-radius:var(--r-sm);overflow:hidden;margin-top:14px;background:var(--bg3)">${allocationBar}</div>` : ''}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
@@ -18383,43 +18338,24 @@ function renderAnalyticsInvestments() {
     </div>
     <div class="lp-meta" style="margin:10px 4px 16px">Total return <b style="font-family:var(--mono);color:${totalReturnPct > 0 ? 'var(--green)' : totalReturnPct < 0 ? 'var(--red)' : 'var(--text)'}">${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(1)}%</b> on ${fmt(_allCapital, dispCurr)} ever put in · ${typeEntries.length} asset ${typeEntries.length===1?'type':'types'}</div>
 
-    <!-- Allocation by type -->
-    ${typeEntries.length > 0 ? `<div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Allocation by Type</div>
-    <div class="form-row fr2" style="margin-bottom:14px">${typeCards}</div>` : ''}
-
-    <!-- Top movers -->
-    ${(topGainers.length > 0 || topLosers.length > 0) ? `
-    <div class="form-row fr2">
-      ${topGainers.length > 0 ? `<div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Top Gainers</div>
-        <div class="list-card">${topGainers.map(perfRow).join('')}</div>
-      </div>` : ''}
-      ${topLosers.length > 0 ? `<div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Top Losers</div>
-        <div class="list-card">${topLosers.map(perfRow).join('')}</div>
-      </div>` : ''}
-    </div>` : ''}
+    <!-- PLS #350: allocation + movers as grouped sections, stacked -->
+    ${typeEntries.length > 0 ? `<div class="lp-sec">Allocation by type</div><div class="lp-grp">${typeCards}</div>` : ''}
+    ${topGainers.length > 0 ? `<div class="lp-sec">Top gainers</div><div class="lp-grp">${topGainers.map(perfRow).join('')}</div>` : ''}
+    ${topLosers.length > 0 ? `<div class="lp-sec">Top losers</div><div class="lp-grp">${topLosers.map(perfRow).join('')}</div>` : ''}
 
     <!-- Sold history -->
-    ${sold.length > 0 ? `<div style="margin-top:16px">
-      <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:8px">Realized History (${sold.length})</div>
-      <div class="list-card list-row-archived">
+    ${sold.length > 0 ? `<div class="lp-sec">Realized history (${sold.length})</div>
+      <div class="lp-grp">
         ${sold.sort((a,b)=>(b.soldDate||'').localeCompare(a.soldDate||'')).map(s => {
           const gl = s.realizedGL || 0;
-          const glClass = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
-          return `<div class="list-row" onclick="openInvDetail('${s.id}')">
-            <div class="list-row-meta">
-              <div class="list-row-title">${_esc(s.name)}</div>
-              <div class="list-row-sub">${s.type} · Sold ${s.soldDate ? fmtD(s.soldDate) : ''}</div>
-            </div>
-            <div class="list-row-right">
-              <div class="list-row-amt ${glClass}">${fmt(gl, s.currency, true)}</div>
-              <div class="list-row-date">realized</div>
-            </div>
+          const col = gl > 0 ? 'var(--green)' : gl < 0 ? 'var(--red)' : 'var(--text3)';
+          return `<div class="lp-row" onclick="openInvDetail('${s.id}')">
+            <div style="flex:1;min-width:0"><div class="lp-name">${_esc(s.name)}</div><div class="lp-meta">${_esc(s.type || '')}${s.soldDate ? ' · sold ' + fmtDFull(s.soldDate) : ''}</div></div>
+            <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${col}">${fmt(gl, s.currency, true)}</div><div class="lp-amt2">realized</div></div>
+            <span class="lp-chev">›</span>
           </div>`;
         }).join('')}
-      </div>
-    </div>` : ''}
+      </div>` : ''}
   </div>`;
 }
 
@@ -18545,17 +18481,17 @@ function renderAnalyticsForex() {
 
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
         <div style="text-align:center">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
+          <div style="font-size:10px;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m High</div>
           <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--green)">${sym(_homeBase())}${fmtRate(maxRate)}</div>
           <div style="font-size:10px;color:var(--text4);margin-top:1px">${months[maxIdx]?.label} ${months[maxIdx]?.year}</div>
         </div>
         <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
+          <div style="font-size:10px;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">Current</div>
           <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)">${sym(_homeBase())}${fmtRate(currentRate)}</div>
           <div style="font-size:10px;color:var(--text4);margin-top:1px">per 1 ${curr}</div>
         </div>
         <div style="text-align:center">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
+          <div style="font-size:10px;letter-spacing:0.06em;color:var(--text4);margin-bottom:3px">12m Low</div>
           <div style="font-family:var(--mono);font-size:11px;font-weight:600;color:var(--red)">${sym(_homeBase())}${fmtRate(minRate)}</div>
           <div style="font-size:10px;color:var(--text4);margin-top:1px">${months[minIdx]?.label} ${months[minIdx]?.year}</div>
         </div>
@@ -19185,7 +19121,7 @@ function renderContractTab() {
   // PLS #312: no "did you hit your goal last month?" before the contract has run a month -- it asked
   // it of a contract starting in 2028 (found by driving the Contract wizard end to end).
   // PLS #342: the monthly "did you hit your goal?" prompt was removed (owner: not value-adding).
-  // doCheckin() and any stored checkinHistory are left untouched; nothing prompts for them now.
+  // Any stored checkinHistory is left in the data untouched; nothing prompts for it now.
   const checkinPromptHTML = '';
 
   // End state
@@ -19323,37 +19259,20 @@ function renderContractTab() {
       ${_fsSec(isLinked ? `Linked · ${linked.length}` : 'Link account or investment')}
       <div class="fs-card" style="padding:6px 16px;max-height:260px;overflow-y:auto">${checkboxes}</div>
     </div>`;
-    return `<div class="card" style="margin-bottom:8px;${editMode?'border:1px dashed var(--border2)':'border:0'}" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0">
-          ${dragHandle}
-          <div style="width:10px;height:10px;border-radius:50%;background:${b.color};flex-shrink:0;margin-top:5px;box-shadow:0 0 4px ${b.color}66"></div>
-          <div style="min-width:0;flex:1">
-            <div style="font-size:13px;font-weight:600">${_esc(b.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${subLine}</div>
-          </div>
+    // PLS #350: Edit list mode is for arranging only (drag, share slider, edit, delete). Balance and
+    // links live in the bucket sheet since #342, so this card drops them and stops wrapping text.
+    return `<div class="fs-card be-card" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${dragHandle}
+        <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div class="fs-t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(b.name)}</div>
+          <div class="fs-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(rateLabel)}${rateLabel ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal · ${fmt(target,goalCurr)}</div>
         </div>
         ${editControls}
-        <div style="text-align:right;margin-left:8px">
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600">${isLinked?fmt(val,goalCurr):'—'}</div>
-          <div style="font-size:10px;color:var(--text4)">of ${fmt(target,goalCurr)}</div>
-          <div style="font-size:11px;color:${statusColor}">${statusTxt}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:8px;height:4px;background:var(--bg4);border-radius:var(--r-sm);overflow:hidden">
-        <div style="height:100%;border-radius:var(--r-sm);background:${gaugeColor};width:${bPct.toFixed(1)}%;transition:width 0.4s"></div>
       </div>
       ${pctSlider}
-      ${isLinked
-        ?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Linked: <span style="color:var(--accent)">${linkedNames}</span></div>`
-        :`<div style="margin-bottom:8px"><input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="${sym(_homeBase())} manual balance" style="font-size:13px;padding:8px 10px"
-           value="${(active.buckets||{})[b.id]>0?(active.buckets||{})[b.id]:''}"
-           onchange="saveContractBucket('${activeId}','${b.id}',this.value)"
-           oninput="saveContractBucket('${activeId}','${b.id}',this.value)"></div>`}
-      <details style="margin-top:4px">
-        <summary style="font-size:11px;color:var(--accent);cursor:pointer;list-style:none;user-select:none">${isLinked?'✓ '+linked.length+' linked — change':'+ Link account / investment'}</summary>
-        <div style="margin-top:8px;border:1px solid var(--border2);border-radius:var(--r-md);padding:4px 10px;max-height:220px;overflow-y:auto">${checkboxes}</div>
-      </details>
+      <div class="fs-s" style="margin-top:6px">${(isLinked || val > 0) ? fmt(val,goalCurr) : 'No balance yet'} of ${fmt(target,goalCurr)}${statusTxt ? ` · <span style="color:${statusColor}">${statusTxt}</span>` : ''}</div>
     </div>`;
   }).join('');
 
@@ -19552,19 +19471,6 @@ function confirmDeleteContract(contractId) {
   saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Contract deleted', 2200, 'trash');
 }
 
-function doCheckin(contractId, hit) {
-  const contract = (db.contracts||[]).find(c=>c.id===contractId);
-  if (!contract) return;
-  const mk = currMonthKey();
-  contract.lastCheckin = mk;
-  if (!contract.checkinHistory) contract.checkinHistory = [];
-  contract.checkinHistory.push({ month: mk, hit, ts: Date.now() });
-  // PLS #157: must be the syncing save — plain saveDB() skips the lastLocalEditAt stamp and
-  // the unsaved flag, so the sync indicator would show 🟢 while the check-in sat unsynced.
-  saveDBWithSync();
-  renderPlanning();
-  showToast(hit ? '✅ Logged — counted as a hit this month.' : '✓ Logged — marked as missed this month.');
-}
 
 function openContractWizard() {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -20092,22 +19998,6 @@ function saveContractTarget(contractId, val) {
 
 // Set the contract's slider min/max. Blank max falls back to the dynamic range. Keeps the target
 // clamped inside the range and rebalances % buckets.
-function saveSliderRange(contractId, which, val) {
-  const c = (db.contracts||[]).find(x=>x.id===contractId);
-  if (!c) return;
-  const raw = (val||'').toString().trim();
-  const v = parseFloat(raw);
-  if (which === 'min') c.sliderMin = (raw === '' || isNaN(v)) ? 0 : Math.max(0, Math.round(v));
-  else c.sliderMax = (raw === '' || isNaN(v)) ? null : Math.max(0, Math.round(v));
-  const mn = c.sliderMin || 0;
-  const mx = (typeof c.sliderMax === 'number' && c.sliderMax > mn) ? c.sliderMax : null;
-  let t = parseFloat(c.targetAmount) || 0;
-  t = Math.max(mn, t);
-  if (mx != null) t = Math.min(mx, t);
-  c.targetAmount = Math.round(t);
-  _rebalancePctToPool(c);
-  saveDBWithSync(); renderPlanning();
-}
 
 
 
@@ -22536,7 +22426,7 @@ function exportXLSX() {
     const txRows = [['Date','Time','Type','Category','Subcategory','Amount','Currency',((_homeBase()) + ' Equiv'),'Account','To Account','Notes','Tags']];
     for (const tx of [...db.transactions].sort((a,b)=>b.date.localeCompare(a.date))) {
       if (tx.isAutoForex || tx.isAutoReimb || tx.isAutoFee || tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain) continue; // skip auto-children
-      const cat = getCategoryDisplay(tx.categoryId);
+      const cat = txCategoryDisplay(tx); // PLS #349: special rows export their own name
       const acct = getAccountDisplay(tx.accountId || tx.fromAccountId);
       const toAcct = tx.toAccountId ? getAccountDisplay(tx.toAccountId) : '';
       const phpEq = txToPhp(tx);
@@ -26231,7 +26121,7 @@ function aiWeeklyRecap() {
     if (t.type === 'income') income += amt;
     else if (t.type === 'expense' || t.type === 'shared') {
       expense += amt;
-      const cat = getCategoryDisplay(t.categoryId);
+      const cat = txCategoryDisplay(t); // PLS #349
       const _isTop = [...db.categories.expense, ...db.categories.income].some(c => c.id === t.categoryId); // PLS #134 fix
       const name = _isTop ? cat.name : _stripIcon(cat.name);
       catSpend[name] = (catSpend[name]||0) + amt;
@@ -26441,8 +26331,8 @@ function renderAnalyticsExternal() {
 
     <!-- Hero Net External -->
     <div style="text-align:center;padding:22px 16px 18px">
-      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px;letter-spacing:-0.1px;text-transform:uppercase">Net External</div>
-      <div style="font-size:30px;font-weight:700;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums;font-family:var(--mono)">${netPositive?'+':'−'}${fmt(fromPhp(Math.abs(net),disp),disp)}</div>
+      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">Net external</div>
+      <div style="font-size:22px;font-weight:700;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums;font-family:var(--mono)">${netPositive?'+':'−'}${fmt(fromPhp(Math.abs(net),disp),disp)}</div>
       <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${netPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:var(--r-full);font-size:10px;font-weight:600;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
         ${netPositive?'▲':'▼'} ${ratio.toFixed(1)}% inflow ratio
       </div>
@@ -26472,13 +26362,13 @@ function renderAnalyticsExternal() {
 
     <!-- Parties list -->
     <div style="padding:0 12px;margin-bottom:22px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">By Party · ${sortedParties.length}</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px">By Party · ${sortedParties.length}</div>
       <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden">${partyRows}</div>
     </div>
 
     <!-- Recent transactions -->
     <div style="padding:0 12px">
-      <div style="font-size:10px;font-weight:600;color:var(--text4);text-transform:uppercase;letter-spacing:0.12em;margin:0 14px 6px">Recent · ${recentTxs.length}</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text4);letter-spacing:0.12em;margin:0 14px 6px">Recent · ${recentTxs.length}</div>
       <div style="background:var(--bg2);border-radius:var(--r-md);overflow:hidden">${txRows}</div>
     </div>
 
@@ -26575,20 +26465,21 @@ function renderAnalyticsCashflow() {
 
   // Hero
   let html = `<div class="page-pad">
-    <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">${current.label} · This Month</div>
-      <!-- PLS #327: font scale matched to the tiles below. Amounts are mono 600 like every other
-           figure on the page (they were 13px bold sans), labels 12px text3, the net 20px/600 so it
-           leads without outweighing the tiles (was 22px/700). Layout unchanged. -->
-      <div style="font-size:12px;color:var(--text3);line-height:1.7">Income <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">${fmt(current.income, dc)}</span></div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.7">Expenses <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(current.expense, dc)}</span></div>
-      <div style="font-size:20px;font-weight:600;margin-top:8px;color:${current.net>=0?'var(--green)':'var(--red)'};font-family:var(--mono)">${fmt(current.net, dc, true)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${current.net>=0?'Net saved':'Net deficit'}</div>
+    <!-- PLS #350: hero like the other reports (centred figure, no gradient box), income and
+         expenses as tiles under it -->
+    <div style="text-align:center;padding:10px 16px 14px">
+      <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">${current.label} · this month</div>
+      <div style="font-size:22px;font-weight:700;color:${current.net>=0?'var(--green)':'var(--red)'};letter-spacing:-0.6px">${fmt(current.net, dc, true)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">${current.net>=0?'net saved':'net deficit'}</div>
+    </div>
+    <div class="lp-tiles" style="margin-bottom:14px">
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Income</div><div class="lp-tile-amt" style="color:var(--green)">${fmt(current.income, dc)}</div><div class="lp-tile-sub">this month</div></div>
+      <div class="lp-tile" style="cursor:default"><div class="lp-tile-lbl">Expenses</div><div class="lp-tile-amt" style="color:var(--red)">${fmt(current.expense, dc)}</div><div class="lp-tile-sub">this month</div></div>
     </div>`;
 
   // 6-month bar chart
   html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Last 6 Months</div>`;
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Last 6 months</div>`;
   months.forEach(m => {
     const pct = Math.abs(m.net) / maxAbs * 100;
     const color = m.net >= 0 ? 'var(--green)' : 'var(--red)';
@@ -26678,13 +26569,13 @@ function renderAnalyticsCrossCurrency() {
 
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Total Cash on Hand</div>
-      <div style="font-size:26px;font-weight:700;font-family:var(--mono)">${fmt(_inDisplay(total), dc)}</div>
+      <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Total Cash on Hand</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono)">${fmt(_inDisplay(total), dc)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">Across ${sortedCurr.length} ${aiPlural(sortedCurr.length,'currency','currencies')} · liquid holdings only</div>
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Currency Exposure</div>`;
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Currency exposure</div>`;
   sortedCurr.forEach(([curr, data]) => {
     const pct = total > 0 ? (data.equiv / total) * 100 : 0;
     // PLS #294: show the rate AS ENTERED. equiv / native rebuilt it by division and printed float
@@ -26709,7 +26600,7 @@ function renderAnalyticsCrossCurrency() {
 
   // FX YTD card
   html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">FX Activity YTD</div>
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">FX Activity YTD</div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
       <span style="color:var(--text2)">Gains</span>
       <span style="color:var(--green);font-family:var(--mono);font-weight:600">+${fmt(_inDisplay(ytdGains), dc)}</span>
@@ -26872,7 +26763,7 @@ function renderAnalyticsPeople() {
             <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
             <span style="flex:1;color:var(--text2)">${lbl} <span style="color:var(--text4)">· ${n}</span></span>
             <span style="font-family:var(--mono);color:var(--text2)">${amt}</span></div>`;
-        return `<div style="margin:6px 0 0 44px">`
+        return `<div style="margin:6px 0 0 44px;max-width:420px">` // PLS #350: no stretched lines on PC
           + (p.lentCount>0 ? line('var(--amber)', '📤 Lent', p.lentCount, fmt(_inDisplay(p.lent), dc)) : '')
           + (p.borrowedCount>0 ? line('var(--red)', '📥 Borrowed', p.borrowedCount, fmt(_inDisplay(p.borrowed), dc)) : '')
           + (p.sharedCount>0 ? line('var(--text4)', '🤝 Shared', p.sharedCount, fmt(_inDisplay(p.sharedOwed), dc)) : '')
@@ -26887,193 +26778,6 @@ function renderAnalyticsPeople() {
 // ───────────────────────────────────────────────────────────
 // TAB: Budget vs Actual — current month burn rate
 // ───────────────────────────────────────────────────────────
-function renderAnalyticsBudget() {
-  const dc = _displayCurrency();
-  const budgets = (db.budgets || []).filter(b => b.active !== false && !b.archived);
-  if (budgets.length === 0) {
-    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No budgets set</div><div class="empty-sub">Set budgets in Settings → Budgets</div></div></div>`;
-  }
-  const now = new Date();
-  // ── PERSONAL LOGIC SET #125 ── Budget tab shares the Overview period picker.
-  // The Analytics → Budget tab follows the SAME period state as Overview
-  // (window._analyticsOverviewPeriod), so there is ONE month context across all Analytics
-  // tabs instead of two competing selectors. Budgets are inherently monthly, so when the
-  // shared period is 'ytd' the Budget tab shows the current month; a specific 'YYYY-MM'
-  // shows that historical month (lets the user review past-month budget spend). For past
-  // months the day-fraction pace projection ("at pace …") is suppressed since the month is
-  // already fully elapsed.
-  const sharedPeriod = window._analyticsOverviewPeriod || 'ytd';
-  const mk = _anIsYear(sharedPeriod) ? currMonthKey() : sharedPeriod; // PLS #318
-  const [vy, vm] = mk.split('-').map(Number);
-  const isCurrentMonth = mk === currMonthKey();
-  const daysInMonth = new Date(vy, vm, 0).getDate();
-  const dayOfMonth = isCurrentMonth ? now.getDate() : daysInMonth;
-  const daysLeft = isCurrentMonth ? (daysInMonth - dayOfMonth) : 0;
-  const monthFrac = dayOfMonth / daysInMonth;
-
-  if (typeof computeBudgetRollover === 'function') {
-    try { computeBudgetRollover(); } catch(e) {}
-  }
-
-  // ── PERSONAL LOGIC SET #95 ── Budget spent calculation mirrors renderBudgetsTab() exactly.
-  // Canonical filter: !archived && !isSettlement && !isLoanTx && !isLoanPayment && !isAutoReimb
-  //   && !isFeeReimbursable && type=expense/shared && currency match. (renderBudgetsTab matches this.)
-  // We use the SAME filter to ensure Analytics and Settings → Budgets show identical numbers.
-  // Each budget row is now a tappable accordion that expands to show category-level breakdown.
-  const rows = budgets.map(b => {
-    const allocs = b.allocations || {};
-    const allocCount = Object.keys(allocs).length;
-    const rollAmt = b.rollover ? (b.rolloverAmount || 0) : 0;
-    const limit = (b.limit || 0) + rollAmt;
-    const breakdown = [];
-    // Always compute total spent for this currency (same filter as Dashboard line 2904)
-    const allCurrTxs = db.transactions.filter(t =>
-      !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
-      t.date && t.date.startsWith(mk) &&
-      (t.type==='expense' || t.type==='shared') && t.currency === b.currency
-    );
-    const totalSpent = allCurrTxs.reduce((s,t)=>s+(t.type==='shared' ? (t.myShare || t.amount) : t.amount), 0);
-
-    if (allocCount > 0) {
-      const _allocKeys = new Set(Object.keys(allocs));
-      Object.entries(allocs).forEach(([catId, allocLim]) => {
-        const limAmt = parseFloat(allocLim) || 0;
-        const cat = getCategoryDisplay(catId);
-        const _isTopA = [...db.categories.expense, ...db.categories.income].some(c => c.id === catId); // PLS #134
-        let spentInCat = 0;
-        allCurrTxs.forEach(t => {
-          if (_txMatchesAlloc(t, catId, _allocKeys)) {
-            spentInCat += t.type==='shared' ? (t.myShare || t.amount) : t.amount;
-          }
-        });
-        breakdown.push({
-          catId, catName: _isTopA ? cat.name : _stripIcon(cat.name), catIcon: cat.icon,
-          allocLim: limAmt, spent: spentInCat,
-          pct: limAmt > 0 ? (spentInCat/limAmt*100) : 0,
-          over: spentInCat > limAmt
-        });
-      });
-    }
-    // Use total spent (matches Dashboard); breakdown is informational only
-    const spent = totalSpent;
-    breakdown.sort((a,b) => b.spent - a.spent);
-    const pct = limit > 0 ? (spent / limit) * 100 : 0;
-    const remaining = limit - spent;
-    const willExceed = isCurrentMonth && limit > 0 && monthFrac > 0 && (spent / monthFrac) > limit;
-    const projectedEnd = monthFrac > 0 ? spent / monthFrac : 0;
-    const expectedPctNow = monthFrac * 100;
-    return { ...b, spent, limit, pct, remaining, willExceed, projectedEnd, expectedPctNow, allocCount, breakdown };
-  }).sort((a,b)=>b.pct-a.pct);
-
-  const totalLimit = rows.reduce((s,r)=>s+toPhp(r.limit, r.currency),0);
-  const totalSpent = rows.reduce((s,r)=>s+toPhp(r.spent, r.currency),0);
-  const totalRemaining = totalLimit - totalSpent;
-  const overCount = rows.filter(r => r.pct > 100).length;
-  const warnCount = rows.filter(r => r.pct > 80 && r.pct <= 100).length;
-
-
-  let html = `<div class="page-pad">
-    <div class="metric-grid fr2-always" style="margin-bottom:14px">
-      <div class="metric-card">
-        <div class="metric-label">Budget Total</div>
-        <div class="metric-value mfit">${fmt(_inDisplay(totalLimit), dc)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Spent</div>
-        <div class="metric-value mfit">${fmt(_inDisplay(totalSpent), dc)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Remaining</div>
-        <div class="metric-value mfit" style="color:${totalRemaining>=0?'var(--green)':'var(--red)'}">${fmt(_inDisplay(totalRemaining), dc)}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Days Left</div>
-        <div class="metric-value mfit">${daysLeft}</div>
-      </div>
-    </div>
-
-    ${overCount > 0 ? `<div style="background:rgba(255,69,58,0.1);border:1px solid var(--red);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--red)"><b>⚠️ ${overCount} ${aiPlural(overCount,'budget')} over limit</b></div>` : ''}
-    ${warnCount > 0 ? `<div style="background:rgba(255,159,10,0.08);border:1px solid var(--amber);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber)"><b>⚠ ${warnCount} ${aiPlural(warnCount,'budget')} above 80% used</b></div>` : ''}
-
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Per Budget · Tap to see breakdown</div>`;
-
-  rows.forEach((r, idx) => {
-    const barColor = r.pct > 100 ? 'var(--red)' : r.pct > 80 ? 'var(--amber)' : 'var(--green)';
-    const barWidth = Math.min(r.pct, 100);
-    const _overSubs = r.breakdown.filter(b=>b.over).length;
-    const _nearSubs = r.breakdown.filter(b=>!b.over && b.pct>=80).length;
-    const name = r.name || (r.location ? `${r.location} (${r.currency})` : `${r.currency} budget`);
-    const accId = `bgt-acc-${idx}`;
-    const breakdownHTML = r.breakdown.length > 0 ? r.breakdown.map(br => {
-      const brOver = br.over;
-      const brNear = !brOver && br.pct >= 80;
-      const brBarColor = brOver ? 'var(--red)' : brNear ? 'var(--amber)' : 'var(--green)';
-      const brBarWidth = Math.min(br.pct, 100);
-      const brRem = br.allocLim - br.spent;
-      const brBadge = brOver ? '<span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(255,69,58,0.12);padding:1px 6px;border-radius:var(--r-full)">OVER</span>'
-        : brNear ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(255,159,10,0.14);padding:1px 6px;border-radius:var(--r-full)">NEAR LIMIT</span>' : '';
-      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-          <div style="display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;flex:1">
-            <span style="width:8px;height:8px;border-radius:50%;background:${brBarColor};flex-shrink:0;box-shadow:0 0 5px ${brBarColor}99"></span>
-            <span style="font-size:14px">${br.catIcon||'💸'}</span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(br.catName)}</span>
-            ${brBadge}
-          </div>
-          <div style="font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0">${fmt(br.spent, r.currency)}<span style="color:var(--text4)"> / ${fmt(br.allocLim, r.currency)}</span></div>
-        </div>
-        <div style="height:7px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden;position:relative">
-          <div style="height:100%;width:${brBarWidth}%;background:${brBarColor};border-radius:var(--r-full);transition:width 0.3s"></div>
-          ${isCurrentMonth ? `<div style="position:absolute;left:${Math.min(r.expectedPctNow,100)}%;top:0;bottom:0;width:2px;background:var(--text2);opacity:0.6;border-radius:1px"></div>` : ''}
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px">
-          <span style="font-size:10px;color:${brOver?'var(--red)':brNear?'var(--amber)':'var(--text4)'};font-weight:${brOver||brNear?'600':'400'}">${br.pct.toFixed(0)}% used</span>
-          <span style="font-size:10px;color:${brRem>=0?'var(--text4)':'var(--red)'};font-family:var(--mono)">${brRem>=0?fmt(brRem,r.currency)+' left':'-'+fmt(Math.abs(brRem),r.currency)+' over'}</span>
-        </div>
-      </div>`;
-    }).join('') : '<div style="padding:14px 0;font-size:12px;color:var(--text4);text-align:center">No categories allocated for this budget</div>';
-
-    html += `<div class="ov-acc" id="${accId}" style="margin-bottom:10px">
-      <div class="ov-acc-hdr" onclick="toggleOvAcc('${accId}')" style="padding:12px 14px;align-items:flex-start">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-            <div style="font-size:13px;font-weight:600">${escapeAttr(name)}</div>
-            <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${r.pct.toFixed(0)}%</div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);font-family:var(--mono);margin-bottom:6px">
-            <span>${fmt(r.spent, r.currency)} / ${fmt(r.limit, r.currency)}</span>
-            <span style="color:${r.remaining>=0?'var(--green)':'var(--red)'}">${r.remaining>=0?'':'-'}${fmt(Math.abs(r.remaining), r.currency)} left</span>
-          </div>
-          <div style="height:8px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
-            <div style="width:${barWidth}%;height:100%;background:${barColor};border-radius:var(--r-sm)"></div>
-            <div style="position:absolute;left:${r.expectedPctNow}%;top:-2px;bottom:-2px;width:1px;background:var(--text3);opacity:0.5"></div>
-          </div>
-          <div style="font-size:10px;color:var(--text4);margin-top:4px">
-            ${r.allocCount === 0 ? '⚠️ No categories allocated' :
-              r.pct > 100 ? `Over by ${fmt(r.spent - r.limit, r.currency)} · tap to see breakdown ▾` :
-              r.willExceed ? `⚠ At pace: ${fmt(r.projectedEnd, r.currency)} by month-end · tap ▾` :
-              `${daysLeft} ${aiPlural(daysLeft,'day')} left · ${r.allocCount} ${aiPlural(r.allocCount,'category','categories')} · tap ▾`}
-          </div>
-          ${(_overSubs+_nearSubs)>0 ? `<div style="display:flex;gap:6px;margin-top:6px">
-            ${_overSubs>0?`<span style="font-size:9px;font-weight:700;color:var(--red);background:rgba(255,69,58,0.12);padding:2px 8px;border-radius:var(--r-full)">🔴 ${_overSubs} over</span>`:''}
-            ${_nearSubs>0?`<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(255,159,10,0.14);padding:2px 8px;border-radius:var(--r-full)">🟡 ${_nearSubs} near limit</span>`:''}
-          </div>`:''}
-        </div>
-      </div>
-      <div class="ov-acc-body" style="padding-top:6px">
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class="btn btn-ghost btn-sm" style="flex:1;font-size:12px" onclick="event.stopPropagation();openAiAllocate('${r.id}')">🤖 ${r.allocCount?'Re-allocate':'AI Allocate'}</button>
-          ${r.allocCount?`<button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--red)" onclick="event.stopPropagation();clearAllocations('${r.id}')">Clear</button>`:''}
-        </div>
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text4);margin-bottom:6px">Where it went${isCurrentMonth?` <span style="font-weight:400;text-transform:none;letter-spacing:0">· ▏ today's pace (${r.expectedPctNow.toFixed(0)}%)</span>`:''}</div>
-        ${breakdownHTML}
-      </div>
-    </div>`;
-  });
-
-  html += `</div>`;
-  return html;
-}
 
 
 // ───────────────────────────────────────────────────────────
@@ -27108,8 +26812,8 @@ function renderAnalyticsSubs() {
 
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Monthly Subscription Burn</div>
-      <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div>
+      <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Monthly Subscription Burn</div>
+      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(_inDisplay(totalYearly), dc)}/year · ${subs.length} active</div>
     </div>
 
@@ -27141,7 +26845,7 @@ function renderAnalyticsSubs() {
       </div>`;
     })()}
 
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Active Subscriptions</div>`;
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Active Subscriptions</div>`;
 
   enriched.forEach(s => {
     const pctOfTotal = totalMonthly > 0 ? (s.monthly / totalMonthly) * 100 : 0;
@@ -27214,13 +26918,13 @@ function renderAnalyticsDayOfWeek() {
 
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Peak Spending Day</div>
-      <div style="font-size:24px;font-weight:700">${topDay}</div>
+      <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Peak spending day</div>
+      <div style="font-size:22px;font-weight:700">${topDay}</div>
       <div style="font-size:11px;color:var(--text3);margin-top:2px">${fmt(_inDisplay(byDay[topDayIdx].total), dc)} across ${byDay[topDayIdx].count} ${aiPlural(byDay[topDayIdx].count,'tx')}</div>
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Week</div>`;
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Week</div>`;
   byDay.forEach((d, i) => {
     const pct = (d.total / maxTotal) * 100;
     const avg = d.count > 0 ? d.total / d.count : 0;
@@ -27237,7 +26941,7 @@ function renderAnalyticsDayOfWeek() {
 
   // Day-of-month buckets
   html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px">
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Month</div>`;
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Month</div>`;
   Object.entries(buckets).forEach(([key, b]) => {
     const pct = grandTotal > 0 ? (b.total / grandTotal) * 100 : 0;
     html += `<div style="margin-bottom:10px">
@@ -27325,7 +27029,7 @@ function renderAnalyticsYoY() {
 
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">${periodLabel} · ${curYear} vs ${lastYear}</div>
+      <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:4px">${periodLabel} · ${curYear} vs ${lastYear}</div>
       <div style="font-size:11px;color:var(--text4)">${monthsCovered}-month comparison</div>
     </div>
 
@@ -27356,7 +27060,7 @@ function renderAnalyticsYoY() {
       ${netChg !== null ? `<div style="font-size:11px;color:${netChg>=0?'var(--green)':'var(--red)'};font-weight:600;margin-top:2px">${netChg>=0?'↑':'↓'} ${Math.abs(netChg).toFixed(1)}% YoY</div>` : ''}
     </div>
 
-    <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Top Categories YoY Shift</div>`;
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Top Categories YoY Shift</div>`;
 
   const allCats = [...new Set([...Object.keys(cur.byCat), ...Object.keys(prev.byCat)])];
   const catComparisons = allCats.map(c => ({
@@ -27460,7 +27164,7 @@ function renderAnalyticsAccountHealth() {
           <div style="flex:1;min-width:0"><div class="lp-name">${escapeAttr(a.name)}</div><div class="lp-meta">${escapeAttr(a.type || 'Other')}</div></div>
           <div style="text-align:right;flex-shrink:0"><div class="lp-amt" style="color:${a.balance < 0 ? 'var(--red)' : 'var(--text)'}">${fmt(a.balance, a.currency||dc, a.balance < 0)}</div><div class="lp-amt2" style="color:${st[1]}">${st[0]}</div></div>
         </div>
-        ${a.txCount > 0 ? `<div style="margin:6px 0 0 44px">`
+        ${a.txCount > 0 ? `<div style="margin:6px 0 0 44px;max-width:420px">` /* PLS #350 */
           + (a.inCount > 0 ? line('var(--green)', 'In', a.inCount, fmt(_inDisplay(a.totalIn), dc)) : '')
           + (a.outCount > 0 ? line('var(--red)', 'Out', a.outCount, fmt(_inDisplay(a.totalOut), dc)) : '')
           + line('var(--text4)', 'Avg per tx', a.txCount, fmt(_inDisplay(a.avgTx), dc))
@@ -27719,7 +27423,7 @@ function renderAnalyticsAISummary() {
 
   return `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">
         ${_ico('sparkle',13)} Summary
       </div>
       <div style="font-size:18px;font-weight:700;margin-bottom:2px">${monthLabel}</div>
@@ -27729,12 +27433,12 @@ function renderAnalyticsAISummary() {
 
     <div class="metric-grid fr2-always" style="margin-bottom:16px">
       <div class="metric-card">
-        <div class="metric-label">Kept This Month</div>
+        <div class="metric-label">Kept this month</div>
         <div class="metric-value mfit" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':'−'}${money(net)}</div>
         <div class="metric-sub">${income>0 ? `${savingsRate.toFixed(0)}% of what you earned` : 'no income logged'}</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Spent This Month</div>
+        <div class="metric-label">Spent this month</div>
         <div class="metric-value mfit">${money(expense)}</div>
         <div class="metric-sub">${avg6>0 ? `usual is ${money(avg6)}` : 'building your baseline'}</div>
       </div>
