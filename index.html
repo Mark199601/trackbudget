@@ -969,10 +969,11 @@ option{background:var(--bg3);color:var(--text)}
 #analytics-swipe-pane [style*="text-transform:uppercase"],
 #analytics-swipe-pane [style*="text-transform: uppercase"],
 #analytics-swipe-pane .metric-label,
-#analytics-swipe-pane .kpi-label{text-transform:none!important;letter-spacing:normal!important}
+#analytics-swipe-pane .kpi-label,
+.ins-pane .metric-label{text-transform:none!important;letter-spacing:normal!important} /* PLS #353: Insights keeps the look it had inside Analytics */
 #analytics-swipe-pane [style*="text-transform:uppercase"],
 #analytics-swipe-pane [style*="text-transform: uppercase"]{font-size:11.5px!important;font-weight:500!important;color:var(--text3)!important}
-#analytics-swipe-pane .metric-label{font-size:11px!important;font-weight:500!important}
+#analytics-swipe-pane .metric-label,.ins-pane .metric-label{font-size:11px!important;font-weight:500!important}
 /* PLS #309: more than two tiles become a swipe row (2 in view, the next one peeking), like Apple
    Wallet / Stocks. On a mouse-driven screen it also gets arrow buttons and a thin scrollbar,
    since a desktop user cannot swipe. */
@@ -1137,6 +1138,7 @@ option{background:var(--bg3);color:var(--text)}
     </div>
     <div class="sb-section">Overview</div>
     <div class="sb-item active" id="sn-dashboard" onclick="nav('dashboard')"><div class="si-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>Dashboard</div>
+    <div class="sb-item" id="sn-insights" onclick="nav('insights')"><div class="si-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></div>Insights</div><!-- PLS #353 -->
     <div class="sb-item" id="sn-analytics" onclick="nav('analytics')"><div class="si-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="4"/></svg></div>Analytics<span class="si-badge" id="analytics-badge" style="display:none">!</span></div>
     <div class="sb-divider"></div>
     <div class="sb-section">Money</div>
@@ -2953,6 +2955,9 @@ function getMonthTotals(monthKey) {
   // monthly habits, yet they were inflating the average spend by 7.5% and shortening runway.
   // Measured inside this same loop, so it can never subtract something expense did not count.
   let oneTimeLoss = 0;
+  // PLS #354: which entries were counted, and their display-currency value, so Insights can list
+  // categories, the biggest expense and the one-time losses from EXACTLY what these totals counted.
+  const expenseItems = [], oneTimeItems = [];
   const dispCurr = _displayCurrency();
   for (const t of txs) {
     // 📖 USER STORY: Pag nag-open ka ng Analytics, yung income at expense totals mo ay malinis —
@@ -2993,6 +2998,7 @@ function getMonthTotals(monthKey) {
       const _g = _investmentGL(t, dispCurr); // PLS #221: one shared decision
       income += _g.income; expense += _g.expense;
       oneTimeLoss += _g.expense; // PLS #277: a sale below cost is a loss, not spending
+      if (_g.expense > 0) oneTimeItems.push({ id: t.id, amt: _g.expense }); // PLS #354
       continue; // the capital portion is never income
     }
     const amt = t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount;
@@ -3005,12 +3011,14 @@ function getMonthTotals(monthKey) {
       expense += converted;
       // PLS #277: write-offs and settlement losses are losses, not spending habits
       if (t.type === 'expense' && (t.isLoanSettlementLoss || t.isReimbSettlementLoss ||
-          t.categoryId === 'sc-writeoff' || t.writeOffReason !== undefined)) oneTimeLoss += converted;
+          t.categoryId === 'sc-writeoff' || t.writeOffReason !== undefined)) { oneTimeLoss += converted; oneTimeItems.push({ id: t.id, amt: converted }); }
+      else expenseItems.push({ id: t.id, amt: converted }); // PLS #354: usual spending, entry by entry
     }
     // Remittance, transfer, lend, borrow excluded from monthly income/expense totals
   }
   return { income, expense, net: income-expense, currency: dispCurr, oneTimeLoss,
-           spending: expense - oneTimeLoss }; // PLS #277: `spending` = usual behaviour, for averages only
+           spending: expense - oneTimeLoss, // PLS #277: `spending` = usual behaviour, for averages only
+           expenseItems, oneTimeItems };   // PLS #354
 }
 
 // DEBUG_SCANNER_NOTE: function signature uses `date, time` as parameters.
@@ -3049,10 +3057,32 @@ function getCategoryDisplay(catId) {
       if (sc && sc.archived) return {icon: sc.icon || '📌', name: `${cat.icon||''} ${sc.name} (archived)`};
     }
   }
-  // Truly orphaned (catId exists but no category found anywhere)
-  return {icon:'❓',name:'Deleted Category'};
+  // -- PLS #352 -- no category lookup ever reads "Deleted Category" (#349/#350 fixed it per transaction in
+  // txCategoryDisplay; raw lookups such as shared-expense rows, analytics and budgets still hit this).
+  // (a) ids the app itself writes keep their real name when the category is missing (older database,
+  //     or the user deleted its parent group). (b) a category the user really deleted reads
+  //     "Uncategorized"; `orphan:true` lets the callers that must skip missing categories still skip them.
+  const _sys = _SYSTEM_CAT_LABELS[catId];
+  if (_sys) return {icon:_sys.icon, name:_sys.name};
+  return {icon:'📌',name:'Uncategorized',orphan:true};
 }
-
+// PLS #352: every categoryId the code assigns on auto-created entries, with its default name + icon.
+// Verified by scan: these are the only system ids written by the app. Add new ones here.
+const _SYSTEM_CAT_LABELS = {
+  'sc-reimbreceived': {name:'Reimbursement Received', icon:'💰'}, // batch reimbursement (receivable, PLS #48)
+  'sc-investreturns': {name:'Investment Returns', icon:'📈'},
+  'sc-investloss':    {name:'Investment Loss',    icon:'📉'},
+  'sc-writeoff':      {name:'Write-off',          icon:'✗'},
+  'sc-debtforgiven':  {name:'Forgiven Debt',      icon:'🕊'},
+  'sc-forexgain':     {name:'Forex Gain',         icon:'📊'},
+  'sc-forexloss':     {name:'Forex Loss',         icon:'📉'},
+  'sc-bankcharges':   {name:'Bank Charges',       icon:'🏦'},
+  'sc-remittance':    {name:'Remittance',         icon:'📤'},
+  'sc-remittancefee': {name:'Remittance Fee',     icon:'💸'},
+  'sc-externalin':    {name:'External In',        icon:'📥'},
+  'sc-externalout':   {name:'External Out',       icon:'📤'},
+  'sc-misc':          {name:'Miscellaneous',      icon:'📌'},
+};
 // 📖 USER STORY: Auto-generated children (gain/loss) ay may dedicated display labels imbes
 // na ipakita as "Uncategorized" o random category. Para mas malinaw kung anong klase ng
 // transaction sila — Loan Settlement Gain, Reimbursement Loss, etc.
@@ -3078,7 +3108,7 @@ function txCategoryDisplay(tx) {
   // 'sc-reimbreceived' that were later removed) is named by what it is, not "Deleted Category". A
   // real, existing category always wins; this only replaces the missing-category fallback.
   const _c = getCategoryDisplay(tx.categoryId);
-  const _missing = !tx.categoryId || /^(Deleted Category|Uncategorized)$/.test(_c.name || '');
+  const _missing = !tx.categoryId || !!_c.orphan || /^(Deleted Category|Uncategorized)$/.test(_c.name || ''); // #352: orphan flag
   if (_missing) {
     if (tx.isAutoReimb)    return {icon:'💰', name:'Reimbursement Received'};
     if (tx.isCorrection || tx.type === 'correction') return {icon:'⚖️', name:'Balance Correction'};
@@ -3153,11 +3183,11 @@ function txAmountDisplay(tx) {
 // ════════════════════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════════════════════
-const PAGES = ['dashboard','analytics','installments','transactions','reimbursements','accounts','investments','loans','planning','settings'];
+const PAGES = ['dashboard','insights','analytics','installments','transactions','reimbursements','accounts','investments','loans','planning','settings'];
 let currentPage = (() => {
   try {
     const saved = localStorage.getItem('tb_last_page');
-    return saved && ['dashboard','transactions','accounts','loans','installments','reimbursements','planning','analytics','settings'].includes(saved) ? saved : 'dashboard';
+    return saved && ['dashboard','insights','transactions','accounts','loans','installments','reimbursements','planning','analytics','settings'].includes(saved) /* PLS #353: + insights */ ? saved : 'dashboard';
   } catch(e) { return 'dashboard'; }
 })();
 var _dashReorderMode = false; // C2: dashboard reorder mode
@@ -3305,7 +3335,7 @@ function _dashWidgetHTML(id, mk, disp) {
 }
 
 function nav(page) {
-  const fn = { dashboard:renderDashboard, analytics:renderAnalytics, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, investments:renderInvestmentsPage, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
+  const fn = { dashboard:renderDashboard, insights:renderInsights /* PLS #353 */, analytics:renderAnalytics, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, investments:renderInvestmentsPage, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   // PLS #199: unknown/retired page ids (e.g. a stale 'ai' in tb_last_page after the AI Insights
   // page was removed) previously blanked the screen — page-content was cleared and no renderer
   // matched. Fall back to the dashboard. Deliberately keyed off `fn` (the real renderer
@@ -3322,9 +3352,10 @@ function nav(page) {
   }
   currentPage = page;
   { const _b = document.getElementById('ph-back'); if (_b) _b.remove(); } // PLS #317: back chevron belongs to an open report only
+  if (page !== 'insights') _insMk = null; // PLS #354: Insights reopens on this month
   if (page === 'analytics') _anHome = true; // PLS #317: the Analytics tab opens on Browse; deep links then call setAnalyticsTab()
   try { localStorage.setItem('tb_last_page', page); } catch(e) {}
-  const titles = {dashboard:'Dashboard',analytics:'Analytics',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',investments:'Investments',loans:'Loans',planning:'Planning',settings:'Settings'};
+  const titles = {dashboard:'Dashboard',insights:'Insights',analytics:'Analytics',installments:'Installments',transactions:'Transactions',reimbursements:'Reimbursements',accounts:'Accounts',investments:'Investments',loans:'Loans',planning:'Planning',settings:'Settings'};
   document.getElementById('ph-title').textContent = titles[page] || page;
   // Sidebar
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
@@ -4010,35 +4041,35 @@ function generateInsights() {
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
     const effLimit = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
     const pct = spent / effLimit;
-    if (pct > 1) insights.push({icon:'🔴',urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${fmt(spent, bgt.currency)} of ${fmt(effLimit, bgt.currency)} limit this month.`});
-    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
+    if (pct > 1) insights.push({icon:'🔴',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${fmt(spent, bgt.currency)} of ${fmt(effLimit, bgt.currency)} limit this month.`});
+    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
   }
 
   // MoM change
   if (prev.expense > 0) {
     const chg = ((curr.expense - prev.expense) / prev.expense) * 100;
-    if (chg > 25) insights.push({icon:'📈',urgent:true,text:`Expenses up <strong>${chg.toFixed(0)}%</strong> vs last month. Consider reviewing discretionary spending.`});
+    if (chg > 25) insights.push({icon:'📈',go:"_insGo('spending')",urgent:true,text:`Expenses up <strong>${chg.toFixed(0)}%</strong> vs last month. Consider reviewing discretionary spending.`});
   }
 
   // Salary FX reminder
   const recentSalary = db.transactions.filter(t=>t.type==='income'&&!t.isSettlement&&t.date&&t.date.startsWith(mk)).slice(-1)[0];
   if (recentSalary && recentSalary.currency !== (_homeBase())) {
     const home = _homeBase();
-    insights.push({icon:'💱',urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your ${home} exchange rate for accurate tracking.`});
+    insights.push({icon:'💱',go:"_insGo('income')",urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your ${home} exchange rate for accurate tracking.`});
   }
 
   // Drive sync reminder
   if (!db.settings.lastDriveSync || new Date()-new Date(db.settings.lastDriveSync) > 86400000*2) {
-    insights.push({icon:'☁️',urgent:true,text:`Backup is <strong>overdue</strong> — last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
+    insights.push({icon:'☁️',go:"nav('settings');setSettingsTab('export')",urgent:true,text:`Backup is <strong>overdue</strong> — last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
   }
 
   // Loan deadline
   const urgentLoans = [...db.loans.lent, ...db.loans.borrowed].filter(l=>!l.settled&&l.dueDate&&daysUntil(l.dueDate)!==null&&daysUntil(l.dueDate)<=7);
-  for (const l of urgentLoans) insights.push({icon:'🤝',urgent:true,text:`Loan <strong>${_esc(l.personName)}</strong> due in ${daysUntil(l.dueDate)} day(s) — ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
+  for (const l of urgentLoans) insights.push({icon:'🤝',go:"nav('loans')",urgent:true,text:`Loan <strong>${_esc(l.personName)}</strong> due in ${daysUntil(l.dueDate)} day(s) — ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
 
   // No income this month
   if (dayOfMonth > 10 && curr.income === 0) {
-    insights.push({icon:'💰',urgent:true,text:`No income recorded yet this month. Remember to log your salary or other income.`});
+    insights.push({icon:'💰',go:"_insGo('income')",urgent:true,text:`No income recorded yet this month. Remember to log your salary or other income.`});
   }
 
   // Net positive (positive vibes — NOT urgent)
@@ -4369,35 +4400,15 @@ function renderDashboard() {
   }
 
   // Insights — only show pill if there are urgent ones, navigates to AI Insights
-  // Merge alerts + insights into one "Needs Attention" card
+  // -- PLS #354 -- Dashboard keeps ONE count row; the list itself (with its Log now / View buttons)
+  // lives on Insights > Needs attention. His call: "minimal items lang" on the Dashboard.
   let insightHTML = '';
-  const urgentInsights = insights.filter(i => i.urgent);
-  const alertItems = alerts;
-  const totalAttention = urgentInsights.length + alertItems.length;
+  const totalAttention = alerts.length + insights.filter(i => i.urgent).length;
   if (totalAttention > 0) {
-    const alertRows = alertItems.map(a => {
-      const icon = a.type==='loan'?'⏰':a.type==='installment'?'📅':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':a.type==='fx'?'💱':'💤';
-      const actionBtn = a.type==='recurring' && a.id
-        ? `<button onclick="event.stopPropagation();logRecurringNow('${a.id}')" style="font-size:10px;padding:2px 8px;border-radius:var(--r-md);border:1px solid var(--accent);color:var(--accent);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0">Log now</button>`
-        : a.type==='installment' && a.id
-        ? `<button onclick="event.stopPropagation();nav('installments')" style="font-size:10px;padding:2px 8px;border-radius:var(--r-md);border:1px solid var(--amber);color:var(--amber);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0">View</button>`
-        : '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:14px;flex-shrink:0">${icon}</span>
-        <span style="font-size:12px;color:var(--text2);flex:1">${_esc(a.msg)}</span>
-        ${actionBtn}
-      </div>`;
-    }).join('');
-    const insightRow = urgentInsights.length > 0
-      ? `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('aisummary'),100)" style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer">
-          <span style="font-size:14px;flex-shrink:0">${urgentInsights[0].icon}</span>
-          <span style="font-size:12px;color:var(--text2);flex:1"><strong>${urgentInsights.length} insight${urgentInsights.length>1?'s':''}</strong> need${urgentInsights.length>1?'':'s'} attention</span>
-          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style="opacity:0.4;flex-shrink:0"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>`
-      : '';
-    insightHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r-md);padding:10px 14px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.05em;color:var(--amber);margin-bottom:6px">NEEDS ATTENTION</div>
-      ${alertRows}${insightRow}
+    insightHTML = `<div onclick="nav('insights')" role="link" tabindex="0" style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r-md);padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer">
+      <span style="font-size:14px;flex-shrink:0">⚠️</span>
+      <span style="font-size:12.5px;color:var(--text2);flex:1"><strong>${totalAttention} ${totalAttention===1?'thing needs':'things need'} attention</strong></span>
+      <span class="lp-chev">›</span>
     </div>`;
   }
 
@@ -4701,6 +4712,9 @@ const APP_VERSION_DATE = 'September 2026';
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.1.9', date: 'September 2026', changes: [
+    '✨ The monthly summary is now its own page, Insights, in the sidebar (it was "AI Summary" inside Analytics)', // PLS #353
+    '🧭 Insights: browse past months, tap any line to see where it comes from, top categories and your biggest expense, and everything that needs attention in one list. One-time losses count in your totals but no longer skew your spending patterns', // PLS #354
+    '🔗 A batch reimbursement now lists the shared expenses it paid and links to Reimbursements, and no entry anywhere reads "Deleted Category"', // PLS #351-#352
     '🧾 Analytics reports share one headline size and drop the ALL CAPS; Investments and Cashflow use the same rows and tiles as the other reports (Overview unchanged)', // PLS #350
     '🔧 Old batch notes lose the "0 full", every automatic entry shows a real name, bucket editing is tidier, and PC lists no longer stretch', // PLS #350
     '🏷️ Batch reimbursements, loan settlements and other automatic entries show their real name in the detail view instead of "Deleted Category"', // PLS #349
@@ -8201,7 +8215,19 @@ function openTxDetail(txId) {
         : `<button class="btn btn-ghost btn-sm" onclick="restoreTx('${tx.id}')">Restore${linkedChildren.length > 0 ? ' All' : ''}</button>
            <button class="btn btn-danger btn-sm" onclick="deleteTxPerm('${tx.id}')">Delete${linkedChildren.length > 0 ? ' All' : ''}</button>`);
   } else {
-    if (tx.isAutoReimb) {
+    if (tx.isBatchReimbSettlement) {
+      // -- PLS #351 -- a batch payment is not a child of one shared expense. It fell into the isAutoReimb
+      // branch, whose "View Parent" opened only the FIRST shared expense (parentId = primaryTxId) and
+      // never reached Reimbursements. It now routes to the page and to its own edit/undo form.
+      const _n = (tx.batchTxIds||[]).length;
+      // note stacked above the buttons: the footer is a flex row, so a sibling note got squeezed to a sliver
+      footer = `<div style="display:flex;flex-direction:column;gap:10px;width:100%">
+        <div style="font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Payment from ${_esc(tx.batchPerson||tx.reimbPerson||'someone')} for ${_n} shared ${_n===1?'expense':'expenses'}. Edit or undo it in Reimbursements.</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" onclick="closeDlg();nav('reimbursements')">Go to Reimbursements</button>
+          <button class="btn btn-ghost btn-sm" onclick="closeDlg();setTimeout(()=>openBatchReimbSettleEdit('${tx.id}'),50)">Edit or undo</button>
+        </div></div>`;
+    } else if (tx.isAutoReimb) {
       const parentReimbExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
       footer = `<div style="font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
         <span>💡 Auto-linked reimbursement. Manage it from the original shared expense.</span>
@@ -8333,8 +8359,26 @@ function openTxDetail(txId) {
     childrenSection = _fsSec(`Linked · ${allChildren.length}`) + _fsFeed(childRows);
   }
 
+  // -- PLS #351 -- trace: each shared expense this batch payment covered, tap to open it. Its timeline
+  // links back here ("Batch payment by ..."), so the loop closes both ways.
+  let coversSection = '';
+  if (tx.isBatchReimbSettlement && Array.isArray(tx.batchTxIds)) {
+    const _who = tx.batchPerson || tx.reimbPerson || '';
+    const _rows = tx.batchTxIds.map(id => db.transactions.find(t => t.id === id)).filter(Boolean).map(st => {
+      const sc = getCategoryDisplay(st.subCatId || st.categoryId);
+      const share = Number(st.persons?.find(p => p.name === _who)?.share) || 0;       // this person's share
+      const paid  = Number(st.paidSoFar?.[_who]) || 0;                                  // paid so far, all payments
+      const done  = share > 0 ? paid >= share - 0.01 : !!st.settled;
+      return _fsRow({ ico:sc.icon, title:_stripIcon(sc.name), sub:`${fmtDFull(st.date)} · ${done ? 'paid' : 'partly paid'}`,
+        amt: share > 0 ? fmt(share, st.currency) : fmt(st.totalBill||st.amount, st.currency),
+        amt2: share > 0 ? `${_esc(_who)}'s share` : '',
+        onclick:`closeDlg();setTimeout(()=>openTxDetail('${st.id}'),50)`, chev:true });
+    }).join('');
+    if (_rows) coversSection = _fsSec(`Covers · ${tx.batchTxIds.length}`) + _fsFeed(_rows);
+  }
+
   if (tx.type === 'shared' && !tx.archived) { _openSharedFs(tx, footer, fxBadge); return; } // PLS #340
-  openDlg('', `<div class="fs">${fsHeadHTML}<div class="fs-card">${rows}</div>${fxBadge ? `<div style="margin-top:12px">${fxBadge}</div>` : ''}${reimbTimelineHTML}${childrenSection}</div>`, footer); // PLS #340
+  openDlg('', `<div class="fs">${fsHeadHTML}<div class="fs-card">${rows}</div>${fxBadge ? `<div style="margin-top:12px">${fxBadge}</div>` : ''}${reimbTimelineHTML}${coversSection}${childrenSection}</div>`, footer); // PLS #340 · #351 covers
 }
 
 // ════════════════════════════════════════════════════════════
@@ -14189,7 +14233,7 @@ function renderAnalytics() {
   // Do not "tidy" these back toward the old spending/cashflow/people names.
   const TAB_REGISTRY = {
     overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance — net worth, income vs expense, cashflow, and budget.'},
-    aisummary:  {label:'AI Summary',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
+    aisummary:  {label:'Insights',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
     cashflow:   {label:'Cashflow',       icon:'💰', section:'patterns', desc:'Money in vs money out over time, and what is left over each month.'},
     calendar:   {label:'Calendar',       icon:'📅', section:'patterns', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
     dayofweek:  {label:'By Day',         icon:'📅', section:'patterns', desc:'Which days of the week you tend to spend the most.'},
@@ -14246,7 +14290,7 @@ function renderAnalytics() {
   else if (_analyticsTab==='investments') content = renderAnalyticsInvestments();
   else if (_analyticsTab==='crosscurr') content = renderAnalyticsCrossCurrency();
   else if (_analyticsTab==='external') content = renderAnalyticsExternal();
-  else if (_analyticsTab==='aisummary') content = renderAnalyticsAISummary();
+  else if (_analyticsTab==='aisummary') { _analyticsTab = 'overview'; _anHome = true; setTimeout(() => nav('insights'), 0); return; } // PLS #353
   else if (_analyticsTab==='forex') content = renderAnalyticsForex();
   else content = renderAnalyticsOverview(); // safe fallback for unknown tab keys
   // Use swipe direction to decide animation class
@@ -14329,7 +14373,7 @@ function setAnalyticsTab(t) {
 var _anHome = true;
 function analyticsBack() { _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0); }
 const _AN_SECTIONS = [
-  { title:'',          keys:['overview','aisummary'] },
+  { title:'',          keys:['overview'] }, // PLS #353: AI Summary moved out to its own page, Insights
   { title:'Money in',  keys:['income','people'] },
   { title:'Money out', keys:['spending'] },
   { title:'Patterns',  keys:['cashflow','calendar','dayofweek','trends','yoy'] },
@@ -14402,7 +14446,7 @@ function renderInlineInsights(types, opts = {}) {
   return `<div style="margin-bottom:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:12.5px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Insights</div>
-      <button onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('aisummary'),100)" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:500;cursor:pointer;padding:0">View AI Summary →</button>
+      <button onclick="nav('insights')" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:500;cursor:pointer;padding:0">Open Insights →</button>
     </div>
     ${cards}
   </div>`;
@@ -20872,7 +20916,7 @@ function aiAnalyzeSpending(currency) {
     const leafId = tx.categoryId;
     if (!leafId || _isAutoOnlyCat(leafId)) continue;
     const disp = getCategoryDisplay(leafId);
-    if (!disp || disp.name === 'Deleted Category') continue;
+    if (!disp || disp.orphan) continue; // PLS #352: was the 'Deleted Category' string
     const _isTopL = [...db.categories.expense, ...db.categories.income].some(c => c.id === leafId); // PLS #134
     const mk = tx.date.slice(0,7);
     const amt = tx.type === 'shared' ? (tx.myShare || tx.amount) : tx.amount;
@@ -25328,7 +25372,7 @@ function aiBudgetIntelligence() {
         const limAmt = parseFloat(limit) || 0;
         if (limAmt <= 0) continue;
         const cat = getCategoryDisplay(catId);
-        if (!cat || cat.name === 'Deleted Category') continue;
+        if (!cat || cat.orphan) continue; // PLS #352: was the 'Deleted Category' string
         const spent = db.transactions.filter(t=>!t.archived&&!t.isSettlement&&!t.isLoanTx&&!t.isLoanPayment&&!t.isAutoReimb&&!t.isFeeReimbursable&&t.date&&t.date.startsWith(mk)&&(t.type==='expense'||t.type==='shared')&&t.currency===bgt.currency).reduce((s,t)=>{ // PLS #95: canonical budget-spend exclusions
           if (!_txMatchesAlloc(t, catId, _allocKeys)) return s;
           return s + (t.type==='shared'?(t.myShare||t.amount):t.amount);
@@ -27186,14 +27230,102 @@ function renderAnalyticsAccountHealth() {
 //     it meaning (vs last month, vs your own average, vs how far into the month you are)
 //   · no jargon, no percentages without the peso figure behind them
 //   · anything projected is labelled as an estimate and says what it's based on
-function renderAnalyticsAISummary() {
+// -- PERSONAL LOGIC SET #353 -- Insights: the old Analytics "AI Summary" as its own sidebar page.
+// It never called an AI -- every line is the app's own math on your data -- so "AI" was dropped from
+// the name. Content and wording are unchanged (his call: "maganda wordings"); only the home moved.
+// Related chips stay (they lead into the matching Analytics reports).
+var _insMk = null; // PLS #354: month shown on Insights (null = this month)
+function _insSetMonth(mk) { _insMk = (!mk || mk === currMonthKey()) ? null : mk; renderInsights(); const pc = document.getElementById('page-content'); if (pc) pc.scrollTop = 0; }
+// Open an Analytics report on the same month Insights is showing (tap-to-trace).
+function _insGo(tab, mk) { window._analyticsOverviewPeriod = mk || _insMk || currMonthKey(); nav('analytics'); setAnalyticsTab(tab); }
+// Usual spending for the months before `mk` (same rule as avgMonthlyExpense6mo, counted back from mk).
+function _usualSpendingBefore(mk) {
+  let total = 0, months = 0; const floor = firstCompleteMonthKey();
+  const y = Number(mk.slice(0,4)), m = Number(mk.slice(5,7)) - 1;
+  for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
+    const d = new Date(y, m - i, 1), k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (floor && k < floor) continue;
+    const t = getMonthTotals(k); if (t.spending > 0) { total += t.spending; months++; }
+  }
+  return months > 0 ? total / months : 0;
+}
+// A category's entries for the month, each opening its transaction.
+function _insListSheet(title, items) {
+  const dc = _displayCurrency();
+  const rows = items.map(it => { const t = db.transactions.find(x => x.id === it.id); if (!t) return ''; const c = txCategoryDisplay(t);
+    return _fsRow({ ico:c.icon, title: t.notes ? _esc(t.notes) : _esc(_stripIcon(c.name)), sub: `${t.notes ? _esc(_stripIcon(c.name)) + ' · ' : ''}${fmtDFull(t.date)}`,
+      amt: fmt(it.amt, dc), onclick:`closeDlg();setTimeout(()=>openTxDetail('${t.id}'),50)`, chev:true }); }).join('');
+  openDlg(title, `<div class="fs">${_fsFeed(rows)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`);
+}
+function _insCatSheet(catName, mk) {
+  const tot = getMonthTotals(mk);
+  const items = (tot.expenseItems || []).filter(it => { const t = db.transactions.find(x => x.id === it.id); if (!t) return false;
+    const d = getCategoryDisplay(t.subCatId || t.categoryId); return ((d.name === 'Category' || d.orphan) ? 'Uncategorized' : _stripIcon(d.name)) === catName; })
+    .sort((a,b) => b.amt - a.amt);
+  const lbl = new Date(Number(mk.slice(0,4)), Number(mk.slice(5,7))-1, 1).toLocaleDateString('en-PH',{month:'long',year:'numeric'});
+  _insListSheet(`${_esc(catName)} · ${lbl}`, items);
+}
+function _insOneTimeSheet(mk) { _insListSheet('One-time losses', (getMonthTotals(mk).oneTimeItems || []).slice().sort((a,b) => b.amt - a.amt)); }
+// Needs attention: the alerts and urgent insights the Dashboard used to list in full.
+function _insNeedsAttentionHTML() {
+  let alerts = [], urgent = [];
+  try { alerts = checkAlerts() || []; } catch(e) {}
+  try { urgent = (generateInsights() || []).filter(i => i.urgent); } catch(e) {}
+  if (!alerts.length && !urgent.length) return '';
+  const aRows = alerts.map(a => {
+    const icon = a.type==='loan'?'⏰':a.type==='installment'?'📅':a.type==='recurring'?'🔄':a.type==='crypto'?'🪙':a.type==='low'?'⚠️':a.type==='fx'?'💱':'💤';
+    const btn = a.type==='recurring' && a.id
+      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();logRecurringNow('${a.id}')" style="flex-shrink:0">Log now</button>`
+      : a.type==='installment' && a.id
+      ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();nav('installments')" style="flex-shrink:0">View</button>` : '';
+    return `<div class="lp-row" style="cursor:default"><span style="font-size:15px;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0;font-size:12.5px;color:var(--text2);line-height:1.45">${_esc(a.msg)}</div>${btn}</div>`;
+  }).join('');
+  const iRows = urgent.map(i => `<div class="lp-row"${i.go ? ` onclick="${i.go}"` : ' style="cursor:default"'}><span style="font-size:15px;flex-shrink:0">${i.icon || '⚠️'}</span>
+      <div style="flex:1;min-width:0;font-size:12.5px;color:var(--text2);line-height:1.45">${i.text}</div>${i.go ? '<span class="lp-chev">›</span>' : ''}</div>`).join('');
+  return `<div class="page-pad" style="padding-bottom:0;padding-top:4px"><div class="lp-sec">Needs attention · ${alerts.length + urgent.length}</div><div class="lp-grp" style="margin-bottom:6px">${aRows}${iRows}</div></div>`;
+}
+function _insMonthNav() {
+  const cur = currMonthKey(), mk = _insMk || cur;
+  const firstMk = db.transactions.filter(t => !t.archived && t.date).map(t => t.date.slice(0,7)).sort()[0] || cur;
+  const y = Number(mk.slice(0,4)), m = Number(mk.slice(5,7)) - 1;
+  const k = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const pv = k(new Date(y, m - 1, 1)), nx = k(new Date(y, m + 1, 1));
+  const arrow = (dir, to) => `<button class="icon-btn" aria-label="${dir<0?'Previous month':'Next month'}" ${to?`onclick="_insSetMonth('${to}')"`:'disabled'} style="width:28px;height:28px;min-width:28px;border-radius:50%;background:var(--bg3);color:var(--accent);${to?'':'opacity:0.35;cursor:default'}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${dir<0?'M15 18l-6-6 6-6':'M9 18l6-6-6-6'}"/></svg></button>`;
+  const label = new Date(y, m, 1).toLocaleString('en', { month:'long', year:'numeric' });
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px;margin:6px auto 0;max-width:1200px;box-sizing:border-box">
+    ${mk !== cur ? `<button class="btn btn-ghost btn-sm" onclick="_insSetMonth(null)">This month</button>` : '<span></span>'}
+    <div style="display:flex;align-items:center;gap:8px">${arrow(-1, pv >= firstMk ? pv : null)}<div style="font-size:13px;font-weight:600;white-space:nowrap">${label}</div>${arrow(1, nx <= cur ? nx : null)}</div>
+  </div>`;
+}
+function renderInsights() {
+  const kin = [['overview','Overview'],['cashflow','Cashflow'],['spending','Spending']];
+  const related = `<div class="page-pad" style="margin-top:0;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text4)">Related</span>
+      ${kin.map(([k,n])=>`<span onclick="_insGo('${k}')" role="link" tabindex="0"
+        style="font-size:11px;color:var(--accent);cursor:pointer;padding:3px 9px;border:1px solid var(--border);border-radius:var(--r-full);background:var(--bg2);white-space:nowrap">${n}</span>`).join('')}
+    </div></div>`;
+  const mk = _insMk || currMonthKey(), isCur = !_insMk; // PLS #354
+  document.getElementById('page-content').innerHTML = `<div class="tab-content-anim ins-pane">${_insMonthNav()}${isCur ? _insNeedsAttentionHTML() : ''}${renderAnalyticsAISummary(mk)}${related}</div>`;
+}
+function renderAnalyticsAISummary(mkSel) {
   const dc = _displayCurrency();
   const now = new Date();
-  const mk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const monthLabel = now.toLocaleDateString('en-PH',{month:'long',year:'numeric'});
+  // PLS #354: any month can be summarised. `base` is the 1st of the chosen month; everything that
+  // compares ("last month", "your last 6") counts back from it. `now` stays today for the pacing
+  // and forecasts, which only render for the current month.
+  const curMk = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const mk = mkSel || curMk;
+  const isCur = mk === curMk;
+  const base = new Date(Number(mk.slice(0,4)), Number(mk.slice(5,7)) - 1, 1);
+  const monthLabel = base.toLocaleDateString('en-PH',{month:'long',year:'numeric'});
+  const monName = base.toLocaleDateString('en-PH',{month:'long'});
+  const thisM = isCur ? 'this month' : `in ${monName}`;
   const tot = getMonthTotals(mk);
   const mkOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  const lastMk = mkOf(new Date(now.getFullYear(), now.getMonth()-1, 1));
+  const lastMk = mkOf(new Date(base.getFullYear(), base.getMonth()-1, 1));
   const lastTot = getMonthTotals(lastMk);
 
   if ((tot.income||0) === 0 && (tot.expense||0) === 0 && (lastTot.income||0) === 0 && (lastTot.expense||0) === 0) {
@@ -27205,32 +27337,36 @@ function renderAnalyticsAISummary() {
   const net = income - expense;
   const savingsRate = income > 0 ? (net / income) * 100 : 0;
   const incomePct  = (lastTot.income||0)  > 0 ? ((income - lastTot.income) / lastTot.income) * 100 : 0;
-  const expensePct = (lastTot.expense||0) > 0 ? ((expense - lastTot.expense) / lastTot.expense) * 100 : 0;
+  // PLS #354 (his call: hybrid): one-time losses (write-offs, settlement and investment losses)
+  // stay in the TOTALS above -- spent, kept, savings rate -- because the money really left. Every
+  // PATTERN below (vs last month, vs usual, pace, top category, biggest expense) uses `spend`,
+  // the usual-spending part, so one write-off does not read as a habit.
+  const oneTime   = tot.oneTimeLoss || 0;
+  const spend     = tot.spending || 0;
+  const lastSpend = lastTot.spending || 0;
+  const expensePct = lastSpend > 0 ? ((spend - lastSpend) / lastSpend) * 100 : 0;
 
   // ── where the month is in its own cycle: pacing only means something against elapsed days ──
   const dayNow    = now.getDate();
   const daysInMth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const monthGone = dayNow / daysInMth;
-  const projSpend = monthGone > 0 ? expense / monthGone : expense;
+  const projSpend = monthGone > 0 ? oneTime + spend / monthGone : expense; // PLS #354: a one-time loss is not multiplied
 
   // ── this month's spending against the user's own recent normal ──
-  const avg6 = avgMonthlyExpense6mo();
+  const avg6 = isCur ? avgMonthlyExpense6mo() : _usualSpendingBefore(mk); // PLS #354: past months compare with the months before them
 
   // ── categories ──
-  const monthStart = `${mk}-01`, monthEnd = `${mk}-31`;
-  const expByCat = {};
-  db.transactions.filter(t => !t.archived && t.type === 'expense' && t.date >= monthStart && t.date <= monthEnd &&
-    !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && !t.isInvestmentFund).forEach(t => {
-    const disp = getCategoryDisplay(t.categoryId);
-    const cat = (disp.name === 'Category' || disp.name === 'Uncategorized') ? 'Uncategorized' : _stripIcon(disp.name);
-    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
-    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
-    expByCat[cat] = (expByCat[cat] || 0) + txAmtIn(t.amount||0, t);
-  });
+  // PLS #354: built from getMonthTotals' own list of usual spending (shared expenses at your share
+  // included), so the categories add up to `spend` and one-time losses never appear here.
+  const _catOf = t => { const d = getCategoryDisplay(t.subCatId || t.categoryId); return (d.name === 'Category' || d.orphan) ? 'Uncategorized' : _stripIcon(d.name); };
+  const _catMap = items => { const m = {}; for (const it of items) { const t = db.transactions.find(x => x.id === it.id); if (!t) continue;
+      const n = _catOf(t); if (!m[n]) m[n] = { amt:0, icon:getCategoryDisplay(t.subCatId || t.categoryId).icon, ids:[] }; m[n].amt += it.amt; m[n].ids.push(t.id); } return m; };
+  const catNow = _catMap(tot.expenseItems || []), catLast = _catMap(lastTot.expenseItems || []);
+  const expByCat = {}; for (const [n,v] of Object.entries(catNow)) expByCat[n] = v.amt;
   const ranked = Object.entries(expByCat).filter(([n]) => n !== 'Uncategorized').sort((a,b) => b[1]-a[1]);
   const topCat = ranked[0];
-  const topCatDisp = topCat ? _inDisplay(topCat[1]) : 0;
-  const topShare = topCat && expense > 0 ? (topCatDisp / expense) * 100 : 0;
+  const topCatDisp = topCat ? topCat[1] : 0;   // already in display currency
+  const topShare = topCat && spend > 0 ? (topCatDisp / spend) * 100 : 0;
 
   // ── liquid cash → runway (same account types the dashboard counts as cash) ──
   const cashPhp = db.accounts.filter(isLiquidAccount)
@@ -27254,7 +27390,7 @@ function renderAnalyticsAISummary() {
   // ── how this month's net ranks against the last 6 ──
   const recentNets = [];
   for (let i = 1; i <= ANALYSIS_MONTHS; i++) {
-    const _k = mkOf(new Date(now.getFullYear(), now.getMonth()-i, 1));
+    const _k = mkOf(new Date(base.getFullYear(), base.getMonth()-i, 1)); // PLS #354: from the chosen month
     if (_fcFloor && _k < _fcFloor) continue; // PLS #215
     const t = getMonthTotals(_k);
     if ((t.income||0) || (t.expense||0)) recentNets.push((t.income||0) - (t.expense||0));
@@ -27266,61 +27402,79 @@ function renderAnalyticsAISummary() {
   // ════════ headline: one sentence a person can repeat out loud ════════
   let verdict, verdictTone;
   if (income <= 0) {
-    verdict = `No income logged yet this month, so everything below is spending-only.`;
+    verdict = `No income logged yet ${thisM}, so everything below is spending-only.`;
     verdictTone = 'var(--text2)';
   } else if (net >= 0 && recentNets.length >= 3 && betterThan === recentNets.length) {
     verdict = `Your strongest month in ${recentNets.length + 1} — you kept ${money(net)} of the ${money(income)} you earned.`;
     verdictTone = 'var(--green)';
   } else if (net >= 0) {
-    verdict = `You kept ${money(net)} of the ${money(income)} you earned this month.`;
+    verdict = `You kept ${money(net)} of the ${money(income)} you earned ${thisM}.`;
     verdictTone = 'var(--green)';
   } else {
-    verdict = `You spent ${money(net)} more than you earned this month.`;
+    verdict = `You spent ${money(net)} more than you earned ${thisM}.`;
     verdictTone = 'var(--red)';
   }
 
   // ════════ bullets — each one pairs a number with what makes it meaningful ════════
   const pts = [];
+  // PLS #354 tap-to-trace: each line carries where its number comes from.
+  const goRep = tab => `_insGo('${tab}','${mk}')`;
+  const P = (text, go) => pts.push({ text, go });
 
   if ((lastTot.income||0) > 0) {
-    if (incomePct > 5)       pts.push(`Income is up ${Math.abs(incomePct).toFixed(0)}% on last month — ${money(income - lastTot.income)} more.`);
-    else if (incomePct < -5) pts.push(`Income is down ${Math.abs(incomePct).toFixed(0)}% on last month — ${money(income - lastTot.income)} less.`);
-    else                     pts.push(`Income held steady with last month.`);
+    if (incomePct > 5)       P(`Income is up ${Math.abs(incomePct).toFixed(0)}% on last month — ${money(income - lastTot.income)} more.`, goRep('income'));
+    else if (incomePct < -5) P(`Income is down ${Math.abs(incomePct).toFixed(0)}% on last month — ${money(income - lastTot.income)} less.`, goRep('income'));
+    else                     P(`Income held steady with last month.`, goRep('income'));
   } else if (income > 0) {
-    pts.push(`Earned ${money(income)} this month.`);
+    P(`Earned ${money(income)} ${thisM}.`, goRep('income'));
   }
 
-  if ((lastTot.expense||0) > 0) {
-    if (expensePct > 10)       pts.push(`Spending rose ${Math.abs(expensePct).toFixed(0)}% — ${money(expense - lastTot.expense)} more than last month.`);
-    else if (expensePct < -10) pts.push(`Spending fell ${Math.abs(expensePct).toFixed(0)}% — ${money(expense - lastTot.expense)} less than last month.`);
-    else                       pts.push(`Spending is close to last month's, within 10%.`);
+  if (lastSpend > 0) {
+    if (expensePct > 10)       P(`Spending rose ${Math.abs(expensePct).toFixed(0)}% — ${money(spend - lastSpend)} more than last month.`, goRep('spending'));
+    else if (expensePct < -10) P(`Spending fell ${Math.abs(expensePct).toFixed(0)}% — ${money(spend - lastSpend)} less than last month.`, goRep('spending'));
+    else                       P(`Spending is close to last month's, within 10%.`, goRep('spending'));
   }
 
   if (topCat) {
-    pts.push(`${topCat[0]} took the biggest share at ${money(topCatDisp)} — that's ${topShare.toFixed(0)}% of everything you spent.`);
+    P(`${topCat[0]} took the biggest share at ${money(topCatDisp)} — that's ${topShare.toFixed(0)}% of everything you spent.`, `_insCatSheet(${JSON.stringify(topCat[0]).replace(/"/g,'&quot;')},'${mk}')`);
   }
 
-  if (avg6 > 0 && expense > 0) {
-    const vsAvg = ((expense - avg6) / avg6) * 100;
+  if (avg6 > 0 && spend > 0) {
+    const vsAvg = ((spend - avg6) / avg6) * 100;
+    const verb = isCur ? `You're spending` : `You spent`;
     if (Math.abs(vsAvg) >= 12) {
-      pts.push(vsAvg > 0
-        ? `You're spending ${vsAvg.toFixed(0)}% more than your usual ${money(avg6)} a month.`
-        : `You're spending ${Math.abs(vsAvg).toFixed(0)}% less than your usual ${money(avg6)} a month.`);
+      P(vsAvg > 0
+        ? `${verb} ${vsAvg.toFixed(0)}% more than your usual ${money(avg6)} a month.`
+        : `${verb} ${Math.abs(vsAvg).toFixed(0)}% less than your usual ${money(avg6)} a month.`, goRep('spending'));
     } else {
-      pts.push(`Spending is running close to your usual ${money(avg6)} a month.`);
+      P(`Spending ${isCur ? 'is running' : 'ran'} close to your usual ${money(avg6)} a month.`, goRep('spending'));
     }
   }
 
   if (income > 0) {
-    if (savingsRate >= 30)     pts.push(`You're keeping ${savingsRate.toFixed(0)}% of your income — well above the 20% many people aim for.`);
-    else if (savingsRate >= 20) pts.push(`You're keeping ${savingsRate.toFixed(0)}% of your income, a healthy rate.`);
-    else if (savingsRate > 0)   pts.push(`You're keeping ${savingsRate.toFixed(0)}% of your income — there's room to push this higher.`);
-    else                        pts.push(`Nothing was left over this month, so savings didn't grow.`);
+    const keep = isCur ? `You're keeping` : `You kept`;
+    if (savingsRate >= 30)     P(`${keep} ${savingsRate.toFixed(0)}% of your income — well above the 20% many people aim for.`, goRep('cashflow'));
+    else if (savingsRate >= 20) P(`${keep} ${savingsRate.toFixed(0)}% of your income, a healthy rate.`, goRep('cashflow'));
+    else if (savingsRate > 0)   P(`${keep} ${savingsRate.toFixed(0)}% of your income — there's room to push this higher.`, goRep('cashflow'));
+    else                        P(`Nothing was left over ${thisM}, so savings didn't grow.`, goRep('cashflow'));
   }
 
-  const bulletHtml = pts.map(p => `<div style="display:flex;gap:8px;margin-bottom:7px;align-items:flex-start">
+  // PLS #354: the one-time loss, named, so the totals and the patterns above both make sense.
+  const _oneItems = tot.oneTimeItems || [];
+  if (oneTime > 0.005 && _oneItems.length) {
+    if (_oneItems.length === 1) {
+      const lt = db.transactions.find(x => x.id === _oneItems[0].id);
+      const kind = !lt ? 'loss' : lt.isInvestmentReturn ? 'investment loss' : txCategoryDisplay(lt).name.toLowerCase();
+      P(`Includes a one-time ${money(oneTime)} ${_esc(kind)}.`, `openTxDetail('${_oneItems[0].id}')`);
+    } else {
+      P(`Includes ${money(oneTime)} of one-time losses (${_oneItems.length} entries).`, `_insOneTimeSheet('${mk}')`);
+    }
+  }
+
+  const bulletHtml = pts.map(p => `<div class="ins-pt" role="link" tabindex="0" onclick="${p.go}" style="display:flex;gap:8px;margin-bottom:7px;align-items:flex-start;cursor:pointer">
       <span style="color:var(--accent);flex-shrink:0;line-height:1.55">•</span>
-      <span style="flex:1">${p}</span>
+      <span style="flex:1">${p.text}</span>
+      <span class="lp-chev" style="line-height:1.55;flex-shrink:0">›</span>
     </div>`).join('');
 
   // ════════ looking ahead — every figure says what it is based on ════════
@@ -27421,6 +27575,35 @@ function renderAnalyticsAISummary() {
       </div>
     </div>`).join('');
 
+  // PLS #354: top 3 categories against last month, and the biggest single expense (usual spending
+  // only -- a one-time loss is named in the summary instead). Rows open what they describe.
+  const top3 = ranked.slice(0,3);
+  const topMax = top3.length ? top3[0][1] : 0;
+  const top3Html = top3.map(([n, v]) => {
+    const was = catLast[n] ? catLast[n].amt : 0, d = v - was;
+    const delta = was <= 0 ? `<span style="color:var(--text3)">new vs last month</span>`
+      : Math.abs(d) < 0.005 ? `<span style="color:var(--text3)">same as last month</span>`
+      : `<span style="color:${d > 0 ? 'var(--red)' : 'var(--green)'}">${d > 0 ? '↑' : '↓'} ${money(d)} vs last month</span>`;
+    return `<div class="lp-row" onclick="_insCatSheet(${JSON.stringify(n).replace(/"/g,'&quot;')},'${mk}')">
+      <span class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${catNow[n].icon || '•'}</span>
+      <div style="flex:1;min-width:0"><div class="lp-name">${_esc(n)}</div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin:5px 0 4px;overflow:hidden;max-width:220px"><div style="height:100%;width:${topMax>0?(v/topMax*100).toFixed(1):0}%;background:var(--accent)"></div></div>
+        <div class="lp-meta">${delta}</div></div>
+      <div class="lp-amt">${money(v)}</div><span class="lp-chev">›</span></div>`;
+  }).join('');
+  let bigHtml = '';
+  { let big = null;
+    for (const it of (tot.expenseItems || [])) if (!big || it.amt > big.amt) big = it;
+    const bt = big && db.transactions.find(x => x.id === big.id);
+    if (bt) { const bc = txCategoryDisplay(bt);
+      bigHtml = `<div class="lp-row" onclick="openTxDetail('${bt.id}')">
+        <span class="pool-avatar" style="width:32px;height:32px;font-size:15px;background:var(--bg3)">${bc.icon || '•'}</span>
+        <div style="flex:1;min-width:0"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt.notes ? _esc(bt.notes) : _esc(_stripIcon(bc.name))}</span></div>
+          <div class="lp-meta">${bt.notes ? _esc(_stripIcon(bc.name)) + ' · ' : ''}${fmtDFull(bt.date)}${spend > 0 ? ` · ${(big.amt/spend*100).toFixed(0)}% of spending` : ''}</div></div>
+        <div class="lp-amt">${money(big.amt)}</div><span class="lp-chev">›</span></div>`; } }
+  const extraHtml = (top3Html ? `<div class="lp-sec">Top categories</div><div class="lp-grp" style="margin-bottom:16px">${top3Html}</div>` : '')
+                  + (bigHtml ? `<div class="lp-sec">Biggest expense</div><div class="lp-grp" style="margin-bottom:16px">${bigHtml}</div>` : '');
+
   return `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">
@@ -27433,21 +27616,22 @@ function renderAnalyticsAISummary() {
 
     <div class="metric-grid fr2-always" style="margin-bottom:16px">
       <div class="metric-card">
-        <div class="metric-label">Kept this month</div>
+        <div class="metric-label">Kept ${thisM}</div>
         <div class="metric-value mfit" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':'−'}${money(net)}</div>
         <div class="metric-sub">${income>0 ? `${savingsRate.toFixed(0)}% of what you earned` : 'no income logged'}</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">Spent this month</div>
+        <div class="metric-label">Spent ${thisM}</div>
         <div class="metric-value mfit">${money(expense)}</div>
         <div class="metric-sub">${avg6>0 ? `usual is ${money(avg6)}` : 'building your baseline'}</div>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    ${extraHtml}
+    ${isCur ? `<div class="card" style="margin-bottom:16px">
       <div class="section-title">Looking ahead</div>
       ${aheadHtml}
-    </div>
+    </div>` : ''}
   </div>`;
 }
 
