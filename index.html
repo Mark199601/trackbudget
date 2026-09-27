@@ -147,6 +147,17 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .ax-note{cursor:text}
 .ax-note textarea{flex:1;background:transparent;border:0;outline:0;resize:none;color:var(--text);font:inherit;font-size:14px;padding:6px 0;min-height:22px;overflow:hidden}
 .ax-note textarea::placeholder{color:var(--text4)}
+/* PLS #390: account fields are plain rows; the list opens from anywhere on the row */
+.ax-pick{position:relative}
+.ax-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px;-webkit-appearance:none;appearance:none}
+.ax-row{min-height:52px}
+.ax-v{font-weight:500}
+.ax-v.ax-ph{font-weight:400}
+.ax-pick:active .ax-v,.ax-row[onclick]:active .ax-v{opacity:.5} /* a tap gives a quick fade as feedback */
+/* PLS #390: a popup that only asks something (no fields) uses a calmer title: the same size and weight as the
+   "Add transaction" header, not the big bold form title, and body text in the app's normal size */
+.dlg.rv-shell:not(:has(input,select,textarea)) .dlg-title{font-size:17px;font-weight:600;letter-spacing:0}
+.dlg-ask{font-size:14px;color:var(--text3);line-height:1.5}
 /* PLS #387: Remittance -- inputs as card rows, soft note and preview */
 .ax-l .ax-sub{display:block;font-size:11px;color:var(--text4);margin-top:2px}
 .ax-inrow{cursor:text}
@@ -171,6 +182,7 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 #add-body #shared-more-row .form-input{background:var(--bg3)!important;border:0!important;border-radius:12px!important}
 /* PLS #381: the extra boxes under the Transfer card (exchange preview, More options) become soft cards too */
 #add-body #tf-forex-preview,#add-body #tf-more-row > div{background:var(--bg3)!important;border:0!important;border-radius:16px!important}
+#add-body #tf-more-row .form-input{background:var(--bg2)!important;border:0!important;border-radius:12px!important;box-shadow:none!important} /* PLS #392 */
 /* PLS #374: the Add transaction main button uses the same pill as the Revolut-style popups */
 #add-body .btn-primary.btn-full{height:50px;border-radius:999px!important;font-size:15px;font-weight:600;background:var(--accent)!important;box-shadow:none}
 
@@ -414,7 +426,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .hero-card::after{content:none}
 .hero-label{font-size:11px;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1} /* PLS #348: sentence case */
 .hero-amount{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-1.8px;color:var(--text);line-height:1;position:relative;z-index:1;font-variant-numeric:tabular-nums slashed-zero;font-feature-settings:"tnum","zero"}
-.hero-currency{font-size:0.62em;color:var(--text2);margin-right:3px;font-weight:600;vertical-align:0.06em;letter-spacing:0}
+.hero-currency{font-size:max(11px,0.62em);color:var(--text2);margin-right:3px;font-weight:600;vertical-align:0.06em;letter-spacing:0}
 .hero-sub{font-size:12px;color:var(--text2);margin-top:8px}
 .hero-row{display:flex;gap:20px;margin-top:16px;flex-wrap:wrap}
 .hero-stat{display:flex;flex-direction:column;gap:3px}
@@ -492,6 +504,10 @@ body.numpad-open.np-pc .sheet-body,body.numpad-open.np-pc .dlg-body{padding-bott
 #tb-numpad.np-float.np-side.open{transform:none;opacity:1;pointer-events:auto}
 .big-amt-input::-webkit-inner-spin-button,.big-amt-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} /* PLS #379: no up/down arrows on the big amount (PC) */
 .big-amt-input{-moz-appearance:textfield}
+/* PLS #392: the grouped amount is drawn over the field */
+.big-amt-row{position:relative}
+.big-amt-fmt{position:absolute;pointer-events:none;text-align:left;color:var(--text);white-space:pre;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-start}
+input.big-amt-input.big-amt-masked,input.big-amt-input.big-amt-masked[readonly]{color:transparent!important;-webkit-text-fill-color:transparent;caret-color:transparent}
 body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(360px + env(safe-area-inset-bottom,0px));scroll-behavior:smooth}
 #tb-numpad-preview{padding:14px 16px 12px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-height:60px;border-radius:var(--r-md);background:var(--bg3);margin-bottom:8px}
 #tb-numpad-preview .np-expr{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--text3);overflow-x:auto;white-space:nowrap;max-width:100%;text-align:right}
@@ -951,6 +967,24 @@ option{background:var(--bg3);color:var(--text)}
 .cat-group.open .cat-group-chevron{transform:rotate(90deg)}
 .cat-group-body{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
 .cat-group.open .cat-group-body{display:block}
+/* PLS #391: category picker in the app's soft style -- no outlines, one card for all categories, line icons on mains */
+.cat-section-label{letter-spacing:0;font-size:13px;color:var(--text3);font-weight:500}
+.cat-tile{background:var(--bg3);border:0;border-radius:16px}
+.cat-tile:hover{border-color:transparent;transform:none;background:var(--accent-bg)}
+.cp-card{background:var(--bg3);border-radius:16px;padding:0 14px;overflow:hidden}
+.cp-card .cat-group{background:transparent;border:0;border-radius:0;margin:0;border-bottom:1px solid var(--border)}
+.cp-card .cat-group:last-child{border-bottom:0}
+.cp-card .cat-group-header{padding:10px 0;gap:12px;min-height:52px;box-sizing:border-box}
+.cp-card .cat-group.open .cat-group-header{background:transparent}
+.cp-ico{width:32px;height:32px;border-radius:10px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.cp-card .cat-group-name{font-size:14px;font-weight:500}
+.cp-card .cat-group-chevron{display:flex;color:var(--text4)}
+.cp-card .cat-group.open .cat-group-chevron{transform:rotate(180deg)}
+.cp-card .cat-group-body{border-top:0;padding:0 0 12px}
+.cp-card .cat-tile{background:var(--bg2)}
+.cp-search input{width:100%;box-sizing:border-box;background:var(--bg3);border:0;border-radius:14px;padding:12px 14px;font:inherit;font-size:16px;color:var(--text);outline:0;margin-bottom:6px}
+.cp-search input::placeholder{color:var(--text4)}
+.cat-picker-wrap:has(.cp-search){min-height:55vh} /* the popup keeps its height while you type */
 @media(max-width:380px){.cat-tile-icon{font-size:20px}.cat-tile-name{font-size:11px}}
 
 /* ── TOGGLE ── */
@@ -1995,6 +2029,7 @@ const _ICONS = {
   health:   '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8"/><path d="M8 12h8"/>',
   book:     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   coffee:   '<path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>',
+  chevDown: '<polyline points="6 9 12 15 18 9"/>',
   gradCap:  '<path d="M22 9 12 4 2 9l10 5 10-5z"/><path d="M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><line x1="22" y1="9" x2="22" y2="15"/>',
   briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="2" y1="13" x2="22" y2="13"/>',
   // PLS #331: icons for the Analytics list (bars, heatmap grid, history, pulse, globe, coins)
@@ -2683,6 +2718,16 @@ document.addEventListener('keydown', e => {
   el.click();
 });
 
+// -- PERSONAL LOGIC SET #393 -- one voice for every toast: no emoji in front, no "!" at the end, no dash
+// joining two thoughts (it becomes a full stop), and one word for a plain save. Line icons (the icon argument) stay.
+function _toastText(msg) {
+  let m = String(msg == null ? '' : msg);
+  m = m.replace(/^[^\p{L}\p{N}₱$€£¥₩₹%+\-−(]+/u, '');           // leading emoji / symbols
+  m = m.replace(/\s+—\s+(\S)/g, (x, c) => '. ' + c.toUpperCase()); // "Saved — syncing" -> "Saved. Syncing"
+  m = m.replace(/\s+—\s*$/, '').replace(/!+(\s*)$/, '$1').trim();  // trailing dash / "!"
+  if (/^(changes saved|updated|saved|saved changes)$/i.test(m)) m = 'Saved';
+  return m ? m[0].toUpperCase() + m.slice(1) : m;
+}
 function showToast(msg, dur=2200, icon=null) {
   // PLS #209: optional leading line icon. `icon` must be a key in _ICONS — arbitrary markup is
   // never accepted, and the message itself is still set as a text node, so it cannot inject.
@@ -2695,7 +2740,7 @@ function showToast(msg, dur=2200, icon=null) {
     s.innerHTML=glyph;
     t.appendChild(s);
   }
-  t.appendChild(document.createTextNode(msg));
+  t.appendChild(document.createTextNode(_toastText(msg)));
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), dur);
 }
@@ -3362,31 +3407,31 @@ const DASH_SECTIONS_ALL = ['alerts','metrics','pulse','insights','budget','recen
   'w_goals','w_concentration'];
 const DASH_SECTION_LABELS = {
   alerts: 'Alerts',
-  metrics: '4-Metric Grid',
+  metrics: '4-metric grid',
   pulse: "Today's Pulse",
-  insights: 'AI Insights',
-  budget: 'Financial Snapshot',
+  insights: 'AI insights',
+  budget: 'Financial snapshot',
   recent: 'Recent transactions',
   // Analytics widgets (hidden by default — add via Customize)
-  w_networth: 'Net Worth Trend',
-  w_inexp: 'Income vs Expense',
-  w_waterfall: 'Cashflow Waterfall',
-  w_savings: 'Savings Trend',
-  w_runway: 'Cash Runway',
-  w_velocity: 'Spending Velocity',
-  w_forecast: 'Month-End Forecast',
-  w_anomaly: 'Anomaly Highlights',
+  w_networth: 'Net worth trend',
+  w_inexp: 'Income vs expense',
+  w_waterfall: 'Cashflow waterfall',
+  w_savings: 'Savings trend',
+  w_runway: 'Cash runway',
+  w_velocity: 'Spending velocity',
+  w_forecast: 'Month-end forecast',
+  w_anomaly: 'Anomaly highlights',
   w_subs: 'Subscriptions',
-  w_fixeddisc: 'Fixed vs Discretionary',
-  w_pareto: '80/20 Spending',
-  w_dow: 'Day-of-Week',
-  w_frequent: 'Most Frequent',
-  w_timeofday: 'Time-of-Day',
-  w_distribution: 'Spending Distribution',
-  w_yoy: 'Year-over-Year',
-  w_incomediv: 'Income Diversity',
-  w_goals: 'Goal Progress',
-  w_concentration: 'Concentration Risk',
+  w_fixeddisc: 'Fixed vs discretionary',
+  w_pareto: '80/20 spending',
+  w_dow: 'Day of week',
+  w_frequent: 'Most frequent',
+  w_timeofday: 'Time of day',
+  w_distribution: 'Spending distribution',
+  w_yoy: 'Year over year',
+  w_incomediv: 'Income diversity',
+  w_goals: 'Goal progress',
+  w_concentration: 'Concentration risk',
 };
 const DASH_SECTION_ICONS = {
   alerts: 'alert',
@@ -3633,7 +3678,7 @@ function openSheet(sheetId, title, html) {
   const _sb = document.getElementById(sheetId+'-body');
   if (_sb) { _sb.classList.remove('fs-list'); if (window._nextSheetCls) _sb.classList.add(window._nextSheetCls); }
   window._nextSheetCls = '';
-  document.getElementById(sheetId+'-title').textContent = title;
+  document.getElementById(sheetId+'-title').textContent = _plainTitle(title); // PLS #393
   document.getElementById(sheetId+'-body').innerHTML = html;
   { const _b = document.getElementById(sheetId+'-body'); _b.classList.remove('ef'); const _sh = document.getElementById(sheetId+'-sheet');
     _sh.classList.remove('rv-shell'); _sh.querySelectorAll(':scope > .rv-foot').forEach(x => x.remove()); // PLS #367 reset
@@ -3717,7 +3762,11 @@ function _rvApply(shell, body, isDlg, sheetId) {
   // PLS #376: Cancel asks first when something in the form was changed (snapshot taken when it opened)
   const _snap = () => [...body.querySelectorAll('input,select,textarea')].map(el => el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value).join('\u0001');
   setTimeout(() => { shell._rvSnap = _snap(); }, 120); // after the form's own setTimeout fills
-  cancel.onclick = () => { if (!isDlg && shell._rvSnap != null && _snap() !== shell._rvSnap) { _rvAskDiscard(() => closeSheet(sheetId)); return; } isDlg ? closeDlg() : closeSheet(sheetId); };
+  cancel.onclick = () => {
+    const dirty = shell._rvSnap != null && _snap() !== shell._rvSnap;
+    if (dirty && !isDlg) { _rvAskDiscard(() => closeSheet(sheetId)); return; }
+    if (dirty && isDlg) { _rvAskInline(shell, body); return; } // PLS #392: small popup forms ask too, inside the same popup
+    isDlg ? closeDlg() : closeSheet(sheetId); };
   const parents = new Set(pool.map(b => b.parentElement));
   const foot = document.createElement('div'); foot.className = 'rv-foot';
   // a form whose whole point is a destructive step (Write off ...) gets that step as the big red button
@@ -3739,9 +3788,23 @@ function _rvApply(shell, body, isDlg, sheetId) {
   parents.forEach(pa => { let e = pa; while (e && e !== body && !e.id?.endsWith('footer') && !e.children.length && !e.textContent.trim()) { const up = e.parentElement; e.remove(); e = up; } });
   shell.appendChild(foot);
 }
+// PLS #392: a popup form can't open a second popup on top of itself, so it swaps its own content for the question;
+// "Keep editing" puts the form back exactly as it was (nothing is rebuilt, so what you typed stays)
+function _rvAskInline(shell, body) {
+  const foot = shell.querySelector('.rv-foot'); const ttlEl = document.getElementById('dlg-title');
+  const oldTtl = ttlEl ? ttlEl.textContent : '';
+  const ask = document.createElement('div'); ask.className = 'rv-ask-inline';
+  ask.innerHTML = `<div class="dlg-ask">What you typed will be lost.</div><div class="rv-foot">
+    <button type="button" class="btn btn-danger rv-dang">Discard</button><button type="button" class="btn rv-sec">Keep editing</button></div>`;
+  body.style.display = 'none'; if (foot) foot.style.display = 'none'; if (ttlEl) ttlEl.textContent = 'Discard changes?';
+  shell.appendChild(ask);
+  const [bDis, bKeep] = ask.querySelectorAll('button');
+  bDis.onclick = () => { ask.remove(); body.style.display = ''; if (foot) foot.style.display = ''; if (ttlEl) ttlEl.textContent = oldTtl; closeDlg(); };
+  bKeep.onclick = () => { ask.remove(); body.style.display = ''; if (foot) foot.style.display = ''; if (ttlEl) ttlEl.textContent = oldTtl; };
+}
 function _rvAskDiscard(onDiscard) { // PLS #376: same question as Add transaction
   window._rvDiscardFn = onDiscard; window._rvPending = 'dlg';
-  openDlg('Discard changes?', `<div style="font-size:13px;color:var(--text2);line-height:1.5">What you typed will be lost.</div>`,
+  openDlg('Discard changes?', `<div class="dlg-ask">What you typed will be lost.</div>`,
     `<button class="btn btn-ghost" onclick="closeDlg()">Keep editing</button>
      <button class="btn btn-danger" onclick="closeDlg();window._rvDiscardFn&&window._rvDiscardFn()">Discard</button>`);
 }
@@ -3790,8 +3853,35 @@ function _efApply(root) {
   // sections that hold fields of their own (collapsible "More options", cross-currency rows)
   root.querySelectorAll('div').forEach(d => { if (!d.classList.contains('ef-card') && [...d.children].some(c => c.classList && c.classList.contains('form-group'))) wrap(d); });
 }
+// PLS #393: titles never start with an emoji ("📸 Snapshots" -> "Snapshots")
+// -- PERSONAL LOGIC SET #395 -- how the app's OWN automatic notes read on screen (the stored note is never changed,
+// and anything you typed yourself is shown exactly as typed). Old notes said "Lent to Mike — 232.56 PGK @ 12.899896800825593
+// PHP/PGK" or "(PHP→PGK @ 0.0857 vs snapshot 13.02)"; they now read "Lent to Mike · 232.56 PGK at 1 PGK = ₱12.8999" and
+// "(PHP → PGK at 1 PGK = ₱11.67, saved rate ₱13.02)". Rates show up to 4 decimals here; the math never uses this text.
+function _noteShow(n) {
+  let s = String(n == null ? '' : n); if (!s) return s;
+  const r4 = x => { const v = Number(x); return isFinite(v) ? String(+v.toFixed(4)) : x; };
+  let m = /^(Lent to|Borrowed from) (.+?) — ([\d.,]+) ([A-Z]{2,5}) @ ([\d.eE-]+) ([A-Z]{2,5})\/([A-Z]{2,5})$/.exec(s);
+  if (m) return `${m[1]} ${m[2]} · ${m[3]} ${m[4]} at 1 ${m[7]} = ${sym(m[6])}${r4(m[5])}`;
+  m = /^Auto from transfer \(([A-Z]{2,5})→([A-Z]{2,5}) @ ([\d.eE-]+) vs (?:snapshot|saved) ([\d.eE-]+|N\/A)\)$/.exec(s);
+  if (m) {
+    const [, from, to, act, saved] = m; const home = _homeBase();
+    const foreign = from === home ? to : from, homeC = from === home ? from : to;
+    const actF = from === home ? 1 / Number(act) : Number(act); // always "1 foreign = x home"
+    const savedTxt = saved === 'N/A' ? '' : `, saved rate ${sym(homeC)}${r4(saved)}`;
+    return (from === home || to === home) ? `Auto from transfer (${from} → ${to} at 1 ${foreign} = ${sym(homeC)}${r4(actF)}${savedTxt})`
+                                          : s.replace(' @ ', ' at ').replace('vs snapshot', 'vs saved');
+  }
+  if (/^(Reimbursement write-off from|Loan Settlement Loss from|Full repayment|Transfer fee|Remittance fee|Added capital to|Forex (gain|loss) from)/.test(s)) {
+    s = s.replace(/^Loan Settlement Loss/, 'Loan settlement loss');
+    let first = true; s = s.replace(/ — /g, () => { const r = first ? ': ' : ', '; first = false; return r; });
+    s = s.replace('(actual rate vs snapshot)', '(actual rate vs saved rate)').replace(/ @ /g, ' at ').replace(/vs snapshot/g, 'vs saved');
+  }
+  return s;
+}
+function _plainTitle(t) { return String(t == null ? '' : t).replace(/^[^\p{L}\p{N}]+/u, ''); }
 function openDlg(title, html, footer='') {
-  document.getElementById('dlg-title').textContent = title;
+  document.getElementById('dlg-title').textContent = _plainTitle(title); // PLS #393
   document.getElementById('dlg-body').innerHTML = html;
   const _db = document.getElementById('dlg-body'); _db.classList.remove('ef');
   { const _dl = document.querySelector('#dlg-overlay .dlg'); _dl.classList.remove('rv-shell'); _dl.querySelectorAll(':scope > .rv-foot').forEach(x => x.remove()); } // PLS #367 reset
@@ -3817,23 +3907,23 @@ function showBucketInfo(key) {
 
 // ── PERSONAL LOGIC SET #20 ── Overview widget info tooltips: tap (i) icon shows plain-English definition
 const _WIDGET_INFO = {
-  'velocity': {title:'Spending Velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.<br><br>Counts your <b>usual spending</b>. One-time losses are left out (loan write-offs, settlement losses, investments sold below cost). FX losses and fees are included.'}, // PLS #293
-  'runway': {title:'Cash Runway', body:'How many <b>months your liquid cash can last</b> at your <b>6-month average</b> spending rate. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
-  'anomaly': {title:'Unusual Transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
-  'forecast': {title:'Month-End Forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
-  'subscription': {title:'Recurring Commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection — useful for spotting "money leaks."'},
-  'savings': {title:'Savings Rate Trend', body:'Your <b>savings rate</b> = (income − expense) ÷ income, shown over the last 6 months. A rising line means you\'re saving more of what you earn. Compares current month vs the previous one.'},
-  'fixed': {title:'Fixed vs Discretionary', body:'Splits your expenses into <b>Fixed</b> (rent, bills, subscriptions — hard to change) and <b>Discretionary</b> (dining, shopping — easier to control). The discretionary % is what you can actually adjust to save more.'},
+  'velocity': {title:'Spending velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.<br><br>Counts your <b>usual spending</b>. One-time losses are left out (loan write-offs, settlement losses, investments sold below cost). FX losses and fees are included.'}, // PLS #293
+  'runway': {title:'Cash runway', body:'How many <b>months your liquid cash can last</b> at your <b>6-month average</b> spending rate. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
+  'anomaly': {title:'Unusual transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
+  'forecast': {title:'Month-end forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
+  'subscription': {title:'Recurring commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection — useful for spotting "money leaks."'},
+  'savings': {title:'Savings rate trend', body:'Your <b>savings rate</b> = (income − expense) ÷ income, shown over the last 6 months. A rising line means you\'re saving more of what you earn. Compares current month vs the previous one.'},
+  'fixed': {title:'Fixed vs discretionary', body:'Splits your expenses into <b>Fixed</b> (rent, bills, subscriptions — hard to change) and <b>Discretionary</b> (dining, shopping — easier to control). The discretionary % is what you can actually adjust to save more.'},
   'pareto': {title:'80/20 Analysis', body:'Identifies the few <b>categories that make up 80% of your spending</b>. Based on the Pareto principle — usually 20% of your categories drive 80% of your expense. Focus optimization here for biggest impact.'},
   'dow': {title:'Day-of-Week Pattern', body:'Shows your <b>average spending per day of the week</b> over the last 90 days. Reveals patterns — e.g. "Friday is your highest spending day." Useful for habit awareness.'},
-  'frequent': {title:'Most Frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total — shows where small habits add up.'},
+  'frequent': {title:'Most frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total — shows where small habits add up.'},
   'timeofday': {title:'Time-of-Day Pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven — this widget helps you spot if that\'s happening.'},
-  'distribution': {title:'Transaction Sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are 100–500 in your display currency." Reveals your spending "zones" and shopping habits.'},
+  'distribution': {title:'Transaction sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are 100–500 in your display currency." Reveals your spending "zones" and shopping habits.'},
   'yoy': {title:'Year-on-Year', body:'Compares this month to the <b>same month last year</b>, side by side. Shows whether you\'re spending more, less, or the same vs your past self. Only appears if you have data from that period.'},
-  'income-div': {title:'Income Diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
-  'goal': {title:'Savings Goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
-  'concentration': {title:'Account Concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
-  'accthealth': {title:'Account Health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg txn</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
+  'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
+  'goal': {title:'Savings goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
+  'concentration': {title:'Account concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
+  'accthealth': {title:'Account health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg txn</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
 };
 function _widgetInfo(key) {
   const def = _WIDGET_INFO[key];
@@ -3984,6 +4074,7 @@ function npRender() {
 // An unfinished sum ("12+") keeps the last good number; a result below zero is not written.
 // -- PERSONAL LOGIC SET #383 -- amounts from the keypad show full centavos: 45.5 -> "45.50", 46 stays "46"
 function _npCents(v) { const r = Math.round(v * 100) / 100; return Number.isInteger(r) ? String(r) : r.toFixed(2); }
+function _npRefit() { document.querySelectorAll('.big-amt-input').forEach(i => { try { _bigAmtFit(i); } catch(e) {} }); }
 function _npLive() {
   if (!_npTarget) return;
   if (!_npExpr) { if (_npTarget.value !== '') { _npTarget.value = ''; _npTarget.dispatchEvent(new Event('input', { bubbles:true })); } return; }
@@ -4564,8 +4655,8 @@ function fitMetricNums() {
   els.forEach(el => {
     el.style.fontSize = baseSize + 'px';
     let size = baseSize;
-    while (el.scrollWidth > el.clientWidth && size > 8) {
-      size -= 0.5;
+    while (el.scrollWidth > el.clientWidth && size > 11) { // PLS #392: whole pixels, never under 11px (TYPE SCALE rule)
+      size -= 1;
       el.style.fontSize = size + 'px';
     }
     if (size < minSize) minSize = size;
@@ -5050,27 +5141,38 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.1.9';
+const APP_VERSION = '1.2.1'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'September 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
-  { ver: '1.1.9', date: 'September 2026', changes: [
-    '✨ The monthly summary is now its own page, Insights, in the sidebar (it was "AI Summary" inside Analytics)', // PLS #353
-    '🗓 One month switcher everywhere: Month | Year plus month tabs on Insights, Analytics and Calendar. Swipe the months on your phone; on a computer you see the whole year', // PLS #358
-    '🗓 The month switcher on Insights and Analytics now spans the full width; Needs attention sits right after the Summary', // PLS #357
+  { ver: '1.2.1', date: 'September 2026', changes: [
+    '🗂 Accounts in grid view: the Idle tag sits beside the account type, so every card is the same height', // PLS #396
+    '🔎 Recent in Pick category now shows the categories you actually used lately', // PLS #394
+    '🧾 Automatic notes read clearly, like "Lent to Mike · 232.56 PGK at 1 PGK = ₱12.8999"', // PLS #395
+    '🔢 The amount at the top of a form shows commas, like 3,000', // PLS #392
+    '🔤 One plain style for headings, messages and dropdowns: sentence case, no "!", and "Choose" when nothing is picked yet', // PLS #393, #395
+    '🛠 Small fixes: Charged to shows Same as From, small forms ask before Cancel drops your changes, and no text is smaller than 11px', // PLS #392
+  ]},
+  { ver: '1.2.0', date: 'September 2026', changes: [
     '📥 External in and out use the same card as the other types', // PLS #389
     '💱 Adding a currency asks for its rate right away, so no total is ever off by a missing rate', // PLS #388
     '📤 Remittance uses the same card, with the rate and the received amount right in it', // PLS #387
     '💱 Transfers between currencies show what you will receive and the rate, before you save', // PLS #382
-    '🧾 Add transaction is one clean card: category, account, when and a note, with your recent accounts as chips', // PLS #381
+    '🧾 Add transaction is one clean card: category, account, when and a note. No extra pills, just tap a row', // PLS #381, #390
+    '🔎 Pick category has a search box, and main categories show the same line icons as Settings', // PLS #391
+    '💬 Yes or no popups use calmer text that matches the rest of the app', // PLS #390
     '🎓 Settings > Categories: pick a line icon for any main category, your own ones included', // PLS #380, #386
     '🖥 On a computer, amount fields open the calculator beside the form. Type on your keyboard too: Enter is Done, and Enter again adds it', // PLS #379
     '🧮 Cleaner calculator: plain number keys, a 00 key, and Done in place of =', // PLS #378
     '⚡ The amount updates while you use the calculator, so 12+34 shows 46 right away', // PLS #377
     '🔒 Add transaction stays open when you tap outside it. Any form with changes asks before Cancel throws them away', // PLS #376
-    '🏷️ Add transaction: your recent categories and accounts sit as one-tap chips', // PLS #375
+  ]},
+  { ver: '1.1.9', date: 'June to September 2026', changes: [ // PLS #392: was two separate 1.1.9 entries
+    '✨ The monthly summary is now its own page, Insights, in the sidebar (it was "AI Summary" inside Analytics)', // PLS #353
+    '🗓 One month switcher everywhere: Month | Year plus month tabs on Insights, Analytics and Calendar. Swipe the months on your phone; on a computer you see the whole year', // PLS #358
+    '🗓 The month switcher on Insights and Analytics now spans the full width; Needs attention sits right after the Summary', // PLS #357
     '💊 Add transaction: the main button is a big pill, like the other popups', // PLS #374
     '🛟 Add transaction asks before closing if you already typed something, so a stray tap does not lose it', // PLS #373
     '🏷️ Add transaction: the button says what you are adding, like "Add expense", "Add income" or "Add transfer"', // PLS #372
@@ -5111,8 +5213,6 @@ const APP_CHANGELOG = [
     '➖ Losses always show a minus sign, and figures show exact centavos instead of rounded pesos',
     '📈 Savings pace counts from your contract start, and spending averages leave out one-time losses like write-offs',
     '🧹 Payday and Recurring were removed from Planning',
-  ]},
-  { ver: '1.1.9', date: 'June 2026', changes: [
     '💱 Cross-currency loans reworked — you enter the "Loaned Amount" (what leaves your account) and the "Expected Receivable" (what they\'ll pay back, e.g. K200), and the agreed rate is worked out for you',
     '📉 The amount you\'re owed now counts down in the payback currency as partial payments come in — no more static reminder',
     '📈 When a cross-currency loan is fully settled, the FX gain versus your agreed rate is shown on the loan detail',
@@ -5332,7 +5432,7 @@ function bulkRecategorize() {
   openDlg('Re-categorize selected',
     `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">Apply a new category to <strong>${ids.length} transaction${ids.length>1?'s':''}</strong>:</div>
      <select class="form-input" id="bulk-recat-sel" style="margin-bottom:4px">
-       <option value="">— Pick a category —</option>
+       <option value="">Choose a category</option>
        ${catOpts}
      </select>
      <div style="font-size:11px;color:var(--text4);margin-top:6px">⚠ This overwrites existing categories on all selected transactions.</div>`,
@@ -5457,7 +5557,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   // gain/loss children. Tap mo yung child → opens its detail (read-only or fully editable).
   // ── PERSONAL LOGIC SET #29 ── isLoanTx parent renders expandable iOS card with: payments + batch settlement parents + gain/loss children; default expanded; chevron toggles
   if (tx.isLoanTx) {
-    const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
+    const label = tx.loanDirection==='lent' ? 'Lent out' : 'Borrowed';
     const icon  = tx.loanDirection==='lent' ? '🤲' : '🤏';
     const iconBg = tx.loanDirection==='lent' ? 'tx-icon-lend' : 'tx-icon-borrow';
     // Find the corresponding loan record for status
@@ -5525,7 +5625,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon ${iconBg}">${icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
-        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount tx-neu">⇄ ${fmt(tx.amount,tx.currency)}</div>
@@ -5563,7 +5663,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
-        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
@@ -5581,7 +5681,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon" style="background:var(--bg4);color:var(--text2)">⚖️</div>
       <div class="tx-meta">
         <div class="tx-name">Balance correction</div>
-        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span> · ${dirLabel}${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span> · ${dirLabel}${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount ${dirColor}">${sign}${fmt(tx.amount,tx.currency)}</div>
@@ -5604,7 +5704,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
         <div class="tx-name">Transfer</div>
-        <div class="tx-detail"><span class="acct-pill">${_esc(from.name)}</span> → <span class="acct-pill">${_esc(to.name)}</span>${tx.notes?' · '+_esc(tx.notes):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${_esc(from.name)}</span> → <span class="acct-pill">${_esc(to.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
       </div>
       <div class="tx-right">
         <div class="tx-amount tx-neu">↔ ${fmt(tx.amount,tx.currency)}</div>
@@ -5622,7 +5722,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   } else {
     detail = `<span class="acct-pill">${_esc(acct.name)}</span>`;
   }
-  if (tx.notes) detail += ` · ${_esc(tx.notes)}`;
+  if (tx.notes) detail += ` · ${_esc(_noteShow(tx.notes))}`;
   // -- PERSONAL LOGIC SET #224 -- An investment sale row shows the PROCEEDS, because that is
   // the cash that really moved. The realized result was invisible here, so a sale closed at a
   // loss still read as a plain "+70,000" row in the ledger. Show the gain or loss on the row
@@ -6022,7 +6122,7 @@ function renderUnifiedAmountForm() {
   // ── PERSONAL LOGIC SET #83 ── No pre-selected account in main Add Tx form (Apple Wallet style).
   // Forces user to explicitly pick. Prevents accidentally submitting to wrong account
   // (e.g. last-used "Beep Card" when user actually wanted Cash).
-  const placeholderAcctOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const placeholderAcctOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===s.prefill?.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   const currOpts = (db.trackedCurrencies || [_homeBase()]).map(c=>`<option value="${c}">${c}</option>`).join('');
 
@@ -6042,7 +6142,7 @@ function renderUnifiedAmountForm() {
       </div>
     </div>
 
-    ${_addQuickCatsHTML()}<!-- PLS #375 -->
+    <!-- PLS #390: no suggested category pills (his call: too busy). The category picker's own Recent section covers it. -->
     <!-- PLS #381 (his pick "C2"): one soft card, label left and value right, no icons or chevrons.
          Category opens the picker, Account is recent chips + More, Date and Time share one "When" row. -->
     <div class="ax-card">
@@ -6073,10 +6173,28 @@ function _bigAmtFit(inp) {
   const sp = _bigAmtFit._s || (_bigAmtFit._s = Object.assign(document.createElement('span'), { style: 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0' }));
   if (!sp.isConnected) document.body.appendChild(sp);
   for (const k of ['fontFamily','fontSize','fontWeight','fontStyle','letterSpacing','fontVariantNumeric','fontFeatureSettings']) sp.style[k] = cs[k];
-  sp.textContent = String(inp.value || inp.placeholder || '0');
+  const shown = _amtTyped(inp.value);
+  sp.textContent = shown || String(inp.placeholder || '0');
   inp.style.width = Math.ceil(Math.max(28, sp.getBoundingClientRect().width + 18)) + 'px'; // + room the number box keeps for itself
+  // PLS #392: a number field can't show commas, so the typed amount is drawn on top of it with commas ("3,000"),
+  // exactly where the field is; the field itself still holds the plain number every save reads
+  const row = inp.parentElement; if (!row) return;
+  let ov = row.querySelector(':scope > .big-amt-fmt');
+  if (!ov) { ov = document.createElement('span'); ov.className = 'big-amt-fmt'; ov.setAttribute('aria-hidden','true'); row.appendChild(ov); }
+  for (const k of ['fontFamily','fontSize','fontWeight','letterSpacing','fontVariantNumeric','lineHeight','paddingTop','paddingBottom']) ov.style[k] = cs[k];
+  ov.textContent = shown;
+  ov.style.left = inp.offsetLeft + 'px'; ov.style.top = inp.offsetTop + 'px'; ov.style.width = inp.offsetWidth + 'px'; ov.style.height = inp.offsetHeight + 'px';
+  inp.classList.toggle('big-amt-masked', !!shown);
+}
+// "3000" -> "3,000", "1234.5" -> "1,234.5" (what you typed, only grouped; decimals untouched)
+function _amtTyped(v) {
+  v = String(v == null ? '' : v); if (!v) return '';
+  const neg = v[0] === '-'; if (neg) v = v.slice(1);
+  const [i, d] = v.split('.');
+  return (neg ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d !== undefined ? '.' + d : '');
 }
 function _bigAmtDecorate() {
+  try { _axRefreshFor(); } catch(e) {} // PLS #390: account rows show a prefilled or carried-over account's name
   document.querySelectorAll('#add-body .big-amt-input').forEach(inp => {
     const row = inp.parentElement; row.classList.add('big-amt-row');
     const hero = row.parentElement;
@@ -6101,7 +6219,7 @@ document.addEventListener('change', e => { if (e.target && /^(add-account|tf-fro
 function _addRecentCats(txType, n) {
   const types = txType === 'income' ? ['income'] : ['expense','shared'];
   const list = db.categories[txType] || []; const out = []; const seen = new Set();
-  const txs = (db.transactions || []).filter(t => types.includes(t.type) && t.categoryId)
+  const txs = (db.transactions || []).filter(t => types.includes(t.type) && t.categoryId && !t.archived && !t.isSettlement && !t.isAutoForex && !t.isAutoReimb && !t.isAutoFee) // PLS #390: only entries you made, same filter as the picker's Recent
     .sort((a,b) => ((b.date||'')+(b.time||'')+(b.createdAt||'')).localeCompare((a.date||'')+(a.time||'')+(a.createdAt||'')));
   for (const t of txs) {
     if (seen.has(t.categoryId)) continue; seen.add(t.categoryId);
@@ -6136,10 +6254,12 @@ function _axAcctRow(acctOpts) {
   return _axPickRow({ label:'Account', sel:'add-account', kind:'any', opts:acctOpts,
     onchange:'syncAddCurrency();updateBigAmtCurr();updateAcctDisplay()', chipsId:'add-quick-acct' });
 }
-// One chip row for any account field (Account, From, To, Paid from). o.sel is the real <select> id the save code reads.
+// PLS #390 (his pick "C"): an account field is a plain row -- label left, the chosen account (or "Choose") right.
+// The real <select> lies invisibly over the whole row, so a tap opens the phone's own list; every existing onchange
+// (currency, caption, preview) still runs. o.sel is the id the save code reads. Nothing is preselected (PLS #83).
 function _axPickRow(o) {
-  return `<div class="ax-row ax-acct"><div class="ax-l">${o.label}</div><div class="ax-chips" id="${o.chipsId}" data-sel="${o.sel}" data-kind="${o.kind}">${_axChipsFor(o.sel, o.kind, '')}</div>
-    <label class="chip ax-more">More<select id="${o.sel}" onchange="${o.onchange};_axRefreshFor('${o.sel}')">${o.opts}</select></label></div>`;
+  return `<div class="ax-row ax-pick"><div class="ax-l">${o.label}</div><div class="ax-v ax-ph" id="${o.chipsId}" data-sel="${o.sel}">Choose</div>
+    <select class="ax-sel" id="${o.sel}" aria-label="${o.label}" onchange="${o.onchange};_axRefreshFor('${o.sel}')">${o.opts}</select></div>`;
 }
 // Recent accounts for a field: "to" learns from where transfers went, the rest from where money came from
 function _axRecent(kind, n, excludeId) {
@@ -6167,7 +6287,10 @@ function _axPick(selId, id) {
   sel.value = id; sel.dispatchEvent(new Event('change', { bubbles:true })); // runs the field's own onchange (currency, caption, preview)
 }
 function _axRefreshFor(selId) {
-  document.querySelectorAll('.ax-chips[data-sel]').forEach(box => { const s = document.getElementById(box.dataset.sel); if (s) box.innerHTML = _axChipsFor(box.dataset.sel, box.dataset.kind, s.value); });
+  document.querySelectorAll('.ax-v[data-sel]').forEach(v => { // PLS #390: show the chosen account's name, or "Choose"
+    const a = db.accounts.find(x => x.id === document.getElementById(v.dataset.sel)?.value);
+    v.textContent = a ? a.name : 'Choose'; v.classList.toggle('ax-ph', !a);
+  });
 }
 function _axAcctRefresh() { _axRefreshFor('add-account'); }
 function _axGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } // the note row grows with what you type
@@ -6177,7 +6300,7 @@ function _addQuickAcctHTML() {
 }
 function _addPickAcct(id) {
   const sel = document.getElementById('add-account'); if (!sel) return;
-  if (sel.closest('.ax-more')) { _axPick('add-account', id); return; } // PLS #381
+  if (sel.closest('.ax-pick')) { _axPick('add-account', id); return; } // PLS #381, #390
   sel.value = id; sel.dispatchEvent(new Event('change', { bubbles:true })); syncAddCurrency(); updateBigAmtCurr(); updateAcctDisplay();
   document.querySelectorAll('#add-quick-acct .chip').forEach(b => b.classList.toggle('active', b.dataset.acct === id));
   _axAcctRefresh(); // PLS #381
@@ -6191,7 +6314,7 @@ function _addIsDirty() {
 function _addUserClose() {
   if (!_addIsDirty()) { closeSheet('add'); return; }
   window._rvPending = 'dlg'; // same rounded popup + pill buttons as the forms
-  openDlg('Discard this transaction?', `<div style="font-size:13px;color:var(--text2);line-height:1.5">What you typed will be lost.</div>`,
+  openDlg('Discard this transaction?', `<div class="dlg-ask">What you typed will be lost.</div>`,
     `<button class="btn btn-ghost" onclick="closeDlg()">Keep editing</button>
      <button class="btn btn-danger" onclick="closeDlg();closeSheet('add')">Discard</button>`);
 }
@@ -6239,7 +6362,7 @@ function openCatPickerSheet() {
   overlay.onclick = (e) => { if (e.target === overlay) closeCatPickerSheet(); };
   overlay.innerHTML = `<div style="background:var(--bg2);border-radius:var(--r-xl);width:calc(100% - 32px);max-width:480px;max-height:80vh;overflow-y:auto;padding:18px 16px 24px;animation:fadeIn 0.2s ease;box-shadow:0 8px 24px rgba(0,0,0,0.22)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:600">Pick category</div>
+      <div style="font-size:17px;font-weight:600">Pick category</div><!-- PLS #391: same title size as the other popups -->
       <div onclick="closeCatPickerSheet()" role="button" aria-label="Close" style="cursor:pointer;font-size:18px;color:var(--text3);padding:4px 8px;-webkit-tap-highlight-color:transparent">✕</div>
     </div>
     ${renderCatPicker(txType, true)}
@@ -6271,7 +6394,6 @@ function renderSharedFormBody(cat, acctOpts, currOpts) {
       </div>
     </div>
 
-    ${_addQuickCatsHTML()}<!-- PLS #384: recent categories here too -->
     <!-- PLS #384: Shared uses the same C2 card as Expense (Category, Paid from, When, note) -->
     <div class="ax-card">
       <div class="ax-row" onclick="openCatPickerSheet()">
@@ -6377,13 +6499,16 @@ function renderCatPicker(forType) {
     if (tx.archived || tx.isSettlement || tx.isAutoForex || tx.isAutoReimb) continue;
     if (tx.isLoanTx || tx.isLoanPayment) continue;
     if (tx.isFeeReimbursable || tx.isInvestmentFund) continue;
-    if (tx.type !== forType) continue;
-    if (!tx.subCategoryId) continue;
+    // PLS #394: transactions keep the picked subcategory in categoryId (there is no subCategoryId field), so the old
+    // check never matched and Recent never showed. Shared entries use expense categories, so they count for expense.
+    if (!(tx.type === forType || (forType === 'expense' && tx.type === 'shared'))) continue;
+    const scId = tx.subCategoryId || tx.categoryId;
+    if (!scId) continue;
     if (tx.date) {
       const t = new Date(tx.date + 'T00:00').getTime();
       if (isNaN(t) || t < cutoffMs) continue;
     }
-    usageMap[tx.subCategoryId] = (usageMap[tx.subCategoryId] || 0) + 1;
+    usageMap[scId] = (usageMap[scId] || 0) + 1; // main-category ids drop out below (only subcategories are in scIndex)
   }
   // Map subCategoryId → {sc, parentCat} for lookup
   const scIndex = {};
@@ -6416,25 +6541,26 @@ function renderCatPicker(forType) {
 
   // Recent section
   if (recentIds.length > 0) {
-    html += `<div class="cat-section-label">🕐 Recent</div>
+    html += `<div class="cat-section-label">Recent</div>
       <div class="cat-grid">${recentIds.map(id => tileFor(scIndex[id].sc, scIndex[id].cat)).join('')}</div>`;
   } else if (fallbackTiles.length > 0) {
     // Show suggested tiles only if user has no transactions yet
-    html += `<div class="cat-section-label">✨ Suggested</div>
+    html += `<div class="cat-section-label">Suggested</div>
       <div class="cat-grid">${fallbackTiles.map(sc => tileFor(sc, cats.find(c=>c.subcats?.includes(sc)) || cats[0])).join('')}</div>`;
   }
 
-  // All categories — collapsible groups (accordion)
-  html += `<div class="cat-section-label">All categories</div>`;
+  // All categories — collapsible groups (accordion). PLS #391: one soft card, main categories show their line icon
+  // (same as Settings > Categories), subcategories keep their emoji.
+  html += `<div class="cat-section-label">All categories</div><div class="cp-card">`;
   for (const cat of cats) {
     const subs = (cat.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
     if (subs.length === 0) continue;
     const isOpen = window._catGroupOpen === cat.id;
     html += `<div class="cat-group${isOpen?' open':''}" data-group="${cat.id}">
       <div class="cat-group-header" onclick="toggleCatGroup('${cat.id}')">
-        <span class="cat-group-icon">${cat.icon}</span>
+        <span class="cat-group-icon cp-ico">${_catMajorIco(cat)}</span>
         <span class="cat-group-name">${_esc(cat.name)}</span>
-        <span class="cat-group-chevron">›</span>
+        <span class="cat-group-chevron">${_ico('chevDown',14)}</span>
       </div>
       <div class="cat-group-body">
         <div class="cat-grid" style="margin-bottom:0;margin-top:8px">
@@ -6444,7 +6570,22 @@ function renderCatPicker(forType) {
     </div>`;
   }
 
-  return `<div class="cat-picker-wrap">${html}</div>`;
+  html += `</div>`;
+  // PLS #391 (his pick B): search is always there, but never auto-focused, so the phone keyboard only opens when you tap it
+  const search = `<div class="cp-search"><input id="cp-q" type="search" placeholder="Search categories" oninput="_cpFilter(this.value)" autocomplete="off" enterkeyhint="search"></div><div id="cp-results" style="display:none"></div>`;
+  return `<div class="cat-picker-wrap">${search}<div id="cp-main">${html}</div></div>`;
+}
+// PLS #391: type to find a subcategory by its name
+function _cpFilter(q) {
+  q = String(q||'').trim().toLowerCase();
+  const main = document.getElementById('cp-main'), res = document.getElementById('cp-results'); if (!main || !res) return;
+  if (!q) { main.style.display = ''; res.style.display = 'none'; return; }
+  const forType = _addState.type === 'income' ? 'income' : 'expense'; const hits = [];
+  (db.categories[forType]||[]).filter(c=>!c.archived).forEach(c => (c.subcats||[]).filter(sc=>!sc.archived && !sc.autoOnly)
+    .forEach(sc => { if (sc.name.toLowerCase().includes(q)) hits.push([sc,c]); })); // subcategory names only, so results stay short
+  res.innerHTML = hits.length ? `<div class="cat-grid">${hits.slice(0,24).map(([sc,c]) => `<div class="cat-tile" onclick="pickSubCat('${c.id}','${sc.id}')"><div class="cat-tile-icon">${sc.icon}</div><div class="cat-tile-name">${_esc(sc.name)}</div></div>`).join('')}</div>`
+    : `<div style="font-size:14px;color:var(--text3);padding:16px 4px">Nothing matches "${_esc(q)}"</div>`;
+  main.style.display = 'none'; res.style.display = '';
 }
 
 function toggleCatGroup(catId) {
@@ -6646,7 +6787,7 @@ function renderRemittanceForm() {
   // assumes "foreign → home" — supports home→foreign, foreign→foreign too.
   // Rate is always expressed as "1 [from currency] = X [to currency]".
   // ── PERSONAL LOGIC SET #85 ── no pre-selected account
-  const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const placeholderOpt = `<option value="" disabled selected>Choose an account</option>`;
   const allOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}" data-curr="${a.currency}">${acctLabel(a)}</option>`).join('');
 
   if (accts.length < 2) {
@@ -6979,7 +7120,7 @@ function renderExternalForm(type) {
   const isIn = type === 'external-in';
   const accts = db.accounts.filter(a=>!a.archived);
   // ── PERSONAL LOGIC SET #86 ── no pre-selected account (External In/Out)
-  const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const placeholderOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   return `<div class="big-amt-wrap">
@@ -7083,7 +7224,7 @@ function renderTransferForm() {
   const accts = db.accounts.filter(a=>!a.archived);
   // ── PERSONAL LOGIC SET #87 ── no pre-selected From/To (Transfer)
   // User must explicitly pick both accounts. Prevents accidental wrong-direction transfers.
-  const placeholderOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const placeholderOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = ()=>placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
   return `<div class="big-amt-wrap">
@@ -7113,7 +7254,7 @@ function renderTransferForm() {
     <div id="tf-forex-preview" style="display:none;background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin:10px 0;border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;color:var(--text4);letter-spacing:0.06em;font-weight:600">💱 <span id="tf-fx-pair"></span><!-- PLS #385: filled from the chosen accounts (was a hardcoded "PGK") --></div>
-        <div style="font-size:11px;color:var(--text4)">snapshot <span id="tf-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
+        <div style="font-size:11px;color:var(--text4)">Rate <span id="tf-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
       </div>
       <div style="font-size:13px;color:var(--text3)">Will receive: <span id="tf-toamount-val" style="font-family:var(--mono);color:var(--green);font-weight:600;font-size:14px;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">—</span></div>
       <div id="tf-fx-extra" style="font-size:11px;color:var(--text4);margin-top:4px;line-height:1.4"></div>
@@ -7140,7 +7281,7 @@ function renderTransferForm() {
               <input class="form-input numpad-input" type="number" id="tf-custom-rate" placeholder="0.0000" step="any" oninput="onTfCustomRateInput()" inputmode="none">
             </div>
           </div>
-          <div style="font-size:11px;color:var(--text4);line-height:1.3">💡 Type either one, the other fills in. Leave blank to use snapshot.</div>
+          <div style="font-size:11px;color:var(--text4);line-height:1.3">💡 Type either one and the other fills in. Leave both blank to use the saved rate.</div>
         </div>
 
         <!-- Transfer fee + reimbursable person -->
@@ -7153,12 +7294,12 @@ function renderTransferForm() {
             </div>
             <div class="form-group" style="margin-bottom:0">
               <label class="form-label" style="font-size:11px">Charged to</label>
-              <select class="form-input" id="tf-fee-acct"><option value="">— Same as From —</option>${acctOpts()}</select>
+              <select class="form-input" id="tf-fee-acct"><option value="">Same as From</option>${acctOpts().replace(/<option value="" disabled selected>[^<]*<\/option>/, '')}<!-- PLS #392: drop the list's placeholder so "Same as From" shows --></select>
             </div>
           </div>
           <div class="form-group" style="margin-top:8px;margin-bottom:0">
             <label class="form-label" style="font-size:11px">Reimbursable from <span style="color:var(--text4);font-weight:400">(optional)</span></label>
-            <input class="form-input" type="text" id="tf-fee-reimb-person" placeholder="Person name — leave blank if none">
+            <input class="form-input" type="text" id="tf-fee-reimb-person" placeholder="Person's name, or leave blank">
             <div style="font-size:11px;color:var(--text4);margin-top:4px;line-height:1.3">💡 If filled, this fee will become a Shared transaction reimbursable from that person.</div>
           </div>
         </div>
@@ -7426,7 +7567,7 @@ function updateTransferPreview() {
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
         const label = isLoss ? 'Forex Loss' : 'Forex Gain';
-        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + toCurr + '</span> <span style="color:var(--text4)">vs snapshot</span>';
+        fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + toCurr + '</span> <span style="color:var(--text4)">vs the saved rate</span>';
       } else {
         fxExtra.innerHTML = '';
       }
@@ -7533,7 +7674,7 @@ function submitAddTx() {
   if (isSalary) {
     setTimeout(()=>{
       window._efNext = true; // PLS #361
-      openDlg('💱 Update FX rate?',
+      openDlg('Update the rate?',
         `<p style="font-size:14px;color:var(--text2);line-height:1.6">You received income in <strong>${currency}</strong>. Would you like to update your ${currency}→${_homeBase()} exchange rate for accuracy?</p>
         <div class="form-group" style="margin-top:16px">
           <label class="form-label" for="payday-fx-rate">1 ${currency} = ? ${_homeBase()}</label>
@@ -7671,7 +7812,7 @@ function submitTransfer() {
           categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss',
           accountId: forexAcct.id,
           date, time: time||nowTime(),
-          notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${fmtRate(forex.actualRate)} vs snapshot ${fmtRate(forex.snapshotRate)})`,
+          notes: `Auto from transfer (${forex.fromCurr}→${forex.toCurr} @ ${fmtRate(forex.actualRate)} vs saved ${fmtRate(forex.snapshotRate)})`,
           fxSnapshot,
           parentId,
           isAutoForex: true,
@@ -7700,7 +7841,7 @@ function submitTransfer() {
         accountId: forexAcct2.id,
         categoryId: forexDiff > 0 ? 'sc-forexgain' : 'sc-forexloss',
         date, time: time||nowTime(),
-        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+        notes: `Forex ${forexDiff>0?'gain':'loss'} from transfer (actual rate vs saved rate)`,
         fxSnapshot: buildFxSnapshot(date, time),
         parentId,
         isAutoForex: true,
@@ -8390,7 +8531,7 @@ function _openSharedFs(tx, footer, fxBadge) {
       _fsInfo('Receipt total', fmt(total, tx.currency))
       + _fsInfo('Your share', fmt(mine, tx.currency))
       + _fsInfo('Account', _esc(acct?.name || ''))
-      + (tx.notes ? _fsInfo('Notes', _esc(tx.notes)) : ''), fxBadge)}
+      + (tx.notes ? _fsInfo('Notes', _esc(_noteShow(tx.notes))) : ''), fxBadge)}
     ${persons.length ? _fsSec(`People · ${persons.length}`) + _fsFeed(peopleRows) : ''}
     ${_fsSec(`Activity · ${payments.length + 1}`)}${_fsFeed(feed)}
     ${others.length ? _fsSec(`Linked · ${others.length}`) + _fsFeed(linked) : ''}
@@ -8402,7 +8543,7 @@ function openTxDetail(txId) {
 
   // ── isLoanTx: parent loan transaction ──
   if (tx.isLoanTx) {
-    const label = tx.loanDirection==='lent' ? 'Lent Out' : 'Borrowed';
+    const label = tx.loanDirection==='lent' ? 'Lent out' : 'Borrowed';
     const icon  = tx.loanDirection==='lent' ? '🤲' : '🤏';
     const iconBg = tx.loanDirection==='lent' ? 'tx-icon-lend' : 'tx-icon-borrow';
     const acctLoan = getAccountDisplay(tx.accountId);
@@ -8418,11 +8559,11 @@ function openTxDetail(txId) {
       </div>
       <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${tx.loanDirection==='lent'?'amber':'teal'}">${label}</span></div></div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'saved':'today\'s'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(acctLoan.name)}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(loan.personName)}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>
-      ${tx.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(tx.notes)}</div></div>`:''}
+      ${tx.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(_noteShow(tx.notes))}</div></div>`:''}
       ${payHistHTML}
       <div style="margin-top:10px;font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Manage payments via the Loans page.</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg();nav('loans')">Go to Loans</button>`
@@ -8441,11 +8582,11 @@ function openTxDetail(txId) {
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
       </div>
       <div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono)">${fmt(tx.amount,tx.currency)}</div></div>
-      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
+      ${(()=>{ const home=_homeBase(); if(tx.currency===home) return ''; const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare??tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'saved':'today\'s'; return `<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; })()}
       <div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(acctPay.name)}</div></div>
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(loan.personName)}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>
-      ${tx.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(tx.notes)}</div></div>`:''}
+      ${tx.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(_noteShow(tx.notes))}</div></div>`:''}
       <div style="margin-top:10px;font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Manage this from the loan in Loans.</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg();nav('loans')">Go to Loans</button>`
     );
@@ -8538,7 +8679,7 @@ function openTxDetail(txId) {
   } else {
     rows += `<div class="detail-row"><div class="detail-label">Amount</div><div class="detail-value" style="font-family:var(--mono);font-size:16px">${fmt(tx.amount,tx.currency)}</div></div>`;
   }
-  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare||tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'snapshot':'current'; rows+=`<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; } }
+  { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare||tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'saved':'today\'s'; rows+=`<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} <span style="font-size:11px;color:var(--text4)">(${label} rate: ${fmtRate(rate)})</span></div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
     const to = getAccountDisplay(tx.toAccountId);
@@ -8554,7 +8695,7 @@ function openTxDetail(txId) {
   }
   if (tx.personName) rows += `<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(tx.personName)}</div></div>`;
   rows += `<div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>`;
-  if (tx.notes) rows += `<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(tx.notes)}</div></div>`;
+  if (tx.notes) rows += `<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(_noteShow(tx.notes))}</div></div>`;
 
   // FX snapshot badge with source + clickable link to Settings
   let fxBadge = '';
@@ -8594,7 +8735,7 @@ function openTxDetail(txId) {
                 <div style="font-size:13px;font-weight:600">${fmtDFull(p.date)}</div>
                 <div style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)">+${fmt(p.amount,p.currency)}</div>
               </div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${label} · ${_esc(pAcct.name)}${p.notes?' · '+_esc(p.notes):''}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${label} · ${_esc(pAcct.name)}${p.notes?' · '+_esc(_noteShow(p.notes)):''}</div>
               ${isGain && gainChild ? `<div style="font-size:11px;color:var(--green);margin-top:2px">📈 +${fmt(gainChild.amount,gainChild.currency)} settlement gain</div>` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
@@ -8783,7 +8924,7 @@ function openTxDetail(txId) {
       else if (c.isBatchReimbSettlement) childLabel = `Batch reimb from ${_esc(c.batchPerson || c.reimbPerson || 'someone')}`;
       else if (c.isBatchSettlement) childLabel = `Batch settlement (${_esc(c.batchPerson||'someone')})`;
       else if (c.isAutoReimb) childLabel = `Reimb. from ${_esc(c.reimbPerson||'someone')}`;
-      else childLabel = _esc(c.notes || 'Child');
+      else childLabel = _esc(_noteShow(c.notes) || 'Child');
       const isReimb = c.isAutoReimb && !c.isBatchReimbSettlement;
       const row = _fsRow({ ico:cCat.icon, title:childLabel, sub:`${fmtDFull(c.date)}${c.archived ? ' · archived' : ''}`, amt:`<span class="tx-amount ${cAmtD.cls}">${cAmtD.str}</span>`,
         onclick:`closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)`, chev:!isReimb });
@@ -8922,7 +9063,7 @@ function openTxReceipt(txId) {
   }
 
   if (tx.notes) {
-    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Notes</div><div class="rcpt-row-value" style="font-style:italic">${_esc(tx.notes)}</div></div>`;
+    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Notes</div><div class="rcpt-row-value" style="font-style:italic">${_esc(_noteShow(tx.notes))}</div></div>`;
   }
 
   // Shared: split lines
@@ -9053,7 +9194,7 @@ function buildTxReceiptText(txId) {
     lines.push(`${_home} Equiv: ${fmt(phpVal, _home)}`);
   }
 
-  if (tx.notes) lines.push(`Notes: ${_esc(tx.notes)}`);
+  if (tx.notes) lines.push(`Notes: ${_esc(_noteShow(tx.notes))}`);
 
   lines.push('');
   lines.push(`Generated: ${generatedAt}`);
@@ -9798,7 +9939,7 @@ function saveEditTransfer(txId) {
         accountId: forexAcctEdit?.id,
         categoryId: forexDiff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
         date: tx.date, time: tx.time||nowTime(),
-        notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+        notes: `Forex ${forexDiff>=0?'gain':'loss'} from transfer (actual rate vs saved rate)`,
         fxSnapshot: tx.fxSnapshot,
         forexSnapRate: snapRate2, // PLS #275: measured at the tx's own rate (PLS #273)
       });
@@ -9884,7 +10025,7 @@ function recomputeTransferForexChild(parentId) {
     accountId: homeAcct.id,
     date: parent.date,
     time: parent.time,
-    notes: `Auto from transfer (${fromAcct.currency}→${toAcct.currency} @ ${fmtRate(actualRate)} vs snapshot ${fmtRate(snapshotRate) || 'N/A'})`,
+    notes: `Auto from transfer (${fromAcct.currency}→${toAcct.currency} @ ${fmtRate(actualRate)} vs saved ${fmtRate(snapshotRate) || 'N/A'})`,
     fxSnapshot: parent.fxSnapshot || buildFxSnapshot(parent.date, parent.time), // PLS #279
     parentId,
     isAutoForex: true
@@ -11126,10 +11267,11 @@ function renderActiveAccounts() {
     const idleDays = idle && (idle.msg.match(/(\d+)\s*days?/) || [])[1];
     return `<div class="acct-card" onclick="openAcctDetail('${a.id}')" style="padding:13px 14px">
       <div class="lp-name" style="white-space:normal;align-items:flex-start"><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3">${_esc(a.name)}</span></div>
-      <div class="lp-meta">${_esc(a.type || 'Other')}${a.note ? ' · ' + _esc(a.note) : ''}</div>
-      <div style="font-family:var(--mono);font-size:16px;font-weight:600;margin-top:8px;color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency, v<0)}</div>
+      <!-- PLS #396: the Idle / Low pill sits at the right end of the type line instead of on its own line under the
+           balance, so a card with a pill is exactly as tall as one without; a long type or note shortens with "…" -->
+      <div class="lp-meta" style="display:flex;align-items:center;gap:8px;min-height:22px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(a.type || 'Other')}${a.note ? ' · ' + _esc(a.note) : ''}</span>${idle ? `<span class="lp-pill due" style="flex-shrink:0;margin:0" title="${_esc(idle.msg)}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span>` : ''}</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:600;margin-top:6px;color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency, v<0)}</div>
       ${a.currency!==dc && v!==0 ? `<div class="lp-amt2">≈ ${fmt(inDc(toPhp(v, a.currency)), dc, v<0)}</div>` : ''}
-      ${idle ? `<div style="margin-top:6px"><span class="lp-pill due" title="${_esc(idle.msg)}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span></div>` : ''}
     </div>`;
   };
   const grid = db.settings.acctView === 'grid';
@@ -12398,7 +12540,7 @@ function _loanPersonCard(direction, person, personLoans) {
                   <span style="color:var(--text4);font-size:11px">↳</span>
                   <div>
                     <div style="font-size:11px;color:var(--text3)">${fmtDFull(p.date)}${p.isBatchSettlement?' · batch':''}</div>
-                    ${p.notes?`<div style="font-size:11px;color:var(--text4)">${_esc(p.notes)}</div>`:''}
+                    ${p.notes?`<div style="font-size:11px;color:var(--text4)">${_esc(_noteShow(p.notes))}</div>`:''}
                   </div>
                 </div>
                 <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600">+${fmt(p.amount, p.currency)}</div>
@@ -12497,7 +12639,7 @@ function _loanSettledView(direction, settled) {
           <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev ${open?'open':''}">›</span></div>`;
         if (open) {
           html += `<div style="border-top:1px solid var(--border)">` + c.loans.map(l => `<div class="tx-item" onclick="event.stopPropagation();openLoanDetail('${l.id}','${direction}')">
-              <div class="tx-meta"><div class="tx-name">${_esc((l.notes||'').trim() || (l.personName||'Loan'))}</div><div class="tx-detail">${fmtDFull(l.date)}</div></div>
+              <div class="tx-meta"><div class="tx-name">${_esc(_noteShow((l.notes||'').trim()) || (l.personName||'Loan'))}</div><div class="tx-detail">${fmtDFull(l.date)}</div></div>
               <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(l.amount, l.currency)}</div></div></div>`).join('')
             + `<div style="padding:10px 16px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)">${bp.isBatchWriteOff
                 ? `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();undoBatchWriteOff('${bp.id}')">Undo write-off</button>`
@@ -12553,7 +12695,7 @@ function openBatchSettleEdit(txId, direction) {
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
       <div style="min-width:0"><div style="color:var(--text);font-weight:600">${_esc(l.personName||'?')}</div>
-        <div style="color:var(--text3);font-size:11px">${fmtDFull(l.date)}${l.notes?' · '+_esc(l.notes):''}</div></div>
+        <div style="color:var(--text3);font-size:11px">${fmtDFull(l.date)}${l.notes?' · '+_esc(_noteShow(l.notes)):''}</div></div>
       <div style="text-align:right;flex-shrink:0"><div style="font-weight:600;color:var(--green)">+${fmt(got,l.currency)} <span style="color:var(--text3);font-weight:400">of ${fmt(l.amount,l.currency)}</span></div>
         <div style="font-size:11px;font-weight:600;color:${done?'var(--green)':'var(--amber)'}">${done?'Paid':'Partial'}</div></div>
     </div>`; }).join('');
@@ -12885,7 +13027,7 @@ function openBatchSettleLoans(direction, person) {
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="flex:1;min-width:0">
         <div style="color:var(--text2)">${fmtDFull(l.date)}${l.dueDate?` · Due ${fmtDFull(l.dueDate)}`:''}</div>
-        ${l.notes?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${_esc(l.notes)}</div>`:''}
+        ${l.notes?`<div style="color:var(--text4);font-size:11px;margin-top:2px">${_esc(_noteShow(l.notes))}</div>`:''}
       </div>
       <div style="font-family:var(--mono);color:${direction==='lent'?'var(--amber)':'var(--red)'}">${fmt(remain, l.currency)}</div>
     </div>`;
@@ -14143,14 +14285,14 @@ function openAddLoan(direction='lent') {
   // PLS #193: was missing a placeholder option, so the browser silently pre-selected the first
   // account in the list — the existing "Select an account" validation in saveAddLoan() could
   // never actually fire, and loans could get saved against the wrong account unnoticed.
-  const placeholderAcctOpt = `<option value="" disabled selected>— Select account —</option>`;
+  const placeholderAcctOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = placeholderAcctOpt + db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" data-curr="${a.currency}">${acctLabel(a)}</option>`).join('');
   const isLent = direction === 'lent';
   const personLabel = isLent ? 'Lent to' : 'Borrowed from'; // PLS #368: sentence case
   const loanedLabel = isLent ? 'Loaned amount' : 'Borrowed amount';
   const acctLabelText = isLent ? 'From account' : 'Into account'; // PLS #368: was 'Source Account (deducted from)'
   const loanedHelp = isLent ? 'What leaves your account' : 'What lands in your account';
-  const expectHelp = isLent ? 'What they\'ll pay back — leave blank if same currency' : 'What you\'ll pay back — leave blank if same currency';
+  const expectHelp = isLent ? 'What they\'ll pay back. Leave blank if it\'s the same currency' : 'What you\'ll pay back. Leave blank if it\'s the same currency'; // PLS #392: no dash
   window._efNext = true; // PLS #360
   openSheet('gen', isLent?'Add loan out':'Add debt', `
     <div class="form-group"><label class="form-label" for="nl-person">${personLabel} *</label><input class="form-input" id="nl-person" placeholder="Person's name"></div>
@@ -14179,7 +14321,7 @@ function openAddLoan(direction='lent') {
     <div id="nl-fx-preview" style="display:none;background:var(--bg2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px;border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;color:var(--text4);letter-spacing:0.06em;font-weight:600">💱 <span id="nl-fx-pair"></span><!-- PLS #385: filled from the loan's currencies --></div>
-        <div style="font-size:11px;color:var(--text4)">snapshot <span id="nl-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
+        <div style="font-size:11px;color:var(--text4)">Rate <span id="nl-fx-rate" style="font-family:var(--mono);font-weight:600;color:var(--text)">—</span></div>
       </div>
       <div style="font-size:13px;color:var(--text3)"><span id="nl-fx-verb">Will deduct</span>: <span id="nl-fx-amount" style="font-family:var(--mono);color:var(--accent);font-weight:600;font-size:14px;letter-spacing:-0.3px;font-variant-numeric:tabular-nums">—</span></div>
       <div id="nl-fx-extra" style="font-size:11px;color:var(--text4);margin-top:4px;line-height:1.4"></div>
@@ -14760,24 +14902,24 @@ function renderAnalytics() {
     aisummary:  {label:'Insights',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
     cashflow:   {label:'Cashflow',       icon:'💰', section:'patterns', desc:'Money in vs money out over time, and what is left over each month.'},
     calendar:   {label:'Calendar',       icon:'📅', section:'patterns', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
-    dayofweek:  {label:'By Day',         icon:'📅', section:'patterns', desc:'Which days of the week you tend to spend the most.'},
+    dayofweek:  {label:'By day',         icon:'📅', section:'patterns', desc:'Which days of the week you tend to spend the most.'},
     spending:   {label:'Spending',       icon:'🛒', section:'out', desc:'Where your money goes, broken down by category.'},
     income:     {label:'Income',         icon:'💵', section:'in', desc:'Where your money comes from, broken down by source.'},
     trends:     {label:'Trends',         icon:'📈', section:'patterns', desc:'How your spending shifts over the months, shown as a heatmap.'},
-    yoy:        {label:'Year-over-Year', icon:'🗓', section:'patterns', desc:'This year vs last year, month by month.'},
+    yoy:        {label:'Year over year', icon:'🗓', section:'patterns', desc:'This year vs last year, month by month.'},
     // PLS #320: 'budget' removed. Planning > Budgets (PLS #306) shows the same status per category;
     // two screens for one thing drifted apart. Its pace line moved to Planning.
     wealth:     {label:'Wealth',         icon:'💎', section:'wealth', desc:'Your net worth over time and how assets and debt stack up.'},
     investments:{label:'Investments',    icon:'📊', section:'wealth', desc:'Your portfolio by type, cost vs current value, and gains.'},
-    accthealth: {label:'Account Health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
+    accthealth: {label:'Account health', icon:'🏦', section:'wealth', desc:'Balance and activity per account, and which ones are growing or shrinking.'},
     // PLS #220: 'in' — People tracks who pays you and who you owe, i.e. money arriving.
     people:     {label:'People',         icon:'👥', section:'in', desc:'Who you send money to or receive from, with running balances.'},
     // PLS #220: 'out' — a subscription is a recurring EXPENSE, not a person. It sat under
     // section:'people' only because subscriptions are often paid to people.
     // PLS #315: Subscriptions tab removed. It only listed Planning > Recurring templates, which #305
     // removed, so it could never show anything again (it told users to set them up in Planning).
-    forex:      {label:'Forex Rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
-    crosscurr:  {label:'Cross-FX',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
+    forex:      {label:'Exchange rates',    icon:'💱', section:'currency', desc:'Exchange rates of your tracked currencies against your home base.'},
+    crosscurr:  {label:'Cross-currency',       icon:'💱', section:'currency', desc:'How any two of your currencies compare against each other.'},
     external:   {label:'External',       icon:'🔄', section:'currency', desc:'Money moving in and out of accounts you do not fully track.'},
   };
   window._TAB_REGISTRY = TAB_REGISTRY;
@@ -14846,9 +14988,9 @@ function renderAnalytics() {
     external:   ['overview','forex','crosscurr'],
   };
   const _TAB_NAME = {overview:'Overview',aisummary:'AI Summary',cashflow:'Cashflow',calendar:'Calendar',
-    dayofweek:'By Day',spending:'Spending',income:'Income',trends:'Trends',yoy:'Year-over-Year',
-    budget:'Budget',wealth:'Wealth',investments:'Investments',accthealth:'Account Health',
-    people:'People',subs:'Subscriptions',forex:'Forex',crosscurr:'Cross-FX',external:'External'};
+    dayofweek:'By day',spending:'Spending',income:'Income',trends:'Trends',yoy:'Year over year',
+    budget:'Budget',wealth:'Wealth',investments:'Investments',accthealth:'Account health',
+    people:'People',subs:'Subscriptions',forex:'Exchange rates',crosscurr:'Cross-currency',external:'External'};
   const kin = _TAB_KIN[_analyticsTab] || [];
   const relatedStrip = kin.length ? `<div class="page-pad" style="margin-top:0;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)">
@@ -17843,7 +17985,7 @@ function buildPieChart(cats, total, prefix, period) {
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px 8px 22px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
           <div style="min-width:0;flex:1;overflow:hidden">
             <div style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
-            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">${_esc(tx.notes)}</div>` : ''}
+            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">${_esc(_noteShow(tx.notes))}</div>` : ''}
           </div>
           <span style="font-family:var(--mono);color:${amtColor};font-weight:500;font-size:11px;flex-shrink:0;margin-left:8px;white-space:nowrap">${sign}${fmt(txAmt, tx.currency)}</span>
         </div>`;
@@ -18019,7 +18161,7 @@ function renderAnalyticsSpending() {
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
           <div style="min-width:0;flex:1;overflow:hidden">
             <div style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
-            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(tx.notes)}</div>` : ''}
+            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(_noteShow(tx.notes))}</div>` : ''}
           </div>
           <span style="font-family:var(--mono);color:var(--red);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px;white-space:nowrap">−${fmt(txAmt, tx.currency)}</span>
         </div>`;
@@ -18199,7 +18341,7 @@ function renderAnalyticsIncome() {
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
           <div style="min-width:0;flex:1;overflow:hidden">
             <div style="color:var(--text2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dateLabel} · ${acctName}</div>
-            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(tx.notes)}</div>` : ''}
+            ${tx.notes ? `<div style="color:var(--text4);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${_esc(_noteShow(tx.notes))}</div>` : ''}
           </div>
           <span style="font-family:var(--mono);color:var(--green);font-weight:500;font-size:12px;flex-shrink:0;margin-left:8px;white-space:nowrap">+${fmt(txAmt, tx.currency)}</span>
         </div>`;
@@ -18598,7 +18740,7 @@ function showHeatmapDay(dateKey) {
     return `<div onclick="closeDlg();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="min-width:0;flex:1">
         <div style="font-size:13px;color:var(--text);font-weight:500">${subCat.icon} ${subCat.subName||subCat.name}</div>
-        <div style="font-size:11px;color:var(--text4);margin-top:2px">${acctName}${tx.notes?' · '+_esc(tx.notes):''}${tx.time?' · '+tx.time:''}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:2px">${acctName}${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}${tx.time?' · '+tx.time:''}</div>
       </div>
       <span style="font-family:var(--mono);font-size:13px;color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${sign}${fmt(amt,tx.currency)}</span>
     </div>`;
@@ -21177,7 +21319,7 @@ function saveFxHistoryEntry(currency, idx) {
   const affected = countAffectedTxs(currency, oldDate, newDate);
 
   if (affected > 0) {
-    openDlg('Update FX rate entry',
+    openDlg('Update rate',
       `<div style="font-size:13px;color:var(--text2);line-height:1.6">
         Changing <strong>${currency}</strong> rate from <strong>${sym(_homeBase())}${oldRate}</strong> (${oldDate}) to <strong>${sym(_homeBase())}${newRate}</strong> (${newDate}).
         <div style="margin:10px 0;padding:10px;background:var(--bg3);border-radius:var(--r-md);font-size:12px">This affects <strong>${affected}</strong> transaction${affected>1?'s':''} in this rate period.</div>
@@ -21281,7 +21423,7 @@ function deleteFxHistoryEntry(currency, idx) {
   if (!entry) return;
   if (entry.source === 'baseline') { showToast('Cannot delete baseline entry'); return; }
 
-  openDlg('Delete FX rate entry?',
+  openDlg('Delete this rate?',
     `<div style="font-size:13px;color:var(--text2)">Delete rate ${sym(_homeBase())}${entry.rate} on ${entry.date}? Affected transactions will re-resolve to the previous period's rate on next recompute.</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="confirmDeleteFxHistory('${currency}',${idx})">Delete</button>`
@@ -22597,7 +22739,7 @@ function openWhatsNew() {
           <div style="font-size:14px;font-weight:700">v${entry.ver}</div>
           <div style="font-size:11px;color:var(--text3)">${entry.date}</div>
         </div>
-        ${entry.changes.map(c => `<div style="font-size:12px;color:var(--text2);padding:4px 0;line-height:1.5">${escapeAttr(c)}</div>`).join('')}
+        ${entry.changes.map(c => `<div style="font-size:12px;color:var(--text2);padding:4px 0;line-height:1.5">${escapeAttr(String(c).replace(/\s+—\s+(\S)/g, (x, ch) => '. ' + ch.toUpperCase()))}<!-- PLS #395: older lines, dash becomes a full stop --></div>`).join('')}
       </div>
     `).join('')}
     <div style="text-align:center;font-size:11px;color:var(--text4);margin-top:20px;padding-bottom:20px">
@@ -22870,11 +23012,11 @@ function runDiagDbIntegrity() {
   collections.forEach(c => {
     const val = db[c];
     const present = val !== undefined && val !== null;
-    const sign = present ? '✅' : '⚠️';
+    const sign = present || c === 'snapshots' ? '✅' : '⚠️'; // PLS #392: snapshots live in Google Drive (see note 19), not in db
     let detail = '';
     if (Array.isArray(val)) detail = val.length + ' items';
     else if (typeof val === 'object' && val) detail = Object.keys(val).length + ' keys';
-    else detail = 'NOT INITIALIZED';
+    else detail = c === 'snapshots' ? 'kept in Google Drive' : 'NOT INITIALIZED';
     _diagLog(sign + ' db.' + c + ' — ' + detail);
   });
 
@@ -23381,7 +23523,7 @@ function renderCSVImportBody() {
   const dc = _displayCurrency();
   const colOpts = s.header.map((c, i) => `<option value="${i}">${escapeAttr(c)} (col ${i+1})</option>`).join('');
   const accts = (db.accounts || []).filter(a => !a.archived);
-  const acctOpts = '<option value="">— Pick account —</option>' + accts.map(a => `<option value="${a.id}">${escapeAttr(a.name)}</option>`).join('');
+  const acctOpts = '<option value="">Choose an account</option>' + accts.map(a => `<option value="${a.id}">${escapeAttr(a.name)}</option>`).join('');
 
   // Preview first 5
   const preview = s.rows.slice(0, 5).map(r => {
@@ -23396,7 +23538,7 @@ function renderCSVImportBody() {
   }).join('');
 
   const sel = (mapVal) => `<select class="form-input" style="font-size:13px;padding:8px">
-    <option value="-1">— Skip —</option>${colOpts.replace(`value="${mapVal}"`, `value="${mapVal}" selected`)}
+    <option value="-1">Skip</option>${colOpts.replace(`value="${mapVal}"`, `value="${mapVal}" selected`)}
   </select>`;
 
   return `<div class="page-pad">
@@ -23416,7 +23558,7 @@ function renderCSVImportBody() {
       <div class="form-group">
         <label class="form-label" for="csv-map-date">Date column *</label>
         <select class="form-input" id="csv-map-date" style="font-size:13px">
-          <option value="-1">— Skip —</option>
+          <option value="-1">Skip</option>
           ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.date===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
         </select>
       </div>
@@ -23424,7 +23566,7 @@ function renderCSVImportBody() {
       <div class="form-group">
         <label class="form-label" for="csv-map-amount">Amount column *</label>
         <select class="form-input" id="csv-map-amount" style="font-size:13px">
-          <option value="-1">— Skip —</option>
+          <option value="-1">Skip</option>
           ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.amount===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
         </select>
       </div>
@@ -23432,7 +23574,7 @@ function renderCSVImportBody() {
       <div class="form-group">
         <label class="form-label" for="csv-map-notes">Notes / description column</label>
         <select class="form-input" id="csv-map-notes" style="font-size:13px">
-          <option value="-1">— Skip —</option>
+          <option value="-1">Skip</option>
           ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.notes===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
         </select>
       </div>
@@ -23440,7 +23582,7 @@ function renderCSVImportBody() {
       <div class="form-group">
         <label class="form-label" for="csv-map-type">Type column (income/expense)</label>
         <select class="form-input" id="csv-map-type" style="font-size:13px">
-          <option value="-1">— Skip (assume expense) —</option>
+          <option value="-1">Skip (count as expense)</option>
           ${s.header.map((c, i) => `<option value="${i}" ${s.mapping.type===i?'selected':''}>${escapeAttr(c)} (col ${i+1})</option>`).join('')}
         </select>
         <div style="font-size:11px;color:var(--text4);margin-top:4px">Negative amounts → expense, positive → income (if no type column)</div>
@@ -23684,7 +23826,7 @@ function renderBankReconBody() {
   if (accts.length === 0) {
     return '<div class="page-pad"><div class="empty-state"><div class="empty-icon">🏦</div><div class="empty-text">No accounts to reconcile</div><div class="empty-sub">Add an account first</div></div></div>';
   }
-  const acctOpts = '<option value="">— Pick account —</option>' + accts.map(a => `<option value="${a.id}" ${s.acctId===a.id?'selected':''}>${escapeAttr(a.name)} (${a.currency || _homeBase()})</option>`).join('');
+  const acctOpts = '<option value="">Choose an account</option>' + accts.map(a => `<option value="${a.id}" ${s.acctId===a.id?'selected':''}>${escapeAttr(a.name)} (${a.currency || _homeBase()})</option>`).join('');
 
   let resultHTML = '';
   if (s.acctId && s.realBalance !== '') {
@@ -23777,17 +23919,17 @@ function renderBankReconBody() {
 
     <div class="card" style="margin-bottom:16px">
       <div class="form-group">
-        <label class="form-label" for="recon-acct">Account *</label>
+        <label class="form-label" for="recon-acct">Account</label>
         <select class="form-input" id="recon-acct" onchange="_reconState.acctId = this.value">${acctOpts}</select>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="recon-date">As of date *</label>
+        <label class="form-label" for="recon-date">As of date</label>
         ${dtField('recon-date','date','As of date',s.asOfDate,{onchange:'_reconState.asOfDate = this.value',max:`${today()}`})}
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="recon-real">Real bank balance (from your bank app) *</label>
+        <label class="form-label" for="recon-real">Real bank balance (from your bank app)</label>
         <input class="form-input numpad-input" type="number" step="any" id="recon-real" value="${s.realBalance}" placeholder="0.00" inputmode="decimal" oninput="_reconState.realBalance = this.value">
       </div>
 
@@ -25625,7 +25767,7 @@ function ensureDBIntegrity() {
         db.transactions.push({ id: genId(), parentId: sw.id, isAutoForex: true, createdAt: new Date().toISOString(),
           type: diff >= 0 ? 'income' : 'expense', amount: Math.abs(diff), currency: _homeBase(),
           accountId: sw.fromAccountId, categoryId: diff >= 0 ? 'sc-forexgain' : 'sc-forexloss',
-          date: sw.date, time: sw.time || '00:00', notes: `Forex ${diff>=0?'gain':'loss'} from transfer (actual rate vs snapshot)`,
+          date: sw.date, time: sw.time || '00:00', notes: `Forex ${diff>=0?'gain':'loss'} from transfer (actual rate vs saved rate)`,
           fxSnapshot: sw.fxSnapshot, forexSnapRate: r });
         db.transactions = db.transactions.filter(t => t.id !== cr.id);
         db.settings._pls304 = true;
@@ -27593,7 +27735,7 @@ function renderAnalyticsDayOfWeek() {
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Week</div>`;
+      <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By day of week</div>`;
   byDay.forEach((d, i) => {
     const pct = (d.total / maxTotal) * 100;
     const avg = d.count > 0 ? d.total / d.count : 0;
@@ -27610,7 +27752,7 @@ function renderAnalyticsDayOfWeek() {
 
   // Day-of-month buckets
   html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px">
-    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By Day of Month</div>`;
+    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">By day of month</div>`;
   Object.entries(buckets).forEach(([key, b]) => {
     const pct = grandTotal > 0 ? (b.total / grandTotal) * 100 : 0;
     html += `<div style="margin-bottom:10px">
@@ -27879,7 +28021,7 @@ function _usualSpendingBefore(mk) {
 function _insListSheet(title, items) {
   const dc = _displayCurrency();
   const rows = items.map(it => { const t = db.transactions.find(x => x.id === it.id); if (!t) return ''; const c = txCategoryDisplay(t);
-    return _fsRow({ ico:c.icon, title: t.notes ? _esc(t.notes) : _esc(_stripIcon(c.name)), sub: `${t.notes ? _esc(_stripIcon(c.name)) + ' · ' : ''}${fmtDFull(t.date)}`,
+    return _fsRow({ ico:c.icon, title: t.notes ? _esc(_noteShow(t.notes)) : _esc(_stripIcon(c.name)), sub: `${t.notes ? _esc(_stripIcon(c.name)) + ' · ' : ''}${fmtDFull(t.date)}`,
       amt: fmt(it.amt, dc), onclick:`closeDlg();setTimeout(()=>openTxDetail('${t.id}'),50)`, chev:true }); }).join('');
   openDlg(title, `<div class="fs">${_fsFeed(rows)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>`);
 }
@@ -28274,7 +28416,7 @@ function renderAnalyticsAISummary(mkSel) {
     if (bt) { const bc = txCategoryDisplay(bt);
       bigHtml = `<div class="lp-row" onclick="openTxDetail('${bt.id}')">
         <span class="pool-avatar" style="width:32px;height:32px;font-size:16px;background:var(--bg3)">${bc.icon || '•'}</span>
-        <div style="flex:1;min-width:0"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt.notes ? _esc(bt.notes) : _esc(_stripIcon(bc.name))}</span></div>
+        <div style="flex:1;min-width:0"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt.notes ? _esc(_noteShow(bt.notes)) : _esc(_stripIcon(bc.name))}</span></div>
           <div class="lp-meta">${bt.notes ? _esc(_stripIcon(bc.name)) + ' · ' : ''}${fmtDFull(bt.date)}${spend > 0 ? ` · ${(big.amt/spend*100).toFixed(0)}% of spending` : ''}</div></div>
         <div class="lp-amt">${money(big.amt)}</div><span class="lp-chev">›</span></div>`; } }
   const extraHtml = (top3Html ? `<div class="lp-sec">Top categories</div><div class="lp-grp" style="margin-bottom:16px">${top3Html}</div>` : '')
