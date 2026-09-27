@@ -187,11 +187,33 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .fz-x{flex:1;min-width:0} .fz-x div:first-child{font-size:13px;color:var(--text);font-weight:600} .fz-x div:last-child{font-size:11px;color:var(--text3);margin-top:2px}
 .fz-recent .acct-pill{background:none!important;border:0!important;padding:0!important;color:var(--text3)!important;font-weight:400!important}
 .fz-rest > *{break-inside:avoid}
+.fz-nw{display:none} /* PLS #400: computer only */
+/* PLS #401: stronger text on the dashboard (his call: the greys read too faint). Every grey steps up one shade:
+   small labels and details use --text2 instead of --text3, and the faintest (--text4) becomes --text3.
+   Section titles use the full text colour. Accent, green and red stay as they are. */
+.dash-fz .section-title{color:var(--text)}
+.dash-fz .fz-k,.dash-fz .fz-hi,.dash-fz .fz-bal-l,.dash-fz .fz-ac .t,.dash-fz .fz-x div:last-child,
+.dash-fz .tx-detail,.dash-fz .acct-pill,.dash-fz .fz-act{color:var(--text2)!important}
+.dash-fz .tx-date-small,.dash-fz .fz-bal small{color:var(--text3)!important}
+.dash-fz [style*="color:var(--text3)"]{color:var(--text2)!important}
+.dash-fz [style*="color:var(--text4)"]{color:var(--text3)!important}
 @media(min-width:1024px){
   .fz-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px;align-items:stretch}
-  .fz-hero{background:var(--bg2);border-radius:var(--r-lg);padding:22px 24px;display:flex;flex-direction:column}
+  /* PLS #400: on a computer the balance card is a gradient hero (the app's own purple and pink) and its right half
+     shows the last 6 months of net worth, so the space works instead of sitting empty */
+  .fz-hero{position:relative;overflow:hidden;border-radius:var(--r-xl);padding:24px 26px;display:flex;gap:24px;align-items:stretch;
+    background:linear-gradient(105deg,var(--bg2) 30%,#9b7bf7 48%,#7c5cf0 62%,#b03fd6 86%,#f472b6 100%);box-shadow:0 8px 28px rgba(124,109,240,.16)}
+  :root:not([data-theme="light"]) .fz-hero{background:linear-gradient(105deg,var(--bg2) 34%,#4c3a9e 58%,#6d3fc0 74%,#9d3a8f 92%,#b8457f 100%)}
+  .fz-hero-main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .fz-nw{flex:0 0 44%;max-width:360px;align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;color:#fff;cursor:pointer;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:var(--r-lg);padding:14px 16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .fz-nw-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:rgba(255,255,255,.85)}
+  .fz-nw-h b{font-family:var(--mono);font-size:13px;font-weight:600;color:#fff;white-space:nowrap}
+  .fz-nw-svg{width:100%;height:78px;margin-top:10px;display:block;overflow:visible}
+  .fz-nw-x{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.8);margin-top:6px}
   .fz-hero .fz-bal-l,.fz-hero .fz-bal,.fz-hero .fz-delta{text-align:left}
   .fz-bal{font-size:44px}
+  .fz-nw{display:flex}
   .fz-hero .fz-acts{display:flex;gap:28px;margin:auto 0 0;padding-top:22px}
   .fz-act i{width:46px;height:46px}
   .fz-month{margin-bottom:0;display:flex;flex-direction:column;justify-content:center;padding:22px 24px}
@@ -4770,6 +4792,46 @@ function runCountUpAnimations() {
 // On phones the bottom bar's Add button hides on this page, since the Add action sits right here.
 // PLS #399: four quick facts under the month bar -- kept this month, spent per day so far, the main category you
 // spent most on, and spending against last month. All from getMonthTotals, so they match Insights and Analytics.
+// PLS #400: net worth at each of the last 6 month-ends, the same way the Net worth trend widget works
+// (account balances as of that date, anchored so the last point equals today's total balance)
+function _fzNwSeries(disp) {
+  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet'];
+  const dates = (db.transactions || []).filter(t => !t.archived && t.date).map(t => t.date);
+  const first = dates.length ? dates.reduce((a, b) => a < b ? a : b) : null;
+  const now = new Date(); const pts = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const eom = i === 0 ? now : new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const eomStr = `${eom.getFullYear()}-${String(eom.getMonth()+1).padStart(2,'0')}-${String(eom.getDate()).padStart(2,'0')}`;
+    if (!first || eomStr < first) continue;
+    let net = 0;
+    for (const a of db.accounts) { if (a.archived) continue;
+      const v = toPhp(getAcctBalanceAsOf(a.id, eomStr), a.currency);
+      if (assetTypes.includes(a.type)) net += v; else if (a.type === 'Credit Card') net += v; }
+    pts.push({ label: d.toLocaleString('en', { month:'short' }), php: net });
+  }
+  if (pts.length < 2) return null;
+  const off = getNetWorth().net - pts[pts.length - 1].php;
+  return pts.map(p => ({ label: p.label, v: fromPhp(p.php + off, disp) }));
+}
+function _fzNwPanel(disp) {
+  let ser = null; try { ser = _fzNwSeries(disp); } catch(e) { ser = null; }
+  if (!ser) return '';
+  const vals = ser.map(p => p.v), lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+  const W = 260, H = 70, px = 4, py = 8;
+  const xy = vals.map((v, i) => [px + i * (W - 2*px) / (vals.length - 1), py + (1 - (v - lo) / span) * (H - 2*py)]);
+  const line = xy.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = line + ` L ${xy[xy.length-1][0].toFixed(1)} ${H} L ${xy[0][0].toFixed(1)} ${H} Z`;
+  const ch = vals[vals.length-1] - vals[0];
+  const last = xy[xy.length-1];
+  return `<div class="fz-nw" onclick="event.stopPropagation();nav('analytics');setTimeout(()=>setAnalyticsTab('wealth'),100)">
+    <div class="fz-nw-h"><span>Net worth, ${ser[0].label} to ${ser[ser.length-1].label}</span><b>${ch>=0?'+':'−'}${fmt(Math.abs(ch), disp)}</b></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="fz-nw-svg" aria-hidden="true">
+      <path d="${area}" fill="rgba(255,255,255,.22)"/><path d="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.5" fill="#fff"/></svg>
+    <div class="fz-nw-x">${ser.map(p => `<span>${p.label}</span>`).join('')}</div>
+  </div>`;
+}
 function _fzMonthStats(curr, disp, now) {
   const inc = curr.income || 0, exp = curr.expense || 0, net = curr.net || 0;
   const day = Math.max(1, now.getDate());
@@ -4813,14 +4875,14 @@ function _fzTopHTML(curr, disp, netWorthPhp) {
       <div style="min-width:0"><div class="fz-hi">${hi}</div>${nick ? `<div class="fz-name">${nick}</div>` : ''}</div></div>
     <button type="button" class="fz-chip" onclick="openDisplayCurrencyPicker()" aria-label="Show amounts in another currency">${_esc(disp)} ${_ico('chevDown',14)}</button>
   </div>
-  <div class="fz-grid"><div class="fz-hero">
+  <div class="fz-grid"><div class="fz-hero"><div class="fz-hero-main">
   <div class="fz-bal-l">Total balance</div>
   <div class="fz-bal" onclick="nav('accounts')">${neg?'−':''}<small>${sym(disp)}</small><span data-countup="${Math.abs(nw)}" data-countup-decimals="2">${num}</span></div>
   ${Math.abs(dNet) >= 0.005 ? `<div class="fz-delta"><span class="${dNet<0?'neg':''}">${dNet<0?'−':'+'}${fmt(Math.abs(dNet),disp)} this month</span></div>` : ''}
   <div class="fz-acts">
     ${act('plus','Add',"openAddSheet()",true)}${act('transfer','Transfer',"openAddSheet({type:'transfer'})")}
     ${act('send','Remit',"openAddSheet({type:'remittance'})")}${act('grid','More',"showQuickAddMenu()")}
-  </div></div>
+  </div></div>${_fzNwPanel(disp)}</div>
   <div class="fz-card fz-link fz-month" onclick="nav('analytics')">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span class="fz-ttl">${now.toLocaleString('en',{month:'long'})}</span><span class="fz-k">${left === 0 ? 'Last day' : left + (left===1?' day left':' days left')}</span></div>
     <div class="fz-two">
@@ -5227,12 +5289,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.3'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.4'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'September 2026';
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.4', date: 'September 2026', changes: [
+    '🌈 On a computer, the balance card is a gradient card with your net worth over the last 6 months beside it', // PLS #400
+    '🔍 Dashboard text is darker and easier to read', // PLS #401
+  ]},
   { ver: '1.2.3', date: 'September 2026', changes: [
     '🖥 Dashboard on a computer: balance and this month side by side, all your top accounts in one row, and Recent next to your budgets', // PLS #398, #399
     '📊 The month card adds what you kept, spent per day, where most of it went, and how it compares with last month', // PLS #399
