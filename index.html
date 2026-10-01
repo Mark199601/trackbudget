@@ -230,7 +230,27 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .fz-sv{font-size:13px;font-weight:600;color:var(--text);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .fz-recent .txrow-wrap:nth-child(n+9){display:none}
 .dash-fz .fz-rest > div > .fz-card:last-child,.dash-fz .fz-rest > div > div > .fz-card:last-child{margin-bottom:0} /* no double gap inside a section */
-@media(min-width:1280px){ .fz-nw{display:flex} } /* PLS #402: the chart panel only where the card is wide enough; narrower screens keep the balance and all four buttons clear */
+@media(min-width:1280px){ .fz-nw{display:flex} }
+/* PLS #403 (his pick "B"): on phones and tablets the balance sits on a gradient card too -- white at the top for the
+   balance, purple and pink below -- with the 6-month net worth chart and the four buttons inside it (white circles) */
+@media(max-width:1023px){
+  .fz-hero{position:relative;overflow:hidden;border-radius:var(--r-xl);padding:22px 20px 18px;margin-bottom:16px;display:flex;flex-direction:column;
+    background:linear-gradient(172deg,var(--bg2) 20%,#9b7bf7 36%,#7c5cf0 68%,#b03fd6 90%,#f472b6 100%);box-shadow:0 8px 24px rgba(124,109,240,.18)}
+  :root:not([data-theme="light"]) .fz-hero{background:linear-gradient(172deg,var(--bg2) 20%,#4c3a9e 36%,#6d3fc0 70%,#9d3a8f 90%,#b8457f 100%)}
+  .fz-hero-main{display:contents}
+  .fz-hero .fz-bal-l,.fz-hero .fz-bal,.fz-hero .fz-delta{text-align:left;order:1}
+  .fz-nw{display:flex;order:2;flex-direction:column;color:#fff;cursor:pointer;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
+    border-radius:var(--r-lg);padding:12px 14px;margin-top:18px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .fz-nw-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:rgba(255,255,255,.88)}
+  .fz-nw-h span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .fz-nw-h b{font-family:var(--mono);font-size:13px;font-weight:600;color:#fff;white-space:nowrap}
+  .fz-nw-svg{width:100%;height:64px;margin-top:8px;display:block;overflow:visible}
+  .fz-nw-x{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.85);margin-top:6px}
+  .fz-hero .fz-acts{order:3;margin:18px 0 2px}
+  .fz-hero .fz-act:not(.main) i{background:var(--bg2);box-shadow:0 2px 10px rgba(20,10,60,.16)}
+  .fz-hero .fz-act.main i{background:#fff;color:var(--accent)}
+  .dash-fz .fz-hero .fz-act{color:#fff!important;text-shadow:0 1px 2px rgba(0,0,0,.18)}
+} /* PLS #402: the chart panel only where the card is wide enough; narrower screens keep the balance and all four buttons clear */
 @media(min-width:1180px){
   /* PLS #399: left column = everything else, right column = Recent, exactly as tall as the left one */
   .fz-rest{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:16px;row-gap:0;grid-auto-flow:row dense;align-items:start}
@@ -498,7 +518,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .kpi-label-strong{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;line-height:1.25}
 .kpi-value{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1.15}
 .kpi-value-sm{font-family:var(--mono);font-size:13px;font-weight:600;line-height:1.15}
-.kpi-value-cur{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1.15}
+.kpi-value-cur{font-family:var(--mono);font-size:16px;font-weight:600;line-height:1.15} /* PLS #405 */
 .kpi-sub{font-size:11px;color:var(--text4);line-height:1.3}
 /* -- PERSONAL LOGIC SET #252 -- Trend charts were fixed at 44px and 52px, so the plot was a thin
    strip while the card around it had room to spare, and an iPad or a monitor showed the same strip
@@ -516,7 +536,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
    tiers only -- phone and small tablet are untouched, because the complaint was desktop-specific.
    .kpi-value (the true hero figure) is deliberately NOT changed. */
 @media(min-width:768px){.kpi-label{font-size:12px}.kpi-label-strong{font-size:14px}.kpi-value{font-size:26px}.kpi-value-sm{font-size:16px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:12px}}
-@media(min-width:1024px){.kpi-label{font-size:13px}.kpi-label-strong{font-size:16px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:18px}.kpi-value-cur{font-size:20px}.kpi-sub{font-size:12px}}
+@media(min-width:1024px){.kpi-label{font-size:13px}.kpi-label-strong{font-size:16px}.kpi-value{font-size:30px}.kpi-value-sm{font-size:18px}.kpi-value-cur{font-size:18px}.kpi-sub{font-size:12px}} /* PLS #405: 18px like .metric-value */
 .hero-card::before{content:none}
 .hero-card::after{content:none}
 .hero-label{font-size:11px;color:var(--text3);margin-bottom:10px;font-weight:500;position:relative;z-index:1} /* PLS #348: sentence case */
@@ -801,11 +821,19 @@ option{background:var(--bg3);color:var(--text)}
 .ov-row3,.ov-row4{display:grid;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-row4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ov-row3{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media(min-width:641px) and (max-width:900px){
-  .ov-pack{column-count:2;column-gap:10px}
-  .ov-pack .ov-row3,.ov-pack .ov-row3.ov-n1,.ov-pack .ov-row3.ov-n2{display:contents}
-  .ov-pack .ov-row3>div{break-inside:avoid;-webkit-column-break-inside:avoid;display:block;margin:0 0 10px}
-}
+/* PLS #407 (his ask, Oct 2026: every Overview card adjusts without the layout looking broken). Replaces the
+   PLS #211 masonry for 641-900px (landscape phone, tablet): masonry gave every card its own height, so the two
+   columns ran ragged. Now every width uses the same equal-height rows -- 3 across on PC, 2 across here, 1 on a
+   phone -- and a row that has an odd card left over lets that last card span the full width instead of leaving
+   a hole. Inside every card the footer link is pinned to the bottom, so cards in one row end on the same line. */
+/* PLS #408: rows of 2 or 3 only (see _ovSplit). 6 columns so a card spans 3 (two per row) or 2 (three per row). */
+.ov-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:stretch;margin-bottom:10px}
+.ov-grid>.ov-d2{grid-column:span 2}.ov-grid>.ov-d3{grid-column:span 3}.ov-grid>.ov-d6{grid-column:span 6}
+@media(min-width:641px) and (max-width:900px){.ov-grid>.ov-t2{grid-column:span 2}.ov-grid>.ov-t3{grid-column:span 3}.ov-grid>.ov-t6{grid-column:span 6}}
+@media(max-width:640px){.ov-grid{grid-template-columns:minmax(0,1fr)}.ov-grid>div{grid-column:auto!important}}
+.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card,.ov-grid>div>.card{display:flex;flex-direction:column} /* PLS #408: + .ov-grid */
+.ov-door-ft{margin-top:auto!important}
+.ov-row3>div>.card>.ov-door-ft,.ov-heroA>div>.card>.ov-door-ft,.ov-grid>div>.card>.ov-door-ft{margin-top:auto!important} /* PLS #408 */
 /* PLS #205: the per-bar value label was originally "+₱100.0k" (~43px) with white-space:nowrap,
    which overflowed the ~32px month columns at 1024px. Dropping the currency symbol and going to
    8.5px brings it to ~24px, which fits at EVERY breakpoint (verified 1440/1280/1100/1024/901/
@@ -847,14 +875,37 @@ option{background:var(--bg3);color:var(--text)}
 .gz-time-opt:hover{background:var(--bg4)}
 .gz-time-opt.sel{background:var(--accent);color:#fff;font-weight:700}
 .gz-time-ap{height:190px;display:flex;flex-direction:column;justify-content:center;gap:6px;border-radius:var(--r-md);background:var(--bg3);padding:4px}
-.ov-row3>div,.ov-row4>div,.ov-heroA>div{min-width:0}
-.ov-row3>div>.card,.ov-row4>div>.card,.ov-row3>div>.metric-card,.ov-row4>div>.metric-card,.ov-heroA>div>.card{height:100%;box-sizing:border-box;margin-bottom:0!important}
+.ov-row3>div,.ov-row4>div,.ov-heroA>div,.ov-grid>div{min-width:0} /* PLS #408 */
+.ov-row3>div>.card,.ov-row4>div>.card,.ov-row3>div>.metric-card,.ov-row4>div>.metric-card,.ov-heroA>div>.card,.ov-grid>div>.card{height:100%;box-sizing:border-box;margin-bottom:0!important}
 .ov-heroA{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto;gap:10px;align-items:stretch;margin-bottom:10px}
 .ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}
+/* PLS #406: Overview budget card */
+.bgr-card{container-type:inline-size}
+.bgr-well{flex:1;position:relative;min-height:230px}
+.bgr-scroll{position:absolute;inset:0;overflow-y:auto;padding:0 2px 26px 0;scrollbar-width:thin}
+.bgr-well::after{content:'';position:absolute;left:0;right:0;bottom:0;height:28px;background:linear-gradient(transparent,var(--bg2));pointer-events:none;border-radius:0 0 14px 14px} /* hints there is more below */
+.bgr-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+@container (min-width:560px){.bgr-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bgr-g{background:var(--bg3);border-radius:14px;padding:12px}
+.bgr-gh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.bgr-gn{font-size:13px;font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bgr-pct{font-family:var(--mono);font-size:12px;font-weight:700;width:44px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+.bgr-bar{background:var(--bg2);border-radius:999px;overflow:hidden;flex-shrink:0}
+.bgr-bar i{display:block;height:100%;border-radius:999px}
+.bgr-bar-big{height:6px;margin:8px 0 6px}
+.bgr-bar-sm{height:5px;width:52px}
+.bgr-gs{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums}
+.bgr-gs span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bgr-rows{margin-top:8px;border-top:1px solid var(--border);padding-top:2px}
+.bgr-r{display:flex;align-items:center;gap:8px;min-height:30px;font-size:12px}
+.bgr-ic{width:22px;height:22px;border-radius:7px;background:var(--bg2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.bgr-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.bgr-more{font-size:11px;color:var(--accent);margin-top:4px;cursor:pointer;font-weight:500}
+@media(max-width:640px){.bgr-well{min-height:0;flex:none}.bgr-scroll{position:static;overflow:visible;padding:0}.bgr-well::after{display:none}}
 @media(max-width:900px){.ov-row4{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-row3{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}}
 @media(max-width:640px){.ov-row3,.ov-heroA{grid-template-columns:1fr}.ov-heroA>.ov-tall{grid-column:auto;grid-row:auto}.ov-row4 .kpi-val{padding-right:58px}.ov-row4 .metric-value{font-size:16px}.ov-row4 .kpi-spark svg{width:52px;height:17.3px}}
-.ov-row3 .stat-month-grid,.ov-heroA .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(max-width:480px){.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card{padding:12px}}
+.ov-row3 .stat-month-grid,.ov-heroA .stat-month-grid,.ov-grid .stat-month-grid{grid-template-columns:repeat(2,minmax(0,1fr))} /* PLS #408: Recent months beside YoY goes 2x2 */
+@media(max-width:480px){.ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card,.ov-grid>div>.card{padding:12px}.ov-door-ft{margin-left:-12px!important;margin-right:-12px!important;margin-bottom:-12px!important;padding-left:12px!important;padding-right:12px!important}} /* PLS #407: the footer stays flush with the card edge on phones (it stuck out 4px) */
 /* cards hug their own content — no height:100% stretch, so a short card can never show an
    internal void; masonry packs the next card tight beneath it instead. */
 /* ── PLS #168: dense PC overview — one masonry for everything; KPI strip on top ── */
@@ -4020,7 +4071,7 @@ const _WIDGET_INFO = {
   'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
   'goal': {title:'Savings goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
   'concentration': {title:'Account concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
-  'accthealth': {title:'Account health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg txn</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
+  'accthealth': {title:'Account health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg transaction</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
 };
 function _widgetInfo(key) {
   const def = _WIDGET_INFO[key];
@@ -4820,7 +4871,7 @@ function _fzNwSeries(disp) {
   const off = getNetWorth().net - pts[pts.length - 1].php;
   return pts.map(p => ({ label: p.label, v: fromPhp(p.php + off, disp) }));
 }
-function _fzNwPanel(disp) {
+function _fzNwPanel(disp) { // PLS #403: phones show it too (inside the hero, above the buttons)
   let ser = null; try { ser = _fzNwSeries(disp); } catch(e) { ser = null; }
   if (!ser) return '';
   const vals = ser.map(p => p.v), lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
@@ -5295,12 +5346,24 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.5'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
-const APP_VERSION_DATE = 'September 2026';
+const APP_VERSION = '1.2.8'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION_DATE = 'October 2026'; // PLS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.8', date: 'October 2026', changes: [
+    '🗓️ Settings shows the right release month', // PLS #409
+  ]},
+  { ver: '1.2.7', date: 'October 2026', changes: [
+    '🧩 Analytics Overview rows always hold 2 or 3 cards, so no card is stretched across the page on its own', // PLS #408
+  ]},
+  { ver: '1.2.6', date: 'October 2026', changes: [
+    '📱 On phones the balance is a gradient card too, with your 6-month net worth chart and the four buttons inside it', // PLS #403
+    '💰 Analytics budgets are grouped by country, each with its total and the categories closest to their limit', // PLS #406
+    '🔤 Analytics text is cleaner: no capital-letter labels, no "txns", nothing smaller than 11px, and one size for each main number', // PLS #404, #405
+    '🧹 Overview cards end on the same line, and their footer no longer sticks out on phones', // PLS #407
+  ]},
   { ver: '1.2.5', date: 'September 2026', changes: [
     '👀 The More, Remit and Transfer buttons stay visible on the gradient balance card', // PLS #402
   ]},
@@ -15165,7 +15228,7 @@ function renderAnalytics() {
   const kin = _TAB_KIN[_analyticsTab] || [];
   const relatedStrip = kin.length ? `<div class="page-pad" style="margin-top:0;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)">
-      <span style="font-size:11px;color:var(--text4);letter-spacing:0.04em">RELATED</span>
+      <span style="font-size:11px;color:var(--text4)">Related</span><!-- PLS #404: sentence case -->
       ${kin.map(k=>`<span onclick="setAnalyticsTab('${k}')" role="link" tabindex="0"
         style="font-size:11px;color:${k==='overview'?'var(--text2)':'var(--accent)'};cursor:pointer;padding:3px 9px;border:1px solid var(--border);border-radius:var(--r-full);background:var(--bg2);white-space:nowrap">${k==='overview'?'← ':''}${_TAB_NAME[k]}</span>`).join('')}
     </div></div>` : '';
@@ -15791,27 +15854,55 @@ function renderAnalyticsOverview() {
     // taller than their content. The Category Breakdown footer already had the right shape: a
     // tinted strip flush to the card edges, pulled out with negative margins and rounded to match
     // the corner. Same treatment here, so one pattern ends every Overview card.
-    const link = `<div style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
+    const link = `<div class="ov-door-ft" style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
       <span onclick="event.stopPropagation();${tab==='budget' ? "nav('planning');setPlanTab('budgets')" : `nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)`}"
         style="color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:500"
         role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1">→</span></span></div>`;
     const i = html.lastIndexOf('</div>');
     return i < 0 ? html : html.slice(0, i) + link + html.slice(i);
   };
-  const _ovSection = (title, sub, rows) => {
-    const body = rows.filter(Boolean).join('');
-    if (!body.trim()) return '';
-    return `<div style="margin:22px 0 10px">
+  // PLS #408 (his rule, Oct 2026: "ayoko ng banat na 1x1, gusto ko 1x2 or 1x3"): every Overview row holds 2 or 3
+  // cards, never one card stretched across the page. Each section is ONE 6-column grid; a card spans 2 columns
+  // (three in a row) or 3 columns (two in a row), so every row in a section ends on the same line.
+  //   PC (>900px):        rows of 3; when 1 is left over the last two rows become 2 + 2 (4 = 2+2, 5 = 3+2, 7 = 3+2+2)
+  //   Tablet / landscape: rows of 2; an odd count makes the LAST row 3 across (3 = 3, 5 = 2+3, 7 = 2+2+3)
+  //   Phone portrait:     1 column, the only thing that fits
+  // Replaces the PLS #211 masonry and the PLS #407 full-width leftover he rejected.
+  const _ovSplit = (n, wide) => {
+    if (n <= 3) return [n];                                   // 1, 2 or 3 fit in one row on both widths
+    if (wide) {
+      const rows = Array(Math.floor(n / 3)).fill(3);
+      if (n % 3 === 2) rows.push(2);
+      if (n % 3 === 1) { rows.pop(); rows.push(2, 2); }       // never 3 + 1: borrow one, end on 2 + 2
+      return rows;
+    }
+    const rows = Array(Math.floor(n / 2)).fill(2);
+    if (n % 2) { rows.pop(); rows.push(3); }                  // odd: the last row takes 3 instead of leaving 1
+    return rows;
+  };
+  const _ovGrid = (items) => {
+    const cards = items.flat().filter(h => h);
+    if (!cards.length) return '';
+    const span = (rows) => rows.flatMap(r => Array(r).fill(6 / r)); // 6-col grid: 2 per row = span 3, 3 per row = span 2
+    const d = span(_ovSplit(cards.length, true)), t = span(_ovSplit(cards.length, false));
+    return `<div class="ov-grid">${cards.map((h, i) => `<div class="ov-d${d[i]} ov-t${t[i]}">${h}</div>`).join('')}</div>`;
+  };
+  const _ovHead = (title, sub) => `<div style="margin:22px 0 10px">
       <div style="font-size:13px;font-weight:700;color:var(--text2);letter-spacing:0.02em">${title}</div>
       ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>`:''}
-    </div><div class="ov-pack">${body}</div>`;
-  };
-  const _ovRow = (items, cls='ov-row3') => {
-    const filled = items.filter(h => h);
-    if (!filled.length) return '';
-    // Auto-fit: a 3-col row holding only 1–2 cards widens them to fill — no empty slots
-    const fit = cls === 'ov-row3' && filled.length < 3 ? ` ov-n${filled.length}` : '';
-    return `<div class="${cls}${fit}">${filled.map(h=>`<div>${h}</div>`).join('')}</div>`;
+    </div>`;
+  // A section left with ONE card (thin data hides the rest) would be a lone stretched card, so that card joins the
+  // section before it (or the next one, if it is the first) and the grid rebalances. Empty sections vanish.
+  const _ovSections = (list) => {
+    const secs = list.filter(Boolean).map(x => ({ ...x, items: x.items.flat().filter(h => h) })).filter(x => x.items.length);
+    for (let i = 0; i < secs.length; i++) {
+      if (secs.length > 1 && secs[i].items.length === 1) {
+        const j = i > 0 ? i - 1 : 1;
+        if (j < i) secs[j].items.push(...secs[i].items); else secs[j].items.unshift(...secs[i].items);
+        secs.splice(i, 1); i = -1;                            // re-check from the top after a merge
+      }
+    }
+    return secs.map(x => _ovHead(x.title, x.sub) + _ovGrid(x.items)).join('');
   };
   return `<div class="page-pad">
     <!-- ── PLS #184: hand-grouped stretch rows (no JS packer) — KPI strip (4-col), then a
@@ -15825,7 +15916,7 @@ function renderAnalyticsOverview() {
              one you are editing. -->
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'INCOME — '+metricLabel.toUpperCase() : period==='ytd'?'INCOME THIS MONTH':'INCOME — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Income in '+metricLabel : period==='ytd'?'Income this month':'Income in '+metricLabel.split(' ')[0]}<!-- PLS #404: no caps, no dash --></span></div>
             ${chgBadge(incomeChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -15835,7 +15926,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'EXPENSES — '+metricLabel.toUpperCase() : period==='ytd'?'EXPENSES THIS MONTH':'EXPENSES — '+metricLabel.split(' ')[0].toUpperCase()}</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Expenses in '+metricLabel : period==='ytd'?'Expenses this month':'Expenses in '+metricLabel.split(' ')[0]}<!-- PLS #404 --></span></div>
             ${chgBadge(expChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -15845,7 +15936,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SAVINGS RATE</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Savings rate</span></div><!-- PLS #404 -->
             
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -15888,7 +15979,7 @@ function renderAnalyticsOverview() {
           const nWith = liqAccts.filter(a => getAcctBalance(a.id) > 0).length;
           return `<div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('accounts')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">LIQUIDITY</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Liquidity</span></div><!-- PLS #404 -->
             ${chgBadge(ohChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -15907,7 +15998,7 @@ function renderAnalyticsOverview() {
             <button type="button" data-ovcat-btn="exp" onclick="ovCatTog('exp')" style="border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--r-full);background:var(--bg);color:var(--text)">Expenses</button>
             <button type="button" data-ovcat-btn="inc" onclick="ovCatTog('inc')" style="border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--r-full);background:transparent;color:var(--text3)">Income</button>
           </div>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--text4)"><span data-ovcat="exp">${_fmtK(expTotal, disp)} · ${Object.keys(expCats).length} cats</span><span data-ovcat="inc" style="display:none">${_fmtK(incTotal, disp)} · ${Object.keys(incCats).length} src</span></span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text4)"><span data-ovcat="exp">${_fmtK(expTotal, disp)} · ${Object.keys(expCats).length} categories</span><span data-ovcat="inc" style="display:none">${_fmtK(incTotal, disp)} · ${Object.keys(incCats).length} sources</span></span>
         </div>
         <div data-ovcat="exp" class="ovcat-pane">${expTotal > 0 ? buildPieChart(expCats, expTotal, 'exp', period) : `<div style="font-size:12px;color:var(--text4);padding:24px 0;text-align:center">No expenses this period</div>`}</div>
         <div data-ovcat="inc" class="ovcat-pane" style="display:none">${incTotal > 0 ? buildPieChart(incCats, incTotal, 'inc', period) : `<div style="font-size:12px;color:var(--text4);padding:24px 0;text-align:center">No income this period</div>`}</div>
@@ -15922,36 +16013,97 @@ function renderAnalyticsOverview() {
       const netWorthHtml = _ovDoor(buildNetWorthTrend(metricMk, dispCurr), 'wealth', 'Wealth detail');
       const heroItems = [budgetHtml, cashflowHtml, savingsRTHtml, netWorthHtml].filter(h => h);
       if (!pieHtml && !heroItems.length) return '';
-      if (!pieHtml) return _ovRow(heroItems, 'ov-row3'); // fall back to a plain trio row if pie is empty
+      // PLS #408: the tall pie needs exactly 4 cards beside it (2 x 2 on PC, a stacked pair on tablet). Any other
+      // count would leave a hole beside the pie, so the cards go into the normal 1x2 / 1x3 grid instead.
+      if (heroItems.length !== 4 || !pieHtml) return _ovGrid([pieHtml, ...heroItems]);
       return `<div class="ov-heroA"><div class="ov-tall">${pieHtml}</div>${heroItems.map(h=>`<div>${h}</div>`).join('')}</div>`;
     })()}
 
-    ${_ovSection('Cash flow', 'Money in, money out, and what that points to', [
-      _ovRow([
-        _ovDoor(buildForecastBand(metricMk, dispCurr), 'cashflow', 'Full cashflow'),
-        _ovDoor(buildAnomalyHighlights(metricMk, dispCurr), 'spending', 'All categories'),
-        _ovDoor(buildIncomeExpenseBars(metricMk, dispCurr), 'cashflow', 'Full cashflow')
-      ])
-    ])}
-    ${_ovSection('Spending patterns', 'Where it goes, and when', [
-      _ovRow([
-        _ovDoor(buildFixedVsDiscretionary(metricMk, dispCurr), 'spending', 'All categories'),
-        _ovDoor(buildDayOfWeekHeatmap(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
-        _ovDoor(buildParetoAnalysis(metricMk, dispCurr), 'spending', 'All categories')
-      ]),
-      _ovRow([
-        _ovDoor(buildMostFrequent(metricMk, dispCurr), 'spending', 'All categories'),
-        _ovDoor(buildTimeOfDayPattern(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
-        _ovDoor(buildSpendingDistribution(metricMk, dispCurr), 'spending', 'All categories')
-      ])
-    ])}
-    ${_ovSection('Income & wealth', 'What you earn and what you hold', [
-      _ovRow([
-        _ovDoor(buildIncomeDiversification(metricMk, dispCurr), 'income', 'Income breakdown'),
-        _ovDoor(buildConcentrationRisk(dispCurr), 'wealth', 'Wealth detail')
-      ])
-    ])}
-    ${_ovRow([(() => {
+    ${(() => {
+      // PLS #408: Recent months is the page's closing strip. Beside YoY it becomes the second card of
+      // "Commitments & history" (1x2); without YoY it stays the full-width strip it always was.
+      const yoyHtml = _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year');
+      const recentHtml = (()=>{
+      // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
+      const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
+      if (activeMonths.length === 0) return '';
+      // PLS #204: the Overview month cards are capped at the most recent 4, same rule as the
+      // Savings card — the grid stays a constant 2x2 instead of growing to 5 and leaving one
+      // card stranded on its own row.
+      const sorted = [...activeMonths].reverse().slice(0, 4);
+      const cards = sorted.map(m => {
+        const net = m.income - m.expense;
+        const isActive = m.key === metricMk;
+        const isPositive = net > 0;
+        const isZeroNet = net === 0;
+        // Sign formatting iOS-style: +₱X / −₱X (using minus sign U+2212)
+        const sign = isPositive ? '+' : (net < 0 ? '−' : '');
+        const netDisplay = sign + fmt(Math.abs(net), disp);
+        const netColor = isZeroNet ? 'var(--text3)' : (isPositive ? 'var(--green)' : 'var(--red)');
+        // Bottom label: "Saved X%" if positive savings, "Spent X%" if no income/over
+        let bottomLabel = '';
+        let progressPct = 0;
+        if (m.income > 0) {
+          const savedPct = Math.max(0, Math.round((1 - m.expense/m.income) * 100));
+          if (savedPct > 0) {
+            bottomLabel = `Saved ${savedPct}%`;
+            progressPct = savedPct;
+          } else {
+            const overPct = Math.round((m.expense/m.income) * 100);
+            const overDisp = overPct > 999 ? '>999%' : overPct + '%';
+            bottomLabel = `Spent ${overDisp}`;
+            progressPct = Math.min(overPct, 100);
+          }
+        } else if (m.expense > 0) {
+          bottomLabel = 'No income logged';
+          progressPct = 100;
+        }
+        // Progress bar segments (10 cells)
+        const filled = Math.round(progressPct / 10);
+        const isOverflow = progressPct > 100;
+        const barColor = isPositive ? 'var(--green)' : (m.income > 0 && progressPct > 0 ? 'var(--amber)' : 'var(--red)');
+        const segments = Array.from({length:10}, (_,i) => 
+          `<div style="flex:1;height:4px;border-radius:var(--r-sm);background:${i < filled ? barColor : 'var(--border2)'};opacity:${i < filled ? '1' : '0.5'}"></div>`
+        ).join('');
+        return `<div style="background:var(--bg2);border:1px solid ${isActive?'var(--accent)':'var(--border)'};border-radius:var(--r-md);padding:14px;transition:all var(--transition);position:relative;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:${isActive?'var(--accent)':'var(--text4)'};text-transform:none">${m.label}</div>
+            
+          </div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:${netColor};letter-spacing:-0.02em;margin-bottom:12px;white-space:nowrap">${netDisplay}</div>
+          <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
+          <div style="font-size:11px;color:var(--text3);font-weight:500">${bottomLabel}</div>
+        </div>`;
+      }).join('');
+      const headerLabel = period === 'ytd' ? `YTD ${currentYear}` : 'Recent Months';
+      return `<div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">${headerLabel}</div>
+          <div style="font-size:11px;color:var(--text4)">${sorted.length} mo</div>
+        </div>
+        <div class="stat-month-grid">${cards}</div>
+      </div>`;
+    })();
+      return _ovSections([
+        { title:'Cash flow', sub:'Money in, money out, and what that points to', items:[
+          _ovDoor(buildForecastBand(metricMk, dispCurr), 'cashflow', 'Full cashflow'),
+          _ovDoor(buildAnomalyHighlights(metricMk, dispCurr), 'spending', 'All categories'),
+          _ovDoor(buildIncomeExpenseBars(metricMk, dispCurr), 'cashflow', 'Full cashflow')
+        ]},
+        { title:'Spending patterns', sub:'Where it goes, and when', items:[
+          _ovDoor(buildFixedVsDiscretionary(metricMk, dispCurr), 'spending', 'All categories'),
+          _ovDoor(buildDayOfWeekHeatmap(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+          _ovDoor(buildParetoAnalysis(metricMk, dispCurr), 'spending', 'All categories'),
+          _ovDoor(buildMostFrequent(metricMk, dispCurr), 'spending', 'All categories'),
+          _ovDoor(buildTimeOfDayPattern(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+          _ovDoor(buildSpendingDistribution(metricMk, dispCurr), 'spending', 'All categories')
+        ]},
+        // PLS #408: What Changed + Goal progress sat in an untitled row under this heading; they are now part of
+        // the section so its cards balance as one group (e.g. 4 = 2+2) instead of leaving one alone.
+        { title:'Income & wealth', sub:'What you earn and what you hold', items:[
+          _ovDoor(buildIncomeDiversification(metricMk, dispCurr), 'income', 'Income breakdown'),
+          _ovDoor(buildConcentrationRisk(dispCurr), 'wealth', 'Wealth detail'),
+          (() => {
       // Top movers: categories where the metric month's spending deviates from its rolling average.
       // ── FIX: previously returned '' whenever period === 'ytd' (the DEFAULT view), so the card
       // silently disappeared. Now it always compares the metric month (= current month on YTD)
@@ -16030,74 +16182,11 @@ function renderAnalyticsOverview() {
           <span style="font-family:var(--mono)">${movers.length} moved &plusmn;30%${movers.length>top.length?` · showing ${top.length}`:''}</span>
         </div>` : ''}
       </div>`;
-    })(), _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')])}
-    ${_ovSection('Commitments & history', 'Recurring costs and how this year compares', [
-      _ovRow([
-
-        _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year')
-      ])
-    ])}
-
-    ${(()=>{
-      // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
-      const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
-      if (activeMonths.length === 0) return '';
-      // PLS #204: the Overview month cards are capped at the most recent 4, same rule as the
-      // Savings card — the grid stays a constant 2x2 instead of growing to 5 and leaving one
-      // card stranded on its own row.
-      const sorted = [...activeMonths].reverse().slice(0, 4);
-      const cards = sorted.map(m => {
-        const net = m.income - m.expense;
-        const isActive = m.key === metricMk;
-        const isPositive = net > 0;
-        const isZeroNet = net === 0;
-        // Sign formatting iOS-style: +₱X / −₱X (using minus sign U+2212)
-        const sign = isPositive ? '+' : (net < 0 ? '−' : '');
-        const netDisplay = sign + fmt(Math.abs(net), disp);
-        const netColor = isZeroNet ? 'var(--text3)' : (isPositive ? 'var(--green)' : 'var(--red)');
-        // Bottom label: "Saved X%" if positive savings, "Spent X%" if no income/over
-        let bottomLabel = '';
-        let progressPct = 0;
-        if (m.income > 0) {
-          const savedPct = Math.max(0, Math.round((1 - m.expense/m.income) * 100));
-          if (savedPct > 0) {
-            bottomLabel = `Saved ${savedPct}%`;
-            progressPct = savedPct;
-          } else {
-            const overPct = Math.round((m.expense/m.income) * 100);
-            const overDisp = overPct > 999 ? '>999%' : overPct + '%';
-            bottomLabel = `Spent ${overDisp}`;
-            progressPct = Math.min(overPct, 100);
-          }
-        } else if (m.expense > 0) {
-          bottomLabel = 'No income logged';
-          progressPct = 100;
-        }
-        // Progress bar segments (10 cells)
-        const filled = Math.round(progressPct / 10);
-        const isOverflow = progressPct > 100;
-        const barColor = isPositive ? 'var(--green)' : (m.income > 0 && progressPct > 0 ? 'var(--amber)' : 'var(--red)');
-        const segments = Array.from({length:10}, (_,i) => 
-          `<div style="flex:1;height:4px;border-radius:var(--r-sm);background:${i < filled ? barColor : 'var(--border2)'};opacity:${i < filled ? '1' : '0.5'}"></div>`
-        ).join('');
-        return `<div style="background:var(--bg2);border:1px solid ${isActive?'var(--accent)':'var(--border)'};border-radius:var(--r-md);padding:14px;transition:all var(--transition);position:relative;overflow:hidden">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:${isActive?'var(--accent)':'var(--text4)'};text-transform:none">${m.label}</div>
-            
-          </div>
-          <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:${netColor};letter-spacing:-0.02em;margin-bottom:12px;white-space:nowrap">${netDisplay}</div>
-          <div style="display:flex;gap:2px;margin-bottom:6px">${segments}</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:500">${bottomLabel}</div>
-        </div>`;
-      }).join('');
-      const headerLabel = period === 'ytd' ? `YTD ${currentYear}` : 'Recent Months';
-      return `<div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">${headerLabel}</div>
-          <div style="font-size:11px;color:var(--text4)">${sorted.length} mo</div>
-        </div>
-        <div class="stat-month-grid">${cards}</div>
-      </div>`;
+    })(),
+          _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')
+        ]},
+        yoyHtml ? { title:'Commitments & history', sub:'Recurring costs and how this year compares', items:[yoyHtml, recentHtml] } : null
+      ]) + (yoyHtml ? '' : recentHtml);
     })()}
   </div>`;
 }
@@ -16726,13 +16815,13 @@ function buildFixedVsDiscretionary(metricMk, dispCurr) {
       <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px;min-width:0;display:flex;flex-direction:column">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:normal;color:var(--text4);margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--text3);display:inline-block"></span> Fixed</div>
         <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(fixed, dispCurr)}</div>
-        <div style="font-size:11px;color:var(--text4);margin-top:2px;margin-bottom:6px">${fixedPct.toFixed(0)}% · ${fixedCount} txn${fixedCount!==1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:2px;margin-bottom:6px">${fixedPct.toFixed(0)}% · ${fixedCount} transaction${fixedCount!==1?'s':''}</div>
         ${_fdTop(topFixed, 'var(--border)')}
       </div>
       <div style="background:var(--accent-bg);border-radius:var(--r-md);padding:10px;min-width:0;display:flex;flex-direction:column">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:normal;color:var(--accent3);margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent);display:inline-block"></span> Discretionary</div>
         <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text2)">${fmt(discretionary, dispCurr)}</div>
-        <div style="font-size:11px;color:var(--text4);margin-top:2px;margin-bottom:6px">${discPct.toFixed(0)}% · ${discCount} txn${discCount!==1?'s':''}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:2px;margin-bottom:6px">${discPct.toFixed(0)}% · ${discCount} transaction${discCount!==1?'s':''}</div>
         ${_fdTop(topDisc, 'var(--border2)')}
       </div>
     </div>
@@ -16945,7 +17034,7 @@ function buildTimeOfDayPattern(metricMk, dispCurr) {
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:14px;font-weight:600">${txs.length}</div>
-        <div style="font-size:11px;color:var(--text4)">timed txns</div>
+        <div style="font-size:11px;color:var(--text4)">with a time</div><!-- PLS #404: was "timed txns" -->
       </div>
     </div>
     <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
@@ -17883,9 +17972,11 @@ function buildBudgetRanking(metricMk, dispCurr) {
   const budgets = (db.budgets || []).filter(b => b.active !== false && !b.archived);
   if (budgets.length === 0) return '';
   const rows = [];
+  const groups = []; // PLS #406: one group per budget (country), so K and ₱ never mix in one list
   for (const b of budgets) {
     const allocs = b.allocations || {};
     if (Object.keys(allocs).length === 0) continue;
+    const g = { b, rows: [] }; groups.push(g);
     const allCurrTxs = db.transactions.filter(t =>
       !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
       t.date && t.date.startsWith(metricMk) &&
@@ -17900,11 +17991,12 @@ function buildBudgetRanking(metricMk, dispCurr) {
       let spentInCat = 0;
       allCurrTxs.forEach(t => { if (_txMatchesAlloc(t, catId, _allocKeys)) spentInCat += (t.type==='shared' ? (t.myShare || t.amount) : t.amount); });
       const pct = spentInCat / limAmt * 100;
-      rows.push({
+      const _r = {
         name: _isTop ? cat.name : _stripIcon(cat.name), icon: cat.icon,
         spent: spentInCat, limAmt, currency: b.currency, pct,
         over: spentInCat > limAmt
-      });
+      };
+      rows.push(_r); g.rows.push(_r);
     }
   }
   if (rows.length === 0) return '';
@@ -17915,50 +18007,42 @@ function buildBudgetRanking(metricMk, dispCurr) {
   const warnCount = rows.filter(r => !r.over && r.pct >= 80).length;
   const okCount = rows.length - overCount - warnCount;
   const monthLabel = (() => { const [y,m] = metricMk.split('-').map(Number); return new Date(y, m-1, 1).toLocaleString('en', {month:'short'}); })();
-  const chip = (n, label, color, bg) => n > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:${bg};color:${color}"><span style="width:6px;height:6px;border-radius:50%;background:${color}"></span>${n} ${label}</span>` : '';
-  const bars = top.map(r => {
-    const color = r.over ? 'var(--red)' : r.pct >= 80 ? 'var(--amber)' : 'var(--green)';
-    const bgTint = r.over ? 'var(--red-bg)' : r.pct >= 80 ? 'var(--amber-bg)' : 'var(--green-bg)';
-    const fillPct = Math.min(r.pct, 100).toFixed(1);
-    const pctDisp = r.pct > 999 ? '>999%' : r.pct.toFixed(0) + '%';
-    // -- PERSONAL LOGIC SET #262 -- This is a SCROLLING list inside a fixed-height card, so type
-    // size decides how many budgets you can see without scrolling, not just how it reads. At the
-    // old scale a row was 52px and only four fitted; the card advertised "15 budgeted categories"
-    // and showed three. Every figure keeps its own size relation -- name still larger than the
-    // amounts, amounts still larger than the axis -- the whole row just steps down one notch.
-    // Measured: 52px -> 42px per row, so five to six rows fit in the same 220px well.
-    return `<div style="padding:6px 0;border-bottom:1px solid var(--border)" class="last-no-border">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="display:flex;align-items:center;gap:6px;min-width:0">
-          <span style="width:20px;height:20px;border-radius:var(--r-sm);background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${r.icon}</span>
-          <span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.name)}</span>
-        </span>
-        <span style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0">${_fmtK(r.spent, r.currency)} <span style="color:var(--text4)">/ ${_fmtK(r.limAmt, r.currency)}</span></span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;height:5px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden">
-          <div style="height:100%;width:${fillPct}%;background:${color};border-radius:var(--r-full);opacity:${r.over ? '1' : '0.85'}"></div>
-        </div>
-        <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${color};background:${bgTint};padding:2px 6px;border-radius:var(--r-full);min-width:42px;text-align:center;flex-shrink:0">${pctDisp}</span>
-      </div>
+  // -- PERSONAL LOGIC SET #406 -- (his pick "A", Oct 2026) the Overview budget card is grouped by budget: each country
+  // gets its total (spent of limit, left/over, same numbers as Planning and the Dashboard) and its 3 fullest categories,
+  // one line each. The card follows the Overview grid (3 columns on PC, 2 on a landscape phone or tablet, 1 on a phone)
+  // without breaking the row: where it sits beside other cards the list scrolls inside the card, so it never makes
+  // its neighbours stretch; alone on a phone it shows everything. Groups sit side by side once the card is wide enough.
+  const isCur = metricMk === currMonthKey();
+  const col = p => p > 100 ? 'var(--red)' : p >= 80 ? 'var(--amber)' : 'var(--green)';
+  const pctTxt = p => `<span class="bgr-pct" style="color:${col(p)}">${p > 999 ? '>999' : p.toFixed(0)}%</span>`;
+  const barH = (p, cls) => `<div class="${cls}"><i style="width:${Math.min(p,100).toFixed(1)}%;background:${col(p)}"></i></div>`;
+  const status = [overCount ? `<b style="color:var(--red)">${overCount} over</b>` : '', warnCount ? `<b style="color:var(--amber)">${warnCount} near limit</b>` : '', okCount ? `${okCount} on track` : '']
+    .filter(Boolean).join(' · ');
+  const monthLong = (() => { const [y,m] = metricMk.split('-').map(Number); return new Date(y, m-1, 1).toLocaleString('en', {month:'long'}); })();
+  // the budget that is furthest over goes first, so a problem is never hidden below the fold
+  const _gPct = g => { const L = (parseFloat(g.b.limit)||0) + (isCur && g.b.rollover ? (g.b.rolloverAmount||0) : 0); let sp = 0; try { sp = _bgtSpent(g.b, metricMk).total; } catch(e) {} return L > 0 ? sp / L : 0; };
+  groups.sort((x, y) => _gPct(y) - _gPct(x));
+  const groupHTML = groups.filter(g => g.rows.length).map(g => {
+    const bgt = g.b;
+    const lim = (parseFloat(bgt.limit) || 0) + (isCur && bgt.rollover ? (bgt.rolloverAmount || 0) : 0); // PLS #362: rollover is this month's only
+    let spent = 0; try { spent = _bgtSpent(bgt, metricMk).total; } catch(e) { spent = g.rows.reduce((s2, r) => s2 + r.spent, 0); }
+    const p = lim > 0 ? spent / lim * 100 : 0;
+    const sorted = g.rows.slice().sort((x, y) => y.pct - x.pct);
+    const more = sorted.length - 3;
+    return `<div class="bgr-g">
+      <div class="bgr-gh"><span class="bgr-gn">${getFlag(bgt.location)} ${_esc(bgt.location)}</span>${lim > 0 ? pctTxt(p) : ''}</div>
+      ${lim > 0 ? barH(p, 'bgr-bar bgr-bar-big') : ''}
+      ${lim > 0 ? `<div class="bgr-gs"><span>${fmt(spent, bgt.currency)} of ${fmt(lim, bgt.currency)}</span><span>${spent > lim ? `<b style="color:var(--red)">${fmt(spent - lim, bgt.currency)} over</b>` : fmt(lim - spent, bgt.currency) + ' left'}</span></div>` : ''}
+      <div class="bgr-rows">${sorted.slice(0, 3).map(r => `<div class="bgr-r"><span class="bgr-ic">${r.icon}</span><span class="bgr-n">${_esc(r.name)}</span>${barH(r.pct, 'bgr-bar bgr-bar-sm')}${pctTxt(r.pct)}</div>`).join('')}</div>
+      ${more > 0 ? `<div class="bgr-more" onclick="event.stopPropagation();nav('planning');setTimeout(()=>setPlanTab('budgets'),50)">+${more} more</div>` : ''}
     </div>`;
   }).join('');
-  return `<div class="card" style="height:100%;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Budgets, % used</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthLabel} · ${rows.length} budgeted categor${rows.length === 1 ? 'y' : 'ies'}</div>
-      </div>
-      ${overCount === 0 ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:var(--green-bg);color:var(--green)">✓ all within</span>` : ''}
+  return `<div class="card bgr-card" style="height:100%;display:flex;flex-direction:column">
+    <div style="margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2)">Budgets</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthLong} · ${status}</div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-      ${chip(overCount, 'over', 'var(--red)', 'var(--red-bg)')}
-      ${chip(warnCount, 'near limit', 'var(--amber)', 'var(--amber-bg)')}
-      ${chip(okCount, 'on track', 'var(--green)', 'var(--green-bg)')}
-    </div>
-    <div style="flex:1;position:relative;min-height:220px;margin-top:2px">
-      <div style="position:absolute;inset:0;overflow-y:auto;padding-right:4px">${bars}</div>
-    </div>
+    <div class="bgr-well"><div class="bgr-scroll"><div class="bgr-groups">${groupHTML}</div></div></div>
   </div>`;
 }
 
@@ -18048,7 +18132,7 @@ function buildSpendingDistribution(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Transaction Sizes${_infoBtn('distribution')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(dominant.count/totalCount*100).toFixed(0)}% of txns are ${dominant.label}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(dominant.count/totalCount*100).toFixed(0)}% of transactions are ${dominant.label}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:var(--mono);font-size:14px;font-weight:600">${totalCount}</div>
@@ -18064,7 +18148,7 @@ function buildSpendingDistribution(metricMk, dispCurr) {
           const h = b.count > 0 ? Math.max(14, (b.count / maxCount) * 80) : 2;
           const bg = b.count === 0 ? 'var(--border2)' : (isDom ? 'var(--accent)' : 'var(--text3)');
           const op = b.count === 0 ? '0.5' : (isDom ? '1' : '0.55');
-          return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${b.label}: ${b.count} txns · ${fmt(b.total, dispCurr)}">
+          return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${b.label}: ${b.count} transaction${b.count===1?'':'s'} · ${fmt(b.total, dispCurr)}">
             <div style="text-align:center;font-size:11px;color:${isDom?'var(--accent)':'var(--text4)'};font-weight:${isDom?'700':'400'};margin-bottom:2px">${b.count > 0 ? pct.toFixed(0)+'%' : ''}</div>
             <div style="width:100%;height:${h}%;background:${bg};opacity:${op};border-radius:var(--r-sm) var(--r-sm) 0 0"></div>
           </div>`;
@@ -18075,7 +18159,7 @@ function buildSpendingDistribution(metricMk, dispCurr) {
       ${buckets.map(b => `<div style="flex:1;text-align:center;min-width:0"><div style="font-weight:${b===dominant?'600':'400'};color:${b===dominant?'var(--text2)':'var(--text4)'}">${b.label}</div><div style="font-family:var(--mono);font-size:11px;color:var(--text4);margin-top:1px">${b.count>0?`${b.count}× · ${_fmtK(b.total, dispCurr)}`:'—'}</div></div>`).join('')}
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;border-top:1px solid var(--border);margin-top:12px;padding-top:9px">
-      ${_sdStat('Avg txn', fmt(totalSpent/totalCount, dispCurr))}
+      ${_sdStat('Avg transaction', fmt(totalSpent/totalCount, dispCurr))}
       ${_sdStat('Median', fmt(median, dispCurr))}
       ${_sdStat('Largest', _fmtK(largest, dispCurr))}
       ${_sdStat('Total', _fmtK(totalSpent, dispCurr))}
@@ -18190,9 +18274,9 @@ function buildPieChart(cats, total, prefix, period) {
       <svg width="140" height="140" viewBox="0 0 140 140" style="overflow:visible">
         ${svgSlices}
         <!-- Center hole content -->
-        <text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui" font-weight="500">${top.icon}</text>
-        <text x="${cx}" y="${cy+9}" text-anchor="middle" font-size="9.5" fill="var(--text)" font-family="system-ui" font-weight="700">${fmt(total,disp)}</text>
-        <text x="${cx}" y="${cy+20}" text-anchor="middle" font-size="8" fill="var(--text4)" font-family="system-ui">Total</text>
+        <text x="${cx}" y="${cy-10}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui" font-weight="500">${top.icon}</text>
+        <text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="12" fill="var(--text)" font-family="system-ui" font-weight="700">${fmt(total,disp)}</text>
+        <text x="${cx}" y="${cy+21}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui">Total</text><!-- PLS #404: was 9.5px and 8px -->
       </svg>
     </div>
     <div style="padding:0 4px;flex:1;position:relative;min-height:220px">
@@ -18355,7 +18439,7 @@ function renderAnalyticsSpending() {
           </div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
-            <div style="font-size:11px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} tx</div>
+            <div style="font-size:11px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} transaction${v.txs.length===1?'':'s'}</div>
           </div>
           <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${color};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div>
           ${expandable?`<svg width="7" height="11" viewBox="0 0 8 13" fill="none" id="drill-${i}-arrow" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);flex-shrink:0;opacity:0.45"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
@@ -18371,8 +18455,8 @@ function renderAnalyticsSpending() {
   return `<div class="page-pad">
     ${segmentedHTML}
     <div style="background:var(--bg2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} EXPENSES — ${periodLabel.toUpperCase()}</div>
-      <div style="font-size:22px;font-weight:600;color:var(--red);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
+      <div style="font-size:11px;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} expenses, ${periodLabel}</div><!-- PLS #404 -->
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--red)">${fmt(total,view)}</div><!-- PLS #405: one hero-number style across Analytics -->
       ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:11px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
@@ -18535,7 +18619,7 @@ function renderAnalyticsIncome() {
           </div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
-            <div style="font-size:11px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} tx</div>
+            <div style="font-size:11px;color:var(--text4);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} transaction${v.txs.length===1?'':'s'}</div>
           </div>
           <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${color};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div>
           ${expandable?`<svg width="7" height="11" viewBox="0 0 8 13" fill="none" id="idrill-${i}-arrow" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);flex-shrink:0;opacity:0.45"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
@@ -18551,8 +18635,8 @@ function renderAnalyticsIncome() {
   return `<div class="page-pad">
     ${segmentedHTML}
     <div style="background:var(--bg2);border-radius:var(--r-md);padding:14px;margin-bottom:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;letter-spacing:0.08em;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} INCOME — ${periodLabel.toUpperCase()}</div>
-      <div style="font-size:22px;font-weight:600;color:var(--green);font-family:var(--mono);letter-spacing:-0.4px;font-variant-numeric:tabular-nums">${fmt(total,view)}</div>
+      <div style="font-size:11px;color:var(--text4);font-weight:600;margin-bottom:6px">${(()=>{ const i=_getCurrInfo(view); return `${i.flag} ${i.label}`; })()} income, ${periodLabel}</div><!-- PLS #404 -->
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--green)">${fmt(total,view)}</div><!-- PLS #405 -->
       ${view !== dispCurr ? `<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${fmt(totalInDisp, dispCurr)} <span style="font-size:11px;color:var(--text4);font-family:inherit">in ${dispCurr}</span></div>` : ''}
       <div style="font-size:11px;color:var(--text4);margin-top:4px">${txs.length} transaction${txs.length!==1?'s':''} · ${sorted.length} categor${sorted.length!==1?'ies':'y'}</div>
     </div>
@@ -18805,7 +18889,7 @@ function renderSpendingHeatmap(disp) {
   // Month labels along top
   const monthLabelEls = monthLabels.map(ml => {
     const x = ml.weekIdx * colWidth;
-    return `<text x="${x}" y="-4" font-size="10" fill="var(--text4)" font-family="system-ui">${ml.label}</text>`;
+    return `<text x="${x}" y="-4" font-size="11" fill="var(--text4)" font-family="system-ui">${ml.label}</text>`; // PLS #404: 11px floor
   }).join('');
 
   // Month divider lines (vertical) — drawn between months — clearer for visual separation
@@ -18817,7 +18901,7 @@ function renderSpendingHeatmap(disp) {
   // Day labels (Sun, Mon, etc.) — only show every other one to save space
   const dayNames = ['Sun','','Tue','','Thu','','Sat'];
   const dayLabelEls = dayNames.map((n,i) => n
-    ? `<text x="-26" y="${i * rowHeight + 9}" font-size="9" fill="var(--text4)" font-family="system-ui">${n}</text>`
+    ? `<text x="-28" y="${i * rowHeight + 9}" font-size="11" fill="var(--text4)" font-family="system-ui">${n}</text>` // PLS #404: 11px floor
     : ''
   ).join('');
 
@@ -19054,7 +19138,7 @@ function renderAnalyticsWealth() {
     <!-- Hero NW -->
     <div style="text-align:center;padding:22px 16px 18px">
       <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">Total net worth</div>
-      <div style="font-size:${nwSize}px;font-weight:700;color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums">${fmt(fromPhp(nw,disp),disp)}</div>
+      <div style="font-size:${nwSize}px;font-weight:700;color:${nwPositive?'var(--text)':'var(--red)'};letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums"><!-- PLS #405: same letter spacing as the other Analytics heroes -->${fmt(fromPhp(nw,disp),disp)}</div>
       <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${nwPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:var(--r-full);font-size:11px;font-weight:600;color:${nwPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
         ${nwPositive?'▲':'▼'} ${(ratio).toFixed(1)}% asset ratio
       </div>
@@ -19203,7 +19287,7 @@ function renderAnalyticsInvestments() {
     <!-- Hero summary card -->
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin-bottom:6px">Portfolio value</div>
-      <div style="font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-0.02em">${fmt(totalCurrent, dispCurr)}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums">${fmt(totalCurrent, dispCurr)}</div><!-- PLS #405 -->
       <div style="font-size:12px;color:var(--text3);margin-top:2px">Invested ${fmt(totalInvested, dispCurr)} · ${active.length} active</div>
       ${totalCurrent > 0 ? `<div style="display:flex;height:8px;border-radius:var(--r-sm);overflow:hidden;margin-top:14px;background:var(--bg3)">${allocationBar}</div>` : ''}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
@@ -27321,7 +27405,7 @@ function renderAnalyticsExternal() {
     <!-- Hero Net External -->
     <div style="text-align:center;padding:22px 16px 18px">
       <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">Net external</div>
-      <div style="font-size:22px;font-weight:700;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-1px;line-height:1.05;font-variant-numeric:tabular-nums;font-family:var(--mono)">${netPositive?'+':'−'}${fmt(fromPhp(Math.abs(net),disp),disp)}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:${netPositive?'var(--green)':'var(--red)'}"><!-- PLS #405 -->${netPositive?'+':'−'}${fmt(fromPhp(Math.abs(net),disp),disp)}</div>
       <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:${netPositive?'rgba(52,199,89,0.15)':'rgba(255,69,58,0.15)'};border-radius:var(--r-full);font-size:11px;font-weight:600;color:${netPositive?'var(--green)':'var(--red)'};letter-spacing:-0.05px">
         ${netPositive?'▲':'▼'} ${ratio.toFixed(1)}% inflow ratio
       </div>
@@ -27458,7 +27542,7 @@ function renderAnalyticsCashflow() {
          expenses as tiles under it -->
     <div style="text-align:center;padding:10px 16px 14px">
       <div style="font-size:11px;font-weight:500;color:var(--text4);margin-bottom:5px">${current.label} · this month</div>
-      <div style="font-size:22px;font-weight:700;color:${current.net>=0?'var(--green)':'var(--red)'};letter-spacing:-0.6px">${fmt(current.net, dc, true)}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:${current.net>=0?'var(--green)':'var(--red)'}">${fmt(current.net, dc, true)}</div><!-- PLS #405 -->
       <div style="font-size:11px;color:var(--text3);margin-top:3px">${current.net>=0?'net saved':'net deficit'}</div>
     </div>
     <div class="lp-tiles" style="margin-bottom:14px">
@@ -27559,7 +27643,7 @@ function renderAnalyticsCrossCurrency() {
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Total Cash on Hand</div>
-      <div style="font-size:22px;font-weight:700;font-family:var(--mono)">${fmt(_inDisplay(total), dc)}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums">${fmt(_inDisplay(total), dc)}</div><!-- PLS #405 -->
       <div style="font-size:11px;color:var(--text3);margin-top:2px">Across ${sortedCurr.length} ${aiPlural(sortedCurr.length,'currency','currencies')} · liquid holdings only</div>
     </div>
 
@@ -27802,7 +27886,7 @@ function renderAnalyticsSubs() {
   let html = `<div class="page-pad">
     <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Monthly Subscription Burn</div>
-      <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div><!-- PLS #405 -->
       <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(_inDisplay(totalYearly), dc)}/year · ${subs.length} active</div>
     </div>
 
@@ -27970,7 +28054,7 @@ function renderAnalyticsYoY() {
       const months = Math.max(0, (curYear - fd.getFullYear()) * 12 + (now.getMonth() - fd.getMonth()));
       const ready = new Date(fd.getFullYear() + 1, fd.getMonth(), 1);
       const readyLabel = ready.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
-      detail = `You have about ${months} month${months === 1 ? '' : 's'} of history, starting ${fd.toLocaleDateString('en-PH',{month:'long',year:'numeric'})}. This tab needs a full year to compare against — it starts working in <b>${readyLabel}</b>.`;
+      detail = `You have about ${months} month${months === 1 ? '' : 's'} of history, starting ${fd.toLocaleDateString('en-PH',{month:'long',year:'numeric'})}. This tab needs a full year to compare against, so it starts working in <b>${readyLabel}</b>.`;
     }
     return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Not enough history yet</div><div class="empty-sub">${detail}</div></div></div>`;
   }
