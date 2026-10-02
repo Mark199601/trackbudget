@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- PLS #411: viewport-fit=cover makes iOS report the home-bar inset; without it env(safe-area-inset-*) is 0, so the calculator keys, bottom nav and popups sat on the home bar -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -424,9 +425,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media(max-width:1023px){
   #sidebar{display:flex;position:fixed;left:0;top:0;bottom:0;z-index:200;transform:translateX(-100%);transition:transform 0.32s cubic-bezier(0.32,0.72,0,1);visibility:hidden}
   #sidebar.sidebar-open{transform:translateX(0);visibility:visible}
-  #bottom-nav{display:block}
+  #sidebar{padding-bottom:calc(16px + env(safe-area-inset-bottom))} /* PLS #412: menu's Add transaction button sits above the iPhone home bar */
+  #bottom-nav{display:none} /* PLS #412 (his call, Oct 2026, option B): no bottom nav anywhere on phones; pages open from the menu button (top-left) */
   #page-header{padding:0 16px;height:52px}
-  #page-content{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
+  #page-content{padding-bottom:calc(24px + env(safe-area-inset-bottom))} /* PLS #412: no nav to clear any more, just the home bar */
 }
 @media(max-width:480px){
   #page-header{padding:0 12px}
@@ -962,6 +964,64 @@ option{background:var(--bg3);color:var(--text)}
 .dlg-overlay.open{opacity:1;pointer-events:all}
 .dlg{background:var(--bg2);border-radius:var(--r-xl);border:1px solid var(--border2);width:100%;max-width:420px;max-height:80dvh;display:flex;flex-direction:column;overflow:hidden;transform:scale(0.92);transition:transform var(--spring);box-shadow:0 12px 24px rgba(0,0,0,0.22)}
 .dlg-overlay.open .dlg{transform:scale(1)}
+/* PLS #415 Ways to save */
+.wts{margin:0 0 16px}
+.wts-h{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 10px;font-size:16px;font-weight:700;color:var(--text)}
+.wts-hr{font-size:12px;font-weight:500;color:var(--text3)}
+.wts-bh{font-size:12px;color:var(--text3);margin:4px 2px 8px}
+.wts-tiles{display:flex;gap:8px}
+.wts-tile{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:11px 10px}
+.wts-tv{font-size:16px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wts-tl{font-size:11px;color:var(--text3);margin-top:3px;line-height:1.3}
+.wts-line{font-size:12px;color:var(--text2);margin:10px 2px 4px;line-height:1.5}.wts-line b{color:var(--text)}
+.wts-rail{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin-top:12px;padding-bottom:4px;scrollbar-width:none}
+.wts-rail::-webkit-scrollbar{display:none}
+.wts-card{flex:0 0 78%;max-width:340px;scroll-snap-align:start;background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.wts-ch{display:flex;justify-content:space-between;align-items:center}
+.wts-ico{width:38px;height:38px;border-radius:12px;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:18px}
+.wts-pill{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--green-bg);color:var(--green);white-space:nowrap}
+.wts-pill.alt{background:var(--accent-bg);color:var(--accent)}
+.wts-ct{font-size:14px;font-weight:700;color:var(--text);line-height:1.3}
+.wts-eq{font-size:13px;color:var(--accent);line-height:1.45}
+.wts-cs{font-size:11px;color:var(--text3);line-height:1.45}
+.wts-soon{font-size:11px;color:var(--text3);margin:10px 2px 0}
+.wts-rc{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:12px 14px;margin-bottom:8px}
+.wts-rch{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:4px}.wts-rch b{color:var(--text)}
+.wts-rl{font-size:12px;color:var(--text2);margin-top:4px}
+.wts-dash{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--accent-bg);display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text);cursor:pointer}
+.wts-dv{color:var(--accent);font-weight:600}
+.wts-add{padding:0 16px 12px;margin-top:-4px;font-size:12px;color:var(--amber);line-height:1.4}.wts-add.over{color:var(--red)}
+/* PLS #423 / #422 editor actions and warning */
+.al-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:10px 0 2px}
+.al-act{border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer}
+.al-in.al-low{border-color:var(--red)!important}
+/* PLS #413: budget bar in the allocation editor */
+#al-bar{padding:12px 18px 10px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.al-bar-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--text2)}
+.al-bar-state{font-size:15px;color:var(--green)}
+.al-bar.over .al-bar-state{color:var(--red)}
+.al-bar-track{height:6px;border-radius:3px;background:var(--bg4);margin:8px 0 10px;overflow:hidden}
+.al-bar-fill{height:100%;border-radius:3px;background:var(--green);transition:width .2s}
+.al-bar.over .al-bar-fill{background:var(--red)}
+.al-bar-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text2)}
+.al-bar-lim b{color:var(--text)}
+.al-bar-link{background:none;border:0;color:var(--accent);font-weight:600;font-size:12px;padding:4px;cursor:pointer}
+.al-bar-chip{border:0;font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--red-bg);color:var(--red);cursor:pointer}
+.al-bar-in{display:inline-block;width:110px;padding:5px 10px;font-size:13px;height:auto}
+.al-bar-note{margin-top:8px;font-size:12px;color:var(--red);line-height:1.45}
+.al-bar-acts{display:flex;gap:8px;margin-top:8px}
+/* PLS #410 (his ask, Oct 2026: "nakagitna ha, lalo na pag maraming txns"): on phones a long popup (an account with
+   hundreds of transactions) grew to 90dvh and ran from under the status bar down to the home bar, so it no longer
+   looked like a centred popup. Every popup now centres inside the SAFE area and keeps a clear 48px gap above and
+   below; anything longer scrolls inside the popup. --pop-sa-t / --pop-sa-b exist so tests can stand in for a notch. */
+:root{--pop-sa-t:env(safe-area-inset-top,0px);--pop-sa-b:env(safe-area-inset-bottom,0px);--pop-gap:48px}
+@media(max-width:1023px){
+  body:not(.numpad-open) .sheet,body:not(.numpad-open) .sheet.rv-shell{top:calc(50% + (var(--pop-sa-t) - var(--pop-sa-b)) / 2)!important;max-height:calc(100dvh - var(--pop-sa-t) - var(--pop-sa-b) - 2 * var(--pop-gap))!important} /* PLS #410: centre in the safe area, never touch the edges */
+  body:not(.numpad-open) .sheet:not(.rv-shell) .sheet-body{padding-bottom:20px}body:not(.numpad-open) .sheet .rv-foot{padding-bottom:18px} /* PLS #410: skipped while the calculator keypad is open, which keeps its own approved layout (#378). Otherwise: the popup never reaches the home bar, so drop only the safe-area part of the padding (form popups keep their own 4px body padding) */
+  .dlg-overlay{padding:calc(20px + var(--pop-sa-t)) 20px calc(20px + var(--pop-sa-b))} /* PLS #410: dialogs centre in the safe area too */
+  .dlg{max-height:calc(100dvh - var(--pop-sa-t) - var(--pop-sa-b) - 2 * var(--pop-gap))} /* PLS #410 */
+  body:not(.numpad-open) .dlg:not(.rv-shell) .dlg-body{padding-bottom:20px}body:not(.numpad-open) .dlg .rv-foot{padding-bottom:18px} /* PLS #411: dialogs never reach the home bar, so the home-bar space (meant for the calculator) is not added inside them */
+}
 .dlg-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .dlg-title{font-size:14px;font-weight:600}
 .dlg-body{padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));overflow-y:auto;flex:1}
@@ -1482,7 +1542,7 @@ option{background:var(--bg3);color:var(--text)}
     <div class="sb-item" id="sn-planning" onclick="nav('planning')"><div class="si-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>Planning</div>
     <div class="sb-item" id="sn-settings" onclick="nav('settings')"><div class="si-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>Settings</div>
     <div style="flex:1"></div>
-    <div style="padding:0 12px"><button class="btn btn-primary btn-full" onclick="openAddSheet()" style="font-size:13px">+ Add transaction</button></div>
+    <div style="padding:0 12px"><button class="btn btn-primary btn-full" onclick="closeMobileSidebar();openAddSheet()" style="font-size:13px">+ Add transaction</button></div><!-- PLS #412: the phone menu closes first, so it is not left open behind the form -->
   </nav>
 
   <div id="sidebar-overlay" onclick="closeMobileSidebar()" style="position:fixed;inset:0;background:rgba(0,0,0,0.22);z-index:199;-webkit-tap-highlight-color:transparent;opacity:0;pointer-events:none;transition:opacity 0.32s cubic-bezier(0.32,0.72,0,1)"></div>
@@ -3690,6 +3750,7 @@ function nav(page) {
   // matched. Fall back to the dashboard. Deliberately keyed off `fn` (the real renderer
   // registry) rather than a separate list, so the guard can never drift out of sync with it.
   if (!fn[page]) page = 'dashboard';
+  _anReturn = null; // PLS #416: any page change forgets the report's way back; _openReportFrom() sets it again
   // Close mobile sidebar if open
   closeMobileSidebar();
   // Clear sticky transient state when leaving certain pages
@@ -3864,7 +3925,9 @@ function attachSwipeDismiss(sheetId) {
       if (!isDragging) return;
       deltaY = e.touches[0].clientY - startY;
       if (deltaY < 0) deltaY = deltaY * 0.3; // rubber-band on upward
-      sheet.style.transform = `translateY(${deltaY}px)`;
+      // PLS #410: popups are centred with translate(-50%,-50%); a bare translateY() replaced that and threw the
+      // popup half off-screen (right and down) the moment a drag started on its header. Keep the centring, add the drag.
+      sheet.style.transform = `translate(-50%, calc(-50% + ${deltaY}px))`;
     }, {passive:true});
     zone.addEventListener('touchend', () => {
       if (!isDragging) return;
@@ -3882,6 +3945,14 @@ function attachSwipeDismiss(sheetId) {
       }
       deltaY = 0;
     });
+    // PLS #410: iOS cancels a touch when it turns into a scroll; with no touchend the drag offset stayed on the popup
+    // and it sat off-centre for good. A cancelled drag snaps back to the centre.
+    zone.addEventListener('touchcancel', () => {
+      if (!isDragging) return;
+      isDragging = false; deltaY = 0;
+      sheet.style.transition = ''; // PLS #410
+      sheet.style.transform = '';  // PLS #410: back to the stylesheet's centred position
+    }, {passive:true});
   });
 }
 
@@ -4029,6 +4100,8 @@ function _noteShow(n) {
 }
 function _plainTitle(t) { return String(t == null ? '' : t).replace(/^[^\p{L}\p{N}]+/u, ''); }
 function openDlg(title, html, footer='') {
+  window._dlgCloseGuard = null; // PLS #418: a new dialog starts without the previous one's close guard
+  document.getElementById('al-bar')?.remove(); // PLS #413: the budget bar belongs to the budget editor only
   document.getElementById('dlg-title').textContent = _plainTitle(title); // PLS #393
   document.getElementById('dlg-body').innerHTML = html;
   const _db = document.getElementById('dlg-body'); _db.classList.remove('ef');
@@ -4038,7 +4111,13 @@ function openDlg(title, html, footer='') {
   if (window._rvPending === 'dlg') { window._rvPending = null; _rvApply(document.querySelector('#dlg-overlay .dlg'), _db, true); } // PLS #367
   document.getElementById('dlg-overlay').classList.add('open');
 }
-function closeDlg() { document.getElementById('dlg-overlay').classList.remove('open'); }
+function closeDlg(force) {
+  // PLS #418: a dialog can refuse to close (the budget editor while it is over the limit). Every way out -- Close,
+  // the X, a tap outside -- comes through here, so one guard covers them all. closeDlg(true) skips it.
+  if (force !== true && typeof window._dlgCloseGuard === 'function' && window._dlgCloseGuard() === false) return;
+  window._dlgCloseGuard = null;
+  document.getElementById('dlg-overlay').classList.remove('open');
+}
 
 // ── Reusable info popover (tappable (i) icons open this) ──
 function showInfo(title, htmlText) {
@@ -4881,7 +4960,7 @@ function _fzNwPanel(disp) { // PLS #403: phones show it too (inside the hero, ab
   const area = line + ` L ${xy[xy.length-1][0].toFixed(1)} ${H} L ${xy[0][0].toFixed(1)} ${H} Z`;
   const ch = vals[vals.length-1] - vals[0];
   const last = xy[xy.length-1];
-  return `<div class="fz-nw" onclick="event.stopPropagation();nav('analytics');setTimeout(()=>setAnalyticsTab('wealth'),100)">
+  return `<div class="fz-nw" onclick="event.stopPropagation();_openReportFrom('wealth')">
     <div class="fz-nw-h"><span>Net worth, ${ser[0].label} to ${ser[ser.length-1].label}</span><b>${ch>=0?'+':'−'}${fmt(Math.abs(ch), disp)}</b></div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="fz-nw-svg" aria-hidden="true">
       <path d="${area}" fill="rgba(255,255,255,.22)"/><path d="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
@@ -4911,7 +4990,7 @@ function _fzMonthStats(curr, disp, now) {
     ${cell('Spent per day', fmt(exp / day, disp))}
     ${cell('Spent most on', topCat ? `${_esc(topCat[0])} · ${fmt(topCat[1], disp)}` : '—')}
     ${cell('Spending', vs, vsCol)}
-  </div>`;
+  </div>${_wtsDashLine()}`; // PLS #415: one line, only when something new went off track
 }
 function _fzTopHTML(curr, disp, netWorthPhp) {
   const nick = _esc(db.profile?.nickname || '');
@@ -5177,7 +5256,7 @@ function renderDashboard() {
       if (!todayTxsA.length) return '';
       const netCls = todayNetA>0?'var(--green)':todayNetA<0?'var(--red)':'var(--text3)';
       const netSign = todayNetA>0?'+':todayNetA<0?'−':'';
-      return `<div onclick="nav('analytics');setTimeout(()=>setAnalyticsTab('trends'),100)" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
+      return `<div onclick="_openReportFrom('trends')" style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:all var(--transition)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='var(--bg2)'">
         <div style="display:flex;align-items:center;gap:12px">
           <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;position:relative">
             <span style="position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--accent);color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1">${todayTxsA.length}</span>📅
@@ -5346,12 +5425,25 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.8'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.9'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'October 2026'; // PLS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.9', date: 'October 2026', changes: [
+    '📱 Popups stay centred on phones, even with a long list, and no longer jump when dragged', // PLS #410
+    '🧮 The calculator keys sit above the iPhone home bar', // PLS #411
+    '☰ Phones use the menu button for every page; the bottom bar is gone', // PLS #412
+    '↩️ Back from a report opened on Insights or the Dashboard returns you there', // PLS #416
+    '✏️ Budget "Allocate with AI" is now called Auto-allocate', // PLS #417
+    '📊 The budget editor shows a live bar: planned vs limit, left or over, and the limit can be edited right there', // PLS #413
+    '🔒 Going over the limit no longer wipes your other categories, and an over-the-limit plan is never saved', // PLS #413 / #418
+    '🗓️ Each month keeps its own budget plan, and next month is planned for you from your spending', // PLS #419 / #420
+    '📎 Budgets show what was spent outside the plan', // PLS #421
+    '💬 The budget editor says what you usually spend and what is already spent, with one-tap Spread, Reset and Unlock all', // PLS #422 / #423
+    '💡 Ways to save on Insights: daily tips from your own spending, with a recap of last month', // PLS #415
+  ]},
   { ver: '1.2.8', date: 'October 2026', changes: [
     '🗓️ Settings shows the right release month', // PLS #409
   ]},
@@ -6486,7 +6578,7 @@ function _addQuickCatsHTML() {
 // listener (currency, caption, save) keeps working. Nothing is preselected (PLS #83).
 function _axAcctRow(acctOpts) {
   return _axPickRow({ label:'Account', sel:'add-account', kind:'any', opts:acctOpts,
-    onchange:'syncAddCurrency();updateBigAmtCurr();updateAcctDisplay()', chipsId:'add-quick-acct' });
+    onchange:'syncAddCurrency();updateBigAmtCurr();updateAcctDisplay();_wtsAddNote()', chipsId:'add-quick-acct' }); // PLS #415
 }
 // PLS #390 (his pick "C"): an account field is a plain row -- label left, the chosen account (or "Choose") right.
 // The real <select> lies invisibly over the whole row, so a tap opens the phone's own list; every existing onchange
@@ -6865,6 +6957,7 @@ function _updateCatDisplay() {
     valEl.parentElement?.classList.remove('ax-ph');
   }
   const q = document.getElementById('add-quick-cats'); if (q) q.outerHTML = _addQuickCatsHTML(); // PLS #375: chip follows the pick
+  _wtsAddNote(); // PLS #415
 }
 
 // ── SHARED FORM PERSON ROWS ──
@@ -15272,7 +15365,30 @@ function setAnalyticsTab(t) {
 // picker, which hid all 17 reports behind one pill. Deep links (dashboard doors, Related chips,
 // "View AI Summary") still go straight to their report, since they call setAnalyticsTab().
 var _anHome = true;
-function analyticsBack() { _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0); }
+// -- PERSONAL LOGIC SET #416 -- His report (Oct 2026): tapping a Summary row on Insights opened the report, but the back
+// chevron then landed on the Analytics Browse list, not Insights ("hindi 1 tap back sa insights"). A report opened from
+// another page now remembers that page, the month it showed and where it was scrolled, and the chevron goes straight back.
+// Reports opened from the Analytics menu itself still go back to Browse, as before.
+var _anReturn = null;
+function _openReportFrom(tab) {
+  const pc = document.getElementById('page-content');
+  const ret = { page: currentPage, insMk: _insMk, scroll: pc ? pc.scrollTop : 0 };
+  nav('analytics');
+  if (ret.page !== 'analytics') _anReturn = ret; // set after nav(), which clears it
+  setAnalyticsTab(tab);
+}
+function analyticsBack() {
+  const r = _anReturn;
+  if (r) { // PLS #416: one tap back to where the report was opened from
+    _anReturn = null;
+    nav(r.page);
+    if (r.page === 'insights' && r.insMk) { _insMk = r.insMk; renderInsights(); }
+    const pc = document.getElementById('page-content');
+    if (pc) requestAnimationFrame(() => { pc.scrollTop = r.scroll; });
+    return;
+  }
+  _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0);
+}
 const _AN_SECTIONS = [
   { title:'',          keys:['overview'] }, // PLS #353: AI Summary moved out to its own page, Insights
   { title:'Money in',  keys:['income','people'] },
@@ -15306,6 +15422,7 @@ function _analyticsHeader() {
     back.onclick = analyticsBack;
     t.parentElement.insertBefore(back, t);
   }
+  back.setAttribute('aria-label', _anReturn ? `Back to ${({insights:'Insights', dashboard:'Dashboard'})[_anReturn.page] || 'previous page'}` : 'Back to Analytics'); // PLS #416
 }
 
 // ── PERSONAL LOGIC SET #89 ── iOS Health-style analytics picker sheet.
@@ -21723,10 +21840,13 @@ function _bgtSpent(b, mk) {
   const txs = db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
     t.date && t.date.startsWith(mk) && (t.type==='expense' || t.type==='shared') && t.currency === b.currency);
   const amt = t => t.type==='shared' ? (t.myShare || t.amount) : t.amount;
-  const keys = new Set(Object.keys(b.allocations || {}));
+  const keys = new Set(Object.keys(_bgtPlan(b, mk).alloc)); // PLS #419: the month's own plan
   const byCat = {};
   for (const k of keys) byCat[k] = txs.reduce((s,t) => s + (_txMatchesAlloc(t, k, keys) ? amt(t) : 0), 0);
-  return { total: txs.reduce((s,t) => s + amt(t), 0), byCat };
+  // PLS #421: spending in this currency that no planned category covers, so the page adds up to the real total
+  const outside = {};
+  txs.forEach(t => { if (![...keys].some(k => _txMatchesAlloc(t, k, keys))) { const n = t.categoryId ? _wtsCatName(t.categoryId) : 'No category'; outside[n] = (outside[n] || 0) + amt(t); } });
+  return { total: txs.reduce((s,t) => s + amt(t), 0), byCat, outside };
 }
 function openBudgetLimitDlg(id) {
   const b = db.budgets.find(x => x.id === id); if (!b) return;
@@ -21768,9 +21888,10 @@ function renderBudgetsTab() {
   const strip = _periodStrip({ sel: mk, firstMk: _firstDataMk(), pick: q => `_bgtSetMonth('${q}')` });
   if (!db.budgets.some(b => b.id === _bgtSel)) _bgtSel = (db.budgets.find(b => b.active) || db.budgets[0]).id;
   const b = db.budgets.find(x => x.id === _bgtSel);
-  const allocs = b.allocations || {};
+  const _plan = _bgtPlan(b, mk); // PLS #419: each month against its own plan
+  const allocs = _plan.alloc || {};
   const sp = _bgtSpent(b, mk);
-  const lim = b.limit + (isCur && b.rollover ? (b.rolloverAmount||0) : 0); // PLS #362: rollover is this month's
+  const lim = _plan.limit + (isCur && b.rollover ? (b.rolloverAmount||0) : 0); // PLS #362: rollover is this month's
   const allocTotal = Object.values(allocs).reduce((s,v) => s + (parseFloat(v)||0), 0);
   const rows = Object.entries(allocs).map(([catId, l]) => ({ catId, lim: parseFloat(l)||0, spent: sp.byCat[catId]||0 }))
     .filter(r => r.lim > 0).sort((x,y) => (y.spent/y.lim) - (x.spent/x.lim));
@@ -21795,7 +21916,12 @@ function renderBudgetsTab() {
     return _fsRow({ ico:cat.icon, icoBg:'var(--bg4)', title:_esc(isTop ? cat.name : _stripIcon(cat.name)),
       sub:`${fmt(r.spent, b.currency)} of ${fmt(r.lim, b.currency)} · ${pct.toFixed(0)}%<div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;background:${col};border-radius:2px"></div></div>`,
       amt:fmt(Math.abs(r.lim - r.spent), b.currency), amtCol:over ? 'var(--red)' : 'var(--text)', amt2:over ? 'over' : 'left' });
-  }).join('');
+  }).join('') + (() => { // PLS #421: "Not in plan"
+    const o = Object.entries(sp.outside || {}).filter(([, v]) => v > 0.005).sort((x, y) => y[1] - x[1]); if (!o.length || !rows.length) return '';
+    const tot = o.reduce((s, [, v]) => s + v, 0);
+    return _fsRow({ ico:'📎', icoBg:'var(--bg4)', title:'Not in plan', sub:_esc(o.slice(0, 3).map(([n, v]) => `${n} ${fmt(v, b.currency)}`).join(' · ') + (o.length > 3 ? ` +${o.length - 3} more` : '')),
+      amt:fmt(tot, b.currency), amtCol:'var(--text)', amt2:'spent' });
+  })();
   const setRow = (label, sub, right, onclick) => `<div class="fs-i"${onclick ? ` onclick="${onclick}" style="cursor:pointer"` : ''}><span style="color:var(--text)"><span style="font-weight:600">${label}</span>${sub ? `<br><span style="font-size:11px;color:var(--text3)">${sub}</span>` : ''}</span>${right}</div>`;
   let html = `<div class="page-pad"><div class="fs" style="max-width:640px;margin:0 auto">${chips}
     ${_fsHead({ badge:getFlag(b.location) || _ico('wallet', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[Math.min(usedPct, 100), 0, ringCol],
@@ -21803,14 +21929,15 @@ function renderBudgetsTab() {
       hero:fmt(Math.abs(left), b.currency), heroCol:left < 0 ? 'var(--red)' : 'var(--text)',
       heroLbl:`${left < 0 ? 'over' : 'left'} · ${fmt(sp.total, b.currency)} spent (${usedPct.toFixed(0)}%)${pace}`,
       pill:!isCur ? ['Month ended', 'var(--bg4)', 'var(--text3)'] : b.active ? [`${dim - d} ${aiPlural(dim - d, 'day')} left`, 'var(--accent-bg)', 'var(--accent)'] : ['Paused', 'var(--bg4)', 'var(--text3)'] })}
-    ${!isCur ? '' : _fsActs(_fsAct('sparkle', rows.length ? 'Re-allocate' : 'Allocate with AI', `openAiAllocate('${b.id}')`, ['var(--accent)','#fff'])
+    ${!isCur ? '' : _fsActs(_fsAct('sparkle', rows.length ? 'Re-allocate' : 'Auto-allocate' /* PLS #417 */, `openAiAllocate('${b.id}')`, ['var(--accent)','#fff'])
       + _fsAct('cog', 'Limit', `openBudgetLimitDlg('${b.id}')`)
       + (rows.length ? _fsAct('x', 'Clear', `clearAllocations('${b.id}')`, ['var(--red-bg)','var(--red)']) : ''))}
     ${_fsSec(`${monthLbl} · ${fmt(allocTotal, b.currency)} planned`)}
-    ${rows.length ? _fsFeed(catRows) : `<div class="fs-card" style="padding:14px 16px;font-size:13px;color:var(--text3)">No categories planned yet.<br><span style="font-size:12px;color:var(--text4)">Use Allocate with AI above, or set them by hand.</span></div>`}
+    ${rows.length ? _fsFeed(catRows) : `<div class="fs-card" style="padding:14px 16px;font-size:13px;color:var(--text3)">No categories planned yet.<br><span style="font-size:12px;color:var(--text4)">Use Auto-allocate above, or set them by hand.</span></div>`}
     ${!isCur ? '' : `${_fsSec('Settings')}
     <div class="fs-card">
       ${setRow('Monthly limit', '', `<b>${fmt(b.limit, b.currency)} ›</b>`, `openBudgetLimitDlg('${b.id}')`)}
+      ${setRow('Next month', 'Planned automatically from your spending. Locked rows stay as they are.', '', '')}
       ${setRow('Rollover unspent', b.rollover && b.rolloverAmount > 0 ? `+${fmt(b.rolloverAmount, b.currency)} carried from last month` : 'Carry leftover to next month', sw(b.rollover, `toggleBudgetRollover('${b.id}',this.checked);renderPlanning()`))}
       ${setRow('Active', 'Shown on Dashboard and in alerts', sw(b.active, `toggleBudget('${b.id}',this.checked);renderPlanning()`))}
     </div>`}
@@ -21837,14 +21964,14 @@ function computeBudgetRollover() {
   // Called on initApp — computes unspent from last month and stores as rolloverAmount
   // Only runs for budgets with rollover enabled; only saves if a value actually changed
   const prevMk = lastMonthKey();
-  let changed = false;
+  let changed = _bgtMonthRoll(); // PLS #419 / #420: freeze the month that ended, plan the new one
   for (const b of db.budgets) {
     if (!b.rollover || !b.active) continue;
     const spent = db.transactions.filter(t =>
       !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable && t.date && t.date.startsWith(prevMk) &&
       (t.type==='expense'||t.type==='shared') && t.currency===b.currency
     ).reduce((s,t) => s + (t.type==='shared'?(t.myShare||t.amount):t.amount), 0);
-    const unspent = Math.max(0, b.limit - spent); // raw float — toFixed() display only (math rule)
+    const unspent = Math.max(0, _bgtPlan(b, prevMk).limit - spent); // raw float — toFixed() display only (math rule); PLS #419: last month's own limit
     if (b.rolloverAmount !== unspent) { b.rolloverAmount = unspent; changed = true; }
   }
   if (changed) saveDBWithSync();
@@ -21889,6 +22016,331 @@ function _txMatchesAlloc(tx, allocKey, allocKeys) {
     return true;
   }
   return false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// -- PERSONAL LOGIC SET #419 -- Budget plans per month (his ask, Oct 2026). One allocation set used to serve every
+// month, so tuning October rewrote how April–September looked against their plan. Each past month now keeps its own
+// frozen plan in b.monthPlans[mk] = { alloc, limit }; the live b.allocations / b.limit belong to the current month
+// (b.planMonth). Months that existed before this change were frozen once with the plan in place at the time (his OK).
+// ═══════════════════════════════════════════════════════════
+function _bgtClone(o) { return JSON.parse(JSON.stringify(o || {})); }
+function _bgtPlan(b, mk) {
+  if (!b) return { alloc: {}, limit: 0 };
+  if (!mk || mk >= currMonthKey() || mk === b.planMonth) return { alloc: b.allocations || {}, limit: b.limit };
+  const p = b.monthPlans && b.monthPlans[mk];
+  return p ? { alloc: p.alloc || {}, limit: p.limit } : { alloc: b.allocations || {}, limit: b.limit };
+}
+function _mkAdd(mk, n) { const y = +mk.slice(0,4), m = +mk.slice(5,7) - 1 + n; const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+// -- PERSONAL LOGIC SET #420 -- Next month's plan is made automatically (his call: "automatic naman sya based sa
+// spending, up to me kung ieedit ko"). Locked rows keep their amounts; every unlocked row gets what Auto-allocate
+// would suggest from the spending pattern, scaled to fit what the locked rows leave of the limit.
+function _bgtSuggestPlan(b, keepAlloc) {
+  const base = keepAlloc || b.allocations || {};
+  let sugg = {};
+  try { sugg = aiAllocateBudget(b.id, aiAnalyzeSpending(b.currency), b.limit).allocations || {}; } catch (e) { return _bgtClone(base); }
+  const locks = new Set(Array.isArray(b.allocLocks) ? b.allocLocks : []);
+  const plan = {};
+  let lockedSum = 0;
+  for (const k of locks) if (base[k] > 0) { plan[k] = base[k]; lockedSum += base[k]; }
+  const pool = Math.max(0, b.limit - lockedSum);
+  const free = Object.entries(sugg).filter(([k, v]) => !locks.has(k) && v > 0);
+  const freeSum = free.reduce((s, [, v]) => s + v, 0);
+  const scale = freeSum > pool && freeSum > 0 ? pool / freeSum : 1;
+  for (const [k, v] of free) { const x = Math.round(v * scale); if (x > 0) plan[k] = x; }
+  return plan;
+}
+function _bgtMonthRoll() {
+  const cur = currMonthKey(); let changed = false;
+  for (const b of (db.budgets || [])) {
+    b.monthPlans = b.monthPlans || {};
+    if (!b.planMonth) { // first run of #419: freeze every earlier month with today's plan, start tracking this month
+      const first = (typeof _firstDataMk === 'function' && _firstDataMk()) || cur;
+      for (let m = first; m < cur; m = _mkAdd(m, 1)) if (!b.monthPlans[m]) b.monthPlans[m] = { alloc: _bgtClone(b.allocations), limit: b.limit };
+      b.planMonth = cur; changed = true; continue;
+    }
+    if (b.planMonth < cur) { // a new month began: freeze the one that ended (and any skipped while the app was closed)
+      for (let m = b.planMonth; m < cur; m = _mkAdd(m, 1)) if (!b.monthPlans[m]) b.monthPlans[m] = { alloc: _bgtClone(b.allocations), limit: b.limit };
+      if (Object.keys(b.allocations || {}).length) b.allocations = _bgtSuggestPlan(b); // PLS #420
+      b.planMonth = cur; changed = true;
+    }
+  }
+  return changed;
+}
+
+// ═══════════════════════════════════════════════════════════
+// -- PERSONAL LOGIC SET #415 -- Ways to save (his design, Oct 2026). Runs every day from the same spending numbers as
+// Budgets: it chases the budget while there is still time to act. Lives on Insights (Summary → Needs attention → Ways
+// to save → How last month went → the rest), with one line on the Dashboard month card when something new goes off
+// track and one line in Add transaction when the picked category is near or over its plan. Every comparison is put in
+// terms of his own regular spending ("about 5 weeks of Grocery"), and every period is labelled.
+// First 6 days of a month: no pace or forecasts (too few days to mean anything), only categories already over plan.
+// ═══════════════════════════════════════════════════════════
+const WTS_MIN_DAY = 7;
+function _wtsAmt(t) { return t.type === 'shared' ? (t.myShare || t.amount) : t.amount; }
+function _wtsTxs(cur, from, to) { // same filter as _bgtSpent
+  return db.transactions.filter(t => !t.archived && !t.isSettlement && !t.isLoanTx && !t.isLoanPayment && !t.isAutoReimb && !t.isFeeReimbursable &&
+    t.date && t.date >= from && t.date <= to && (t.type === 'expense' || t.type === 'shared') && t.currency === cur);
+}
+function _wtsMonthEnd(mk) { const y = +mk.slice(0,4), m = +mk.slice(5,7); return `${mk}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`; }
+function _wtsMonthName(mk, long) { return new Date(mk + '-01T12:00').toLocaleString('en', { month: long ? 'long' : 'short' }); }
+function _wtsFirstMk() { const f = typeof firstCompleteMonthKey === 'function' ? firstCompleteMonthKey() : null; return f || _mkAdd(currMonthKey(), -6); }
+function _wtsCatName(k) { const c = getCategoryDisplay(k); return c ? _stripIcon(c.name) : 'Other'; }
+function _wtsMedian(a) { const s = [...a].sort((x, y) => x - y); const n = s.length; return n ? (n % 2 ? s[(n-1)/2] : (s[n/2-1] + s[n/2]) / 2) : 0; }
+// "Usually": median of the last 3 complete months (rule: recent habits, not old ones)
+function _wtsUsual(cur, key, keys) {
+  const cm = currMonthKey(), first = _wtsFirstMk(), vals = [];
+  for (let i = 1; i <= 3; i++) { const m = _mkAdd(cm, -i); if (m < first) break;
+    vals.push(_wtsTxs(cur, m + '-01', _wtsMonthEnd(m)).reduce((s, t) => s + (_txMatchesAlloc(t, key, keys) ? _wtsAmt(t) : 0), 0)); }
+  return _wtsMedian(vals);
+}
+// The yardstick for analogies: the planned category with the biggest usual spend in this currency
+function _wtsAnchor(b) {
+  const keys = new Set(Object.keys(b.allocations || {}));
+  let best = null; const cm = currMonthKey(), first = _wtsFirstMk();
+  for (const k of keys) {
+    const u = _wtsUsual(b.currency, k, keys); if (!(u > 0)) continue;
+    const counts = []; for (let i = 1; i <= 3; i++) { const m = _mkAdd(cm, -i); if (m < first) break; counts.push(_wtsTxs(b.currency, m + '-01', _wtsMonthEnd(m)).filter(t => _txMatchesAlloc(t, k, keys)).length); }
+    if (_wtsMedian(counts) < 4 || u < (parseFloat(b.limit) || 0) * 0.1) continue; // everyday spending, and a real share of the budget
+    if (!best || u > best.usual) best = { key: k, name: _wtsCatName(k), usual: u };
+  }
+  return best;
+}
+function _wtsEq(amount, anchor) {
+  if (!anchor || !(anchor.usual > 0) || !(amount > 0)) return '';
+  const days = amount / (anchor.usual / 30), weeks = amount / (anchor.usual / 4.33), months = amount / anchor.usual;
+  const what = `your usual ${anchor.name} spending`;
+  if (weeks < 1.5) return `about ${Math.max(1, Math.round(days))} ${Math.round(days) === 1 ? 'day' : 'days'} of ${what}`;
+  if (weeks < 6.5) return `about ${Math.round(weeks)} weeks of ${what}`;
+  const mo = Math.round(months * 2) / 2;
+  return mo === 1 ? `about one full month of ${what}` : `about ${mo} months of ${what}`;
+}
+function _wtsDayName(i) { return ['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'][i]; }
+function _wtsMerchant(t) { const w = String(t.notes || '').toLowerCase().split('\n')[0].trim().split(/\s+/)[0] || ''; return w.length >= 4 ? w : ''; }
+function _wtsCap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Everything Ways to save knows for one budget this month
+function _wtsBudget(b, now) {
+  const mk = currMonthKey(), plan = _bgtPlan(b, mk), keys = new Set(Object.keys(plan.alloc));
+  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(), d = now.getDate(), left = dim - d;
+  const sp = _bgtSpent(b, mk);
+  const lim = plan.limit + (b.rollover ? (b.rolloverAmount || 0) : 0);
+  const monthTx = _wtsTxs(b.currency, mk + '-01', _wtsMonthEnd(mk));
+  const anchor = _wtsAnchor(b);
+  const out = { b, mk, d, dim, daysLeft: left, spent: sp.total, lim, perDay: sp.total / Math.max(1, d), pace: sp.total / Math.max(1, d) * dim, tips: [], offKeys: [], anchor };
+  const first = _wtsFirstMk(), firstName = _wtsMonthName(first, true);
+  const hist = _wtsTxs(b.currency, first + '-01', _wtsMonthEnd(_mkAdd(mk, -1)));
+  const money = v => fmt(v, b.currency);
+  // A. planned categories over (or, from day 7, heading over) their plan, bought often enough to skip a few.
+  // Needs (groceries, bills) never get "skip it"; an over smaller than 1% of the limit is not worth a card.
+  let needs = new Set(); try { needs = new Set(aiAnalyzeSpending(b.currency).filter(r => r.isNeed).map(r => r.catId)); } catch (e) {}
+  for (const k of keys) {
+    const p = parseFloat(plan.alloc[k]) || 0; if (!(p > 0)) continue;
+    const spent = sp.byCat[k] || 0, txs = monthTx.filter(t => _txMatchesAlloc(t, k, keys)), n = txs.length;
+    const proj = spent / Math.max(1, d) * dim;
+    const minGap = Math.max(0.01 * plan.limit, 0.01);
+    const over = spent - p >= minGap, heading = d >= WTS_MIN_DAY && proj > p * 1.1 && proj - p >= minGap && !needs.has(k);
+    if (!(over || heading)) continue;
+    if (needs.has(k)) { out.offKeys.push(b.id + ':' + k); out.tips.push({ kind: 'over', save: 0, ico: getCategoryDisplay(k)?.icon || '•', title: `${_wtsCatName(k)} · over plan`, eq: `${money(spent)} so far, plan was ${money(p)}.`, sub: 'This one is a need, so the plan may be too tight. Worth raising it next month.' }); continue; }
+    if (n < 3 || d < 1) { if (over) out.offKeys.push(b.id + ':' + k); if (over) out.tips.push({ kind: 'over', save: 0, ico: getCategoryDisplay(k)?.icon || '•', title: `${_wtsCatName(k)} · over plan`, eq: `${money(spent)} so far, plan was ${money(p)}.`, sub: '' }); continue; }
+    const avg = spent / n, skip = left >= 4 ? 2 : 1, save = avg * skip;
+    let sub = `${money(spent)} so far, plan was ${money(p)}.`;
+    const late = txs.filter(t => +(t.time || '12').slice(0,2) >= 17).reduce((s, t) => s + _wtsAmt(t), 0);
+    if (spent > 0 && late / spent >= 0.6) sub += ` ${Math.round(late / spent * 100)}% of it went after 5 PM.`;
+    let eq = left > 0 ? `Skip it ${skip} ${skip === 1 ? 'time' : 'times'} this week and save about ${money(save)}.` : '';
+    const hk = hist.filter(t => _txMatchesAlloc(t, k, keys));
+    const lunch = hk.filter(t => { const h = +(t.time || '12').slice(0,2); return h >= 11 && h <= 14; }).map(_wtsAmt);
+    const eve = hk.filter(t => +(t.time || '12').slice(0,2) >= 17).map(_wtsAmt);
+    if (lunch.length >= 3 && eve.length >= 3) { const la = lunch.reduce((s,v)=>s+v,0)/lunch.length, ea = eve.reduce((s,v)=>s+v,0)/eve.length;
+      if (ea >= la * 2) eq = `Since ${firstName}, ${_wtsCatName(k)} in the evening averages ${money(ea)}, about ${Math.round(ea / la)} times a lunchtime one (${money(la)}). ` + eq; }
+    out.offKeys.push(b.id + ':' + k);
+    out.tips.push({ kind: 'skip', key: k, save, ico: getCategoryDisplay(k)?.icon || '•', title: `${_wtsCatName(k)} · ${n} times this month`, eq, sub, pill: left > 0 ? `Save ~${money(save)}` : '' });
+  }
+  if (d < WTS_MIN_DAY) return out; // first week: over-plan only (his rule)
+  // B. one small thing bought very often (grouped by the first word of the note), since the first complete month
+  const groups = {};
+  for (const t of hist.concat(monthTx)) { const m = _wtsMerchant(t); if (!m) continue; (groups[m] = groups[m] || []).push(t); }
+  const weekly = anchor ? anchor.usual / 4.33 : Infinity;
+  const freq = Object.entries(groups).map(([m, ts]) => ({ m, ts, n: ts.length, total: ts.reduce((s, t) => s + _wtsAmt(t), 0) }))
+    .filter(g => g.n >= 12 && g.total / g.n <= weekly / 2).sort((x, y) => y.n - x.n)[0];
+  if (freq) {
+    const avg = freq.total / freq.n, cnt = [0,0,0,0,0,0,0];
+    freq.ts.forEach(t => { cnt[new Date(t.date + 'T12:00').getDay()]++; });
+    const top = cnt.map((c, i) => [c, i]).sort((x, y) => y[0] - x[0]).slice(0, 2);
+    let sub = `About ${money(avg)} a visit`;
+    if (top[0][0] + top[1][0] >= freq.n * 0.4) sub += `, mostly on ${_wtsDayName(top[0][1])} and ${_wtsDayName(top[1][1])}`;
+    sub += '.';
+    const ck = freq.ts[freq.ts.length - 1].categoryId, pk = [...keys].find(k => _txMatchesAlloc({ categoryId: ck }, k, keys));
+    let pill = '';
+    if (pk) { const rest = (parseFloat(plan.alloc[pk]) || 0) - (sp.byCat[pk] || 0);
+      if (rest > 0) { sub += ` ${money(rest)} left in this month's ${_wtsCatName(pk)} plan, about ${Math.floor(rest / avg)} more.`; pill = `${money(rest)} left`; } }
+    out.tips.push({ kind: 'freq', save: 0, ico: getCategoryDisplay(ck)?.icon || '🛍️', title: `${_wtsCap(freq.m)} · ${freq.n} times since ${firstName}`, eq: `That adds up to ${money(freq.total)}, ${_wtsEq(freq.total, anchor)}.`, sub, pill });
+    out.freqName = _wtsCap(freq.m); out.freqAvg = avg;
+  }
+  // C. the biggest one-off of the last 6 months
+  const from6 = [_mkAdd(mk, -6), first].sort().pop();
+  const pool6 = hist.filter(t => t.date >= from6 + '-01');
+  const big = pool6.filter(t => anchor && _wtsAmt(t) >= anchor.usual * 0.25 && !/family|medic|health|hospital|doctor|school|tuition/i.test(_wtsCatName(t.categoryId))).sort((x, y) => _wtsAmt(y) - _wtsAmt(x))[0];
+  if (big) {
+    const bm = big.date.slice(0,7), bt = _wtsTxs(b.currency, bm + '-01', _wtsMonthEnd(bm)).reduce((s, t) => s + _wtsAmt(t), 0);
+    const what = _esc(String(big.notes || '').split('\n')[0].trim() || _wtsCatName(big.categoryId));
+    out.tips.push({ kind: 'big', save: 0, ico: getCategoryDisplay(big.categoryId)?.icon || '💸', title: 'Big one-offs',
+      eq: `${what} (${money(_wtsAmt(big))}, ${fmtDFull(big.date)}) = ${_wtsEq(_wtsAmt(big), anchor)}.`,
+      sub: `One-off spends like this pushed ${_wtsMonthName(bm, true)} to ${money(bt)}. Plan them ahead as their own line.` });
+  }
+  // D. what is left of the yardstick category, per day
+  if (anchor && keys.has(anchor.key) && left >= 2) {
+    const rest = (parseFloat(plan.alloc[anchor.key]) || 0) - (sp.byCat[anchor.key] || 0);
+    if (rest > 0) {
+      const hk = hist.filter(t => _txMatchesAlloc(t, anchor.key, keys)), months = Math.max(1, new Set(hk.map(t => t.date.slice(0,7))).size);
+      const perWeek = hk.length / months / 4.33, avgT = hk.length ? hk.reduce((s, t) => s + _wtsAmt(t), 0) / hk.length : 0;
+      out.tips.push({ kind: 'daily', save: 0, ico: getCategoryDisplay(anchor.key)?.icon || '🛒', title: `${anchor.name} · ${money(rest)} left`,
+        eq: `That is about ${money(rest / left)} a day for the next ${left} days.`,
+        sub: hk.length ? `You usually buy it ${perWeek < 1.5 ? 'about once' : `${Math.floor(perWeek)}–${Math.ceil(perWeek)} times`} a week, around ${money(avgT)} each time.` : '' });
+    }
+  }
+  return out;
+}
+// Tips that do not belong to one budget: subscriptions, fees, money to collect, a win
+function _wtsGeneral(now, anchors, freqByCur) {
+  const tips = [], soon = [], cm = currMonthKey(), first = _wtsFirstMk(), firstName = _wtsMonthName(first, true);
+  const curs = [...new Set((db.budgets || []).filter(b => b.active).map(b => b.currency))];
+  const parents = db.categories.expense || [];
+  for (const cur of curs) {
+    const money = v => fmt(v, cur), anchor = anchors[cur];
+    const hist = _wtsTxs(cur, first + '-01', _wtsMonthEnd(_mkAdd(cm, -1)));
+    // E. subscriptions: steady monthly charges under a "Subscriptions" parent
+    const subP = parents.find(c => /subscri/i.test(c.name));
+    if (subP) {
+      let monthly = 0, names = [];
+      for (const sc of (subP.subcats || [])) {
+        if (/fee|charge/i.test(sc.name)) continue;
+        const per = {};
+        hist.filter(t => t.categoryId === sc.id).forEach(t => { const m = t.date.slice(0,7); per[m] = (per[m] || 0) + _wtsAmt(t); });
+        const vals = Object.values(per); if (vals.length < 2) continue;
+        const mean = vals.reduce((s,v)=>s+v,0) / vals.length, sd = Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0) / vals.length);
+        if (mean > 0 && sd / mean <= 0.5) { monthly += _wtsMedian(vals); names.push(_stripIcon(sc.name));
+          // coming up: charged last month after today's date, not yet this month
+          const lm = _mkAdd(cm, -1), lastT = hist.filter(t => t.categoryId === sc.id && t.date.startsWith(lm)).sort((a,b)=>a.date<b.date?1:-1)[0];
+          const thisM = db.transactions.some(t => t.categoryId === sc.id && t.date && t.date.startsWith(cm) && t.currency === cur);
+          if (lastT && !thisM && +lastT.date.slice(8,10) >= now.getDate()) soon.push(`${_stripIcon(sc.name)} ${money(_wtsAmt(lastT))}`); }
+      }
+      if (names.length >= 2 && monthly > 0) tips.push({ kind: 'subs', save: 0, ico: '📱', title: `Subscriptions · about ${money(monthly)} a month`,
+        eq: `That is about ${money(monthly * 12)} a year${anchor ? `, ${_wtsEq(monthly * 12, anchor)}` : ''}.`, sub: `${names.join(', ')}.` });
+    }
+    // G. fees
+    const fee = {};
+    hist.forEach(t => { const n = _wtsCatName(t.categoryId); if (/fee|charge/i.test(n)) { (fee[n] = fee[n] || { n: 0, total: 0 }); fee[n].n++; fee[n].total += _wtsAmt(t); } });
+    const topFee = Object.entries(fee).filter(([, v]) => v.n >= 3).sort((x, y) => y[1].total - x[1].total)[0];
+    if (topFee) { const [name, v] = topFee, f = freqByCur[cur];
+      const eq = f && f.avg > 0 ? `${v.n} times, about ${money(v.total / v.n)} each. That is about ${Math.round(v.total / f.avg)} ${f.name} visits.` : `${v.n} times, about ${money(v.total / v.n)} each${anchor ? `, ${_wtsEq(v.total, anchor)}` : ''}.`;
+      tips.push({ kind: 'fee', save: 0, ico: '🏦', title: `${name} · ${money(v.total)} since ${firstName}`, eq, sub: 'Fewer, bigger transfers or withdrawals mean fewer fees.' }); }
+    // H. money to collect
+    const open = ((db.loans && db.loans.lent) || []).filter(l => !l.settled && !l.archived && l.currency === cur && (parseFloat(l.remaining ?? l.amount) || 0) > 0);
+    if (open.length) { const total = open.reduce((s, l) => s + (parseFloat(l.remaining ?? l.amount) || 0), 0);
+      const who = [...new Set(open.map(l => l.personName).filter(Boolean))];
+      tips.push({ kind: 'collect', save: 0, ico: '🤝', title: `Money to collect · ${money(total)}`,
+        eq: `${who.length ? who.join(' and ') + (who.length === 1 ? ' owes' : ' owe') : 'People owe'} you ${money(total)}${anchor ? `, ${_wtsEq(total, anchor)}` : ''}.`, sub: 'Not savings, but money that is yours to get back.' }); }
+    // F. a win: a category that fell by half or more between the first and the last complete month
+    const lm = _mkAdd(cm, -1);
+    if (first < lm) {
+      const by = (m) => { const o = {}; _wtsTxs(cur, m + '-01', _wtsMonthEnd(m)).forEach(t => { const n = _wtsCatName(t.categoryId); o[n] = (o[n] || 0) + _wtsAmt(t); }); return o; };
+      const a = by(first), z = by(lm);
+      const win = Object.entries(a).filter(([n, v]) => /fee|charge/i.test(n) && v > 0 && (z[n] || 0) <= v * 0.5)
+        .map(([n, v]) => ({ n, v, w: z[n] || 0 })).filter(x => hist.filter(t => _wtsCatName(t.categoryId) === x.n).length >= 3).sort((x, y) => (y.v - y.w) - (x.v - x.w))[0];
+      if (win) { for (let i = tips.length - 1; i >= 0; i--) if (tips[i].kind === 'fee' && tips[i].title.startsWith(win.n)) tips.splice(i, 1);
+        tips.push({ kind: 'win', save: 0, ico: '🎉', title: `Nice one · ${win.n}`, eq: `${money(win.v)} in ${firstName} → ${money(win.w)} in ${_wtsMonthName(lm, true)}.`, sub: 'Keep it up.' }); }
+    }
+  }
+  return { tips, soon };
+}
+function _wtsCompute() {
+  const now = new Date();
+  const per = (db.budgets || []).filter(b => b.active).map(b => _wtsBudget(b, now)).filter(x => x.spent > 0 || x.tips.length);
+  const anchors = {}, freqByCur = {};
+  per.forEach(x => { if (x.anchor) anchors[x.b.currency] = x.anchor; if (x.freqName) freqByCur[x.b.currency] = { name: x.freqName, avg: x.freqAvg }; });
+  const early = now.getDate() < WTS_MIN_DAY;
+  const gen = early ? { tips: [], soon: [] } : _wtsGeneral(now, anchors, freqByCur);
+  const skip = per.flatMap(x => x.tips.filter(t => t.kind === 'skip' || t.kind === 'over')).sort((a, b) => b.save - a.save);
+  const rest = per.flatMap(x => x.tips.filter(t => t.kind !== 'skip' && t.kind !== 'over'));
+  const tips = [...skip, ...rest, ...gen.tips.filter(t => t.kind !== 'win'), ...gen.tips.filter(t => t.kind === 'win')];
+  return { now, early, per, tips, soon: gen.soon, offKeys: per.flatMap(x => x.offKeys) };
+}
+function _wtsHTML() {
+  let w; try { w = _wtsCompute(); } catch (e) { console.warn('Ways to save failed:', e); return ''; }
+  window._wtsLast = w;
+  if (!w.tips.length && (w.early || !w.per.length)) return '';
+  try { db.settings.wtsSeen = [...new Set(w.offKeys)].sort(); saveDB(); } catch (e) {} // seen: the Dashboard line waits for something new
+  const tile = (v, l, c) => `<div class="wts-tile"><div class="wts-tv"${c ? ` style="color:${c}"` : ''}>${v}</div><div class="wts-tl">${l}</div></div>`;
+  const stats = w.early ? '' : w.per.map(x => {
+    const money = v => fmt(v, x.b.currency), over = x.spent - x.lim, red = 'var(--red)';
+    const top = x.tips.filter(t => t.kind === 'skip').sort((a, b) => b.save - a.save)[0];
+    const better = top && x.daysLeft > 0 ? `<div class="wts-line">Skip ${_wtsCatName(top.key)} ${x.daysLeft >= 4 ? 2 : 1} ${x.daysLeft >= 4 ? 'times' : 'time'} this week and you finish near <b>${money(x.pace - top.save)}</b> instead of ${money(x.pace)}.</div>` : '';
+    return `<div class="wts-bh">${_esc(x.b.location)} budget</div>
+      <div class="wts-tiles">${tile(money(x.perDay), 'spent a day so far')}${tile('~' + money(x.pace), `by ${_wtsMonthName(x.mk)} ${x.dim} at this pace`, x.pace > x.lim ? red : '')}${tile(money(Math.abs(over)), over > 0 ? 'over the plan' : 'left in the plan', over > 0 ? red : 'var(--green)')}</div>${better}`;
+  }).join('');
+  const dl = w.per.length ? w.per[0].daysLeft : 0;
+  const card = t => `<div class="wts-card"><div class="wts-ch"><span class="wts-ico">${t.ico}</span>${t.pill ? `<span class="wts-pill${t.kind === 'freq' ? ' alt' : ''}">${t.pill}</span>` : ''}</div>
+      <div class="wts-ct">${_esc(t.title)}</div>${t.eq ? `<div class="wts-eq">${t.eq}</div>` : ''}${t.sub ? `<div class="wts-cs">${t.sub}</div>` : ''}</div>`;
+  return `<div class="wts" id="wts">
+    <div class="wts-h"><span>Ways to save</span><span class="wts-hr">${w.early ? 'Over plan so far' : `${dl} ${dl === 1 ? 'day' : 'days'} left`}</span></div>
+    ${stats}
+    ${w.tips.length ? `<div class="wts-rail">${w.tips.map(card).join('')}</div>` : ''}
+    ${w.soon.length ? `<div class="wts-soon">Coming up: ${w.soon.join(', ')}, usually around this date.</div>` : ''}
+  </div>`;
+}
+// "How [last month] went": plan vs what happened, per budget
+function _wtsRecapHTML() {
+  const lm = _mkAdd(currMonthKey(), -1), rows = [];
+  for (const b of (db.budgets || []).filter(x => x.active)) {
+    const plan = _bgtPlan(b, lm), keys = Object.keys(plan.alloc); if (!keys.length) continue;
+    const sp = _bgtSpent(b, lm), money = v => fmt(v, b.currency); if (!(sp.total > 0)) continue;
+    const gaps = keys.map(k => ({ k, p: parseFloat(plan.alloc[k]) || 0, s: sp.byCat[k] || 0 })).filter(r => r.p > 0);
+    const over = gaps.filter(r => r.s > r.p + 0.005).sort((a, b) => (b.s - b.p) - (a.s - a.p)).slice(0, 2);
+    const ok = gaps.filter(r => r.s > 0 && r.s <= r.p + 0.005).sort((a, b) => b.s - a.s).slice(0, 2);
+    const diff = sp.total - plan.limit;
+    rows.push(`<div class="wts-rc"><div class="wts-rch"><b>${_esc(b.location)}</b><span style="color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">${money(Math.abs(diff))} ${diff > 0 ? 'over' : 'under'}</span></div>
+      <div class="wts-cs">Finished at ${money(sp.total)} of ${money(plan.limit)}.</div>
+      ${over.map(r => `<div class="wts-rl">⚠️ ${_esc(_wtsCatName(r.k))}: ${money(r.s)} vs ${money(r.p)} plan</div>`).join('')}
+      ${ok.map(r => `<div class="wts-rl">✅ ${_esc(_wtsCatName(r.k))}: ${money(r.s)} of ${money(r.p)}</div>`).join('')}</div>`);
+  }
+  if (!rows.length) return '';
+  return `<div class="wts" style="margin-top:0"><div class="wts-h"><span>How ${_wtsMonthName(lm, true)} went</span></div>${rows.join('')}</div>`;
+}
+// Dashboard month card: one line, only when a category newly went off track
+function _wtsDashLine() {
+  try {
+    const w = _wtsCompute(); if (!w.tips.length) return '';
+    const seen = new Set((db.settings && db.settings.wtsSeen) || []);
+    if (!w.offKeys.some(k => !seen.has(k))) return '';
+    const n = w.tips.length;
+    return `<div class="wts-dash" onclick="event.stopPropagation();_wtsOpen()"><span><b>${n} ${n === 1 ? 'way' : 'ways'} to save</b></span><span class="wts-dv">View ›</span></div>`;
+  } catch (e) { return ''; }
+}
+function _wtsOpen() { nav('insights'); requestAnimationFrame(() => { const el = document.getElementById('wts'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }
+// Add transaction: one line under Category when that category is at 80%+ of its plan
+function _wtsAddNote() {
+  try {
+    const s = _addState; const row = document.getElementById('cat-fr-value')?.closest('.ax-row'); if (!row) return;
+    let el = document.getElementById('wts-add-note');
+    const key = s.subCatId || s.catId;
+    if (!key || s.type === 'income' || s.type === 'transfer' || s.type === 'remittance') { if (el) el.remove(); return; }
+    const acctId = document.getElementById('add-account')?.value;
+    const acct = acctId ? db.accounts.find(a => a.id === acctId) : null;
+    const mk = currMonthKey(); let best = null;
+    for (const b of (db.budgets || []).filter(x => x.active && (!acct || x.currency === acct.currency))) {
+      const plan = _bgtPlan(b, mk), keys = new Set(Object.keys(plan.alloc));
+      const k = [...keys].find(x => _txMatchesAlloc({ categoryId: key }, x, keys)); if (!k) continue;
+      const p = parseFloat(plan.alloc[k]) || 0; if (!(p > 0)) continue;
+      const spent = _bgtSpent(b, mk).byCat[k] || 0, pct = spent / p;
+      if (!best || pct > best.pct) best = { b, k, p, spent, pct, n: _wtsTxs(b.currency, mk + '-01', _wtsMonthEnd(mk)).filter(t => _txMatchesAlloc(t, k, keys)).length };
+    }
+    if (!best || best.pct < 0.8) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'wts-add-note'; row.after(el); }
+    const money = v => fmt(v, best.b.currency);
+    el.className = 'wts-add' + (best.pct > 1 ? ' over' : '');
+    el.innerHTML = `${_esc(_wtsCatName(best.k))}: <b>${money(best.spent)} of ${money(best.p)}</b> this month · ${best.n} ${best.n === 1 ? 'time' : 'times'} so far`;
+  } catch (e) {}
 }
 
 function aiAnalyzeSpending(currency) {
@@ -22045,7 +22497,7 @@ function aiAllocateBudget(bgtId, results, totalLimit) {
     if (wantsTotal > remaining) {
       const scale = remaining / wantsTotal;
       wants.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
-      warning = `Your past spending exceeds budget. Wants reduced to ${(scale*100).toFixed(0)}% of historical.`;
+      warning = `Your usual spending is more than this limit, so the wants were trimmed to about ${(scale*100).toFixed(0)}% of what you usually spend to fit.`; // PLS #422
     } else {
       wants.forEach(r => { allocations[r.catId] = r.predicted; });
     }
@@ -22112,13 +22564,21 @@ function openAiAllocate(bgtId) {
       // it (that was #271's hidden "touched" rule, now shown as a closed lock you can reopen). Locks
       // persist on the budget (allocLocks) so they are still set next time the editor opens.
       const _locked0 = new Set(Array.isArray(bgt.allocLocks) ? bgt.allocLocks : []);
+      // PLS #422 (his picks, Oct 2026): rows say what you usually spend and what is already spent this month, in plain
+      // words, instead of "avg · volatile spending · ↑139%". A plan below what is already spent is flagged.
+      const _alKeys = new Set(allRows.map(r => r.catId)), _alSp = _bgtSpent(bgt, currMonthKey());
+      const _alSpentOf = k => _wtsTxs(bgt.currency, currMonthKey() + '-01', _wtsMonthEnd(currMonthKey())).reduce((n, t) => n + (_txMatchesAlloc(t, k, _alKeys) ? _wtsAmt(t) : 0), 0);
+      const _alSpent = {}; allRows.forEach(r => { _alSpent[r.catId] = _alSpentOf(r.catId); });
+      window._alSpent = _alSpent;
+      const _alSub = k => { const u = _wtsUsual(bgt.currency, k, _alKeys), sp = _alSpent[k] || 0;
+        return [u > 0 ? `Usually ${fmt(u, bgt.currency)}` : 'No recent spending', sp > 0 ? `${fmt(sp, bgt.currency)} spent this month` : ''].filter(Boolean).join(' · '); };
       const _lockIco = on => _ico(on ? 'lock' : 'unlock', 16);
       const _alRow = r => {
         const allocated = allocations[r.catId] || 0, on = _locked0.has(r.catId);
         return `<div class="fs-row al-row" style="cursor:default">
           <span class="fs-dot" style="background:var(--bg4)">${r.icon}</span>
           <div style="flex:1;min-width:0"><div class="fs-t">${_esc(r.name)}</div>
-            <div class="fs-s">${r._noData ? 'no recent spending' : `avg ${fmt(r.avg, bgt.currency)} · ${_esc(String(r.reason || '').replace(/\s*\(.*\)$/, ''))}${Math.abs(r.trendPct) > 15 ? ` · ${r.trendPct > 0 ? '↑' : '↓'}${Math.abs(r.trendPct).toFixed(0)}%` : ''}`}</div></div>
+            <div class="fs-s al-sub" data-cat="${r.catId}">${_alSub(r.catId)}</div></div>
           <button type="button" class="al-lock${on ? ' on' : ''}" data-cat="${r.catId}" aria-pressed="${on}" title="${on ? 'Locked: rebalance will not move this' : 'Unlocked: rebalance may adjust this'}" onclick="_allocToggleLock(this)">${_lockIco(on)}</button>
           <input type="number" class="form-input alloc-input numpad-input al-in" data-cat="${r.catId}" value="${allocated}" inputmode="none">
         </div>`;
@@ -22129,15 +22589,15 @@ function openAiAllocate(bgtId) {
         ${_other.length ? `<details class="al-other"${_other.some(r => (allocations[r.catId] || 0) > 0) ? ' open' : ''}><summary class="fs-card"><span>Other categories · ${_other.length}</span><span style="color:var(--text3);font-weight:500">no recent spending ›</span></summary>${_fsFeed(_other.map(_alRow).join(''))}</details>` : ''}`;
 
       const totalAlloc = Object.values(allocations).reduce((s,v)=>s+v, 0);
-      const effLimitAlloc = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+      let effLimitAlloc = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0); // PLS #413: let, the limit is editable in the bar
       const remaining = effLimitAlloc - totalAlloc;
 
       const _alHead = total => { const rem = effLimitAlloc - total, pct = effLimitAlloc > 0 ? total / effLimitAlloc * 100 : 0;
         return _fsHead({ badge:_ico('sparkle', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[Math.min(pct, 100), 0, pct > 100.05 ? 'var(--red)' : 'var(--accent)'],
-          title:'AI allocation', sub:`${_esc(bgt.location)} budget · limit ${fmt(effLimitAlloc, bgt.currency)}`,
+          title:'Auto-allocate' /* PLS #417 */, sub:`${_esc(bgt.location)} budget · limit ${fmt(effLimitAlloc, bgt.currency)}`,
           hero:fmt(Math.abs(rem), bgt.currency), heroCol:rem < -0.005 ? 'var(--red)' : 'var(--green)',
           heroLbl:`${rem < -0.005 ? 'over the limit' : 'buffer left'} · ${fmt(total, bgt.currency)} allocated (${pct.toFixed(0)}%)`,
-          pill:['From your last 3–6 months','var(--bg4)','var(--text3)'] }); };
+          pill:['From your last 3–6 months','var(--bg4)','var(--text3)'] }) + (window._alActsHTML ? window._alActsHTML(total) : ''); }; // PLS #423
       openDlg('',
         `<div class="fs">
         <div id="alloc-summary">${_alHead(totalAlloc)}</div>
@@ -22146,7 +22606,7 @@ function openAiAllocate(bgtId) {
         <div class="set-foot" style="text-align:center;margin-top:12px">Needs are filled first; wants share the rest. Change an amount and the unlocked rows rebalance to keep the total at the limit. 🔒 keeps a row where it is.</div>
         </div>`,
         `<span id="alloc-saved" style="font-size:11px;color:var(--green);opacity:0;transition:opacity var(--transition);margin-right:auto;align-self:center"></span>
-         <button class="btn btn-ghost btn-sm" onclick="flushAllocSave('${bgtId}');closeDlg()">Close</button>
+         <button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button>
          <button class="btn btn-primary btn-sm" onclick="confirmAiAllocate('${bgtId}')">Apply</button>`
       );
 
@@ -22168,7 +22628,119 @@ function openAiAllocate(bgtId) {
         // the peso, and if every category is touched or all absorbers sit at zero there is nothing
         // to move -- the buffer just tells you the truth rather than inventing a redistribution.
         const _allocTouched = new Set(_locked0); window._allocLocks = _allocTouched; window._allocLockBgt = bgtId; // PLS #345: explicit locks
-        const _effLim = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+        let _effLim = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
+        const _roll = bgt.rollover ? (bgt.rolloverAmount||0) : 0;
+        // PLS #418: what the budget looked like when the editor opened, so "Discard changes" can put it back exactly.
+        const _orig = { alloc: JSON.parse(JSON.stringify(bgt.allocations || {})), limit: bgt.limit,
+                        locks: Array.isArray(bgt.allocLocks) ? [...bgt.allocLocks] : null };
+        // PLS #413 (his option B): unlocked rows are sized from the SHAPE they had when the editor opened, never from
+        // their current value. Going over the limit can still squeeze them to 0, but lowering the row you typed brings
+        // them back to their old share -- the old code scaled from the zeros and they never returned.
+        const _shape = {};
+        document.querySelectorAll('.alloc-input').forEach(i => { _shape[i.dataset.cat] = Math.max(0, parseFloat(i.value) || 0); });
+        window._allocShape = _shape;
+        // PLS #418 (his rule, Oct 2026): "Discard" keeps the LAST plan that fit, not the one from when the editor opened.
+        // Every successful autosave moves this marker forward.
+        let _lastOk = JSON.parse(JSON.stringify(_orig));
+        const _inputs = () => [...document.querySelectorAll('.alloc-input')];
+        const _num = i => parseFloat(i.value) || 0;
+        // Where the total lands once the unlocked rows have rebalanced (they fill the pot, never go below 0).
+        // The bar reads this, so it does not flicker red for the 300 ms before the rebalance runs.
+        let _pending = false; // an edit is waiting for its rebalance (300 ms debounce)
+        const _projected = () => {
+          const ins = _inputs();
+          if (!_pending) return ins.reduce((n, i) => n + _num(i), 0); // nothing waiting: the real total, buffer included
+          const touched = ins.filter(i => _allocTouched.has(i.dataset.cat));
+          const absorbers = ins.filter(i => !_allocTouched.has(i.dataset.cat) && (_shape[i.dataset.cat] || 0) > 0);
+          const tSum = touched.reduce((n, i) => n + _num(i), 0);
+          if (!absorbers.length) return ins.reduce((n, i) => n + _num(i), 0);
+          return Math.max(_effLim, tSum);
+        };
+        const _isOver = () => _projected() > _effLim + 0.005;
+        const _cur = bgt.currency;
+        const _limBtnHtml = () => `<span class="al-bar-lim">Limit <b>${fmt(bgt.limit, _cur)}</b> <button type="button" class="al-bar-link" onclick="window._alEditLimit()">Edit</button></span>`;
+        // PLS #413: always-visible budget bar between the list and Close/Apply -- planned vs limit, left or over,
+        // the limit itself (editable in place) and, when over, a one-tap raise.
+        function _alBar(warn) {
+          const el = document.getElementById('al-bar'); if (!el) return;
+          const total = _projected(), left = _effLim - total, over = left < -0.005;
+          const pct = _effLim > 0 ? Math.min(100, total / _effLim * 100) : 100;
+          const state = over ? `${fmt(-left, _cur)} over` : (Math.abs(left) < 0.005 ? 'Fully planned' : `${fmt(left, _cur)} left`);
+          const raiseTo = Math.ceil((total - _roll) * 100) / 100;
+          el.className = 'al-bar' + (over ? ' over' : '');
+          el.innerHTML = `<div class="al-bar-top"><span>${fmt(total, _cur)} of ${fmt(_effLim, _cur)} planned</span><b class="al-bar-state">${state}</b></div>
+            <div class="al-bar-track"><div class="al-bar-fill" style="width:${pct}%"></div></div>
+            <div class="al-bar-row">${el.dataset.editing === '1'
+              ? `<span class="al-bar-lim">Limit <input type="number" class="form-input numpad-input al-bar-in" id="al-bar-in" value="${bgt.limit}" inputmode="none"> <button type="button" class="al-bar-link" onclick="window._alSaveLimit()">Done</button></span>`
+              : _limBtnHtml()}
+              ${over && el.dataset.editing !== '1' ? `<button type="button" class="al-bar-chip" onclick="window._alSetLimit(${raiseTo})">Raise limit to ${fmt(raiseTo, _cur)}</button>` : ''}</div>
+            ${over ? `<div class="al-bar-note">${warn
+              ? `You are ${fmt(-left, _cur)} over. Lower a row or raise the limit to finish, or discard to keep your last plan that fit.<div class="al-bar-acts"><button type="button" class="btn btn-ghost btn-sm" onclick="window._alDiscard()">Discard changes</button><button type="button" class="btn btn-ghost btn-sm" onclick="window._alKeep()">Cancel</button></div>`
+              : 'Not saved while over the limit'}</div>` : ''}`;
+        }
+        window._alKeep = () => _alBar(false);
+        window._alEditLimit = () => { const el = document.getElementById('al-bar'); if (!el) return; el.dataset.editing = '1'; _alBar(false);
+          const i = document.getElementById('al-bar-in');
+          // the app's calculator keypad; its Done applies the new limit straight away (PLS #413)
+          if (i && typeof npOpen === 'function') npOpen(i, v => window._alSetLimit(v)); else if (i) i.focus(); };
+        window._alSetLimit = (v) => {
+          if (!(v > 0)) { showToast('Enter a valid limit'); return; }
+          bgt.limit = Math.round(v * 100) / 100;
+          _effLim = bgt.limit + _roll; effLimitAlloc = _effLim;
+          const el = document.getElementById('al-bar'); if (el) el.dataset.editing = '';
+          _rebalance(); _summary(); _autosave();
+        };
+        window._alSaveLimit = () => { const i = document.getElementById('al-bar-in'); window._alSetLimit(parseFloat(i && i.value)); };
+        window._alDiscard = () => {
+          bgt.allocations = JSON.parse(JSON.stringify(_lastOk.alloc)); bgt.limit = _lastOk.limit; // PLS #418: last plan that fit
+          if (_lastOk.locks) bgt.allocLocks = [..._lastOk.locks]; else delete bgt.allocLocks;
+          clearTimeout(window._allocSaveT); clearTimeout(window._allocRebalT);
+          saveDBWithSync(); closeDlg(true);
+          if (currentPage === 'analytics') renderAnalytics(); else renderPlanning();
+          showToast('Changes discarded');
+        };
+        // PLS #418 (his option C + "discard changes"): the editor cannot be closed while it is over the limit.
+        window._dlgCloseGuard = () => {
+          clearTimeout(window._allocSaveT);
+          if (_isOver()) { _alBar(true); document.getElementById('al-bar')?.scrollIntoView({ block:'nearest' }); return false; }
+          _autosave(); return true;
+        };
+        window._allocIsOver = _isOver;
+        // PLS #423: one-tap actions -- spread what is left, start again from the suggestion, unlock everything
+        window._alActsHTML = (total) => {
+          const left = _effLim - total, anyFree = _inputs().some(i => !_allocTouched.has(i.dataset.cat) && (_shape[i.dataset.cat] || 0) > 0);
+          const chip = (t, fn) => `<button type="button" class="al-act" onclick="${fn}">${t}</button>`;
+          return `<div class="al-acts">${left > 0.5 && anyFree ? chip(`Spread ${fmt(left, _cur)} left`, 'window._alSpread()') : ''}${chip('Reset to suggestion', 'window._alReset()')}${_allocTouched.size ? chip('Unlock all', 'window._alUnlockAll()') : ''}</div>`;
+        };
+        window._alSpread = () => { _pending = false; _rebalance(); _summary(); _autosave(); };
+        window._alReset = () => {
+          const sug = (window._pendingAllocations && window._pendingAllocations.aiAlloc) || {};
+          _inputs().forEach(i => { const k = i.dataset.cat; if (_allocTouched.has(k)) return; const v = Math.max(0, Math.round(sug[k] || 0)); i.value = v; _shape[k] = v; });
+          _rebalance(); _summary(); _autosave(); document.querySelectorAll('.al-in').forEach(_alWarn);
+        };
+        window._alUnlockAll = () => {
+          _allocTouched.clear();
+          document.querySelectorAll('.al-lock').forEach(btn => _allocPaintLock(btn, false));
+          _inputs().forEach(i => { _shape[i.dataset.cat] = Math.max(0, parseFloat(i.value) || 0); });
+          _summary(); _autosave();
+        };
+        // PLS #422: a plan below what is already spent this month gets a red edge and a note
+        function _alWarn(i) {
+          const k = i.dataset.cat, sp = (window._alSpent || {})[k] || 0, v = parseFloat(i.value) || 0;
+          const sub = document.querySelector(`.al-sub[data-cat="${k}"]`); const low = sp > 0 && v + 0.005 < sp;
+          i.classList.toggle('al-low', low);
+          if (sub) { const base = sub.dataset.base || sub.innerHTML; sub.dataset.base = base; sub.innerHTML = low ? base + ` · <span style="color:var(--red)">below what you spent</span>` : base; }
+        }
+        window._alWarn = _alWarn;
+        function _autosave() {
+          if (_isOver()) return; // PLS #418
+          const b = db.budgets.find(x => x.id === bgtId); if (!b) return;
+          const next = {};
+          _inputs().forEach(i => { const v = parseFloat(i.value); if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v; });
+          b.allocations = next; b.allocLocks = [..._allocTouched];
+          saveDBWithSync();
+          _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched] }; // PLS #418
+        }
 
         function _rebalance() {
           const inputs = [...document.querySelectorAll('.alloc-input')];
@@ -22178,7 +22750,7 @@ function openAiAllocate(bgtId) {
           const touchedSum = touched.reduce((n,i) => n + (parseFloat(i.value)||0), 0);
           let pool = _effLim - touchedSum;
           if (pool < 0) pool = 0;                             // you overspent the limit on purpose
-          const base = absorbers.map(i => Math.max(0, parseFloat(i.value)||0));
+          const base = absorbers.map(i => _shape[i.dataset.cat] !== undefined ? _shape[i.dataset.cat] : Math.max(0, parseFloat(i.value)||0)); // PLS #413: from the opening shape
           const baseSum = base.reduce((a,b) => a+b, 0);
           if (baseSum <= 0) return;                           // no shape to scale; leave them alone
           const scale = pool / baseSum;
@@ -22199,7 +22771,8 @@ function openAiAllocate(bgtId) {
           let total = 0;
           document.querySelectorAll('.alloc-input').forEach(i => { total += parseFloat(i.value)||0; });
           const summ = document.getElementById('alloc-summary');
-          if (summ) summ.innerHTML = _alHead(total); // PLS #345: live hero + ring
+          if (summ) summ.innerHTML = _alHead(_projected()); // PLS #345: live hero + ring (#413: same figure as the bar)
+          _alBar(false); // PLS #413
         }
 
         document.querySelectorAll('.alloc-input').forEach(inp => {
@@ -22211,6 +22784,7 @@ function openAiAllocate(bgtId) {
           const _autosave = () => {
             const b = db.budgets.find(x => x.id === bgtId);
             if (!b) return;
+            if (_isOver()) return; // PLS #418: an over-the-limit plan is never written; the last plan that fit stays saved
             const next = {};
             document.querySelectorAll('.alloc-input').forEach(i => {
               const v = parseFloat(i.value);
@@ -22219,6 +22793,7 @@ function openAiAllocate(bgtId) {
             b.allocations = next;
             b.allocLocks = [..._allocTouched];   // PLS #345
             saveDBWithSync();
+            _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched] }; // PLS #418
             const mark = document.getElementById('alloc-saved');
             if (mark) { mark.textContent = 'Saved'; mark.style.opacity = '1';
               clearTimeout(window._allocFade);
@@ -22228,17 +22803,25 @@ function openAiAllocate(bgtId) {
             _allocTouched.add(inp.dataset.cat);
             const _lb = inp.parentElement.querySelector('.al-lock'); if (_lb && !_lb.classList.contains('on')) _allocPaintLock(_lb, true);
             clearTimeout(window._allocRebalT);
-            window._allocRebalT = setTimeout(() => { _rebalance(); _summary(); }, 300);
+            _pending = true; // PLS #413
+            window._allocRebalT = setTimeout(() => { _rebalance(); _pending = false; _summary(); }, 300);
             clearTimeout(window._allocSaveT);
             window._allocSaveT = setTimeout(_autosave, 700);
             _summary();
+            setTimeout(() => document.querySelectorAll('.al-in').forEach(_alWarn), 320); // PLS #422 (after the rebalance)
           });
         });
+        document.querySelectorAll('.al-in').forEach(_alWarn); // PLS #422
+        _summary(); // PLS #423: draws the one-tap actions
+        // PLS #413: the bar sits outside the scrolling list, right above Close / Apply
+        { const dl = document.querySelector('#dlg-overlay .dlg'), ft = document.getElementById('dlg-footer');
+          if (dl && ft && !document.getElementById('al-bar')) { const bar = document.createElement('div'); bar.id = 'al-bar'; dl.insertBefore(bar, ft); }
+          _alBar(false); }
       }, 50);
     } catch(e) {
       hideLoading();
       console.error(e);
-      showToast('AI allocation failed: ' + e.message);
+      showToast('Auto-allocate failed: ' + e.message); // PLS #417
     }
   }, 200);
 }
@@ -22256,12 +22839,14 @@ function _allocToggleLock(btn) {
   const set = window._allocLocks; if (!set) return;
   const cat = btn.dataset.cat, on = !set.has(cat);
   if (on) set.add(cat); else set.delete(cat);
+  if (!on && window._allocShape) { const i = document.querySelector(`.alloc-input[data-cat="${cat}"]`); if (i) window._allocShape[cat] = Math.max(0, parseFloat(i.value) || 0); } // PLS #413
   _allocPaintLock(btn, on);
   const b = db.budgets.find(x => x.id === window._allocLockBgt);
   if (b) { b.allocLocks = [...set]; saveDBWithSync(); }
 }
 function flushAllocSave(bgtId) {
   clearTimeout(window._allocSaveT);
+  if (typeof window._allocIsOver === 'function' && window._allocIsOver()) return; // PLS #418
   const b = db.budgets.find(x => x.id === bgtId);
   const inputs = document.querySelectorAll('.alloc-input');
   if (!b || !inputs.length) return;
@@ -22274,6 +22859,7 @@ function flushAllocSave(bgtId) {
 function confirmAiAllocate(bgtId) {
   const bgt = db.budgets.find(b => b.id === bgtId);
   if (!bgt) return;
+  if (typeof window._allocIsOver === 'function' && window._allocIsOver()) { closeDlg(); return; } // PLS #418: shows the over-limit choices instead
   // Read final values from inputs
   const finalAlloc = {};
   document.querySelectorAll('.alloc-input').forEach(inp => {
@@ -27311,7 +27897,7 @@ function aiNavigate(insId) {
     'Consider reallocating': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
     'Go to Reimbursements': ()=>{ nav('reimbursements'); },
-    'Review spending': ()=>{ nav('analytics'); setTimeout(()=>setAnalyticsTab('spending'),150); },
+    'Review spending': ()=>{ _openReportFrom('spending'); }, // PLS #416
     'Review budget limit': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'Review allocation': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
     'View Accounts': ()=>{ nav('accounts'); },
@@ -28267,7 +28853,7 @@ var _insAttentionSlot = ''; // PLS #357: Needs attention HTML, placed right afte
 var _insMk = null; // PLS #354: month shown on Insights (null = this month)
 function _insSetMonth(mk) { _insMk = (!mk || mk === currMonthKey()) ? null : mk; renderInsights(); }
 // Open an Analytics report on the same month Insights is showing (tap-to-trace).
-function _insGo(tab, mk) { window._analyticsOverviewPeriod = mk || _insMk || currMonthKey(); nav('analytics'); setAnalyticsTab(tab); }
+function _insGo(tab, mk) { window._analyticsOverviewPeriod = mk || _insMk || currMonthKey(); _openReportFrom(tab); } // PLS #416
 // Usual spending for the months before `mk` (same rule as avgMonthlyExpense6mo, counted back from mk).
 function _usualSpendingBefore(mk) {
   let total = 0, months = 0; const floor = firstCompleteMonthKey();
@@ -28376,6 +28962,7 @@ function renderInsights() {
 function renderAnalyticsAISummary(mkSel) {
   const dc = _displayCurrency();
   const now = new Date();
+  const _wtsSlot = (!mkSel || mkSel === currMonthKey()) ? _wtsHTML() : ''; // PLS #415
   // PLS #354: any month can be summarised. `base` is the 1st of the chosen month; everything that
   // compares ("last month", "your last 6") counts back from it. `now` stays today for the pacing
   // and forecasts, which only render for the current month.
@@ -28632,7 +29219,7 @@ function renderAnalyticsAISummary(mkSel) {
     });
   }
 
-  if (net < 0) {
+  if (net < 0 && !_wtsSlot) { // PLS #415: Ways to save covers this while it shows
     const gap = Math.abs(net);
     ahead.push({
       icon: 'alert',
@@ -28694,6 +29281,8 @@ function renderAnalyticsAISummary(mkSel) {
       <div style="font-size:13px;line-height:1.55;color:var(--text2)">${bulletHtml}</div>
     </div>
     ${_insAttentionSlot}
+    ${isCur ? _wtsSlot : ''}
+    ${isCur ? _wtsRecapHTML() : ''}
 
     <div class="metric-grid fr2-always" style="margin-bottom:16px">
       <div class="metric-card">
