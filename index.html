@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- PLS #411: viewport-fit=cover makes iOS report the home-bar inset; without it env(safe-area-inset-*) is 0, so the calculator keys, bottom nav and popups sat on the home bar -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- PLS #425 (his report, Oct 2026): viewport-fit=cover (#411) drew the app under the iPhone clock and left a gap at the bottom.
+     Back to the normal layout; the home-bar space now comes from --sab (set below for installed iPhones). -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -406,14 +407,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .sb-divider{height:1px;background:var(--border);margin:6px 16px}
 
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-#page-header{height:var(--header-h);display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;gap:12px}
+#page-header{height:calc(var(--header-h) + env(safe-area-inset-top, 0px));padding-top:env(safe-area-inset-top, 0px)!important;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;gap:12px}
 #page-header .ph-left{display:flex;align-items:center;gap:12px;min-width:0}
 #page-header .ph-title{font-size:16px;font-weight:600;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #page-header .ph-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 #page-content{flex:1;overflow-y:auto;overflow-x:hidden}
 #page-content::-webkit-scrollbar{width:4px}
 
-#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);z-index:100}
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:var(--sab);z-index:100}
 .bn-items{display:flex}
 .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px 8px;gap:3px;border:none;background:none;color:var(--text4);font-size:11px;font-weight:500;letter-spacing:0;transition:color var(--transition)}
 .bn-item.active{color:var(--accent)}
@@ -425,10 +426,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media(max-width:1023px){
   #sidebar{display:flex;position:fixed;left:0;top:0;bottom:0;z-index:200;transform:translateX(-100%);transition:transform 0.32s cubic-bezier(0.32,0.72,0,1);visibility:hidden}
   #sidebar.sidebar-open{transform:translateX(0);visibility:visible}
-  #sidebar{padding-bottom:calc(16px + env(safe-area-inset-bottom))} /* PLS #412: menu's Add transaction button sits above the iPhone home bar */
+  #sidebar{padding-bottom:calc(16px + var(--sab));padding-top:env(safe-area-inset-top, 0px)} /* PLS #412 / #424: clear the home bar and the status bar */
   #bottom-nav{display:none} /* PLS #412 (his call, Oct 2026, option B): no bottom nav anywhere on phones; pages open from the menu button (top-left) */
-  #page-header{padding:0 16px;height:52px}
-  #page-content{padding-bottom:calc(24px + env(safe-area-inset-bottom))} /* PLS #412: no nav to clear any more, just the home bar */
+  #page-header{padding:0 16px;height:calc(52px + env(safe-area-inset-top, 0px))} /* PLS #424: clears the iPhone status bar */
+  #page-content{padding-bottom:calc(8px + var(--sab))} /* PLS #412 / #425: just clear the home bar (his ref: Binance) */
 }
 @media(max-width:480px){
   #page-header{padding:0 12px}
@@ -625,11 +626,11 @@ body.numpad-open.np-pc .sheet-body,body.numpad-open.np-pc .dlg-body{padding-bott
 .big-amt-row{position:relative}
 .big-amt-fmt{position:absolute;pointer-events:none;text-align:left;color:var(--text);white-space:pre;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-start}
 input.big-amt-input.big-amt-masked,input.big-amt-input.big-amt-masked[readonly]{color:transparent!important;-webkit-text-fill-color:transparent;caret-color:transparent}
-body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(360px + env(safe-area-inset-bottom,0px));scroll-behavior:smooth}
+body.numpad-open .sheet-body,body.numpad-open .dlg-body{padding-bottom:calc(360px + var(--sab));scroll-behavior:smooth}
 #tb-numpad-preview{padding:14px 16px 12px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-height:60px;border-radius:var(--r-md);background:var(--bg3);margin-bottom:8px}
 #tb-numpad-preview .np-expr{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--text3);overflow-x:auto;white-space:nowrap;max-width:100%;text-align:right}
 #tb-numpad-preview .np-result{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text);min-height:32px;text-align:right}
-#tb-numpad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+#tb-numpad-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding-bottom:calc(8px + var(--sab))}
 .np-btn{background:var(--bg3);border:none;color:var(--text);font-size:22px;font-weight:500;padding:0;height:54px;border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.08s ease,background 0.12s cubic-bezier(0.32,0.72,0,1);font-family:var(--mono);user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .np-btn:active,.np-btn.pressed{transform:scale(0.94);background:var(--bg4)}
 .np-btn.np-fn{background:var(--bg4);color:var(--text2);font-size:16px;font-weight:600;font-family:var(--font)"SF Pro Text",system-ui,sans-serif;letter-spacing:-0.2px}
@@ -681,7 +682,7 @@ option{background:var(--bg3);color:var(--text)}
 .rv-shell .sheet-body,.rv-shell .dlg-body{padding:10px 18px 4px}
 .rv-shell .ef .ef-card{border-radius:16px}
 .rv-shell > .dlg-footer{display:none!important}
-.rv-foot{display:flex;flex-direction:column;gap:8px;padding:12px 18px calc(18px + env(safe-area-inset-bottom,0px));flex-shrink:0}
+.rv-foot{display:flex;flex-direction:column;gap:8px;padding:12px 18px calc(18px + var(--sab));flex-shrink:0}
 .rv-foot > button{height:48px;width:100%;border-radius:999px!important;border:0!important;font:inherit;font-size:15px!important;font-weight:600!important;cursor:pointer;margin:0!important;flex:none!important;box-shadow:none!important;padding:0 18px!important}
 .rv-foot > .rv-pri{background:var(--accent)!important;color:#fff!important}
 .rv-foot > .rv-sec{background:var(--bg3)!important;color:var(--text)!important}
@@ -836,6 +837,7 @@ option{background:var(--bg3);color:var(--text)}
 .ov-row3>div>.card,.ov-row4>div>.card,.ov-heroA>div>.card,.ov-grid>div>.card{display:flex;flex-direction:column} /* PLS #408: + .ov-grid */
 .ov-door-ft{margin-top:auto!important}
 .ov-row3>div>.card>.ov-door-ft,.ov-heroA>div>.card>.ov-door-ft,.ov-grid>div>.card>.ov-door-ft{margin-top:auto!important} /* PLS #408 */
+.ov-row3>div>.card>*:not(.ov-door-ft):nth-last-child(2),.ov-heroA>div>.card>*:not(.ov-door-ft):nth-last-child(2),.ov-grid>div>.card>*:not(.ov-door-ft):nth-last-child(2){margin-bottom:12px} /* PLS #426: the last line never touches the footer strip */
 /* PLS #205: the per-bar value label was originally "+₱100.0k" (~43px) with white-space:nowrap,
    which overflowed the ~32px month columns at 1024px. Dropping the currency symbol and going to
    8.5px brings it to ~24px, which fits at EVERY breakpoint (verified 1440/1280/1100/1024/901/
@@ -957,13 +959,26 @@ option{background:var(--bg3);color:var(--text)}
 .sheet-title{font-size:16px;font-weight:600}
 .sheet-close{width:28px;height:28px;border-radius:50%;background:var(--bg4);border:none;color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;transition:all var(--transition)}
 .sheet-close:hover{background:var(--bg5);color:var(--text)}
-.sheet-body{padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));overflow-y:auto;flex:1}
+.sheet-body{padding:20px;padding-bottom:calc(20px + var(--sab));overflow-y:auto;flex:1}
 .sheet-body::-webkit-scrollbar{width:3px}
 
 .dlg-overlay{position:fixed;inset:0;background:rgba(6,6,13,0.55);backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity var(--transition);padding:20px}
 .dlg-overlay.open{opacity:1;pointer-events:all}
 .dlg{background:var(--bg2);border-radius:var(--r-xl);border:1px solid var(--border2);width:100%;max-width:420px;max-height:80dvh;display:flex;flex-direction:column;overflow:hidden;transform:scale(0.92);transition:transform var(--spring);box-shadow:0 12px 24px rgba(0,0,0,0.22)}
 .dlg-overlay.open .dlg{transform:scale(1)}
+/* PLS #427: UI audit fixes (Oct 2026) */
+@media(max-width:640px){.pie-list-well{min-height:0!important}.pie-list-well>div{position:static!important;max-height:320px}} /* 1: one column: the list takes its own height (scrolls past 320px), no empty floor */
+@media(max-width:480px){.kpi-mo{display:none}} /* 2: "Income", "Expenses", "19 accounts" fit their tiles */
+.ins-pane .metric-label{min-height:0!important} /* 6: Insights tiles, no blank line under the label */
+.kpi-val .metric-value+div{white-space:nowrap} /* 2: "19 accounts" on one line */
+.ps-strip.fade-l{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 28px);mask-image:linear-gradient(to right,transparent 0,#000 28px)} /* 1 */
+.ps-strip.fade-r{-webkit-mask-image:linear-gradient(to left,transparent 0,#000 28px);mask-image:linear-gradient(to left,transparent 0,#000 28px)}
+.ps-strip.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to right,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%)}
+/* 5: on phones a transaction's detail line may use two lines, so the note is readable next to two account chips */
+@media(max-width:640px){.tx-detail{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tx-detail .acct-pill{white-space:nowrap}}
+/* 7: small text links get a bigger tap area without moving anything */
+.section-action,.bgr-more,.ov-door-ft [role=link],[data-ovcat][onclick]{position:relative}
+.section-action::after,.bgr-more::after,.ov-door-ft [role=link]::after,[data-ovcat][onclick]::after{content:'';position:absolute;inset:-10px -8px}
 /* PLS #415 Ways to save */
 .wts{margin:0 0 16px}
 .wts-h{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 10px;font-size:16px;font-weight:700;color:var(--text)}
@@ -1014,7 +1029,7 @@ option{background:var(--bg3);color:var(--text)}
    hundreds of transactions) grew to 90dvh and ran from under the status bar down to the home bar, so it no longer
    looked like a centred popup. Every popup now centres inside the SAFE area and keeps a clear 48px gap above and
    below; anything longer scrolls inside the popup. --pop-sa-t / --pop-sa-b exist so tests can stand in for a notch. */
-:root{--pop-sa-t:env(safe-area-inset-top,0px);--pop-sa-b:env(safe-area-inset-bottom,0px);--pop-gap:48px}
+:root{--sab:env(safe-area-inset-bottom,0px);--pop-sa-t:env(safe-area-inset-top,0px);--pop-sa-b:var(--sab);--pop-gap:48px} /* PLS #425: --sab = the home-bar space */
 @media(max-width:1023px){
   body:not(.numpad-open) .sheet,body:not(.numpad-open) .sheet.rv-shell{top:calc(50% + (var(--pop-sa-t) - var(--pop-sa-b)) / 2)!important;max-height:calc(100dvh - var(--pop-sa-t) - var(--pop-sa-b) - 2 * var(--pop-gap))!important} /* PLS #410: centre in the safe area, never touch the edges */
   body:not(.numpad-open) .sheet:not(.rv-shell) .sheet-body{padding-bottom:20px}body:not(.numpad-open) .sheet .rv-foot{padding-bottom:18px} /* PLS #410: skipped while the calculator keypad is open, which keeps its own approved layout (#378). Otherwise: the popup never reaches the home bar, so drop only the safe-area part of the padding (form popups keep their own 4px body padding) */
@@ -1024,7 +1039,7 @@ option{background:var(--bg3);color:var(--text)}
 }
 .dlg-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .dlg-title{font-size:14px;font-weight:600}
-.dlg-body{padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));overflow-y:auto;flex:1}
+.dlg-body{padding:20px;padding-bottom:calc(20px + var(--sab));overflow-y:auto;flex:1}
 .dlg-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
 
 /* ── EMOJI PICKER ── */
@@ -1133,7 +1148,7 @@ option{background:var(--bg3);color:var(--text)}
 .pool-add-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── ONBOARDING ── */
-.onboard-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;padding:24px}
+.onboard-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + var(--sab))} /* PLS #424 */
 .onboard-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r-xl);padding:32px;width:100%;max-width:440px;max-height:90dvh;overflow-y:auto}
 .onboard-step{display:none}
 .onboard-step.active{display:block}
@@ -5443,6 +5458,8 @@ const APP_CHANGELOG = [
     '📎 Budgets show what was spent outside the plan', // PLS #421
     '💬 The budget editor says what you usually spend and what is already spent, with one-tap Spread, Reset and Unlock all', // PLS #422 / #423
     '💡 Ways to save on Insights: daily tips from your own spending, with a recap of last month', // PLS #415
+    '📱 iPhone: back to the normal layout under the clock, and only the home bar\'s height is kept free at the bottom', // PLS #424 / #425
+    '🧹 Tidier screens on phones: slimmer card footers, no empty gaps, labels that fit, readable transfer notes, bigger tap areas', // PLS #426 / #427
   ]},
   { ver: '1.2.8', date: 'October 2026', changes: [
     '🗓️ Settings shows the right release month', // PLS #409
@@ -15971,10 +15988,10 @@ function renderAnalyticsOverview() {
     // taller than their content. The Category Breakdown footer already had the right shape: a
     // tinted strip flush to the card edges, pulled out with negative margins and rounded to match
     // the corner. Same treatment here, so one pattern ends every Overview card.
-    const link = `<div class="ov-door-ft" style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
+    const link = `<div class="ov-door-ft" style="display:flex;justify-content:flex-end;align-items:center;font-size:11px;border-top:1px solid var(--border);margin:12px -16px -16px;padding:6px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
       <span onclick="event.stopPropagation();${tab==='budget' ? "nav('planning');setPlanTab('budgets')" : `nav('analytics');setTimeout(()=>setAnalyticsTab('${tab}'),80)`}"
         style="color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:500"
-        role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1">→</span></span></div>`;
+        role="link" tabindex="0">${label} <span style="font-size:13px;line-height:1;position:relative;top:-2px">→</span></span></div>`; // PLS #426: arrow level with the text
     const i = html.lastIndexOf('</div>');
     return i < 0 ? html : html.slice(0, i) + link + html.slice(i);
   };
@@ -16033,7 +16050,7 @@ function renderAnalyticsOverview() {
              one you are editing. -->
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Income in '+metricLabel : period==='ytd'?'Income this month':'Income in '+metricLabel.split(' ')[0]}<!-- PLS #404: no caps, no dash --></span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Income<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Income<span class="kpi-mo"> this month</span>':'Income<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PLS #404: no caps, no dash --></span></div>
             ${chgBadge(incomeChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -16043,7 +16060,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Expenses in '+metricLabel : period==='ytd'?'Expenses this month':'Expenses in '+metricLabel.split(' ')[0]}<!-- PLS #404 --></span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Expenses<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Expenses<span class="kpi-mo"> this month</span>':'Expenses<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PLS #404 --></span></div>
             ${chgBadge(expChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -16101,7 +16118,7 @@ function renderAnalyticsOverview() {
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
             <div class="metric-value" style="font-size:18px;letter-spacing:-0.3px;white-space:nowrap">${fmt(onHand, disp)}</div>
-            <div style="font-size:11px;color:var(--text4)">${nWith} liquid account${nWith !== 1 ? 's' : ''}</div>
+            <div style="font-size:11px;color:var(--text4)">${nWith}<span class="kpi-mo"> liquid</span> account${nWith !== 1 ? 's' : ''}</div><!-- PLS #427 -->
           </div>
           <div class="kpi-spark" style="position:absolute;right:12px;bottom:8px">${_spark(trend, '#a78bfa')}</div>
         </div>`;
@@ -16119,7 +16136,7 @@ function renderAnalyticsOverview() {
         </div>
         <div data-ovcat="exp" class="ovcat-pane">${expTotal > 0 ? buildPieChart(expCats, expTotal, 'exp', period) : `<div style="font-size:12px;color:var(--text4);padding:24px 0;text-align:center">No expenses this period</div>`}</div>
         <div data-ovcat="inc" class="ovcat-pane" style="display:none">${incTotal > 0 ? buildPieChart(incCats, incTotal, 'inc', period) : `<div style="font-size:12px;color:var(--text4);padding:24px 0;text-align:center">No income this period</div>`}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text4);border-top:1px solid var(--border);margin:12px -16px -16px;padding:9px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text4);border-top:1px solid var(--border);margin:12px -16px -16px;padding:6px 16px;background:var(--accent-bg);border-radius:0 0 15px 15px">
           <span><span data-ovcat="exp">Category Breakdown</span><span data-ovcat="inc" style="display:none">Income Sources</span></span>
           <span><span data-ovcat="exp" style="cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('spending')">View all →</span><span data-ovcat="inc" style="display:none;cursor:pointer;color:var(--accent);font-weight:500" onclick="setAnalyticsTab('income')">View all →</span></span>
         </div>
@@ -17063,7 +17080,7 @@ function buildDayOfWeekHeatmap(metricMk, dispCurr) {
       if (weekdayAvg === 0 && weekendAvg === 0) return '';
       const higher = weekendAvg > weekdayAvg ? 'Weekends' : 'Weekdays';
       const diff = weekdayAvg > 0 ? Math.abs((weekendAvg - weekdayAvg) / weekdayAvg * 100) : 0;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text4);border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+      return `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;row-gap:6px;column-gap:12px;font-size:11px;color:var(--text4);border-top:1px solid var(--border);margin-top:10px;padding-top:10px"><!-- PLS #427 -->
         <span>${higher} spend ${diff.toFixed(0)}% more on average</span>
         <span style="display:flex;gap:10px">
           <span style="color:var(--text3)">Wkday <span style="font-family:var(--mono);color:var(--text2);font-weight:600">${_fmtK(weekdayAvg,dispCurr)}</span></span>
@@ -17339,12 +17356,11 @@ function buildIncomeDiversification(metricMk, dispCurr) {
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Income Diversification${_infoBtn('income-div')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;white-space:nowrap">Income Diversification${_infoBtn('income-div')}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'} · ${riskLabel}</div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;flex-shrink:0;padding-left:8px"> <!-- PLS #427: verdict only; the note sits under the title -->
         <div style="font-size:11px;font-weight:600;color:${riskColor}">${risk} risk</div>
-        <div style="font-size:11px;color:var(--text4)">${riskLabel}</div>
       </div>
     </div>
     <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
@@ -17514,12 +17530,11 @@ function buildConcentrationRisk(dispCurr) {
   return `<div class="card" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em">Account Concentration${_infoBtn('concentration')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${topPct.toFixed(0)}% in ${_esc(topAcct.name)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;white-space:nowrap">Account Concentration${_infoBtn('concentration')}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${topPct.toFixed(0)}% in ${_esc(topAcct.name)} · ${riskLabel}</div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;flex-shrink:0;padding-left:8px"> <!-- PLS #427: verdict only; the note sits under the title -->
         <div style="font-size:11px;font-weight:600;color:${riskColor}">${risk}</div>
-        <div style="font-size:11px;color:var(--text4)">${riskLabel}</div>
       </div>
     </div>
     <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin-bottom:10px">
@@ -18396,7 +18411,7 @@ function buildPieChart(cats, total, prefix, period) {
         <text x="${cx}" y="${cy+21}" text-anchor="middle" font-size="11" fill="var(--text4)" font-family="system-ui">Total</text><!-- PLS #404: was 9.5px and 8px -->
       </svg>
     </div>
-    <div style="padding:0 4px;flex:1;position:relative;min-height:220px">
+    <div class="pie-list-well" style="padding:0 4px;flex:1;position:relative;min-height:220px">
       <div style="position:absolute;inset:0;overflow-y:auto;padding-right:4px">${legend}</div>
     </div>
   </div>`;
@@ -18493,7 +18508,7 @@ function renderAnalyticsSpending() {
     <div style="display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;margin-bottom:16px;gap:3px">
       ${viewOptions.map(opt => { const info = _getCurrInfo(opt); return `
       <button onclick="setSpendingView('${opt}')" style="flex:1;padding:8px 12px;border:none;border-radius:var(--r-sm);background:${view===opt?'var(--bg)':'transparent'};color:${view===opt?'var(--text)':'var(--text3)'};font-size:13px;font-weight:${view===opt?'600':'500'};cursor:pointer;transition:all 0.2s;box-shadow:${view===opt?'0 1px 3px rgba(0,0,0,0.1)':'none'};display:flex;align-items:center;justify-content:center;gap:6px">
-        <span style="font-size:14px">${info.flag}</span> ${info.label} <span style="font-size:11px;color:var(--text4);font-weight:500">${info.code}</span>
+        <span style="font-size:14px">${info.flag}</span><span class="kpi-mo"> ${info.label}</span> <span style="font-size:11px;color:var(--text4);font-weight:500">${info.code}</span><!-- PLS #427: flag + code on phones -->
       </button>`; }).join('')}
     </div>` : '';
 
@@ -18675,7 +18690,7 @@ function renderAnalyticsIncome() {
     <div style="display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;margin-bottom:16px;gap:3px">
       ${viewOptions.map(opt => { const info = _getCurrInfo(opt); return `
       <button onclick="setIncomeView('${opt}')" style="flex:1;padding:8px 12px;border:none;border-radius:var(--r-sm);background:${view===opt?'var(--bg)':'transparent'};color:${view===opt?'var(--text)':'var(--text3)'};font-size:13px;font-weight:${view===opt?'600':'500'};cursor:pointer;transition:all 0.2s;box-shadow:${view===opt?'0 1px 3px rgba(0,0,0,0.1)':'none'};display:flex;align-items:center;justify-content:center;gap:6px">
-        <span style="font-size:14px">${info.flag}</span> ${info.label} <span style="font-size:11px;color:var(--text4);font-weight:500">${info.code}</span>
+        <span style="font-size:14px">${info.flag}</span><span class="kpi-mo"> ${info.label}</span> <span style="font-size:11px;color:var(--text4);font-weight:500">${info.code}</span><!-- PLS #427: flag + code on phones -->
       </button>`; }).join('')}
     </div>` : '';
 
@@ -19169,6 +19184,9 @@ function renderAnalyticsWealth() {
     'Investment':      '📈',
     'Credit Card':     '💳',
     'Loan':            '📋',
+    // PLS #427: investment types shown as their own group fell back to a bare dot
+    'Cooperative':     '🤝', 'Stocks':'📊', 'Bonds':'📜', 'Treasury Bond':'🏛️', 'MP2 (Pag-IBIG)':'🪙', 'REITs':'🏬', 'Mutual Fund':'🏦',
+    'Time Deposit':    '🔒', 'Real Estate':'🏠', 'Corporation':'🏢', 'Land Ownership':'🌏', 'Insurance/VUL':'☂️', 'Crypto':'₿',
   };
 
   function groupByType(rows) {
@@ -20335,7 +20353,7 @@ function renderContractTab() {
     // PLS #342: outside Edit list mode a bucket is one feed row; tapping it opens a sheet holding
     // the balance input, the link checkboxes and Edit / Delete (they were always open on the page).
     _bFeed.push(_fsRow({ ico:`<span style="width:12px;height:12px;border-radius:50%;background:${b.color}"></span>`, icoBg:'var(--bg4)',
-      title:_esc(b.name), sub:`${_esc(rateLabel)}${rateLabel ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal · ${fmt(perMonth,goalCurr)}/mo`,
+      title:_esc(b.name), sub:`${rateLabel && rateLabel !== '—' ? `<span class="kpi-mo">${_esc(rateLabel)} · </span>` : ''}${fmt(perMonth,goalCurr)}/mo · ${(+sharePct.toFixed(1))}% of goal`, // PLS #427
       amt:(isLinked || val > 0) ? fmt(val,goalCurr) : '—', amtCol:'var(--text)',
       amt2:statusTxt ? `<span style="color:${statusColor}">${statusTxt}</span>` : `of ${fmt(target,goalCurr)}`,
       onclick:`openBucketDetail('${activeId}','${b.id}')`, chev:true }));
@@ -20444,8 +20462,8 @@ function renderContractTab() {
       ? `<div class="fs-card" style="text-align:center;padding:20px 16px"><div style="font-size:13px;color:var(--text3);margin-bottom:10px">No buckets yet. Add one to track where your savings go.</div>
           <button class="btn btn-primary btn-sm" onclick="openBucketSheet('${activeId}',null)">+ Add bucket</button></div>`
       : editMode ? bucketsHTML : _fsFeed(_bFeed.join(''))}
-    ${BUCKET_DEFS.length>0?`<div class="set-foot" style="margin-top:8px">Allocated ${fmt(_allocSum,goalCurr)} (${(+_allocPct.toFixed(0))}%) of ${fmt(safeGoal,goalCurr)} ·
-      ${Math.abs(_over) <= Math.max(1, safeGoal*0.005) ? `<span style="color:var(--green);font-weight:600">100% allocated</span>`
+    ${BUCKET_DEFS.length>0?`<div class="set-foot" style="margin-top:8px">Allocated ${fmt(_allocSum,goalCurr)} of ${fmt(safeGoal,goalCurr)} ·
+      ${Math.abs(_over) < 0.005 ? `<span style="color:var(--green);font-weight:600">fully allocated</span>` /* PLS #427: exact, no rounded "100%" */
         : (_over > 0 ? `<span style="color:var(--amber);font-weight:600">over by ${fmt(_over,goalCurr)}</span>` : `${fmt(-_over,goalCurr)} left`)}${editMode ? '' : ' · tap a bucket for its balance and links'}</div>`:''}
 
     ${_fsSec('Milestones')}
@@ -21922,7 +21940,7 @@ function renderBudgetsTab() {
     return _fsRow({ ico:'📎', icoBg:'var(--bg4)', title:'Not in plan', sub:_esc(o.slice(0, 3).map(([n, v]) => `${n} ${fmt(v, b.currency)}`).join(' · ') + (o.length > 3 ? ` +${o.length - 3} more` : '')),
       amt:fmt(tot, b.currency), amtCol:'var(--text)', amt2:'spent' });
   })();
-  const setRow = (label, sub, right, onclick) => `<div class="fs-i"${onclick ? ` onclick="${onclick}" style="cursor:pointer"` : ''}><span style="color:var(--text)"><span style="font-weight:600">${label}</span>${sub ? `<br><span style="font-size:11px;color:var(--text3)">${sub}</span>` : ''}</span>${right}</div>`;
+  const setRow = (label, sub, right, onclick) => `<div class="fs-i"${onclick ? ` onclick="${onclick}" style="cursor:pointer"` : ''}><span style="color:var(--text);min-width:0;flex:1"><span style="font-weight:600">${label}</span>${sub ? `<br><span style="font-size:11px;color:var(--text3)">${sub}</span>` : ''}</span>${right}</div>`;
   let html = `<div class="page-pad"><div class="fs" style="max-width:640px;margin:0 auto">${chips}
     ${_fsHead({ badge:getFlag(b.location) || _ico('wallet', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[Math.min(usedPct, 100), 0, ringCol],
       title:`${_esc(b.location)} budget`, sub:`${monthLbl} · limit ${fmt(lim, b.currency)}${isCur && b.rollover && b.rolloverAmount > 0 ? ' incl. rollover' : ''}`,
@@ -26230,6 +26248,23 @@ function applyAutoTheme() {
 // token, so iOS standalone + Android paint the status bar light in light mode and dark in
 // dark mode. apple-mobile-web-app-status-bar-style stays "default" (translucent kept the
 // text white over a light app).
+// -- PERSONAL LOGIC SET #425 -- Installed on an iPhone without a Home button, the app reaches under the home bar but iOS
+// reports no inset in the normal layout. Give it the home bar's height: 34px upright, 21px sideways (20px on iPad).
+// Safari tabs, Android and PC keep the OS value (0).
+function _syncHomeBar() {
+  try {
+    const standalone = window.navigator.standalone === true;
+    const tall = Math.max(screen.width, screen.height) >= 812;
+    if (!standalone || !tall) { document.documentElement.style.removeProperty('--sab'); return; }
+    const pad = Math.max(screen.width, screen.height) >= 1000 ? 20 : (window.innerWidth > window.innerHeight ? 21 : 34);
+    document.documentElement.style.setProperty('--sab', pad + 'px');
+  } catch (e) {}
+}
+_syncHomeBar(); window.addEventListener('resize', _syncHomeBar); window.addEventListener('orientationchange', _syncHomeBar);
+// -- PERSONAL LOGIC SET #427 -- month strips: fade the edge that has more months behind it, so a cut-off letter never shows
+function _psFade(el) { const l = el.scrollLeft > 2, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2; el.classList.toggle('fade-l', l); el.classList.toggle('fade-r', r); }
+document.addEventListener('scroll', e => { const t = e.target; if (t && t.classList && t.classList.contains('ps-strip')) _psFade(t); }, true);
+new MutationObserver(() => requestAnimationFrame(() => document.querySelectorAll('.ps-strip').forEach(_psFade))).observe(document.documentElement, { childList: true, subtree: true });
 function _syncThemeColor() {
   const m = document.querySelector('meta[name="theme-color"]');
   if (!m) return;
@@ -28139,6 +28174,7 @@ function renderAnalyticsCashflow() {
   // 6-month bar chart
   html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;margin-bottom:14px">
     <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:12px">Last 6 months</div>`;
+  const _multiYr = new Set(months.map(m => m.yr)).size > 1; // PLS #427: one year in view -> month names only
   months.forEach(m => {
     const pct = Math.abs(m.net) / maxAbs * 100;
     const color = m.net >= 0 ? 'var(--green)' : 'var(--red)';
@@ -28147,7 +28183,7 @@ function renderAnalyticsCashflow() {
     // out of the statistics but must still be visible as a listing. min-height:34px fixes the row
     // height so the two-line labels below cannot make the gaps between months uneven.
     html += `<div onclick="openTxnsForMonth('${m.mk}')" title="View ${m.label} transactions" style="display:flex;align-items:center;gap:10px;min-height:34px;margin-bottom:4px;cursor:pointer">
-      <div style="width:30px;flex-shrink:0;text-align:center;font-size:11px;line-height:1.2;color:var(--text3)">${m.mon}<br><span style="color:var(--text4)">${m.yr}</span></div>
+      <div style="width:30px;flex-shrink:0;text-align:center;font-size:11px;line-height:1.2;color:var(--text3)">${m.mon}${_multiYr ? `<br><span style="color:var(--text4)">${m.yr}</span>` : ''}</div>
       <div style="flex:1;height:18px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden;position:relative">
         <div style="width:${pct}%;height:100%;background:${color};border-radius:var(--r-sm)"></div>
       </div>
