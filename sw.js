@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-9-6'; // same app version 1.2.9 (his call), new cache so phones refresh
+const CACHE = 'trackbudget-v1-2-9-7'; // same app version 1.2.9 (his call), new cache so phones refresh
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {
