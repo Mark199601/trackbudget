@@ -432,6 +432,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 #page-header .ph-title{font-size:16px;font-weight:600;letter-spacing:-0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #page-header .ph-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 #page-content{flex:1;overflow-y:auto;overflow-x:hidden}
+/* PLS #443 (his pick A, Oct 2026): the sync status sits on the header diskette as a small dot, amber = this device is not synced
+   (on iPhone, Safari needs one tap to sign in), purple = another device saved a newer file. No dot = nothing to do. */
+.sync-dot-badge{position:absolute;top:-3px;right:-4px;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px var(--bg2)}
 #page-content::-webkit-scrollbar{width:4px}
 
 #bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:var(--sab);z-index:100}
@@ -2052,7 +2055,7 @@ var _gdriveTokenExpiry = 0; // Unix timestamp ms when token expires
 // ── Token persistence helpers ──
 const GDRIVE_TOKEN_KEY = 'tb_gdrive_token';
 function saveDriveToken(token, expiresInSec) {
-  _gdriveAccessToken = token;
+  _gdriveAccessToken = token; if (typeof _syncNeedsTap !== 'undefined') _syncNeedsTap = false; // PLS #442: signed in again, the reminder row is no longer needed
   _gdriveTokenExpiry = Date.now() + (expiresInSec || 3600) * 1000 - 30000; // -30s buffer
   try {
     localStorage.setItem(GDRIVE_TOKEN_KEY, JSON.stringify({
@@ -3841,7 +3844,7 @@ function renderPageHeader(page) {
   // pills. Contextual "+ X" actions are accent text buttons. Functional icons are SVG (not
   // emoji) so they tint with the theme and render identically across platforms.
   const svgArchive = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>`;
-  const syncHTML = `<div id="sync-indicator" role="button" tabindex="0" onclick="syncNow()" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);cursor:pointer;white-space:nowrap"><span id="sync-icon" style="display:flex;align-items:center"></span><span id="sync-label">–</span></div>`;
+  const syncHTML = `<span id="sync-disk-slot" style="display:flex"></span>`; // PLS #443: the diskette carries the status (was a text badge: Unsaved / Saving / Not synced)
   const themeHTML = `<button id="theme-toggle-btn" class="icon-btn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">${isLight ? SVG_MOON : SVG_SUN}</button>`;
   let pageHTML = '';
   // -- PERSONAL LOGIC SET #287 -- iOS nav bar: the page's own actions sit at the far right as
@@ -3854,7 +3857,7 @@ function renderPageHeader(page) {
   const _plus = (fn, label) => `<button class="icon-btn hdr-act" aria-label="${label}" title="${label}" onclick="${fn}">${_svgPlus}</button>`;
   const _more = pg => `<button class="icon-btn hdr-act" aria-label="More" title="More" onclick="openPageMenu(event,'${pg}')">${_svgMore}</button>`;
   if (page==='dashboard') {
-    pageHTML = renderDeviceIndicator();
+    pageHTML = ''; // PLS #443: the diskette now lives in the shared slot above
   } else if (page==='accounts') {
     pageHTML = _more('accounts') + _plus('openAddAccount()', 'Add account'); // PLS #287
   } else if (page==='targets') {
@@ -5494,7 +5497,7 @@ const APP_CHANGELOG = [
   { ver: '1.2.10', date: 'October 2026', changes: [
     '🔄 Sync now looks at Google Drive first, so one device can no longer overwrite what the other device saved', // PLS #441
     '🧩 When both devices have changes they are combined, and you are asked only when both changed the same item', // PLS #441
-    '🟡 The header tells you when this device is not synced or needs a sync, tap it to sync', // PLS #441
+    '🟡 A small dot on the diskette tells you when this device is not synced (amber) or another device saved a newer file (purple), tap it to sync', // PLS #441 / #443
     '↩️ Undo last sync, an Auto sync switch, and one backup kept per day for the last 7 days', // PLS #441
     '🛠️ Bulk change category works again', // PLS #440
   ]},
@@ -25158,7 +25161,7 @@ function ensureDriveToken(callback, silent=false) {
     return;
   }
   if (typeof google === 'undefined' || !google.accounts) {
-    if (!silent) showToast('Google API loading, please try again'); else setSyncStatus('signin'); // PLS #441
+    if (!silent) showToast('Google API loading, please try again'); else { _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); } // PLS #441 / #442
     return;
   }
   // Try silent token refresh first (no popup)
@@ -25172,7 +25175,7 @@ function ensureDriveToken(callback, silent=false) {
         if (silent) {
           // Silent mode — never show popup. PLS #441: but say so, the header shows "Not synced"
           console.warn('Silent token refresh failed:', tokenResponse.error);
-          setSyncStatus('signin');
+          _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); // PLS #442
           return;
         }
         // Non-silent — fall back to popup
@@ -25862,6 +25865,8 @@ async function saveToDriveSilent() {
     const testRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + _gdriveAccessToken);
     if (!testRes.ok) {
       clearDriveToken(); // Token expired — will re-auth next manual save
+      setSyncStatus('unsaved'); // PLS #442: was left on "Saving..." with nothing happening
+      setTimeout(() => ensureDriveToken(() => saveToDriveSilent(), true), 0); // then the same quiet renewal as above
       return;
     }
     // PLS #441: the save is guarded. If another device saved after this device's last sync, nothing is uploaded and the
@@ -26020,7 +26025,9 @@ async function syncNow(opts) {
   opts = opts || {};
   if (!db.settings.googleDriveConnected) { if (!opts.silent) openDriveSheet(); return; }
   if (_syncBusy || _isSavingToDrive) return;
-  if (!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) { setSyncStatus('signin'); ensureDriveToken(() => syncNow(opts), !!opts.silent); return; }
+  if (!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) {
+    if (opts.silent) setTimeout(() => { if ((!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) && _syncStatus !== 'saving') { _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); } }, 2500); // PLS #442: wait for Google's answer before showing the reminder
+    ensureDriveToken(() => syncNow(opts), !!opts.silent); return; }
   if (!navigator.onLine) { setSyncStatus('signin'); if (!opts.silent) showToast('You are offline, sync will run when you are back online'); return; }
   _syncBusy = true; clearTimeout(_autoSaveTimer); if (!opts.silent) showLoading('Syncing...');
   const h0 = _syncHash();   // what this device held when the sync started
@@ -26148,7 +26155,34 @@ function _syncDoUndo() {
   try { localStorage.removeItem('tb_premerge'); } catch(e) {}
   closeDlg(); showToast('Put back, syncing'); setTimeout(() => location.reload(), 900);
 }
-function toggleAutoSync(on) { db.settings.autoSyncOff = !on; saveDB(); showToast(on ? 'Auto sync is on' : 'Auto sync is off, use Sync now'); }
+// -- PERSONAL LOGIC SET #443 -- Sync status on the diskette (his pick A; replaces the reminder row of #442 and the header text badge).
+// Safari cannot renew the Google sign-in quietly, so the iPhone needs one tap: the amber dot asks for it, and tapping the
+// diskette runs Sync now (the tap is what lets Safari open the sign-in). Purple dot = another device saved a newer file.
+// On the Dashboard the diskette is always there; on other pages it appears only while a tap is needed, so headers stay clean.
+var _syncNeedsTap = false;   // true only after a quiet renewal was tried and refused, so PC and Android never see the dot for a renewal that works
+function _syncDiskState() {
+  if (typeof db === 'undefined' || !db || !db.settings || !db.settings.googleDriveConnected) return 'off';
+  if (_syncStatus === 'saving') return 'saving';
+  if (_syncStatus === 'behind') return 'behind';
+  const noToken = !_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry;
+  if (_syncStatus === 'signin' || (noToken && _syncNeedsTap) || (db.settings.autoSyncOff && _syncStatus === 'unsaved')) return 'signin';
+  return 'ok';
+}
+function _syncDiskRender() {
+  const slot = document.getElementById('sync-disk-slot'); if (!slot) return;
+  const st = _syncDiskState(), onDash = (typeof currentPage !== 'undefined' && currentPage === 'dashboard');
+  if (!onDash && st !== 'signin' && st !== 'behind') { if (slot.innerHTML) slot.innerHTML = ''; slot.dataset.state = ''; return; }
+  if (slot.dataset.state === st && slot.innerHTML) return;
+  const tip = st === 'signin' ? 'Not synced, tap to sync' : st === 'behind' ? 'Newer save on Google Drive, tap to sync' : st === 'saving' ? 'Syncing' : st === 'off' ? 'Backups, Google Drive is not connected' : 'Synced, tap for backups';
+  const dot = st === 'signin' ? 'var(--amber)' : st === 'behind' ? 'var(--accent)' : '';
+  const glyph = st === 'saving'
+    ? `<span style="display:flex;color:var(--accent)"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span>`
+    : `<span style="position:relative;display:flex;opacity:${st === 'off' ? '0.5' : '1'}">${SVG_DISKETTE}${dot ? `<span class="sync-dot-badge" style="background:${dot}"></span>` : ''}</span>`;
+  slot.dataset.state = st;
+  slot.innerHTML = `<button id="sync-disk" class="icon-btn" data-state="${st}" onclick="syncDiskTap()" title="${tip}" aria-label="${tip}">${glyph}</button>`;
+}
+function syncDiskTap() { const st = _syncDiskState(); if (st === 'signin' || st === 'behind') syncNow(); else if (st !== 'saving') openSyncShortcuts(); }
+function toggleAutoSync(on) { db.settings.autoSyncOff = !on; saveDB(); updateSyncIndicator(); showToast(on ? 'Auto sync is on' : 'Auto sync is off, use Sync now'); }
 
 // ── SYNC STATUS INDICATOR ──
 // _syncStatus moved to top
@@ -26159,63 +26193,10 @@ function setSyncStatus(status) {
   updateSyncIndicator();
 }
 
-function updateSyncIndicator() {
-  const icon = document.getElementById('sync-icon');
-  const label = document.getElementById('sync-label');
-  if (!icon || !label) return;
-  // PLS #287: the badge is shown only while it needs attention (unsaved changes, saving now).
-  // Idle / saved / no-Drive states stay out of the header; Settings shows the Drive status.
-  const _ind = document.getElementById('sync-indicator');
-  if (_ind) _ind.style.display = (db.settings.googleDriveConnected && ['unsaved','saving','behind','signin'].includes(_syncStatus)) ? 'flex' : 'none'; // PLS #441: also when another device saved, or the sign-in ran out
-  // PLS #132 family: sync states are themed SVGs (emoji render inconsistently across
-  // platforms and don't tint). Cloud = idle/no Drive, dot = unsaved, spinning arrows =
-  // saving, cloud-check = saved.
-  const svgCloud = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6 6 0 0 0-11.7 1.62A4 4 0 0 0 7 19z"/></svg>`;
-  const svgDot = `<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>`;
-  const svgSaving = `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
-  const svgCloudCheck = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .42-8.98 6 6 0 0 0-11.7 1.62A4 4 0 0 0 7 19z"/><path d="M9 13l2 2 4-4"/></svg>`;
-
-  if (!db.settings.googleDriveConnected) {
-    icon.innerHTML = svgCloud;
-    icon.style.color = 'var(--text4)';
-    label.textContent = 'No Drive';
-    label.style.color = 'var(--text4)';
-    return;
-  }
-
-  if (_syncStatus === 'behind') { // PLS #441: another device saved after this device's last sync
-    icon.innerHTML = svgDot; icon.style.color = 'var(--accent)'; label.textContent = 'Sync needed'; label.style.color = 'var(--accent)';
-  } else if (_syncStatus === 'signin') { // PLS #441: Drive cannot be reached without signing in again
-    icon.innerHTML = svgCloud; icon.style.color = 'var(--amber)'; label.textContent = 'Not synced'; label.style.color = 'var(--amber)';
-  } else if (_syncStatus === 'unsaved') {
-    icon.innerHTML = svgDot;
-    icon.style.color = 'var(--amber)';
-    label.textContent = 'Unsaved';
-    label.style.color = 'var(--amber)';
-  } else if (_syncStatus === 'saving') {
-    icon.innerHTML = svgSaving;
-    icon.style.color = 'var(--accent)';
-    label.textContent = 'Saving...';
-    label.style.color = 'var(--accent)';
-  } else if (_syncStatus === 'saved' && _lastSyncTime) {
-    const mins = Math.floor((Date.now() - _lastSyncTime) / 60000);
-    const timeStr = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins/60)}h ago`;
-    icon.innerHTML = svgCloudCheck;
-    icon.style.color = 'var(--green)';
-    label.textContent = `Saved ${timeStr}`;
-    label.style.color = 'var(--green)';
-  } else {
-    icon.innerHTML = svgCloud;
-    icon.style.color = 'var(--text4)';
-    label.textContent = '–';
-    label.style.color = 'var(--text4)';
-  }
-}
+function updateSyncIndicator() { _syncDiskRender(); } // PLS #443
 
 // Update "X min ago" every minute
-setInterval(() => {
-  if (_syncStatus === 'saved') updateSyncIndicator();
-}, 60 * 1000);
+setInterval(() => { updateSyncIndicator(); }, 60 * 1000); // also catches a sign-in that ran out while the app stayed open
 
 // Auto-save trigger (30s debounce)
 // _autoSaveTimer moved to top
@@ -26226,10 +26207,11 @@ function autoSaveTrigger() {
   // PLS #152: shortened debounce — saves once after a brief pause in edits (was 30s)
   // IMPORTANT: Only saves if token already in memory — never triggers popup
   _autoSaveTimer = setTimeout(async () => {
-    if (_gdriveAccessToken) {
+    if (_gdriveAccessToken && Date.now() < _gdriveTokenExpiry) {
       await saveToDriveSilent();
+    } else {
+      ensureDriveToken(() => saveToDriveSilent(), true); // PLS #442: renew quietly, then save. Where the browser refuses (Safari), the reminder row asks for one tap. (Was: skip and say nothing.)
     }
-    // No token = skip silently. User must do a manual save to re-auth.
   }, UX_EDIT_AUTOSAVE_DEBOUNCE);
 }
 
@@ -26456,8 +26438,8 @@ function openSyncShortcuts() {
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin:14px 0 8px">Backups · TrackBudget/Backups</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');setTimeout(saveToDrive,120)">☁ Save to Drive now</button>
-        <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(loadFromDrive,120)">📥 Load from Drive</button>
+        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');setTimeout(syncNow,120)">Sync now</button>
+        <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(loadFromDrive,120)">Load an older backup</button>
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin:18px 0 8px">Snapshots</div>
       <div style="display:flex;flex-direction:column;gap:8px">
@@ -27020,7 +27002,7 @@ function initApp() {
     if (db.settings.googleDriveConnected) {
       // PLS #441: one check replaces the blocking "unsynced edit" popup and the "New backup" pill. It saves, loads the
       // newer save, or combines, and asks only when both devices changed the same item. Auto sync off = Sync now only.
-      if (!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) setSyncStatus('signin');
+      setTimeout(() => { if ((!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) && _syncStatus !== 'saving') { _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); } }, 2500); // PLS #442: only if Google has not answered by then
       ensureDriveToken(() => { if (!db.settings.autoSyncOff) { _syncLastAuto = Date.now(); syncNow({ silent: true }); } else setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'idle'); }, true); // silent = no popup
     }
   }
