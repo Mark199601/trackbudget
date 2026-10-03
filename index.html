@@ -147,6 +147,25 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .ax-when .dt-display .dt-icon{display:none}
 .ax-dot{color:var(--text4);font-weight:400}
 .ax-note{cursor:text}
+/* PLS #438: the app's own account list (name, type, current balance) replaces the browser dropdown */
+.ax-pick .ax-sel{pointer-events:none}
+.gz-pick-panel.acp-panel{width:min(380px,calc(100vw - 32px));padding:12px 0 6px;max-height:min(560px,calc(100vh - 96px));display:flex;flex-direction:column;overflow:hidden}
+.acp-head{display:flex;align-items:center;justify-content:space-between;padding:0 12px 8px 16px;flex-shrink:0}
+.acp-head .gz-pick-title{font-size:14px} /* same size as the other popup titles; list text is the app's 13 / 11px (his call: 14px read too big) */
+.acp-list{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.acp-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:8px 16px;background:none;border:0;text-align:left;color:var(--text);cursor:pointer;font-family:inherit}
+.acp-row + .acp-row{box-shadow:inset 16px 0 0 var(--bg2),inset 0 1px 0 var(--border)} /* iOS-style hairline that starts under the name */
+.acp-row:hover{background:var(--bg3);box-shadow:none}.acp-row:hover + .acp-row{box-shadow:none}
+.acp-t{display:flex;flex-direction:column;min-width:0;flex:1}
+/* his call (Oct 2026): iOS-like text here, and no bold digits ("parang baduy yung naka bold yung digits") */
+.acp-n{font-size:13px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acp-s{font-size:11px;color:var(--text3);margin-top:1px}
+.acp-b{font-size:13px;font-weight:400;color:var(--text2);white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+.acp-ck{width:14px;flex-shrink:0;color:var(--accent);font-size:13px;text-align:right;visibility:hidden}
+.acp-row.on .acp-ck{visibility:visible}
+.acp-empty{padding:18px 16px;font-size:13px;color:var(--text3);text-align:center}
+/* PLS #439: no focus box around the note field (his report: it looked wrong on PC); the blinking cursor already shows where you are */
+.ax-note textarea:focus,.ax-note textarea:focus-visible{box-shadow:none;border-color:transparent!important;outline:0}
 .ax-note textarea{flex:1;background:transparent;border:0;outline:0;resize:none;color:var(--text);font:inherit;font-size:14px;padding:6px 0;min-height:22px;overflow:hidden}
 .ax-note textarea::placeholder{color:var(--text4)}
 /* PLS #397: fintech-style dashboard. PLS #398: type matches the rest of the app (section titles 13px/600 text2,
@@ -4444,6 +4463,22 @@ document.addEventListener('mousedown', function(e) {
   const t = e.target;
   if (t && t.classList && t.classList.contains('numpad-input') && t.type === 'number') { e.preventDefault(); if (_npTarget !== t) npOpen(t); }
 }, { capture: true });
+// -- PERSONAL LOGIC SET #437 -- (his report, Oct 2026: "sa pc view yung pop up calculator d agad nagshoshow")
+// On PC the calculator only opened on a click exactly on the digits. Now it also opens when the amount field gets
+// focus any other way (Tab, a click beside the digits), and Add transaction opens with it already showing, so the
+// keyboard can type the amount right away. Phones are unchanged.
+document.addEventListener('focusin', function(e) {
+  if (NP_IS_MOBILE) return;
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('numpad-input') && t.type === 'number' && _npTarget !== t) npOpen(t);
+});
+function _npPcAuto() {
+  if (NP_IS_MOBILE) return;
+  const sh = document.getElementById('add-sheet'); if (!sh || !sh.classList.contains('open')) return;
+  if (document.getElementById('dlg-overlay')?.classList.contains('open') || document.getElementById('acp-overlay') || document.getElementById('gz-pick-overlay')) return;
+  const i = sh.querySelector('.big-amt-input'); if (!i || i.offsetParent === null) return;
+  if (_npTarget !== i) npOpen(i);
+}
 document.addEventListener('keydown', function(e) {
   const pad = document.getElementById('tb-numpad');
   const open = pad && pad.classList.contains('open');
@@ -4467,7 +4502,7 @@ document.addEventListener('keydown', function(e) {
   if (document.getElementById('dlg-overlay')?.classList.contains('open') || document.getElementById('cat-picker-overlay')) return;
   const a = document.activeElement;
   if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'BUTTON' || a.tagName === 'SELECT' || (a.tagName === 'INPUT' && !sheet.contains(a)))) return;
-  if (document.getElementById('gz-pick-overlay') || (a && a.closest && a.closest('.dt-field'))) return; // leave the date and time pickers alone
+  if (document.getElementById('gz-pick-overlay') || document.getElementById('acp-overlay') || (a && a.closest && a.closest('.dt-field'))) return; // leave the date and time pickers alone (and the account list, PLS #438)
   const btn = [...document.querySelectorAll('#add-body button.btn-primary')].filter(b => b.offsetParent).pop();
   if (btn) { e.preventDefault(); btn.click(); }
 }, true);
@@ -5473,6 +5508,8 @@ const APP_CHANGELOG = [
     '📏 The budget editor has a smaller bottom bar, so more of your categories fit on screen', // PLS #428
     '🔤 One text style across the app: the same sizes, less bold, and one grey for details', // PLS #433 to #436
     '📐 Popups share one compact bottom strip, and popups with no title lose the empty space on top', // PLS #429 / #430
+    '🏦 Picking an account now shows each account with its current balance, on phone and computer', // PLS #438
+    '🖥️ On a computer the calculator opens as soon as you add a transaction, so you can type the amount right away', // PLS #437
   ]},
   { ver: '1.2.8', date: 'October 2026', changes: [
     '🗓️ Settings shows the right release month', // PLS #409
@@ -6324,6 +6361,7 @@ function openAddSheet(prefill={}) {
   window._catGroupOpen = null;
   openSheet('add','Add transaction','');
   renderAddSheet();
+  if (typeof NP_IS_MOBILE !== 'undefined' && !NP_IS_MOBILE) setTimeout(_npPcAuto, 380); // PLS #437: after the sheet has slid in, so the calculator lines up beside it
 }
 
 // ── QUICK-ADD: tap = expense; long-press / right-click = action menu ──
@@ -6563,7 +6601,7 @@ function _bigAmtDecorate() {
     sub.textContent = acct ? `${cur} · ${acct.name}` : `${cur} · choose an account`;
     _bigAmtFit(inp);
     if (!hero._npTap) { hero._npTap = true; hero.style.cursor = 'text'; // the whole amount area opens the keypad, not just the digits
-      hero.addEventListener('click', e => { if (e.target !== inp && !e.target.closest('button,select,a')) { e.stopPropagation(); /* else the "tap outside closes the keypad" handler shuts it again */ if (typeof NP_IS_MOBILE !== 'undefined' && NP_IS_MOBILE) npOpen(inp); else inp.focus(); } }); }
+      hero.addEventListener('click', e => { if (e.target !== inp && !e.target.closest('button,select,a')) { e.stopPropagation(); /* else the "tap outside closes the keypad" handler shuts it again */ npOpen(inp); /* PLS #437: PC too, a click anywhere on the amount area opens the calculator */ } }); }
   });
 }
 document.addEventListener('input', e => { if (e.target && e.target.classList && e.target.classList.contains('big-amt-input')) _bigAmtFit(e.target); });
@@ -6614,7 +6652,7 @@ function _axAcctRow(acctOpts) {
 // The real <select> lies invisibly over the whole row, so a tap opens the phone's own list; every existing onchange
 // (currency, caption, preview) still runs. o.sel is the id the save code reads. Nothing is preselected (PLS #83).
 function _axPickRow(o) {
-  return `<div class="ax-row ax-pick"><div class="ax-l">${o.label}</div><div class="ax-v ax-ph" id="${o.chipsId}" data-sel="${o.sel}">Choose</div>
+  return `<div class="ax-row ax-pick" onclick="_axOpenAcctList('${o.sel}')"><div class="ax-l">${o.label}</div><div class="ax-v ax-ph" id="${o.chipsId}" data-sel="${o.sel}">Choose</div>
     <select class="ax-sel" id="${o.sel}" aria-label="${o.label}" onchange="${o.onchange};_axRefreshFor('${o.sel}')">${o.opts}</select></div>`;
 }
 // Recent accounts for a field: "to" learns from where transfers went, the rest from where money came from
@@ -6649,6 +6687,31 @@ function _axRefreshFor(selId) {
   });
 }
 function _axAcctRefresh() { _axRefreshFor('add-account'); }
+// -- PERSONAL LOGIC SET #438 -- (his ask, Oct 2026) The account field opens the app's own list instead of the
+// browser's dropdown (ugly on PC), and every account shows its current balance, on PC and phone. The hidden
+// <select> still holds the value, so every existing onchange (currency, caption, preview, save) runs as before.
+// The list is built from that select's own options, so "From" and "To" keep whatever they already leave out.
+function _axCloseAcctList() { const o = document.getElementById('acp-overlay'); if (o) o.remove(); }
+function _axOpenAcctList(selId) {
+  const sel = document.getElementById(selId); if (!sel) return;
+  _axCloseAcctList(); try { if (typeof npClose === 'function' && document.getElementById('tb-numpad')?.classList.contains('open')) npConfirm(); } catch(e) {}
+  const rows = [...sel.options].filter(o => o.value && !o.disabled).map(o => {
+    const a = db.accounts.find(x => x.id === o.value);
+    const sub = a ? [a.type, a.currency].filter(Boolean).join(' · ') : '';
+    const bal = a ? fmt(getAcctBalance(a.id), a.currency || _homeBase()) : '';
+    return `<button type="button" class="acp-row${o.value === sel.value ? ' on' : ''}" data-id="${escapeAttr(o.value)}"><span class="acp-t"><span class="acp-n">${_esc(a ? a.name : o.textContent)}</span>${sub ? `<span class="acp-s">${_esc(sub)}</span>` : ''}</span><span class="acp-b">${bal}</span><span class="acp-ck" aria-hidden="true">✓</span></button>`;
+  }).join('');
+  const ov = document.createElement('div'); ov.id = 'acp-overlay'; ov.className = 'gz-pick-overlay';
+  ov.innerHTML = `<div class="gz-pick-panel acp-panel" role="dialog" aria-label="${escapeAttr(sel.getAttribute('aria-label') || 'Account')}"><div class="acp-head"><span class="gz-pick-title">Choose an account</span><button type="button" class="sheet-close" aria-label="Close" onclick="_axCloseAcctList()">✕</button></div><div class="acp-list">${rows || '<div class="acp-empty">No accounts yet</div>'}</div></div>`;
+  ov.addEventListener('click', e => {
+    const r = e.target.closest('.acp-row');
+    if (r) { _axPick(selId, r.dataset.id); _axCloseAcctList(); return; }
+    if (e.target === ov) _axCloseAcctList();
+  });
+  document.body.appendChild(ov);
+  const on = ov.querySelector('.acp-row.on'); if (on) on.scrollIntoView({ block:'center' });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('acp-overlay')) { e.stopPropagation(); _axCloseAcctList(); } }, true);
 function _axGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } // the note row grows with what you type
 function _addQuickAcctHTML() {
   const r = _addRecentAccts(2); if (!r.length) return '';
