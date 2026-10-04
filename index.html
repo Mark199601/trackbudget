@@ -5491,12 +5491,15 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.11'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.12'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'October 2026'; // PLS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.12', date: 'October 2026', changes: [
+    '🎯 Budget auto allocation: a category you set to 0 now stays 0 when you open the editor again', // PLS #446
+  ]},
   { ver: '1.2.11', date: 'October 2026', changes: [
     '💸 Debts now use their own words: a debt you do not pay in full is recorded as a gain (discount, forgiven, or exchange rate difference), not as a write-off', // PLS #444
     '📈 Paying more than you owe is recorded as Interest paid', // PLS #444
@@ -22153,7 +22156,7 @@ function clearAllocations(bgtId) {
 function confirmClearAllocations(bgtId) {
   const b = db.budgets.find(x=>x.id===bgtId);
   if (b) {
-    b.allocations = {}; saveDBWithSync(); closeDlg();
+    b.allocations = {}; delete b.allocZero; saveDBWithSync(); closeDlg(); // PLS #446: a cleared plan forgets its zeros
     if (currentPage === 'analytics') renderAnalytics();
     else renderPlanning();
     showToast('Sub-budgets cleared');
@@ -22717,9 +22720,15 @@ function openAiAllocate(bgtId) {
       const saved = bgt.allocations || {};
       const hasSaved = Object.keys(saved).length > 0;
       const allocations = {};
+      // -- PERSONAL LOGIC SET #446 -- A row you set to 0 stays 0 (his report, Oct 2026: "hindi ko malagyan ng zero yung
+      // needs, bumabalik"). Only amounts above 0 are stored in the plan, so a row left at 0 looked the same as a row
+      // you had never set, and the suggestion filled it again on reopen -- which also pushed the plan over the limit.
+      // The rows that sat at 0 are now remembered (allocZero). A locked row missing from the plan counts too, so the
+      // zeros typed before this fix (typing locks the row) are kept without redoing them.
+      const _zeroKept = new Set([...(Array.isArray(bgt.allocZero) ? bgt.allocZero : []), ...(Array.isArray(bgt.allocLocks) ? bgt.allocLocks : [])]);
       allRows.forEach(r => {
         allocations[r.catId] = hasSaved
-          ? (saved[r.catId] !== undefined ? saved[r.catId] : (aiAlloc[r.catId] || 0))
+          ? (saved[r.catId] !== undefined ? saved[r.catId] : (_zeroKept.has(r.catId) ? 0 : (aiAlloc[r.catId] || 0))) // PLS #446: a kept zero wins over the suggestion
           : (aiAlloc[r.catId] || 0);
       });
       window._pendingAllocations = { bgtId, allocations, results: allRows, aiAlloc, hasSaved };
@@ -22798,7 +22807,8 @@ function openAiAllocate(bgtId) {
         const _roll = bgt.rollover ? (bgt.rolloverAmount||0) : 0;
         // PLS #418: what the budget looked like when the editor opened, so "Discard changes" can put it back exactly.
         const _orig = { alloc: JSON.parse(JSON.stringify(bgt.allocations || {})), limit: bgt.limit,
-                        locks: Array.isArray(bgt.allocLocks) ? [...bgt.allocLocks] : null };
+                        locks: Array.isArray(bgt.allocLocks) ? [...bgt.allocLocks] : null,
+                        zero: Array.isArray(bgt.allocZero) ? [...bgt.allocZero] : null }; // PLS #446
         // PLS #413 (his option B): unlocked rows are sized from the SHAPE they had when the editor opened, never from
         // their current value. Going over the limit can still squeeze them to 0, but lowering the row you typed brings
         // them back to their old share -- the old code scaled from the zeros and they never returned.
@@ -22860,6 +22870,7 @@ function openAiAllocate(bgtId) {
         window._alDiscard = () => {
           bgt.allocations = JSON.parse(JSON.stringify(_lastOk.alloc)); bgt.limit = _lastOk.limit; // PLS #418: last plan that fit
           if (_lastOk.locks) bgt.allocLocks = [..._lastOk.locks]; else delete bgt.allocLocks;
+          if (_lastOk.zero) bgt.allocZero = [..._lastOk.zero]; else delete bgt.allocZero; // PLS #446
           clearTimeout(window._allocSaveT); clearTimeout(window._allocRebalT);
           saveDBWithSync(); closeDlg(true);
           if (currentPage === 'analytics') renderAnalytics(); else renderPlanning();
@@ -22904,8 +22915,9 @@ function openAiAllocate(bgtId) {
           const next = {};
           _inputs().forEach(i => { const v = parseFloat(i.value); if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v; });
           b.allocations = next; b.allocLocks = [..._allocTouched];
+          b.allocZero = _allocZeros(); // PLS #446: remember the rows left at 0
           saveDBWithSync();
-          _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched] }; // PLS #418
+          _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched], zero: [...b.allocZero] }; // PLS #418 / #446
         }
 
         function _rebalance() {
@@ -22958,8 +22970,9 @@ function openAiAllocate(bgtId) {
             });
             b.allocations = next;
             b.allocLocks = [..._allocTouched];   // PLS #345
+            b.allocZero = _allocZeros();         // PLS #446: remember the rows left at 0
             saveDBWithSync();
-            _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched] }; // PLS #418
+            _lastOk = { alloc: JSON.parse(JSON.stringify(next)), limit: b.limit, locks: [..._allocTouched], zero: [...b.allocZero] }; // PLS #418 / #446
             const mark = document.getElementById('alloc-saved');
             if (mark) { mark.textContent = 'Saved'; mark.style.opacity = '1';
               clearTimeout(window._allocFade);
@@ -22996,6 +23009,8 @@ function openAiAllocate(bgtId) {
 // flight when the sheet closes. Flush it first, so "type a number, close immediately" keeps the
 // number -- the exact case autosave exists to protect.
 // PLS #345: lock button in the allocation editor
+// PLS #446: the rows sitting at 0 in the open editor (blank counts as 0)
+function _allocZeros() { return [...document.querySelectorAll('.alloc-input')].filter(i => !(parseFloat(i.value) > 0)).map(i => i.dataset.cat); }
 function _allocPaintLock(btn, on) {
   btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on);
   btn.title = on ? 'Locked: rebalance will not move this' : 'Unlocked: rebalance may adjust this';
@@ -23019,6 +23034,7 @@ function flushAllocSave(bgtId) {
   const next = {};
   inputs.forEach(i => { const v = parseFloat(i.value); if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v; });
   b.allocations = next;
+  b.allocZero = _allocZeros(); // PLS #446
   saveDBWithSync();
 }
 
@@ -23034,6 +23050,7 @@ function confirmAiAllocate(bgtId) {
     if (val > 0) finalAlloc[cat] = val;
   });
   bgt.allocations = finalAlloc;
+  bgt.allocZero = _allocZeros(); // PLS #446: remember the rows left at 0
   saveDBWithSync();
   closeDlg();
   // Re-render whichever page is active (Planning → Budgets, or Analytics → Budget tab)
