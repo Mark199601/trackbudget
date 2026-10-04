@@ -711,6 +711,7 @@ option{background:var(--bg3);color:var(--text)}
 .rv-foot > .rv-sec{background:var(--bg3)!important;color:var(--text)!important}
 .rv-foot > .rv-dang{background:var(--red)!important;color:#fff!important}
 .rv-foot > .rv-del{background:transparent!important;color:var(--red)!important;height:34px;font-size:14px!important;font-weight:500!important}
+.rv-foot > .rv-del.rv-gain{color:var(--green)!important} /* PLS #444: on a debt the unpaid part is a gain, so its link is green, not red */
 .rv-foot > button:disabled{opacity:.5}
 /* PLS #360: semi-fintech forms (Edit forms + Add loan): fields grouped in soft cards, label left, value right */
 .ef .ef-card{background:var(--bg3);border-radius:14px;padding:0 14px;margin:0 0 14px}
@@ -3550,6 +3551,8 @@ function txCategoryDisplay(tx) {
   // PLS #268: the write-off carries isBatchSettlement so the batch machinery can see it, so it has
   // to be named BEFORE that line -- otherwise it reads "Loan Settlement Received", the exact
   // opposite of what happened. Nothing was received.
+  if ((tx.isBatchWriteOff || tx.isLoanSettlementLoss) && tx.type === 'income') return tx.writeOffReason === 'Exchange rate difference' ? {icon:'📈', name:'Forex Gain'} : {icon:'📈', name:'Debt Discount'}; // PLS #444: a debt not paid in full is a gain, it used to read "Loan Write-off" / "Loan Settlement Loss"
+  if (tx.isLoanSettlementLoss && /^(Interest paid|Overpayment) to /.test(tx.notes || '')) return {icon:'📉', name:'Interest Paid'}; // PLS #444
   if (tx.isBatchWriteOff)        return {icon:'✖️', name:'Loan Write-off'};
   if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
   if (tx.isLoanSettlementGain)   return {icon:'📈', name:'Loan Settlement Gain'};
@@ -5488,12 +5491,17 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.10'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.11'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'October 2026'; // PLS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.11', date: 'October 2026', changes: [
+    '💸 Debts now use their own words: a debt you do not pay in full is recorded as a gain (discount, forgiven, or exchange rate difference), not as a write-off', // PLS #444
+    '📈 Paying more than you owe is recorded as Interest paid', // PLS #444
+    '🔮 The settle popup for debts shows the projected gain or loss as you type the amount', // PLS #445
+  ]},
   { ver: '1.2.10', date: 'October 2026', changes: [
     '🔄 Sync now looks at Google Drive first, so one device can no longer overwrite what the other device saved', // PLS #441
     '🧩 When both devices have changes they are combined, and you are asked only when both changed the same item', // PLS #441
@@ -13301,7 +13309,7 @@ function confirmBatchSettleEdit(txId, direction) {
       accountId: newAcctId,
       date: newDate,
       time: newTime,
-      notes: isGain ? `Settlement gain from ${tx.batchPerson}` : `Overpayment to ${tx.batchPerson}`,
+      notes: isGain ? `Settlement gain from ${tx.batchPerson}` : `Interest paid to ${tx.batchPerson}`, // PLS #444
       isLoanSettlementGain: isGain,
       isLoanSettlementLoss: !isGain,
       isSettlement: true,
@@ -13431,6 +13439,16 @@ function confirmBatchReimbSettleEdit(txId) {
   showToast('Batch reimbursement updated');
 }
 
+// -- PERSONAL LOGIC SET #444 -- (his call, Oct 2026) On DEBTS the numbers were already right (the unpaid part is income, paying
+// extra is a loss) but the words came from the lent-out side: "Write off", "Uncollectible", "Loan Settlement Loss". A debt he does
+// not pay in full is a GAIN for him (a discount, or just the exchange rate when he pays in another currency), and paying more
+// than he owes is interest, a LOSS. Lent out keeps its wording untouched ("sa lent out okay naman na ako").
+const _DEBT_REASONS = ['Exchange rate difference', 'Discount', 'Forgiven', 'Disputed', 'Other'];
+function _debtGainNote(reason, person) {
+  return reason === 'Exchange rate difference' ? `Exchange rate gain on debt to ${person}` : reason === 'Forgiven' ? `Debt forgiven by ${person}`
+    : reason === 'Disputed' ? `Disputed debt to ${person} closed` : reason === 'Other' ? `Debt to ${person} closed, not paid in full` : `Debt discount from ${person}`;
+}
+function _debtGainCat(reason) { return reason === 'Exchange rate difference' ? 'sc-forexgain' : 'sc-debtforgiven'; }
 function openBatchSettleLoans(direction, person) {
   const loans = db.loans[direction]
     .filter(l => !l.settled && (l.personName||'').trim() === person)
@@ -13486,7 +13504,7 @@ function openBatchSettleLoans(direction, person) {
        <div id="bsl-amount-fmt" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
      </div>
      <div id="bsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
-     <div id="bsl-wo-hint" style="display:none;font-size:11px;color:var(--text3);margin:-6px 0 12px 2px">Clear the amount above to write off all of it instead.</div>
+     <div id="bsl-wo-hint" style="display:none;font-size:11px;color:var(--text3);margin:-6px 0 12px 2px">${direction === 'borrowed' ? 'Lower the amount above to record the unpaid part as a gain.' : 'Clear the amount above to write off all of it instead.'}</div>
      <div class="form-group"><label class="form-label" for="bsl-acct">${direction==='lent'?'Receive into':'Pay from'}</label>
        <select class="form-input" id="bsl-acct" onchange="syncCurrToAcct('bsl-acct','bsl-curr');updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${acctOpts}</select>
      </div>
@@ -13509,17 +13527,17 @@ function openBatchSettleLoans(direction, person) {
           settles what it reaches and drops the rest. The reason picker only appears when there IS
           a shortfall -- an exact settlement has nothing to give a reason for. */''}
      <div class="form-group" id="bsl-wo-wrap" style="display:none">
-       <label class="form-label" for="bsl-wo-reason">Write-off reason</label>
-       <select class="form-input" id="bsl-wo-reason">
-         <option value="Uncollectible">Uncollectible</option>
+       <label class="form-label" for="bsl-wo-reason">${direction === 'borrowed' ? 'Reason' : 'Write-off reason'}</label>
+       <select class="form-input" id="bsl-wo-reason" onchange="this.dataset.touched='1'">
+         ${direction === 'borrowed' ? _DEBT_REASONS.map(r => `<option value="${r}">${r}</option>`).join('') : `<option value="Uncollectible">Uncollectible</option>
          <option value="Forgiven">Forgiven</option>
          <option value="Disputed">Disputed</option>
          <option value="Person unreachable">Person unreachable</option>
-         <option value="Other">Other</option>
+         <option value="Other">Other</option>`}
        </select>
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" id="bsl-wo-btn" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">Write off</button>
+     <button class="btn btn-danger btn-sm${direction === 'borrowed' ? ' rv-gain' : ''}" id="bsl-wo-btn" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">${direction === 'borrowed' ? 'Record as gain' : 'Write off'}</button>
      <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle</button>`
   );
   // Auto-fill with grand total in settlement currency
@@ -13612,28 +13630,43 @@ function updateBatchSettlePreview(direction, person) {
     _woBtn.style.cursor = _hasShort ? '' : 'not-allowed';
     if (_hasShort) {
       const _left = _batchUncoveredLoans(loans, targetCurr, date, time, received).length;
+      if (direction === 'borrowed') { // PLS #444
+        _woBtn.textContent = received > 0 ? `Record ${fmt(_shortfall, targetCurr)} as gain` : `Record all ${loans.length} \u00b7 ${fmt(grandTotal, targetCurr)} as gain`;
+        _woBtn.title = `${_left} ${_left===1?'debt':'debts'} will be closed, the unpaid part is recorded as a gain`;
+        const _rs = document.getElementById('bsl-wo-reason');   // paying in another currency: the gap is the exchange rate unless he says otherwise
+        if (_rs && !_rs.dataset.touched) _rs.value = loans.some(l => (l.currency || _homeBase()) !== targetCurr) ? 'Exchange rate difference' : 'Discount';
+      } else {
       _woBtn.textContent = received > 0
         ? `Write off ${fmt(_shortfall, targetCurr)}`
         : `Write off all ${loans.length} \u00b7 ${fmt(grandTotal, targetCurr)}`;
       _woBtn.title = `${_left} ${_left===1?'loan':'loans'} will be closed as written off`;
+      }
     } else {
-      _woBtn.textContent = 'Write off';
-      _woBtn.title = 'Nothing is unpaid at this amount \u2014 lower it, or clear it to write off everything';
+      _woBtn.textContent = direction === 'borrowed' ? 'Record as gain' : 'Write off';
+      _woBtn.title = direction === 'borrowed' ? 'Nothing is unpaid at this amount, lower it to record the rest as a gain' : 'Nothing is unpaid at this amount \u2014 lower it, or clear it to write off everything';
     }
     if (_woWrap) _woWrap.style.display = _hasShort ? '' : 'none';
     if (_woHint) _woHint.style.display = _hasShort ? 'none' : '';
   }
   if (!preview) return;
 
+  const _pg = (label, amt, col, tail) => `<div style="color:var(--text3);margin-top:3px">${label}: <strong style="font-family:var(--mono);color:var(--${col})">${amt}</strong>${tail || ''}</div>`; // PLS #445 (his call, Oct 2026: "dapat may projected kang gain or loss"): the debt popup says, while he types, what this amount gains or loses him
   if (received <= 0) {
-    preview.innerHTML = `<div style="color:var(--text3)">Total owed: <strong style="font-family:var(--mono);color:var(--text2)">${fmt(grandTotal, targetCurr)}</strong></div>`;
+    preview.innerHTML = `<div style="color:var(--text3)">Total owed: <strong style="font-family:var(--mono);color:var(--text2)">${fmt(grandTotal, targetCurr)}</strong></div>`
+      + (direction === 'borrowed' ? _pg('Projected gain', '+' + fmt(grandTotal, targetCurr), 'green', ' if you record all of it as gain') : '');
     return;
   }
 
   const diff = received - grandTotal;
   const dispCurr = targetCurr;
 
-  if (Math.abs(diff) < 0.01) {
+  const _D = direction === 'borrowed', _n1 = _D ? 'debt' : 'loan', _nn = _D ? 'debts' : 'loans'; // PLS #444: debts say "debt", and no dash
+  if (_D && Math.abs(diff) < 0.01) {
+    preview.innerHTML = `<div style="color:var(--green)">✓ Exact, settles all ${loans.length} ${loans.length>1?_nn:_n1} in full</div>` + _pg('Projected gain or loss', fmt(0, dispCurr), 'text2');
+  } else if (_D && diff > 0) {
+    preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${loans.length} ${loans.length>1?_nn:_n1} in full</div>`
+      + _pg('Projected loss', '-' + fmt(diff, dispCurr), 'red', ', logged as Interest paid');
+  } else if (Math.abs(diff) < 0.01) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Exact — settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
   } else if (diff > 0) {
     // Sobra — gain for lent, loss for borrowed
@@ -13668,9 +13701,11 @@ function updateBatchSettlePreview(direction, person) {
       } else break;
     }
     const untouched = loans.length - fullyPaid - (partialAmt > 0 ? 1 : 0);
-    let msg = `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
-    if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next loan: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
-    if (untouched > 0) msg += `<div style="color:var(--text3);margin-top:2px">${untouched} ${untouched>1?'loans':'loan'} untouched</div>`;
+    let msg = _D ? `<div style="color:var(--amber)">Partial, settles ${fullyPaid} of ${loans.length} ${loans.length>1?_nn:_n1} in full</div>`
+      : `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
+    if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next ${_n1}: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
+    if (untouched > 0) msg += `<div style="color:var(--text3);margin-top:2px">${untouched} ${untouched>1?_nn:_n1} untouched</div>`;
+    if (_D) msg += _pg('Projected gain', '+' + fmt(-diff, targetCurr), 'green', ' if you record the rest as gain'); // PLS #445
     preview.innerHTML = msg;
   }
 }
@@ -13694,7 +13729,7 @@ function confirmBatchWriteOffLoans(direction, person) {
   const time = document.getElementById('bsl-time')?.value || nowTime();
   const targetCurr = document.getElementById('bsl-curr')?.value || (loans[0].currency || _homeBase());
   const received = roundMoney(parseFloat(document.getElementById('bsl-amount')?.value) || 0, targetCurr);
-  const reason = document.getElementById('bsl-wo-reason')?.value || 'Uncollectible';
+  const reason = document.getElementById('bsl-wo-reason')?.value || (direction === 'borrowed' ? 'Discount' : 'Uncollectible');
   const notes = document.getElementById('bsl-notes')?.value?.trim() || '';
   const acctId = document.getElementById('bsl-acct')?.value;
 
@@ -13737,7 +13772,9 @@ function confirmBatchWriteOffLoans(direction, person) {
     currency: targetCurr,
     accountId: primary.accountId,
     date, time,
-    notes: 'Loan Settlement Loss from ' + person + ' \u00b7 ' + stillOpen.length + ' ' +
+    notes: direction === 'borrowed'
+      ? _debtGainNote(reason, person) + ' \u00b7 ' + stillOpen.length + ' ' + (stillOpen.length>1?'debts':'debt') + (notes ? ' \u00b7 ' + notes : '')   // PLS #444
+      : 'Loan Settlement Loss from ' + person + ' \u00b7 ' + stillOpen.length + ' ' +
            (stillOpen.length>1?'loans':'loan') + ' \u00b7 ' + label,
     isLoanSettlementLoss: true,
     isSettlement: true,
@@ -13760,7 +13797,7 @@ function confirmBatchWriteOffLoans(direction, person) {
     batchPerson: person,
     batchDirection: direction,
     writeOffReason: reason,
-    categoryId: direction === 'lent' ? 'sc-writeoff' : 'sc-debtforgiven',
+    categoryId: direction === 'lent' ? 'sc-writeoff' : _debtGainCat(reason), // PLS #444: an exchange rate gap is Forex Gain, not Forgiven Debt
     fxSnapshot: snap,
     createdAt: new Date().toISOString(),
   });
@@ -13893,7 +13930,7 @@ function confirmBatchSettleLoans(direction, person) {
       accountId: acctId,
       date,
       time,
-      notes: isExcessGain ? `Settlement gain from ${person}` : `Overpayment to ${person}`,
+      notes: isExcessGain ? `Settlement gain from ${person}` : `Interest paid to ${person}`, // PLS #444: was "Overpayment to"
       isLoanSettlementGain: isExcessGain,
       isLoanSettlementLoss: !isExcessGain,
       isSettlement: true,
@@ -14364,6 +14401,31 @@ function openWriteOffLoan(loanId, direction) {
     'Other'
   ];
   const reasonOpts = reasons.map(r=>`<option value="${r}">${r}</option>`).join('');
+  if (direction === 'borrowed') { // PLS #444: a debt he will not pay is a gain for him, with its own words
+    window._efNext = true;
+    openDlg(`Close debt to ${loan.personName}`,
+      `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">
+        You still owe <strong>${fmt(remaining, loan.currency)}</strong>. Closing it without paying will:
+        <ul style="margin:8px 0 0 20px;padding:0;font-size:12px;color:var(--text3)">
+          <li>Mark the debt as settled (it leaves the active list)</li>
+          <li>Record <strong>${fmt(remaining, loan.currency)}</strong> as a gain</li>
+          <li>You can restore it from the settled list</li>
+        </ul>
+      </div>
+      <div class="form-group"><label class="form-label" for="wol-reason">Reason</label>
+        <select class="form-input" id="wol-reason">${['Discount','Forgiven','Exchange rate difference','Disputed','Other'].map(r=>`<option value="${r}">${r}</option>`).join('')}</select>
+      </div>
+      <div class="form-group"><label class="form-label" for="wol-notes">Notes</label>
+        <input class="form-input" id="wol-notes" placeholder="Additional context...">
+      </div>
+      <div class="form-group"><label class="form-label" for="wol-date">Date</label>
+        ${dtField('wol-date','date','Date',today())}
+      </div>`,
+      `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
+       <button class="btn btn-primary btn-sm" onclick="confirmWriteOffLoan('${loanId}','${direction}')">Record as gain</button>`
+    );
+    return;
+  }
 
   window._efNext = true; // PLS #361
   openDlg(`Write off loan from ${loan.personName}`,
@@ -14392,7 +14454,7 @@ function openWriteOffLoan(loanId, direction) {
 function confirmWriteOffLoan(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
-  const reason = document.getElementById('wol-reason')?.value || 'Uncollectible';
+  const reason = document.getElementById('wol-reason')?.value || (direction === 'borrowed' ? 'Discount' : 'Uncollectible');
   const notes = document.getElementById('wol-notes')?.value?.trim() || '';
   const date = document.getElementById('wol-date')?.value || today();
   const time = nowTime();
@@ -14409,14 +14471,14 @@ function confirmWriteOffLoan(loanId, direction) {
     accountId: loan.accountId,
     date,
     time,
-    notes: `Loan Settlement Loss from ${loan.personName} — ${lossNotes}`,
+    notes: direction === 'borrowed' ? _debtGainNote(reason, loan.personName) + (notes ? ' \u00b7 ' + notes : '') : `Loan Settlement Loss from ${loan.personName} — ${lossNotes}`, // PLS #444
     isLoanSettlementLoss: true,
     isSettlement: true,
     parentId: loanId,
     writeOffReason: reason,
     // PLS #254: its own category. 'sc-misc' buried a real loss among odds and ends, and
     // 'sc-investreturns' called a forgiven debt an investment return.
-    categoryId: direction === 'lent' ? 'sc-writeoff' : 'sc-debtforgiven',
+    categoryId: direction === 'lent' ? 'sc-writeoff' : _debtGainCat(reason), // PLS #444
     fxSnapshot: buildFxSnapshot(date, time),
     createdAt: new Date().toISOString(),
   });
