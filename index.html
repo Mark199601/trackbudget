@@ -248,8 +248,11 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
   .fz-ac{padding:14px 12px}
   .fz-ac{flex:none}
 }
-.fz-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px 12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
-.fz-sv{font-size:13px;font-weight:600;color:var(--text);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+/* PLS #448 (his pick A, Oct 2026): the month card's two stat columns stay equal. With plain 1fr a long value
+   ("Housing & Utilities · ₱73,594.78") grew its column and pushed the right column out of the card on PC, iPad and
+   phone. minmax(0,1fr) holds them at half each; a long value wraps to a second line instead of being cut. */
+.fz-stats{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.fz-sv{font-size:13px;font-weight:600;color:var(--text);margin-top:3px;white-space:normal;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .fz-recent .txrow-wrap:nth-child(n+9){display:none}
 .dash-fz .fz-rest > div > .fz-card:last-child,.dash-fz .fz-rest > div > div > .fz-card:last-child{margin-bottom:0} /* no double gap inside a section */
 @media(min-width:1280px){ .fz-nw{display:flex} }
@@ -735,6 +738,36 @@ option{background:var(--bg3);color:var(--text)}
 .ef .ef-card > .form-group.ef-stack{display:block;padding:10px 0}
 .ef .ef-card > .form-group.ef-stack > .form-label{display:block;margin:0 0 8px}
 .ef .ef-card > .form-group.ef-stack > .form-input{text-align:left;text-align-last:auto}
+/* PLS #457 (his pick "F5 tiles + Monzo buttons", Oct 2026): edit forms. Amount card on top, fields as 2-across tiles,
+   Save full width, Cancel and Archive/Delete side by side. Only popups titled "Edit ..." in _F6_TITLES get .f6. */
+.f6 .f6-hero{background:var(--bg3);border-radius:20px;padding:14px 16px;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.f6 .f6-hero > .f6-hl{min-width:0;flex:1}
+.f6 .f6-hero .form-label{display:block;font-size:12px;font-weight:400;color:var(--text3);margin:0 0 2px;text-transform:none;letter-spacing:0}
+.f6 .f6-hero input.form-input,.f6 .f6-hero .ef-field input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0;width:100%;height:auto;font-size:30px!important;font-weight:600!important;letter-spacing:-1px;color:var(--text);text-align:left!important;text-align-last:auto!important}
+.f6 .f6-amt{display:flex;align-items:baseline;gap:2px}.f6 .f6-hero .form-group{min-height:0!important;padding:0!important;margin:0!important;border:0!important}.f6 .f6-hero .f6-sub{min-height:0}.f6 .f6-sym{font-size:20px;font-weight:600;color:var(--text3)}
+.f6 .f6-hero .f6-sub{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-top:2px}
+.f6 .f6-hero .f6-sub input.form-input{width:4.5em!important;pointer-events:none}.f6 .f6-hero .f6-sub select.form-input,.f6 .f6-hero .f6-sub input.form-input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0 14px 0 0!important;margin:0;width:auto;height:auto;font-size:11px!important;font-weight:500;color:var(--text3);text-align:left}
+.f6 .f6-hero .ef-hint,.f6 .f6-hero .form-hint{display:block;font-size:11px;color:var(--text3);margin-top:2px;text-align:left}
+.f6 .f6-badge{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--accent-bg);color:var(--accent)}
+.f6 .f6-badge.out{background:rgba(244,63,94,.12);color:var(--red)}.f6 .f6-badge.in{background:rgba(34,197,94,.12);color:var(--green)}
+.f6 .ef .ef-card.f6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;background:transparent;padding:0;margin:0 0 8px;border-radius:0}
+.f6 .ef .f6-grid > .form-group{display:block!important;background:var(--bg3);border-radius:16px;padding:11px 12px 12px!important;border-top:0!important;min-height:0;min-width:0;margin:0}
+.f6 .ef .f6-grid > .form-group.f6-wide{grid-column:1/-1}
+.f6 .ef .f6-grid > .form-group > .form-label{display:flex;align-items:center;gap:6px;flex:none;margin:0 0 6px;font-size:11px;font-weight:400;color:var(--text3)}
+.f6 .ef .f6-grid > .form-group > .form-label > .f6-ico{display:flex;color:var(--accent)}
+.f6 .ef .f6-grid .form-input,.f6 .ef .f6-grid .ef-field input,.f6 .ef .f6-grid .ef-field select{text-align:left!important;text-align-last:auto!important;padding:0!important;font-size:13px;font-weight:600;width:100%;min-height:0;height:auto}
+.f6 .ef .f6-grid select.form-input{padding-right:16px!important}
+.f6 .ef .f6-grid textarea.form-input{text-align:left;min-height:20px;font-weight:500}
+.f6 .ef .f6-grid .dt-row,.f6 .ef .f6-grid .dt-field{justify-content:flex-start}
+.f6 .ef .f6-grid .dt-display{justify-content:flex-start;padding:0!important;padding-left:0!important;margin-left:0!important;text-indent:0;font-size:13px;font-weight:600;min-height:0}
+.f6 .ef .f6-grid .dt-field > .dt-display{margin-left:0}
+.f6 .ef .f6-grid .dt-display .dt-icon{display:none}
+.f6 .ef .f6-grid > .form-group > .ef-hint,.f6 .ef .f6-grid > .form-group > .form-hint{display:block;text-align:left;margin:4px 0 0;font-size:11px;color:var(--text3)}
+.f6 .rv-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.f6 .rv-foot > button{grid-column:1/-1}
+.f6 .rv-foot > button.f6-half{grid-column:auto}
+.f6 .rv-foot > .rv-del{height:48px!important;font-size:15px!important;font-weight:600!important;background:rgba(244,63,94,.12)!important}
+.f6 .rv-foot > .rv-del.rv-gain{background:rgba(34,197,94,.12)!important}
 
 .type-toggle{display:flex;background:var(--bg3);border-radius:var(--r-md);padding:3px;gap:2px;margin-bottom:16px;flex-wrap:wrap}
 .type-btn{flex:1;min-width:60px;padding:8px 4px;border:none;border-radius:var(--r-sm);background:transparent;font-size:11px;font-weight:500;transition:all var(--transition);color:var(--text3);cursor:pointer}
@@ -1237,6 +1270,10 @@ b,strong{font-weight:600} /* PLS #433: one bold weight, browsers default these t
 .cp-card .cat-tile{background:var(--bg2)}
 .cp-search input{width:100%;box-sizing:border-box;background:var(--bg3);border:0;border-radius:14px;padding:12px 14px;font:inherit;font-size:16px;color:var(--text);outline:0;margin-bottom:6px}
 .cp-search input::placeholder{color:var(--text4)}
+/* PLS #455: the Add tile at the end of each group, and the inline new-subcategory form */
+.cat-tile.cp-add{background:transparent!important;border:1.5px dashed var(--border3)!important}.cat-tile.cp-add .cat-tile-icon{color:var(--accent);display:flex;align-items:center;justify-content:center;height:32px}.cat-tile.cp-add .cat-tile-name{color:var(--accent)}
+.cp-new{background:var(--bg3);border-radius:16px;padding:14px;margin-top:4px}.cp-new .form-input{background:var(--bg2)}
+.cp-addq{display:flex;align-items:center;gap:8px;width:100%;margin-top:4px;padding:12px 14px;border:1.5px dashed var(--border3);border-radius:14px;background:transparent;color:var(--accent);font:inherit;font-size:14px;font-weight:500;cursor:pointer;text-align:left}
 .cat-picker-wrap:has(.cp-search){min-height:55vh} /* the popup keeps its height while you type */
 @media(max-width:380px){.cat-tile-icon{font-size:20px}.cat-tile-name{font-size:11px}}
 
@@ -2064,6 +2101,7 @@ function saveDriveToken(token, expiresInSec) {
       expiry: _gdriveTokenExpiry
     }));
   } catch(e) {}
+  setTimeout(_driveRememberEmail, 0); // PLS #453
 }
 function loadDriveToken() {
   try {
@@ -2079,6 +2117,31 @@ function loadDriveToken() {
     _gdriveTokenExpiry = expiry;
     return true;
   } catch(e) { return false; }
+}
+// -- PERSONAL LOGIC SET #453 -- (his report, Oct 2026: "pag nagsysynch ako matic nagrerefresh lang pero d nagsysynch",
+// on every device, fixed only by Disconnect + log in again). Two causes together:
+//  (1) the quiet renewal told Google which account to use with the word "Connected" (what connect stored instead of an
+//      email), so Google could not pick an account without asking, and the renewal failed;
+//  (2) the sign-in window that followed opened only after that failure came back, no longer inside his tap, so the
+//      browser blocked it without a word. Connect worked because it opens the window inside the tap.
+// Fix: keep the real email (Drive tells it with the drive.file scope we already have) and pass it as the hint; a tap on
+// Sync opens the sign-in inside the tap; a blocked or closed window says so; a token Google refuses is dropped (#454).
+const GDRIVE_EMAIL_KEY = 'tb_gdrive_email';
+function _driveHint() {
+  let e = ''; try { e = localStorage.getItem(GDRIVE_EMAIL_KEY) || ''; } catch(x) {}
+  if (!e && typeof db !== 'undefined' && db && db.settings && /@/.test(db.settings.googleDriveEmail || '')) e = db.settings.googleDriveEmail;
+  return /@/.test(e) ? e : '';
+}
+async function _driveRememberEmail() {
+  if (!_gdriveAccessToken || _driveHint()) return;
+  try {
+    const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { 'Authorization': 'Bearer ' + _gdriveAccessToken } });
+    if (!r.ok) return;
+    const e = ((await r.json()).user || {}).emailAddress || '';
+    if (!/@/.test(e)) return;
+    try { localStorage.setItem(GDRIVE_EMAIL_KEY, e); } catch(x) {}
+    if (typeof db !== 'undefined' && db && db.settings) db.settings.googleDriveEmail = e; // device-only setting, written with the next save
+  } catch(x) {}
 }
 function clearDriveToken() {
   _gdriveAccessToken = null;
@@ -3875,6 +3938,8 @@ function renderPageHeader(page) {
     // PLS #306: "+" adds to whichever Planning tab is open
     pageHTML = ((db.contracts||[]).some(c => c.id === db.activeContractId) ? _more('planning') : '')
       + _plus("(_planTab==='wishlist'?openAddWishlist():_planTab==='contract'?openContractWizard():openAddBudget())", 'Add');
+  } else if (page==='analytics') {
+    pageHTML = (!_anHome && _analyticsTab === 'overview') ? _more('analytics') : ''; // PLS #452: Edit layout
   } else if (page==='installments') {
     // -- PERSONAL LOGIC SET #236 -- Installments was the ONE list page with no header action, so
     // it carried a full-width gradient button at the bottom of the list instead. That pushed the
@@ -3916,6 +3981,7 @@ function openPageMenu(ev, page) {
   if (page === 'reimbursements') items.push(['Archive', (db.archivedTransactions||[]).filter(t => t.type === 'shared').length, 'openTxArchiveSheet()']);
   if (page === 'installments') items.push(['Archive', (db.installments||[]).filter(i=>i.archived).length, 'openInstArchiveSheet()']);
   if (page === 'investments') items.push(['Archive', (db.investments||[]).filter(i=>i.archived).length, 'openInvArchiveSheet()']);
+  if (page === 'analytics') items.push(['Edit layout', '', 'openOvLayout()']); // PLS #452
   if (!items.length) return;
   const m = document.createElement('div');
   m.className = 'pg-menu'; m.id = 'pg-menu';
@@ -3941,7 +4007,8 @@ function openSheet(sheetId, title, html) {
   document.getElementById(sheetId+'-body').innerHTML = html;
   { const _b = document.getElementById(sheetId+'-body'); _b.classList.remove('ef'); const _sh = document.getElementById(sheetId+'-sheet');
     _sh.classList.remove('rv-shell'); _sh.querySelectorAll(':scope > .rv-foot').forEach(x => x.remove()); // PLS #367 reset
-    if (window._efNext) { window._efNext = false; _efApply(_b); _rvApply(_sh, _b, false, sheetId); } } // PLS #360 / #367
+    _sh.classList.remove('f6');
+    if (window._efNext) { window._efNext = false; _efApply(_b); const _f6 = _f6Is(title); if (_f6) { _sh.classList.add('f6'); _f6Apply(_b); } _rvApply(_sh, _b, false, sheetId); if (_f6) _f6Foot(_sh); } } // PLS #360 / #367 / #457
   document.getElementById(sheetId+'-overlay').classList.add('open');
   document.getElementById(sheetId+'-sheet').classList.add('open');
   // Auto-attach swipe-to-dismiss (idempotent — uses _swipeAttached flag)
@@ -4042,7 +4109,7 @@ function _rvApply(shell, body, isDlg, sheetId) {
   if (!pri.length && dels.length) { const d = dels.shift(); d.classList.add('rv-dang'); foot.appendChild(d); }
   pri.forEach(b => { b.classList.add('rv-pri'); foot.appendChild(b); });
   other.forEach(b => { b.classList.add('rv-sec'); foot.appendChild(b); });
-  cancel.classList.add('rv-sec'); foot.appendChild(cancel);
+  cancel.classList.add('rv-sec', 'rv-cancel'); foot.appendChild(cancel);
   dels.forEach(b => { b.classList.add('rv-del'); foot.appendChild(b); });
   // PLS #368: one wording -- edits say "Save changes", adds say "Add <thing>" (from the title)
   const ttl = ((isDlg ? document.getElementById('dlg-title') : shell.querySelector('.sheet-title')) || {}).textContent || '';
@@ -4122,6 +4189,85 @@ function _efApply(root) {
   // sections that hold fields of their own (collapsible "More options", cross-currency rows)
   root.querySelectorAll('div').forEach(d => { if (!d.classList.contains('ef-card') && [...d.children].some(c => c.classList && c.classList.contains('form-group'))) wrap(d); });
 }
+// -- PERSONAL LOGIC SET #457 -- Edit forms in his pick (Oct 2026): "F5" tiles with the Monzo buttons. Runs after
+// _efApply on the same DOM, so every field, id and handler is the form's own; only the layout changes:
+//  * the money field (amount, balance, monthly...) moves into an amount card on top, its Currency picker sits small
+//    under it (the currency still follows the account, #3), and the opener may set window._f6Meta = {badge, tone}
+//  * every other field becomes a tile, 2 across; wide content (pickers, notes, lists) takes the whole row, and an odd
+//    tile count makes the last one full width so no hole is left (same idea as #408)
+//  * buttons: Save full width, then Cancel beside Archive / Delete (_f6Foot)
+const _F6_TITLES = new Set(['Edit transaction', 'Edit transfer', 'Edit remittance', 'Edit account', 'Edit loan', 'Edit investment',
+  'Edit installment', 'Edit category', 'Edit subcategory', 'Edit profile', 'Edit payment', 'Edit contract']);
+function _f6Is(title) { return _F6_TITLES.has(_plainTitle(title)); }
+function _f6IcoFor(lbl) {
+  const t = String(lbl).toLowerCase();
+  const m = [[/categor/, 'tag'], [/person|name of|borrower|lender|nickname|^name$/, 'user'], [/account|from|to |^to$|paid|source|wallet/, 'wallet'], [/due/, 'flag'],
+    [/date|start|end|month/, 'calendar'], [/time/, 'clock'], [/rate/, 'exchange'], [/currenc/, 'coins'], [/note|reference/, 'fileText'],
+    [/type|kind/, 'layers'], [/location|country|nationality/, 'pin'], [/value|amount|balance|invested|receiv|paid|goal|target|limit/, 'coins'], [/icon|emoji/, 'sparkle'], [/alert|threshold/, 'alert']];
+  for (const [re, ic] of m) if (re.test(t)) return ic;
+  return 'tag';
+}
+function _f6Apply(root) {
+  if (!root) return;
+  const meta = window._f6Meta || {}; window._f6Meta = null;
+  const cards = [...root.querySelectorAll('.ef-card')];
+  const lblOf = g => ((g.querySelector(':scope > .form-label') || {}).textContent || '').trim();
+  // 1. amount card
+  const moneyRe = /amount|balance|monthly|invested|loaned|total|price|^value$|current value/i;
+  let money = null;
+  for (const c of cards) { money = [...c.children].find(g => g.classList.contains('form-group') && !g.classList.contains('ef-stack') && moneyRe.test(lblOf(g)) && !/rate|fee|split|receiv/i.test(lblOf(g)) && g.querySelector('input[type=number], input.numpad-input')); if (money) break; }
+  if (money) {
+    const hero = document.createElement('div'); hero.className = 'f6-hero';
+    const left = document.createElement('div'); left.className = 'f6-hl'; hero.appendChild(left);
+    const card = money.parentElement;
+    // the amount's own Currency box sits right after it (a select, or the loan's read-only account currency);
+    // a Currency right after ANOTHER amount is that amount's (Edit loan: the Expected receivable's), never ours
+    const prevG = g => { let p = g.previousElementSibling; while (p && !p.classList.contains('form-group')) p = p.previousElementSibling; return p; };
+    let nx = money.nextElementSibling; while (nx && !nx.classList.contains('form-group')) nx = nx.nextElementSibling;
+    const isCur = g => g && g.classList.contains('form-group') && /^currency$/i.test(lblOf(g));
+    const isAmt = g => !!g && !!g.querySelector('input[type=number], input.numpad-input');
+    const cur = isCur(nx) && nx.querySelector('select, input') ? nx
+      : [...card.children].find(g => isCur(g) && g.querySelector('select') && !isAmt(prevG(g)));
+    money.classList.add('f6-hero-g'); left.appendChild(money);
+    const curSel = cur ? cur.querySelector('select, input') : null;
+    if (cur) { const sub = document.createElement('div'); sub.className = 'f6-sub'; sub.appendChild(curSel); cur.remove(); left.appendChild(sub); }
+    // the currency symbol in front of the amount, following the Currency picker (which follows the account)
+    const inp = money.querySelector('input[type=number], input.numpad-input');
+    if (inp) {
+      const w = document.createElement('div'); w.className = 'f6-amt'; const sy = document.createElement('span'); sy.className = 'f6-sym';
+      inp.parentNode.insertBefore(w, inp); w.appendChild(sy); w.appendChild(inp);
+      const upd = () => { sy.textContent = sym((curSel && curSel.value) || meta.currency || _homeBase()).trim(); };
+      upd(); root.addEventListener('change', upd); root.addEventListener('input', upd);
+    }
+    if (meta.badge) { const b = document.createElement('div'); b.className = 'f6-badge' + (meta.tone ? ' ' + meta.tone : ''); b.textContent = meta.badge; hero.appendChild(b); }
+    const first = root.querySelector('.ef-card'); (first || root.firstChild) ? root.insertBefore(hero, first || root.firstChild) : root.appendChild(hero);
+  }
+  // 2. tiles
+  root.querySelectorAll('.ef-card').forEach(c => {
+    const gs = [...c.children].filter(g => g.classList.contains('form-group'));
+    if (!gs.length) return;
+    c.classList.add('f6-grid');
+    const narrow = [];
+    gs.forEach(g => {
+      const l = g.querySelector(':scope > .form-label');
+      if (l && !l.querySelector('.f6-ico')) { const i = document.createElement('span'); i.className = 'f6-ico'; i.innerHTML = _ico(_f6IcoFor(l.textContent), 14); l.insertBefore(i, l.firstChild); }
+      const wide = g.classList.contains('ef-stack') || !!g.querySelector('textarea') || !l;
+      if (wide) g.classList.add('f6-wide'); else narrow.push(g);
+    });
+    // an odd run of tiles between two wide ones would leave a hole: its last tile takes the row
+    let run = [];
+    const flush = () => { if (run.length % 2) run[run.length - 1].classList.add('f6-wide'); run = []; };
+    gs.forEach(g => { if (g.classList.contains('f6-wide')) flush(); else run.push(g); }); flush();
+  });
+}
+function _f6Foot(shell) {
+  const foot = shell && shell.querySelector(':scope > .rv-foot'); if (!foot) return;
+  const cancel = foot.querySelector(':scope > .rv-cancel'); const dels = [...foot.querySelectorAll(':scope > .rv-del, :scope > .rv-dang:not(:first-child)')];
+  if (!cancel || !dels.length) return;                       // nothing to pair: Cancel stays full width
+  foot.appendChild(cancel); dels.forEach(d => foot.appendChild(d));   // Save (and others) first, then Cancel, then Archive / Delete
+  const pair = [cancel, ...dels]; pair.forEach(b => b.classList.add('f6-half'));
+  if (pair.length % 2) pair[pair.length - 1].classList.remove('f6-half'); // three in the pair row: the last one takes its own row
+}
 // PLS #393: titles never start with an emoji ("📸 Snapshots" -> "Snapshots")
 // -- PERSONAL LOGIC SET #395 -- how the app's OWN automatic notes read on screen (the stored note is never changed,
 // and anything you typed yourself is shown exactly as typed). Old notes said "Lent to Mike — 232.56 PGK @ 12.899896800825593
@@ -4156,9 +4302,10 @@ function openDlg(title, html, footer='') {
   document.getElementById('dlg-body').innerHTML = html;
   const _db = document.getElementById('dlg-body'); _db.classList.remove('ef');
   { const _dl = document.querySelector('#dlg-overlay .dlg'); _dl.classList.remove('rv-shell'); _dl.querySelectorAll(':scope > .rv-foot').forEach(x => x.remove()); } // PLS #367 reset
-  if (window._efNext) { window._efNext = false; _efApply(_db); window._rvPending = 'dlg'; } // PLS #360 / #367
+  const _dlg = document.querySelector('#dlg-overlay .dlg'); _dlg.classList.remove('f6'); let _f6 = false;
+  if (window._efNext) { window._efNext = false; _efApply(_db); window._rvPending = 'dlg'; _f6 = _f6Is(title); if (_f6) { _dlg.classList.add('f6'); _f6Apply(_db); } } // PLS #360 / #367 / #457
   document.getElementById('dlg-footer').innerHTML = footer;
-  if (window._rvPending === 'dlg') { window._rvPending = null; _rvApply(document.querySelector('#dlg-overlay .dlg'), _db, true); } // PLS #367
+  if (window._rvPending === 'dlg') { window._rvPending = null; _rvApply(_dlg, _db, true); if (_f6) _f6Foot(_dlg); } // PLS #367 / #457
   document.getElementById('dlg-overlay').classList.add('open');
 }
 function closeDlg(force) {
@@ -5491,12 +5638,27 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.12'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.14'; // his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'October 2026'; // PLS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL LOGIC SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.14', date: 'October 2026', changes: [
+    '🔄 Sync no longer stops at a refresh. Tapping Sync now opens the Google sign-in when it is needed, so you do not have to disconnect and log in again', // PLS #453 / #454
+    '➕ Add a subcategory right from the category picker while adding an entry. What you already typed stays', // PLS #455
+    '🔀 A subcategory can move to another main category. Its past entries and budget amounts move with it', // PLS #456
+    '🧩 Overview: tap ⋯ then Edit layout to reorder or hide cards', // PLS #452
+    '✨ New look for every Edit form: the amount on top, details in tiles, and Save, Cancel and Archive at the bottom', // PLS #457
+    '🛠️ Fixed: saving an investment with Add capital entries no longer takes the money from the account a second time', // PLS #458
+    '🛠️ Fixed: editing a settled loan in another currency keeps the rate in its entry note', // PLS #459
+  ]},
+  { ver: '1.2.13', date: 'October 2026', changes: [
+    '₿ A Crypto Wallet can hold any coin (BTC, ETH, BNB and more), not only USDT. USDT is still the default, and a new coin asks for its rate first', // PLS #447
+    '🧾 The month card on the Dashboard keeps both columns inside the card; a long value moves to a second line', // PLS #448
+    '🔄 Coming back online, a device now combines its entries with the other devices on its own, without a tap', // PLS #449
+    '🧩 Each device keeps its own copy of its last sync, so offline entries from two devices can always be combined', // PLS #450 / #451
+  ]},
   { ver: '1.2.12', date: 'October 2026', changes: [
     '🎯 Budget auto allocation: a category you set to 0 now stays 0 when you open the editor again', // PLS #446
   ]},
@@ -6994,7 +7156,7 @@ function renderCatPicker(forType) {
   html += `<div class="cat-section-label">All categories</div><div class="cp-card">`;
   for (const cat of cats) {
     const subs = (cat.subcats||[]).filter(sc => !sc.archived && !sc.autoOnly);
-    if (subs.length === 0) continue;
+    // PLS #455: an empty group stays, so its first subcategory can be added from here (was: skipped)
     const isOpen = window._catGroupOpen === cat.id;
     html += `<div class="cat-group${isOpen?' open':''}" data-group="${cat.id}">
       <div class="cat-group-header" onclick="toggleCatGroup('${cat.id}')">
@@ -7005,6 +7167,7 @@ function renderCatPicker(forType) {
       <div class="cat-group-body">
         <div class="cat-grid" style="margin-bottom:0;margin-top:8px">
           ${subs.map(sc => tileFor(sc, cat)).join('')}
+          <div class="cat-tile cp-add" role="button" tabindex="0" onclick="_cpNewSub('${cat.id}')" aria-label="Add a subcategory to ${_esc(cat.name)}"><div class="cat-tile-icon">${_ico('plus',22)}</div><div class="cat-tile-name">Add</div></div>
         </div>
       </div>
     </div>`;
@@ -7024,8 +7187,61 @@ function _cpFilter(q) {
   (db.categories[forType]||[]).filter(c=>!c.archived).forEach(c => (c.subcats||[]).filter(sc=>!sc.archived && !sc.autoOnly)
     .forEach(sc => { if (sc.name.toLowerCase().includes(q)) hits.push([sc,c]); })); // subcategory names only, so results stay short
   res.innerHTML = hits.length ? `<div class="cat-grid">${hits.slice(0,24).map(([sc,c]) => `<div class="cat-tile" onclick="pickSubCat('${c.id}','${sc.id}')"><div class="cat-tile-icon">${sc.icon}</div><div class="cat-tile-name">${_esc(sc.name)}</div></div>`).join('')}</div>`
-    : `<div style="font-size:14px;color:var(--text3);padding:16px 4px">Nothing matches "${_esc(q)}"</div>`;
+    : `<div style="font-size:14px;color:var(--text3);padding:16px 4px 8px">Nothing matches "${_esc(q)}"</div>
+       <button type="button" class="cp-addq" onclick="_cpNewSub(null, document.getElementById('cp-q').value)">${_ico('plus',16)}<span>Add "${(r => _esc(r.length > 28 ? r.slice(0,27) + '…' : r))(String(document.getElementById('cp-q')?.value || q).trim())}" as a subcategory</span></button>`; // PLS #455
   main.style.display = 'none'; res.style.display = '';
+}
+
+// -- PERSONAL LOGIC SET #455 -- (his ask, Oct 2026: "minsan sa form wala dun yung subcategories ko ... para d na mag
+// exit > settings > cats"). A missing subcategory is added from the category picker itself: the Add tile at the end of
+// each group, or "Add ... as a subcategory" when a search finds nothing. Saved into the same list Settings > Categories
+// uses, then picked right away, so the form he was filling keeps everything he typed.
+function _cpNewSub(catId, name) {
+  const forType = _addState.type === 'income' ? 'income' : 'expense';
+  const cats = (db.categories[forType] || []).filter(c => !c.archived);
+  if (!cats.length) return;
+  const sel = catId || window._catGroupOpen || cats[0].id;
+  const box = document.querySelector('#cat-picker-overlay .cat-picker-wrap'); if (!box) return;
+  box.innerHTML = `<div class="cp-new">
+    <div class="form-group"><label class="form-label" for="cpn-cat">Category</label>
+      <select class="form-input" id="cpn-cat">${cats.map(c => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${_esc(c.name)}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label" for="cpn-name">Subcategory name</label>
+      <input class="form-input" id="cpn-name" placeholder="e.g. Milk tea" autocomplete="off" value="${escapeAttr(String(name || '').trim())}" oninput="onCatNameInput('cpn-name','cpn-emoji',null,'${forType}')"></div>
+    <div class="form-group" style="margin-bottom:14px"><label class="form-label">Icon</label>
+      <div class="emoji-trigger" onclick="toggleInlineEmoji('cpn-emoji-panel')"><span class="et-icon" id="cpn-emoji">📌</span><span>Pick icon</span></div>
+      <div id="cpn-emoji-panel" style="display:none;margin-top:8px;background:var(--bg2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('cpn-emoji')}</div></div>
+    <button type="button" class="btn btn-primary btn-full" onclick="_cpSaveSub('${forType}')">Add and use it</button>
+    <button type="button" class="btn btn-ghost btn-full" style="margin-top:8px" onclick="_cpBack()">Back to categories</button>
+  </div>`;
+  const nm = document.getElementById('cpn-name');
+  if (nm && nm.value) onCatNameInput('cpn-name', 'cpn-emoji', null, forType); // suggest an icon for the typed name
+  else if (nm && window.innerWidth >= 1024) nm.focus(); // phones: no keyboard until he taps (same rule as the search, #391)
+}
+function _cpBack() {
+  const box = document.querySelector('#cat-picker-overlay .cat-picker-wrap'); if (!box) return;
+  const forType = _addState.type === 'income' ? 'income' : 'expense';
+  box.outerHTML = renderCatPicker(forType);
+}
+function _cpSaveSub(forType) {
+  const name = (document.getElementById('cpn-name')?.value || '').trim();
+  if (!name) { showToast('Enter a name'); return; }
+  const cat = (db.categories[forType] || []).find(c => c.id === document.getElementById('cpn-cat')?.value);
+  if (!cat) return;
+  if (!cat.subcats) cat.subcats = [];
+  // same name already in that category: use it (bring it back if it was archived) instead of making a twin
+  const twin = cat.subcats.find(sc => !sc.autoOnly && String(sc.name).trim().toLowerCase() === name.toLowerCase());
+  if (twin) {
+    if (twin.archived) { twin.archived = false; saveDBWithSync(); showToast(`${twin.name} was archived, it is back`); }
+    else showToast(`${twin.name} is already in ${cat.name}`);
+    window._catGroupOpen = cat.id; pickSubCat(cat.id, twin.id); return;
+  }
+  const icon = document.getElementById('cpn-emoji')?.textContent || '📌';
+  const sc = { id: 'sc-' + genId(), name, icon, archived: false };
+  cat.subcats.push(sc);
+  saveDBWithSync();
+  window._catGroupOpen = cat.id;
+  pickSubCat(cat.id, sc.id);
+  showToast('Subcategory added');
 }
 
 function toggleCatGroup(catId) {
@@ -9766,6 +9982,7 @@ function openEditTx(txId) {
 
   window._efNext = true; // PLS #360
 
+  window._f6Meta = ({ expense:{badge:'Expense',tone:'out'}, income:{badge:'Income',tone:'in'}, shared:{badge:'Shared',tone:'out'} })[tx.type] || null; // PLS #457
   openSheet('gen', 'Edit transaction', `
     <div class="form-group"><label class="form-label" for="edit-cat">Category</label><select class="form-input" id="edit-cat">${catOpts}</select></div>
     ${sharedFieldsHTML}
@@ -10130,6 +10347,7 @@ function openEditRemittance(txId) {
       </div>
     </div>` : '';
   window._efNext = true; // PLS #360
+  window._f6Meta = { badge:'Remittance' }; // PLS #457
   openSheet('gen','Edit remittance',`
     <div class="form-group"><label class="form-label" for="erm-from">From account</label><select class="form-input" id="erm-from" onchange="updateEditRemittancePreview()">${acctOpts(tx.fromAccountId)}</select></div>
     <div class="form-group"><label class="form-label" for="erm-to">To account</label><select class="form-input" id="erm-to" onchange="updateEditRemittancePreview()">${acctOpts(tx.toAccountId)}</select></div>
@@ -10260,6 +10478,7 @@ function openEditTransfer(txId) {
   const fromAcctRender = accts.find(a=>a.id===tx.fromAccountId);
   const isCrossCurrencyRender = fromAcctRender && toAcct && (fromAcctRender.currency !== toAcct.currency || (tx.currency && tx.currency !== fromAcctRender.currency));
   window._efNext = true; // PLS #360
+  window._f6Meta = { badge:'Transfer' }; // PLS #457
   openSheet('gen','Edit transfer',`
     <div class="form-group"><label class="form-label" for="etf-from">From account</label><select class="form-input" id="etf-from" onchange="syncEditTransferCurrency()">${acctOpts(tx.fromAccountId)}</select></div>
     <div class="form-group"><label class="form-label" for="etf-to">To account</label><select class="form-input" id="etf-to" onchange="updateEditTransferPreview()">${acctOpts(tx.toAccountId)}</select></div>
@@ -11976,11 +12195,23 @@ function submitBalanceCorrection(acctId, appBal) {
 }
 
 
+// -- PERSONAL LOGIC SET #447 -- (his pick B, Oct 2026; supersedes the USDT lock of #44 / #45) A Crypto Wallet
+// can hold ANY coin in CRYPTO_CURRENCIES, not only USDT: a user with 0.05 BTC used to get "0.05 USDT", so the
+// account and net worth were wrong. USDT stays the default. The coin list shows only while the type is Crypto
+// Wallet; other types keep the tracked-currency list. A coin with no rate asks for it first (#388) and is then
+// added to the tracked currencies, the same as Settings > Add currency. Existing USDT wallets are untouched.
+function _acctCurrOpts(type, sel) {
+  const list = type === 'Crypto Wallet' ? [...CRYPTO_CURRENCIES] : db.trackedCurrencies.slice();
+  if (sel && type !== 'Crypto Wallet' && !list.includes(sel)) list.push(sel); // never drop the account's own currency
+  return list.map(c => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+}
+function _acctCurrFor(type, picked) { // PLS #447: the currency a save will actually use
+  if (type === 'Crypto Wallet') return CRYPTO_CURRENCIES.has(picked) ? picked : 'USDT';
+  return picked || _homeBase();
+}
 function openAddAccount() {
   const acctTypes = ['Savings','Checking','Cash','E-Wallet','Credit Card','Prepaid','Crypto Wallet','Investment','Other'];
-  // Ensure USDT is in tracked currencies (for Crypto Wallet support)
-  if (!db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = _acctCurrOpts(acctTypes[0], _homeBase()); // PLS #447 (USDT is no longer pushed into tracked on open)
   window._efNext = true; // PLS #361
   openSheet('gen','Add account',`
     <div class="form-group"><label class="form-label" for="na-name">Account name *</label><input class="form-input" id="na-name" placeholder="e.g. Main Savings"></div>
@@ -11999,28 +12230,29 @@ function onAcctTypeChange(typeId, currId) {
   const typeEl = document.getElementById(typeId);
   const currEl = document.getElementById(currId);
   if (!typeEl || !currEl) return;
-  if (typeEl.value === 'Crypto Wallet') {
-    currEl.value = 'USDT';
-    currEl.disabled = true;
-    currEl.style.opacity = '0.6';
-  } else {
-    currEl.disabled = false;
-    currEl.style.opacity = '';
+  // PLS #447: Crypto Wallet shows the coin list (USDT by default), other types the tracked currencies.
+  const toCrypto = typeEl.value === 'Crypto Wallet', isCrypto = currEl.dataset.mode === 'crypto';
+  if (toCrypto !== isCrypto) {
+    const prev = currEl.value;
+    if (toCrypto) currEl.dataset.fiat = prev; // remember the pick to restore it when switching back
+    const sel = toCrypto ? (CRYPTO_CURRENCIES.has(prev) ? prev : 'USDT') : (currEl.dataset.fiat || _homeBase());
+    currEl.innerHTML = _acctCurrOpts(typeEl.value, sel);
+    currEl.value = sel;
+    currEl.dataset.mode = toCrypto ? 'crypto' : 'fiat';
   }
+  currEl.disabled = false;
+  currEl.style.opacity = '';
 }
 
 function saveAddAccount() {
   const name = document.getElementById('na-name')?.value?.trim();
   if (!name) { showToast('Enter account name'); return; }
   const type = document.getElementById('na-type')?.value||'Savings';
-  // 📖 USER STORY: When you add a new account and select "Crypto Wallet" as the type,
-  // the currency is automatically set to USDT and cannot be changed. This keeps all crypto
-  // accounts consistent and tracked under a single FX rate.
-  // ── PERSONAL LOGIC SET #44 ── Crypto Wallet account type always locked to USDT
-  const currency = type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('na-currency')?.value||_homeBase());
+  // ── PERSONAL LOGIC SET #44 ── (superseded by #447) Crypto Wallet was locked to USDT. It now holds the
+  // coin you pick (USDT by default); any other type uses the currency picked as before.
+  const currency = _acctCurrFor(type, document.getElementById('na-currency')?.value); // PLS #447
   if (!_hasRate(currency)) { _askRate(currency, saveAddAccount); return; } // PLS #388: no account in a currency without a rate
-  // Ensure USDT in tracked if used
-  if (currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
+  if (!db.trackedCurrencies.includes(currency)) db.trackedCurrencies.push(currency); // PLS #447: like Settings > Add currency
   db.accounts.push({
     id:'acct-'+genId(), name, type, currency,
     initialBalance:parseFloat(document.getElementById('na-balance')?.value)||0,
@@ -12038,13 +12270,13 @@ function openEditAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
   const acctTypes = ['Savings','Checking','Cash','E-Wallet','Credit Card','Prepaid','Crypto Wallet','Investment','Other'];
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===a.currency?'selected':''}>${c}</option>`).join('');
+  const currOpts = _acctCurrOpts(a.type, a.currency); // PLS #447
   window._efNext = true; // PLS #360
   openSheet('gen','Edit account',`
     <div class="form-group"><label class="form-label" for="ea-name">Account name *</label><input class="form-input" id="ea-name" value="${escapeAttr(a.name)}"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="ea-type">Type</label><select class="form-input" id="ea-type" onchange="onAcctTypeChange('ea-type','ea-currency')">${acctTypes.map(t=>`<option ${t===a.type?'selected':''}>${t}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label" for="ea-currency">Currency</label><select class="form-input" id="ea-currency" ${a.type==='Crypto Wallet'?'disabled style="opacity:0.6"':''}>${currOpts}</select></div>
+      <div class="form-group"><label class="form-label" for="ea-currency">Currency</label><select class="form-input" id="ea-currency" data-mode="${a.type==='Crypto Wallet'?'crypto':'fiat'}">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label" for="ea-balance">Initial balance</label><input class="form-input numpad-input" type="number" id="ea-balance"  value="${a.initialBalance||0}" inputmode="none"></div>
     <div class="form-group"><label class="form-label" for="ea-note">Note / reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
@@ -12057,17 +12289,15 @@ function saveEditAccount(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
   { const _t = document.getElementById('ea-type')?.value || a.type; // PLS #388: check the rate BEFORE changing anything,
-    const _c = _t === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency); // so Cancel leaves the account untouched
+    const _c = _acctCurrFor(_t, document.getElementById('ea-currency')?.value || a.currency); // so Cancel leaves the account untouched (PLS #447)
     if (!_hasRate(_c)) { _askRate(_c, () => saveEditAccount(acctId)); return; } }
   a.name = document.getElementById('ea-name')?.value?.trim() || a.name;
   a.type = document.getElementById('ea-type')?.value || a.type;
-  // 📖 USER STORY: Pag binago mo ang type ng existing account papuntang "Crypto Wallet", auto
-  // converts to USDT ang currency. Pag nilipat mo from Crypto Wallet to ibang type, pwede ka na
-  // mag-pick ng currency manually.
-  // ── PERSONAL LOGIC SET #45 ── Crypto Wallet always USDT (enforced on save/edit)
-  const _newCur = a.type === 'Crypto Wallet' ? 'USDT' : (document.getElementById('ea-currency')?.value || a.currency);
+  // ── PERSONAL LOGIC SET #45 ── (superseded by #447) Crypto Wallet was forced to USDT on save.
+  // Now a Crypto Wallet keeps the coin picked (USDT if none); other types as before.
+  const _newCur = _acctCurrFor(a.type, document.getElementById('ea-currency')?.value || a.currency); // PLS #447
   a.currency = _newCur;
-  if (a.currency === 'USDT' && !db.trackedCurrencies.includes('USDT')) db.trackedCurrencies.push('USDT');
+  if (!db.trackedCurrencies.includes(a.currency)) db.trackedCurrencies.push(a.currency); // PLS #447
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
   a.note = document.getElementById('ea-note')?.value?.trim() || '';
   a.alertThreshold = parseFloat(document.getElementById('ea-threshold')?.value) || null;
@@ -12528,6 +12758,7 @@ function openEditInv(invId) {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===inv.currency?'selected':''}>${c}</option>`).join('');
   const acctOpts = `<option value="">None</option>`+db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}" ${a.id===inv.sourceAccountId?'selected':''}>${acctLabel(a)}</option>`).join('');
   window._efNext = true; // PLS #360
+  window._f6Meta = { badge:'Investment' }; // PLS #457
   openSheet('gen2','Edit investment',`
     <div class="form-group"><label class="form-label" for="ei-name">Investment name *</label>
       <input class="form-input" id="ei-name" value="${escapeAttr(inv.name)}"></div>
@@ -12544,8 +12775,8 @@ function openEditInv(invId) {
         <select class="form-input" id="ei-currency">${currOpts}</select></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label">Date</label>${dtField('ei-date','date','Today',inv.date||today())}</div>
-      <div class="form-group"><label class="form-label">Time</label>${dtField('ei-time','time','Now',inv.time||nowTime())}</div>
+      <div class="form-group"><label class="form-label">Date</label>${dtField('ei-date','date','Today',inv.date||_invFundTx(invId)?.date||today())}</div>
+      <div class="form-group"><label class="form-label">Time</label>${dtField('ei-time','time','Now',inv.time||_invFundTx(invId)?.time||nowTime())}</div>
     </div>
     <div class="form-group"><label class="form-label" for="ei-notes">Notes</label>
       <input class="form-input" id="ei-notes" value="${escapeAttr(inv.notes||'')}"></div>
@@ -12553,30 +12784,48 @@ function openEditInv(invId) {
   `);
 }
 
+// -- PERSONAL LOGIC SET #458 -- Edit investment, Save with nothing changed (his real data, Oct 2026):
+// inv.amount is the TOTAL capital (first funding + every Add capital top-up, #126), but Save wrote that
+// total onto the FIRST funding entry. ICTSI Coop: 600 funding + 5 top-ups of 1,200 = 6,600, so the 600
+// entry became 6,600 and Seabank was charged the 6,000 of top-ups a second time (3,400.86 -> -2,599.14).
+// Now only the change he typed moves the first funding entry (top-ups keep their own entries), and it
+// refuses a total lower than the top-ups. A record with no saved time (older ones) opened with the
+// current time and Save stamped it on the funding entry; the form now opens with the entry's own
+// date/time and only a changed value is written. The note is rebuilt only when the name changes.
+function _invFundTx(invId) {
+  const f = db.transactions.filter(t => t.isInvestmentFund && t.investmentId === invId);
+  f.sort((a, b) => ((a.date||'') + (a.time||'')).localeCompare((b.date||'') + (b.time||'')) || String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+  return f[0] || null;
+}
 function saveEditInv(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
   const eiAmt = parseFloat(document.getElementById('ei-amount')?.value);
   if (!(eiAmt > 0)) { showToast('Enter a valid amount'); return; }
+  const fundTx = _invFundTx(id);
+  const oldAmt = inv.amount, oldName = inv.name, oldDate = inv.date || fundTx?.date, oldTime = inv.time || fundTx?.time;
+  const newCur = document.getElementById('ei-currency')?.value || inv.currency;
+  const fundAmt = fundTx ? roundMoney(fundTx.amount + (eiAmt - oldAmt), newCur) : null;
+  if (fundTx && !(fundAmt > 0)) { showToast('Lower than the Add capital entries. Edit those first'); return; }
   inv.name=document.getElementById('ei-name')?.value?.trim()||inv.name;
   inv.type=document.getElementById('ei-type')?.value||inv.type;
   inv.amount=eiAmt;
-  inv.currency=document.getElementById('ei-currency')?.value||inv.currency;
+  inv.currency=newCur;
   inv.sourceAccountId=document.getElementById('ei-src')?.value||null;
   inv.notes=document.getElementById('ei-notes')?.value?.trim()||'';
-  // Handle date + time edits
+  // Handle date + time edits (PLS #458: only a changed value is written)
   const newDate = document.getElementById('ei-date')?.value;
   const newTime = document.getElementById('ei-time')?.value;
-  if (newDate) inv.date = newDate;
-  if (newTime) inv.time = newTime;
+  const dateCh = !!newDate && newDate !== oldDate, timeCh = !!newTime && newTime !== oldTime;
+  if (dateCh) inv.date = newDate;
+  if (timeCh) inv.time = newTime;
   // Propagate date/time changes to the linked Fund tx so tx log stays in sync
-  const fundTx = db.transactions.find(t => t.isInvestmentFund && t.investmentId === id);
   if (fundTx) {
-    if (newDate) fundTx.date = newDate;
-    if (newTime) fundTx.time = newTime;
-    fundTx.amount = inv.amount;
+    if (dateCh) fundTx.date = newDate;
+    if (timeCh) fundTx.time = newTime;
+    if (eiAmt !== oldAmt) fundTx.amount = fundAmt;
     fundTx.currency = inv.currency;
-    fundTx.notes = `Invested in ${_esc(inv.name)}`;
+    if (inv.name !== oldName) fundTx.notes = `Invested in ${inv.name}`;
     if (inv.sourceAccountId) {
       fundTx.fromAccountId = inv.sourceAccountId;
       fundTx.accountId = inv.sourceAccountId;
@@ -14132,6 +14381,7 @@ function editLoanFull(loanId, direction) {
   const loanDate = loan.date || today();
   const loanTime = loan.time || nowTime();
   window._efNext = true; // PLS #360
+  window._f6Meta = direction === 'lent' ? { badge:'Lent out' } : { badge:'Borrowed' }; // PLS #457: same words as the Loans page (#290)
   openDlg('Edit loan',
     `<div class="form-group"><label class="form-label" for="lf-person">Person *</label><input class="form-input" id="lf-person" value="${escapeAttr(loan.personName||'')}"></div>
     <div class="form-row fr2">
@@ -14229,7 +14479,13 @@ function saveLoanFull(loanId, direction) {
         parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
       }
     } else {
-      parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+      // -- PERSONAL LOGIC SET #459 -- a settled loan's money side is frozen (#194), but this branch rewrote its
+      // entry note to the plain form, so a settled K120 loan (Steven) lost "— 120 PGK @ 11.0381666667 PHP/PGK"
+      // on a Save with nothing changed. The note is rebuilt from the loan's own stored figures.
+      const _x = loan.agreedRate > 0 && loan.loanedCurrency && loan.currency !== loan.loanedCurrency;
+      parentTx.notes = _x
+        ? `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${loan.amount} ${loan.currency} @ ${fmtRate(loan.agreedRate)} ${loan.loanedCurrency}/${loan.currency}`
+        : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
     }
   }
 
@@ -15579,6 +15835,7 @@ const _AN_SHORT = { overview:'This month at a glance', aisummary:'Your month in 
   crosscurr:'What you hold in each currency, FX gains', external:'Money from outside your accounts' };
 function _analyticsHeader() {
   const t = document.getElementById('ph-title'); if (!t) return;
+  if (currentPage === 'analytics') renderPageHeader('analytics'); // PLS #452: the "..." follows the open report
   let back = document.getElementById('ph-back');
   if (_anHome || currentPage !== 'analytics') { t.textContent = currentPage === 'analytics' ? 'Analytics' : t.textContent; if (back) back.remove(); return; }
   t.textContent = (window._TAB_REGISTRY?.[_analyticsTab] || {}).label || 'Analytics';
@@ -15920,6 +16177,77 @@ function openCalDay(dateStr) {
   }
 
   openSheet('gen', `📅 ${labelDate}`, body);
+}
+
+// -- PERSONAL LOGIC SET #452 -- (his pick A, Oct 2026) Overview layout: move cards up or down inside their group and
+// hide the ones he does not need. No width resize: the 2 or 3 per row rule (#408) still decides the rows, so a hidden
+// or moved card can never leave a stretched 1x1. Saved in db.settings.ovLayout so every device shows the same order.
+// The four tiles at the top are not part of it (a 4-across strip with one missing would leave a hole).
+const OV_GROUPS = [
+  { id:'top', title:'Top cards', cards:[['pie','Category Breakdown'],['budget','Budgets'],['cashrun','Cashflow & Runway'],['savings','Savings Rate Trend'],['networth','Net Worth Trend']] },
+  { id:'cashflow', title:'Cash flow', cards:[['forecast','Month-End Forecast'],['unusual','Unusual Transactions'],['incexp','Income vs Expense']] },
+  { id:'patterns', title:'Spending patterns', cards:[['fixed','Fixed vs Discretionary'],['dow','Day-of-Week Pattern'],['pareto','80/20 Analysis'],['frequent','Most Frequent'],['tod','Time-of-Day Pattern'],['sizes','Transaction Sizes']] },
+  { id:'wealth', title:'Income & wealth', cards:[['incdiv','Income Diversification'],['concentration','Account Concentration'],['changed','What Changed'],['goal','Savings Goal']] },
+  { id:'history', title:'Commitments & history', cards:[['yoy','Year over year'],['recent','Recent Months']] }
+];
+function _ovLayout() { const l = (db.settings || {}).ovLayout; return { order: (l && l.order) || {}, hidden: (l && Array.isArray(l.hidden)) ? l.hidden : [] }; }
+function _ovHidden(k) { return _ovLayout().hidden.includes(k); }
+// The group's keys in the saved order. A card added in a later build (not in the saved list) keeps its default slot.
+function _ovOrder(gid) {
+  const def = (OV_GROUPS.find(g => g.id === gid) || { cards: [] }).cards.map(c => c[0]);
+  const saved = (_ovLayout().order[gid] || []).filter(k => def.includes(k));
+  const out = saved.slice();
+  def.forEach((k, i) => { if (out.includes(k)) return; const prev = def.slice(0, i).reverse().find(x => out.includes(x)); out.splice(prev ? out.indexOf(prev) + 1 : 0, 0, k); });
+  return out;
+}
+// items: { key: html }. Returns the html list in his order, hidden cards left out.
+function _ovArrange(gid, items) { return _ovOrder(gid).filter(k => !_ovHidden(k)).map(k => items[k] || '').filter(h => h); }
+
+// PLS #452: the Edit layout popup. Works on a copy; nothing changes until Save changes.
+function openOvLayout() {
+  const L = _ovLayout();
+  window._ovEd = { order: Object.fromEntries(OV_GROUPS.map(g => [g.id, _ovOrder(g.id)])), hidden: L.hidden.slice() };
+  window._efNext = true;
+  openSheet('gen', 'Edit layout', `
+    <div style="font-size:12px;color:var(--text3);margin:-2px 0 10px">Move a card up or down inside its group, or switch it off to hide it. Rows still hold 2 or 3 cards.</div>
+    <input type="hidden" id="ove-state" value="">
+    <div id="ove-list"></div>
+    <div style="text-align:center;margin:4px 0 12px"><span role="button" tabindex="0" onclick="_ovEdReset()" style="font-size:12px;color:var(--accent);cursor:pointer">Reset to default</span></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-primary btn-full" onclick="saveOvLayout()">Save changes</button></div>`);
+  _ovEdDraw();
+}
+function _ovEdDraw() {
+  const E = window._ovEd, box = document.getElementById('ove-list'); if (!E || !box) return;
+  const arrow = (gid, i, d, off) => `<button type="button" aria-label="${d < 0 ? 'Move up' : 'Move down'}" ${off ? 'disabled' : ''} onclick="_ovEdMove('${gid}',${i},${d})"
+    style="width:28px;height:28px;border:0;border-radius:var(--r-sm);background:var(--bg3);color:${off ? 'var(--text3)' : 'var(--text2)'};opacity:${off ? '0.4' : '1'};cursor:${off ? 'default' : 'pointer'};display:flex;align-items:center;justify-content:center;padding:0">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${d < 0 ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg></button>`;
+  box.innerHTML = OV_GROUPS.map(g => {
+    const keys = E.order[g.id], name = k => (g.cards.find(c => c[0] === k) || [k, k])[1];
+    return `<div class="lp-sec">${g.title}</div><div class="lp-grp">` + keys.map((k, i) => {
+      const on = !E.hidden.includes(k);
+      return `<div class="lp-row" style="cursor:default;gap:8px">
+        <div style="display:flex;gap:4px;flex-shrink:0">${arrow(g.id, i, -1, i === 0)}${arrow(g.id, i, 1, i === keys.length - 1)}</div>
+        <div style="flex:1;min-width:0"><div class="lp-name" style="${on ? '' : 'color:var(--text3)'}">${name(k)}</div>${on ? '' : '<div class="lp-meta">Hidden</div>'}</div>
+        <label class="toggle" onclick="event.stopPropagation()" aria-label="Show ${name(k)}"><input type="checkbox" ${on ? 'checked' : ''} onchange="_ovEdShow('${k}',this.checked)"><div class="toggle-slider"></div></label>
+      </div>`; }).join('') + `</div>`;
+  }).join('');
+  const st = document.getElementById('ove-state'); if (st) st.value = JSON.stringify(E); // lets Cancel see a change (PLS #376)
+}
+function _ovEdMove(gid, i, d) {
+  const a = window._ovEd.order[gid], j = i + d; if (j < 0 || j >= a.length) return;
+  [a[i], a[j]] = [a[j], a[i]]; haptic(); _ovEdDraw();
+}
+function _ovEdShow(k, on) { const h = window._ovEd.hidden; const i = h.indexOf(k); if (on && i >= 0) h.splice(i, 1); if (!on && i < 0) h.push(k); _ovEdDraw(); }
+function _ovEdReset() { window._ovEd = { order: Object.fromEntries(OV_GROUPS.map(g => [g.id, g.cards.map(c => c[0])])), hidden: [] }; _ovEdDraw(); }
+function saveOvLayout() {
+  const E = window._ovEd; if (!E) return;
+  const isDef = OV_GROUPS.every(g => E.order[g.id].join() === g.cards.map(c => c[0]).join()) && !E.hidden.length;
+  if (isDef) delete db.settings.ovLayout; else db.settings.ovLayout = { order: E.order, hidden: E.hidden.slice() };
+  saveDBWithSync();
+  window._ovEd = null;
+  closeSheet('gen');
+  if (currentPage === 'analytics' && _analyticsTab === 'overview') renderAnalytics();
+  showToast(isDef ? 'Default layout restored' : 'Layout saved');
 }
 
 function renderAnalyticsOverview() {
@@ -16277,7 +16605,7 @@ function renderAnalyticsOverview() {
     </div>
 
     ${(() => {
-      const pieHtml = (expTotal > 0 || incTotal > 0) ? `<div class="card" style="display:flex;flex-direction:column">
+      const pieHtml = (!_ovHidden('pie') && (expTotal > 0 || incTotal > 0)) ? `<div class="card" style="display:flex;flex-direction:column">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <div style="display:inline-flex;background:var(--bg3);border-radius:var(--r-full);padding:2px;gap:2px">
             <button type="button" data-ovcat-btn="exp" onclick="ovCatTog('exp')" style="border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--r-full);background:var(--bg);color:var(--text)">Expenses</button>
@@ -16296,19 +16624,21 @@ function renderAnalyticsOverview() {
       const cashflowHtml = _ovDoor(buildCashflowRunway(metricMk, dispCurr), 'cashflow', 'Full cashflow');
       const savingsRTHtml = _ovDoor(buildSavingsSparkline(metricMk, dispCurr), 'cashflow', 'Full cashflow');
       const netWorthHtml = _ovDoor(buildNetWorthTrend(metricMk, dispCurr), 'wealth', 'Wealth detail');
-      const heroItems = [budgetHtml, cashflowHtml, savingsRTHtml, netWorthHtml].filter(h => h);
+      // PLS #452: his order and hidden cards. The pie stays the tall card on the left whenever 4 cards sit beside it.
+      const _topOrder = _ovArrange('top', { pie: pieHtml, budget: budgetHtml, cashrun: cashflowHtml, savings: savingsRTHtml, networth: netWorthHtml });
+      const heroItems = _topOrder.filter(h => h !== pieHtml);
       if (!pieHtml && !heroItems.length) return '';
       // PLS #408: the tall pie needs exactly 4 cards beside it (2 x 2 on PC, a stacked pair on tablet). Any other
       // count would leave a hole beside the pie, so the cards go into the normal 1x2 / 1x3 grid instead.
-      if (heroItems.length !== 4 || !pieHtml) return _ovGrid([pieHtml, ...heroItems]);
+      if (heroItems.length !== 4 || !pieHtml) return _ovGrid(_topOrder);
       return `<div class="ov-heroA"><div class="ov-tall">${pieHtml}</div>${heroItems.map(h=>`<div>${h}</div>`).join('')}</div>`;
     })()}
 
     ${(() => {
       // PLS #408: Recent months is the page's closing strip. Beside YoY it becomes the second card of
       // "Commitments & history" (1x2); without YoY it stays the full-width strip it always was.
-      const yoyHtml = _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year');
-      const recentHtml = (()=>{
+      const yoyHtml = _ovHidden('yoy') ? '' : _ovDoor(buildYoYComparison(metricMk, dispCurr), 'yoy', 'Year-over-year'); // PLS #452
+      const recentHtml = _ovHidden('recent') ? '' : (()=>{
       // Filter: only months with activity (income > 0 OR expense > 0). Hide future + empty.
       const activeMonths = chartMonths.filter(m => !m.isFuture && (m.income > 0 || m.expense > 0));
       if (activeMonths.length === 0) return '';
@@ -16370,25 +16700,26 @@ function renderAnalyticsOverview() {
       </div>`;
     })();
       return _ovSections([
-        { title:'Cash flow', sub:'Money in, money out, and what that points to', items:[
-          _ovDoor(buildForecastBand(metricMk, dispCurr), 'cashflow', 'Full cashflow'),
-          _ovDoor(buildAnomalyHighlights(metricMk, dispCurr), 'spending', 'All categories'),
-          _ovDoor(buildIncomeExpenseBars(metricMk, dispCurr), 'cashflow', 'Full cashflow')
-        ]},
-        { title:'Spending patterns', sub:'Where it goes, and when', items:[
-          _ovDoor(buildFixedVsDiscretionary(metricMk, dispCurr), 'spending', 'All categories'),
-          _ovDoor(buildDayOfWeekHeatmap(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
-          _ovDoor(buildParetoAnalysis(metricMk, dispCurr), 'spending', 'All categories'),
-          _ovDoor(buildMostFrequent(metricMk, dispCurr), 'spending', 'All categories'),
-          _ovDoor(buildTimeOfDayPattern(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
-          _ovDoor(buildSpendingDistribution(metricMk, dispCurr), 'spending', 'All categories')
-        ]},
+        // PLS #452: a hidden card is not built at all; the rest follow his order
+        { title:'Cash flow', sub:'Money in, money out, and what that points to', items:_ovArrange('cashflow', {
+          forecast: !_ovHidden('forecast') && _ovDoor(buildForecastBand(metricMk, dispCurr), 'cashflow', 'Full cashflow'),
+          unusual: !_ovHidden('unusual') && _ovDoor(buildAnomalyHighlights(metricMk, dispCurr), 'spending', 'All categories'),
+          incexp: !_ovHidden('incexp') && _ovDoor(buildIncomeExpenseBars(metricMk, dispCurr), 'cashflow', 'Full cashflow')
+        })},
+        { title:'Spending patterns', sub:'Where it goes, and when', items:_ovArrange('patterns', {
+          fixed: !_ovHidden('fixed') && _ovDoor(buildFixedVsDiscretionary(metricMk, dispCurr), 'spending', 'All categories'),
+          dow: !_ovHidden('dow') && _ovDoor(buildDayOfWeekHeatmap(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+          pareto: !_ovHidden('pareto') && _ovDoor(buildParetoAnalysis(metricMk, dispCurr), 'spending', 'All categories'),
+          frequent: !_ovHidden('frequent') && _ovDoor(buildMostFrequent(metricMk, dispCurr), 'spending', 'All categories'),
+          tod: !_ovHidden('tod') && _ovDoor(buildTimeOfDayPattern(metricMk, dispCurr), 'dayofweek', 'Day-by-day detail'),
+          sizes: !_ovHidden('sizes') && _ovDoor(buildSpendingDistribution(metricMk, dispCurr), 'spending', 'All categories')
+        })},
         // PLS #408: What Changed + Goal progress sat in an untitled row under this heading; they are now part of
         // the section so its cards balance as one group (e.g. 4 = 2+2) instead of leaving one alone.
-        { title:'Income & wealth', sub:'What you earn and what you hold', items:[
-          _ovDoor(buildIncomeDiversification(metricMk, dispCurr), 'income', 'Income breakdown'),
-          _ovDoor(buildConcentrationRisk(dispCurr), 'wealth', 'Wealth detail'),
-          (() => {
+        { title:'Income & wealth', sub:'What you earn and what you hold', items:_ovArrange('wealth', {
+          incdiv: !_ovHidden('incdiv') && _ovDoor(buildIncomeDiversification(metricMk, dispCurr), 'income', 'Income breakdown'),
+          concentration: !_ovHidden('concentration') && _ovDoor(buildConcentrationRisk(dispCurr), 'wealth', 'Wealth detail'),
+          changed: !_ovHidden('changed') && (() => {
       // Top movers: categories where the metric month's spending deviates from its rolling average.
       // ── FIX: previously returned '' whenever period === 'ytd' (the DEFAULT view), so the card
       // silently disappeared. Now it always compares the metric month (= current month on YTD)
@@ -16468,9 +16799,9 @@ function renderAnalyticsOverview() {
         </div>` : ''}
       </div>`;
     })(),
-          _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')
-        ]},
-        yoyHtml ? { title:'Commitments & history', sub:'Recurring costs and how this year compares', items:[yoyHtml, recentHtml] } : null
+          goal: !_ovHidden('goal') && _ovDoor(buildGoalProgress(dispCurr), 'wealth', 'Wealth detail')
+        })},
+        yoyHtml ? { title:'Commitments & history', sub:'Recurring costs and how this year compares', items:_ovArrange('history', { yoy: yoyHtml, recent: recentHtml }) } : null
       ]) + (yoyHtml ? '' : recentHtml);
     })()}
   </div>`;
@@ -23685,6 +24016,8 @@ function openEditSubCat(catId, subId, forType) {
       <div id="esc-emoji-panel" style="display:none;margin-top:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-lg);padding:12px">${renderEmojiPanel('esc-emoji-display')}</div>
      </div>
      <div class="form-group"><label class="form-label" for="esc-name">Name</label><input class="form-input" id="esc-name" value="${escapeAttr(sc.name)}" oninput="onCatNameInput('esc-name','esc-emoji-display',null,'${forType}')"></div>
+     ${sc.autoOnly ? '' : `<div class="form-group"><label class="form-label" for="esc-parent">Main category</label><select class="form-input" id="esc-parent">${db.categories[forType].filter(c => !c.archived || c.id === catId).map(c => `<option value="${c.id}"${c.id === catId ? ' selected' : ''}>${_esc(c.name)}</option>`).join('')}</select>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Its past transactions move with it</div></div>`}<!-- PLS #456 -->
      ${!canDelete ? '<div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:8px 10px;border-radius:var(--r-sm);margin-bottom:8px">💡 This subcategory has linked transactions. You can Archive/Restore but cannot delete.</div>' : ''}`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      ${canDelete
@@ -23714,14 +24047,29 @@ function doDeleteSubCat(catId, subId, forType) {
   saveDBWithSync(); closeDlg(); renderSettings(); showToast('Subcategory deleted', 2200, 'trash');
 }
 
+// -- PERSONAL LOGIC SET #456 -- (his ask, Oct 2026: "subcats pwede mo ma reassign into other main category"). A
+// subcategory can move to another main category of the same type. Transactions and budget plans store only the
+// subcategory's id, so the id is kept and the record just changes parent: its past transactions and its budget rows
+// follow it, in every report, with nothing rewritten. A twin name in the target is refused (that would be a merge).
 function saveEditSubCat(catId, subId, forType) {
   const cat = db.categories[forType].find(c=>c.id===catId);
   const sc = cat?.subcats?.find(s=>s.id===subId);
   if (sc) {
-    sc.name = document.getElementById('esc-name')?.value?.trim()||sc.name;
+    const newName = document.getElementById('esc-name')?.value?.trim()||sc.name;
+    const to = document.getElementById('esc-parent')?.value;
+    const dest = to && to !== catId ? db.categories[forType].find(c => c.id === to) : null;
+    if (dest && (dest.subcats||[]).some(x => x.id !== subId && !x.autoOnly && String(x.name).trim().toLowerCase() === newName.toLowerCase())) {
+      showToast(`${dest.name} already has ${newName}, rename it first`); return;
+    }
+    sc.name = newName;
     const newIcon = document.getElementById('esc-emoji-display')?.textContent?.trim();
     if (newIcon) sc.icon = newIcon;
+    if (dest) {
+      cat.subcats.splice(cat.subcats.indexOf(sc), 1);
+      (dest.subcats = dest.subcats || []).push(sc);
+    }
     saveDBWithSync(); closeDlg(); renderSettings();
+    if (dest) showToast(`Moved to ${dest.name}, with its past transactions`);
   }
 }
 
@@ -25161,6 +25509,7 @@ function confirmDisconnectDrive() {
   db.settings.googleDriveConnected = false;
   db.settings.googleDriveEmail = null;
   clearDriveToken();
+  try { localStorage.removeItem(GDRIVE_EMAIL_KEY); } catch(e) {} // PLS #453
   _gdriveFolderId = null;
   _gdriveBackupsFolderId = null;
   Object.keys(_gdriveSubfolderCache).forEach(k => delete _gdriveSubfolderCache[k]);
@@ -25179,6 +25528,7 @@ function initGoogleDrive() {
   _gdriveTokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GDRIVE_CLIENT_ID,
     scope: GDRIVE_SCOPES,
+    error_callback: (err) => _driveSignInError(err), // PLS #453: a blocked or closed window used to fail without a word
     callback: async (tokenResponse) => {
       if (tokenResponse.error) {
         const errMap = {
@@ -25243,42 +25593,54 @@ function ensureDriveToken(callback, silent=false) {
     if (!silent) showToast('Google API loading, please try again'); else { _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); } // PLS #441 / #442
     return;
   }
-  // Try silent token refresh first (no popup)
+  // PLS #453: a tap (not silent) opens the sign-in right away, inside the tap, with his account as the hint. Google closes
+  // it on its own when he already allowed TrackBudget, so it is usually one quick flash or one tap on his account.
+  // (Was: a quiet try first, then a window opened after that failed, by which time the browser no longer counted the tap.)
+  if (!silent) {
+    const tapClient = google.accounts.oauth2.initTokenClient({
+      client_id: GDRIVE_CLIENT_ID,
+      scope: GDRIVE_SCOPES,
+      hint: _driveHint(),
+      error_callback: (err) => _driveSignInError(err),
+      callback: (res) => {
+        if (res.error) { _driveSignInError(res); return; }
+        saveDriveToken(res.access_token, res.expires_in);
+        db.settings.googleDriveConnected = true;
+        _gdriveTokenClient = tapClient;
+        callback();
+      }
+    });
+    tapClient.requestAccessToken({ prompt: _driveHint() ? '' : 'select_account' });
+    return;
+  }
+  // Silent: no window may ask for anything. Where the browser or Google refuses, the amber dot asks for one tap (#443).
+  const _quietFail = (why) => { console.warn('Silent token refresh failed:', why); _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); }; // PLS #441 / #442
   const silentClient = google.accounts.oauth2.initTokenClient({
     client_id: GDRIVE_CLIENT_ID,
     scope: GDRIVE_SCOPES,
     prompt: 'none',
-    hint: db.settings.googleDriveEmail || '',
+    hint: _driveHint(), // PLS #453: was db.settings.googleDriveEmail, which held the word "Connected"
+    error_callback: (err) => _quietFail(err && err.type),
     callback: (tokenResponse) => {
-      if (tokenResponse.error) {
-        if (silent) {
-          // Silent mode — never show popup. PLS #441: but say so, the header shows "Not synced"
-          console.warn('Silent token refresh failed:', tokenResponse.error);
-          _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); // PLS #442
-          return;
-        }
-        // Non-silent — fall back to popup
-        const popupClient = google.accounts.oauth2.initTokenClient({
-          client_id: GDRIVE_CLIENT_ID,
-          scope: GDRIVE_SCOPES,
-          callback: (res) => {
-            if (res.error) { showToast('Sign in failed: ' + res.error); return; }
-            saveDriveToken(res.access_token, res.expires_in);
-            db.settings.googleDriveConnected = true;
-            saveDB();
-            _gdriveTokenClient = popupClient;
-            callback();
-          }
-        });
-        popupClient.requestAccessToken({ prompt: 'select_account' });
-        return;
-      }
+      if (tokenResponse.error) { _quietFail(tokenResponse.error); return; }
       saveDriveToken(tokenResponse.access_token, tokenResponse.expires_in);
       _gdriveTokenClient = silentClient;
       callback();
     }
   });
   silentClient.requestAccessToken();
+}
+// PLS #454: Google refused the saved sign-in. Plain words, since other Drive screens show the message as is
+function _driveAuthErr() { const e = new Error('Google sign-in expired, sign in again'); e.driveAuth = true; return e; }
+// PLS #453: what went wrong with a sign-in window, in plain words
+function _driveSignInError(err) {
+  const t = (err && (err.type || err.error)) || '';
+  _syncNeedsTap = true; if (typeof setSyncStatus === 'function') setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin');
+  const msg = t === 'popup_failed_to_open' || t === 'popup_blocked_by_browser' ? 'The Google sign-in window was blocked. Allow pop-ups for this site, then tap Sync again'
+    : t === 'popup_closed' || t === 'popup_closed_by_user' ? 'Google sign-in was closed, nothing was synced'
+    : t === 'access_denied' ? 'Access denied, accept the permissions to sync'
+    : 'Google sign-in failed' + (t ? ': ' + t : '') + ', tap Sync to try again';
+  showToast(msg, 5000);
 }
 
 async function driveRequest(method, url, body, extraHeaders) {
@@ -25293,6 +25655,7 @@ async function driveRequest(method, url, body, extraHeaders) {
   });
   if (!res.ok) {
     const err = await res.text();
+    if (res.status === 401) { clearDriveToken(); throw _driveAuthErr(); } // PLS #454
     throw new Error(`Drive API error ${res.status}: ${err}`);
   }
   const text = await res.text();
@@ -25370,6 +25733,18 @@ async function getOrCreateSubfolder(subfolderName) {
 // PLS #441: "Save to Drive" is now one Sync now (look first, then save, load or combine)
 async function saveToDrive() { return syncNow(); }
 
+// -- PERSONAL LOGIC SET #449 -- (his report, Oct 2026) iPad and PC both logged offline; back online, the PC's save found
+// a newer file from the iPad, STOPPED and showed a purple dot, so its entries stayed on the PC alone until he tapped the
+// diskette. Coming back online, and any auto-save that finds Drive newer, now run the full Sync: load the newer save or
+// combine both, asking only when the same item changed on both. Never over an open form (it would reload under him);
+// then the dot stays and the next return to the app, or a tap, finishes it.
+function _syncAutoCombine() {
+  if (!db.settings.googleDriveConnected || db.settings.autoSyncOff || _syncBusy || _isSavingToDrive) return;
+  if (document.querySelector('#dlg-overlay.open, .sheet.open')) return;
+  _syncLastAuto = Date.now();
+  if (_gdriveAccessToken && Date.now() < _gdriveTokenExpiry) syncNow({ silent: true });
+  else ensureDriveToken(() => syncNow({ silent: true }), true);   // Safari may refuse: the amber dot asks for one tap (#443)
+}
 async function pruneOldBackups(folderId, keepCount) {
   try {
     const files = await driveRequest('GET',
@@ -25950,7 +26325,8 @@ async function saveToDriveSilent() {
     }
     // PLS #441: the save is guarded. If another device saved after this device's last sync, nothing is uploaded and the
     // header shows "Sync needed"; Sync now then loads or combines. (Was: always upload a new file, burying the other device's save.)
-    await _syncGuardedSave();
+    const _saved = await _syncGuardedSave();
+    if (_saved === false) setTimeout(_syncAutoCombine, 0); // PLS #449: Drive is newer -> load or combine now, not just a purple dot
   } catch(e) {
     console.warn('Auto-save to Drive failed:', e.message);
     setSyncStatus(_syncIsUnsynced() ? 'unsaved' : _syncStatus === 'behind' ? 'behind' : 'unsaved');
@@ -26060,6 +26436,54 @@ function _syncKeptAll(merged, mine, theirs, base) {
   return true;
 }
 var _syncBusy = false, _syncLastAuto = 0;
+// -- PERSONAL LOGIC SET #450 -- (his pick A, Oct 2026) Each device keeps its OWN copy of the save it last synced, in
+// IndexedDB (far more room than localStorage, so a phone does not fill up). Combining needs that common save point, and
+// relying on Drive alone failed: Drive keeps the newest 10 files (#441 pruning), so a busy iPhone auto-saving 12 times
+// while the iPad and PC were offline deleted the point both of them were based on, and Sync could only say "Two
+// different saves". Now the local copy is used first; Drive's copy is the fallback.
+const _sbStore = { db: null,
+  open() { if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { try { const r = indexedDB.open('tb_sync', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { this.db = r.result; res(r.result); }; r.onerror = () => rej(r.error); } catch(e) { rej(e); } }); },
+  async put(k, v) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(true); t.onerror = () => rej(t.error); }); },
+  async get(k) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readonly'); const q = t.objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } };
+// PLS #450 (debug, Oct 2026): IndexedDB can hang without ever answering (seen in Safari), and a sync that awaited it
+// never finished. Every call is capped at 3 s; past that the copy is skipped and Drive's copy is used, as if absent.
+const _sbCap = pr => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error('IndexedDB timeout')), 3000))]);
+async function _syncKeepBase(fileId, data) {   // never throws: a failed copy only means Drive's copy is used next time
+  try { const c = typeof data === 'string' ? JSON.parse(data) : JSON.parse(JSON.stringify(data)); delete c._backupMeta; await _sbCap(_sbStore.put('base', { fileId, json: JSON.stringify(c), at: new Date().toISOString() })); } catch(e) { console.warn('Sync base not kept:', e); _sbStore.db = null; }
+}
+async function _syncLocalBase(fileId) { try { const b = await _sbCap(_sbStore.get('base')); if (b && b.fileId === fileId && b.json) return JSON.parse(b.json); } catch(e) { _sbStore.db = null; } return null; }
+// -- PERSONAL LOGIC SET #451 -- (his pick B, Oct 2026) Last fallback when a device HAS synced before but neither its own
+// copy (#450) nor Drive has the common save: keep EVERYTHING from both sides instead of making him pick one. Records with
+// an id are matched by id: new on either side is kept; the same record different on both is ASKED (Drive's version until
+// he answers). Running totals are never added here (with no common point, adding would double them). Single values
+// (rates, settings) follow Drive; lists without ids are joined. The trade-off he accepted: something deleted on one device
+// while apart can come back. A device that never synced still gets the "Two different saves" choice.
+function _syncUnion(mine, theirs, path, out) {
+  const p = path.join('.');
+  if (_SYNC_LOCAL.has(p)) return mine;
+  if (_syncEq(mine, theirs)) return theirs;
+  if (_syncIsObj(mine) && _syncIsObj(theirs)) { const res = {};
+    for (const k of new Set([...Object.keys(theirs), ...Object.keys(mine)])) res[k] = (k in mine && k in theirs) ? _syncUnion(mine[k], theirs[k], [...path, k], out) : (k in theirs ? theirs[k] : mine[k]);
+    return res; }
+  const emptyArr = v => Array.isArray(v) && !v.length;
+  if ((_syncIsIdArr(mine) || emptyArr(mine)) && (_syncIsIdArr(theirs) || emptyArr(theirs))) {
+    const T = new Map(theirs.map(x => [x.id, x])); const res = theirs.slice();
+    for (const m of mine) { const t = T.get(m.id); if (!t) { res.push(m); continue; }
+      if (!_syncEq(m, t)) out.conflicts.push({ pathArr: [...path, '#' + m.id], kind: 'record', mine: m, theirs: t }); }
+    return res; }
+  if (Array.isArray(mine) && Array.isArray(theirs)) { const J = x => JSON.stringify(x); const res = theirs.slice(); mine.forEach(x => { if (!res.some(y => J(y) === J(x))) res.push(x); }); return res; }
+  return theirs;
+}
+function _syncUnionDB(mine, theirs) {
+  const out = { conflicts: [], rules: [], flags: [], deltaPaths: new Set(), union: true };
+  const res = _syncUnion(mine, theirs, [], out);
+  const tIds = new Set((theirs.transactions || []).map(t => t.id)), mIds = new Set((mine.transactions || []).map(t => t.id));
+  const key = t => [t.type, t.date, t.amount, t.currency, t.accountId || t.fromAccountId, t.categoryId || ''].join('|');
+  const onlyM = (mine.transactions || []).filter(t => !tIds.has(t.id)), onlyT = (theirs.transactions || []).filter(t => !mIds.has(t.id));
+  for (const a of onlyM) if (onlyT.some(b => key(a) === key(b))) out.flags.push({ kind: 'duplicate', tx: a });
+  return { db: res, out };
+}
 async function _syncLatest() {
   const folderId = await getOrCreateFolder();
   const r = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and name contains 'trackbudget' and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,description)&pageSize=1`);
@@ -26078,11 +26502,12 @@ async function _syncUpload() {
   formData.append('metadata', new Blob([JSON.stringify({ name: filename, parents: [folderId], description: JSON.stringify(meta) })], { type: 'application/json' }));   // device and count ride on the file, so a check needs no download
   formData.append('file', new Blob([JSON.stringify(backupData)], { type: 'application/json' }));
   const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime', { method: 'POST', headers: { 'Authorization': 'Bearer ' + _gdriveAccessToken }, body: formData });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) { if (res.status === 401) { clearDriveToken(); throw _driveAuthErr(); } throw new Error(await res.text()); } // PLS #454
   const up = await res.json();
   db.settings.lastDriveSync = now.toISOString(); db.settings.lastDriveBackupFile = filename; db.settings.lastDriveSyncDevice = getDeviceName();
   db.settings.lastSyncedFileId = up.id; delete db.settings.forcePush; db.settings.lastSyncedHash = _syncHash();
   saveDB(); _lastSyncTime = Date.now(); _hasUnsavedChanges = false; setSyncStatus('saved');
+  await _syncKeepBase(up.id, backupData); // PLS #450
   pruneOldBackups(folderId, 10).catch(() => {});
   return up.id;
 }
@@ -26126,20 +26551,30 @@ async function syncNow(opts) {
     if (!unsynced) {                                                                     // nothing unsaved here: take the newer save
       if (_syncHash() !== h0) { _syncBusy = false; hideLoading(); return syncNow(opts); }   // an entry was added while this was loading: start over, it will be combined instead of replaced
       _syncReplaceDB(theirs, latest.id, meta.deviceName); db.settings.lastSyncedHash = _syncHash(); saveDB();
+      await _syncKeepBase(latest.id, theirs); // PLS #450
       showToast(`Loaded the newer save from ${meta.deviceName}`); setTimeout(() => location.reload(), 900); return;
     }
     let baseDb = null;                                                                   // both changed: combine against the last save they had in common
-    if (baseId) { try { baseDb = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${baseId}?alt=media`); } catch(e) { baseDb = null; } }
+    if (baseId) baseDb = await _syncLocalBase(baseId);                                   // PLS #450: this device's own copy first
+    if (baseId && (!baseDb || !_syncValid(baseDb))) { try { baseDb = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files/${baseId}?alt=media`); } catch(e) { baseDb = null; } }
     const tClean = JSON.parse(JSON.stringify(theirs)); delete tClean._backupMeta;
-    if (!baseDb || !_syncValid(baseDb)) { hideLoading(); window._syncPending = { theirs: tClean, latest, meta }; setSyncStatus('behind'); _syncAskSides(); return; }   // no common save point: the user picks a side, both are kept
-    delete baseDb._backupMeta;
+    if (!baseId && (!baseDb || !_syncValid(baseDb))) { hideLoading(); window._syncPending = { theirs: tClean, latest, meta }; setSyncStatus('behind'); _syncAskSides(); return; }   // never synced: the user picks a side, both are kept
+    if (baseDb) delete baseDb._backupMeta;
     const mineC = JSON.parse(JSON.stringify(db));
-    const { db: merged, out } = _syncMergeDB(baseDb, mineC, tClean);
-    if (!_syncValid(merged) || !_syncKeptAll(merged, mineC, tClean, baseDb)) throw new Error('the combined result did not pass its check, nothing was changed');
+    const { db: merged, out } = (baseDb && _syncValid(baseDb)) ? _syncMergeDB(baseDb, mineC, tClean) : _syncUnionDB(mineC, tClean); // PLS #451: no common save left, keep both
+    if (!_syncValid(merged) || !_syncKeptAll(merged, mineC, tClean, baseDb || { transactions: [], accounts: [] })) throw new Error('the combined result did not pass its check, nothing was changed');
     window._syncPending = { merged, out, latest, meta, choices: out.conflicts.map(() => 'theirs'), mineHash: _syncHash() };
     if (out.conflicts.length) { hideLoading(); setSyncStatus('behind'); _syncAskConflicts(); return; }
     await _syncFinishMerge();
   } catch(e) {
+    // -- PERSONAL LOGIC SET #454 -- Google refused the saved sign-in (a 401). It is dropped at once; a quiet sync renews it
+    // quietly once, a tapped sync asks for one more tap (a window opened now, after the network call, would be blocked).
+    if (e && e.driveAuth) {
+      _syncBusy = false; hideLoading(); _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin');
+      if (opts.silent && !opts._renewed) ensureDriveToken(() => syncNow({ ...opts, _renewed: true }), true);
+      else if (!opts.silent) showToast('Google sign-in expired, tap Sync once more to sign in', 5000);
+      return;
+    }
     console.warn('Sync failed:', e); setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'behind'); if (!opts.silent) showToast('Sync failed: ' + (e.message || e));
   } finally { _syncBusy = false; hideLoading(); }
 }
@@ -26154,7 +26589,7 @@ async function _syncFinishMerge() {
   hideLoading(); window._syncPending = null;
   const flags = p.out.flags || [];
   const done = () => location.reload();
-  if (!flags.length) { showToast(`Combined with the save from ${p.meta.deviceName}`); setTimeout(done, 1100); return; }
+  if (!flags.length) { showToast(p.out.union ? `Combined with the save from ${p.meta.deviceName}. Anything deleted while apart may be back` : `Combined with the save from ${p.meta.deviceName}`, p.out.union ? 3500 : undefined); setTimeout(done, p.out.union ? 2600 : 1100); return; } // PLS #451
   const line = f => f.kind === 'duplicate' ? `Possible duplicate, logged on both devices: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which was archived on the other device`
     : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} points to an account that was deleted on the other device` : `The account ${f.name} was added on both devices`;
   window._syncReload = done;
@@ -26179,6 +26614,8 @@ function _syncDescribe(c, d) {
   field = String(field).replace(/#/g, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
   const show = (v, gone) => gone ? 'removed' : v === undefined || v === null || v === '' ? 'empty' : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (v ? 'yes' : 'no') : typeof v === 'string' ? (v.length > 28 ? v.slice(0, 27) + '…' : v) : 'changed';
   if (c.kind === 'deleted') return { title, sub: 'Deleted on one device, edited on the other', mine: c.mineGone ? 'delete it' : 'keep the edit', theirs: c.theirsGone ? 'delete it' : 'keep the edit' };
+  if (c.kind === 'record') { const amt = r => (col === 'transactions' && r && typeof r.amount === 'number') ? fmt(r.amount, r.currency) : 'this version'; // PLS #451
+    return { title, sub: 'Different on the two devices', mine: amt(c.mine), theirs: amt(c.theirs) }; }
   return { title, sub: field ? `Both devices changed ${field}` : 'Both devices changed this', mine: show(c.mine, c.mineGone), theirs: show(c.theirs, c.theirsGone) };
 }
 function _syncAskConflicts() {
@@ -26200,6 +26637,7 @@ function _syncApplyChoices() {
     for (let k = 0; k < P.length - 1 && node != null; k++) { const s = P[k]; node = (typeof s === 'string' && s[0] === '#' && Array.isArray(node)) ? node.find(x => x && x.id === s.slice(1)) : node[s]; }
     if (node == null) return; const last = P[P.length - 1];
     if (c.kind === 'deleted') { const gone = side === 'mine' ? c.mineGone : c.theirsGone; if (gone && Array.isArray(node)) { const ix = node.findIndex(x => x && x.id === last.slice(1)); if (ix >= 0) node.splice(ix, 1); } return; }
+    if (c.kind === 'record') { if (Array.isArray(node)) { const ix = node.findIndex(x => x && x.id === last.slice(1)); if (ix >= 0) node[ix] = JSON.parse(JSON.stringify(side === 'mine' ? c.mine : c.theirs)); } return; } // PLS #451
     const gone = side === 'mine' ? c.mineGone : c.theirsGone; if (gone) { delete node[last]; return; }
     node[last] = side === 'mine' ? c.mine : c.theirs; });
   if (!_syncValid(p.merged)) { showToast('That choice could not be applied, nothing was changed'); return; }
@@ -26218,6 +26656,7 @@ async function _syncSide(side) {
   if (side === 'mine') { db.settings.forcePush = true; saveDB(); return syncNow(); }
   try { localStorage.setItem('tb_premerge', JSON.stringify({ at: new Date().toISOString(), from: p.meta.deviceName, db })); } catch(e) {}
   _syncReplaceDB(p.theirs, p.latest.id, p.meta.deviceName); db.settings.lastSyncedHash = _syncHash(); saveDB();
+  await _syncKeepBase(p.latest.id, p.theirs); // PLS #450
   showToast(`Loaded the save from ${p.meta.deviceName}`); setTimeout(() => location.reload(), 900);
 }
 function syncHasUndo() { try { return !!localStorage.getItem('tb_premerge'); } catch(e) { return false; } }
@@ -26517,7 +26956,7 @@ function openSyncShortcuts() {
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin:14px 0 8px">Backups · TrackBudget/Backups</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');setTimeout(syncNow,120)">Sync now</button>
+        <button class="btn btn-primary btn-full" onclick="closeSheet('gen');syncNow()">Sync now</button>
         <button class="btn btn-ghost btn-full" onclick="closeSheet('gen');setTimeout(loadFromDrive,120)">Load an older backup</button>
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;margin:18px 0 8px">Snapshots</div>
@@ -27184,8 +27623,8 @@ function _checkOnline() {
   if (!offline && _wasOffline) {
     // Just came back online — auto-sync if Drive connected
     showToast('🌐 Back online — syncing…');
-    if (db?.settings?.googleDriveConnected && typeof saveToDriveSilent === 'function') {
-      setTimeout(() => { saveToDriveSilent().catch(()=>{}); }, UX_AUTOSAVE_DEBOUNCE);
+    if (db?.settings?.googleDriveConnected && typeof _syncAutoCombine === 'function') {
+      setTimeout(() => { _syncAutoCombine(); }, UX_AUTOSAVE_DEBOUNCE); // PLS #449: full sync (was a guarded save that stopped when Drive was newer)
     }
   }
   _wasOffline = offline;

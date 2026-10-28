@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-12'; // v1.2.12: a budget row set to 0 stays 0 on reopen (PLS #446)
+const CACHE = 'trackbudget-v1-2-14'; // v1.2.14: sync sign-in fix, add/move subcategory, Overview layout, edit forms, investment save fix (PLS #452-#459)
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {
