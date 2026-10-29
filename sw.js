@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-14-4'; // v1.2.14 continued: PLS / PSS split in comments, unused payday + recurring code and the one-record #304 repair removed
+const CACHE = 'trackbudget-v1-2-14-5'; // v1.2.14 continued: sync popups in plain words with real names (PSS #466-#468), Replace all wins on the next sync (PLS #469)
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {

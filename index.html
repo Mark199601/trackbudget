@@ -5687,6 +5687,8 @@ const APP_CHANGELOG = [
     '➕ Add expense: More options, Extra charge records a tip or fee as its own entry, same account, date and time', // PLS #463
     '➕ Add income: More options, Fee deducted and Extra income (like a bonus) are saved as their own entries', // PLS #463
     '🏷️ Transaction details show the type by name, like Remittance or External in', // PSS #465
+    '🔄 Sync popups use plain words and show the real names (category, account), not codes. After an import they say Imported file and This device', // PSS #466 #467 #468
+    '📥 After Replace all, the next sync saves the imported file to Google Drive as is, without combining or asking. The old save stays in Backups', // PLS #469
   ]},
   { ver: '1.2.13', date: 'October 2026', changes: [
     '₿ A Crypto Wallet can hold any coin (BTC, ETH, BNB and more), not only USDT. USDT is still the default, and a new coin asks for its rate first', // PLS #447
@@ -24718,12 +24720,22 @@ function importJSON(event) {
 
 function replaceImport() {
   if (!window._importedDB) return;
+  // -- PERSONAL LOGIC SET #469 -- (his pick, Oct 2026: "Import ang masusunod") Replace all is on purpose, so the import wins.
+  // The file carries the sync facts of the device that saved it (which Drive save it last synced, its device name), and
+  // keeping those made the next sync combine against the wrong common save and ask about entries he had just replaced.
+  // Now this device keeps its own facts, and when Drive is connected the next sync uploads the import as the newest save
+  // (forcePush). The old Drive save is not deleted; it stays in Backups.
+  const keep = {}; _SYNC_LOCAL_SETTINGS.forEach(k => { if (db.settings && k in db.settings) keep[k] = db.settings[k]; });
   db = window._importedDB;
+  if (!db.settings) db.settings = {};
+  _SYNC_LOCAL_SETTINGS.forEach(k => delete db.settings[k]); Object.assign(db.settings, keep);
+  if (keep.googleDriveConnected) db.settings.forcePush = true;
   // ── PERSONAL LOGIC SET #70 ── force onboarded:true after file-based Replace All import
   // Prevents app from showing onboarding screen if backup was saved before onboarded:true was set,
   // or if the backup came from a different build that didn't persist the flag.
   // Mirrors the same fix applied to confirmLoadDriveBackup() (line ~16566).
   db.onboarded = true;
+  db.settings.importedAt = new Date().toISOString(); // PSS #468: the next sync popup names this side "Imported file"
   saveDBWithSync();
   closeDlg();
   showToast('✅ Backup loaded! Reloading...');
@@ -26500,7 +26512,7 @@ async function saveToDriveSilent() {
 //   4. A copy from before the combine is kept on this device (Undo last sync), and the result is checked before it is used.
 // Tested before the build on his real data: 40 two-device cases plus 129 actions through the app's own functions.
 const _SYNC_LOCAL_SETTINGS = ['lastDriveSync','lastDriveSyncLocal','lastDriveBackupFile','lastDriveSyncDevice','lastLocalEditAt','deviceName','lastActiveDevice',
-  'deviceHistory','googleDriveToken','googleDriveConnected','googleDriveEmail','theme','themeMode','lastSyncedFileId','lastSyncedHash','forcePush','autoSyncOff'];
+  'deviceHistory','importedAt','googleDriveToken','googleDriveConnected','googleDriveEmail','theme','themeMode','lastSyncedFileId','lastSyncedHash','forcePush','autoSyncOff'];
 const _SYNC_LOCAL = new Set(['debugLog', '_backupMeta', ..._SYNC_LOCAL_SETTINGS.map(k => 'settings.' + k)]);   // facts about ONE device: never synced, never a conflict
 // running totals: both devices' changes are ADDED together
 const _SYNC_DELTA = [/^loans\.(lent|borrowed)\.#[^.]+\.remaining$/, /^installments\.#[^.]+\.paidMonths$/, /^transactions\.#[^.]+\.paidSoFar\.[^.]+$/, /^investments\.#[^.]+\.amount$/];
@@ -26703,7 +26715,7 @@ async function syncNow(opts) {
       if (_syncHash() !== h0) { _syncBusy = false; hideLoading(); return syncNow(opts); }   // an entry was added while this was loading: start over, it will be combined instead of replaced
       _syncReplaceDB(theirs, latest.id, meta.deviceName); db.settings.lastSyncedHash = _syncHash(); saveDB();
       await _syncKeepBase(latest.id, theirs); // PLS #450
-      showToast(`Loaded the newer save from ${meta.deviceName}`); setTimeout(() => location.reload(), 900); return;
+      showToast(`Updated with the data from ${meta.deviceName}`); setTimeout(() => location.reload(), 900); return;
     }
     let baseDb = null;                                                                   // both changed: combine against the last save they had in common
     if (baseId) baseDb = await _syncLocalBase(baseId);                                   // PLS #450: this device's own copy first
@@ -26723,7 +26735,7 @@ async function syncNow(opts) {
     if (e && e.driveAuth) {
       _syncBusy = false; hideLoading(); _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin');
       if (opts.silent && !opts._renewed) ensureDriveToken(() => syncNow({ ...opts, _renewed: true }), true);
-      else if (!opts.silent) showToast('Google sign-in expired, tap Sync once more to sign in', 5000);
+      else if (!opts.silent) showToast('Sign-in expired. Tap Sync to sign in again', 5000);
       return;
     }
     console.warn('Sync failed:', e); setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'behind'); if (!opts.silent) showToast('Sync failed: ' + (e.message || e));
@@ -26731,20 +26743,20 @@ async function syncNow(opts) {
 }
 async function _syncFinishMerge() {
   const p = window._syncPending; if (!p || !p.merged) return;
-  if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Something changed while syncing, syncing again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
+  if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Data changed while syncing. Trying again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
   try { localStorage.setItem('tb_premerge', JSON.stringify({ at: new Date().toISOString(), from: p.meta.deviceName, db })); } catch(e) {}   // Undo last sync; skipped if the phone has no room
   const mineTx = db.transactions.length;
   _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); saveDB();
   showLoading('Syncing...');
-  try { await _syncUpload(); } catch(e) { hideLoading(); db.settings.lastLocalEditAt = new Date().toISOString(); saveDB(); setSyncStatus('unsaved'); showToast('Combined on this device, the upload will retry'); setTimeout(() => location.reload(), 1200); return; }
+  try { await _syncUpload(); } catch(e) { hideLoading(); db.settings.lastLocalEditAt = new Date().toISOString(); saveDB(); setSyncStatus('unsaved'); showToast('Synced here. Will upload to Drive when it can'); setTimeout(() => location.reload(), 1200); return; }
   hideLoading(); window._syncPending = null;
   const flags = p.out.flags || [];
   const done = () => location.reload();
-  if (!flags.length) { showToast(p.out.union ? `Combined with the save from ${p.meta.deviceName}. Anything deleted while apart may be back` : `Combined with the save from ${p.meta.deviceName}`, p.out.union ? 3500 : undefined); setTimeout(done, p.out.union ? 2600 : 1100); return; } // PLS #451
-  const line = f => f.kind === 'duplicate' ? `Possible duplicate, logged on both devices: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which was archived on the other device`
-    : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} points to an account that was deleted on the other device` : `The account ${f.name} was added on both devices`;
+  if (!flags.length) { showToast(p.out.union ? `Synced with ${p.meta.deviceName}. Items you deleted may be back` : `Synced with ${p.meta.deviceName}`, p.out.union ? 3500 : undefined); setTimeout(done, p.out.union ? 2600 : 1100); return; } // PLS #451
+  const line = f => f.kind === 'duplicate' ? `Maybe added twice: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which you archived on the other device`
+    : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} uses an account you deleted on the other device` : `Account ${f.name} was added on both devices`;
   window._syncReload = done;
-  openDlg('Synced, please check these', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">Both saves were combined and nothing was removed. ${flags.length === 1 ? 'One item is' : flags.length + ' items are'} worth a look.</div>
+  openDlg('Synced, please check', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">Both devices are synced and nothing was lost. Please check ${flags.length === 1 ? 'this one' : 'these ' + flags.length}.</div>
     <div class="fs-card fs-feed">${flags.map(f => `<div class="fs-row"><div class="fs-t" style="font-weight:400;white-space:normal">${_esc(line(f))}</div></div>`).join('')}</div>`,
     `<button class="btn btn-primary btn-sm" onclick="closeDlg();_syncReload()">OK</button>`);
 }
@@ -26762,26 +26774,45 @@ function _syncDescribe(c, d) {
   if (rec) { const nm = col === 'transactions' ? _syncTxName(rec) : (rec.name || rec.personName || rec.location || rec.label || ''); if (nm) title += ': ' + nm; }
   if (!rec && P.length > 1) field = P.slice(1).join(' ');
   if (col === 'budgets' && P.includes('allocations')) { const cid = P[P.indexOf('allocations') + 1]; const cd = typeof getCategoryDisplay === 'function' ? getCategoryDisplay(cid) : null; field = 'planned for ' + ((cd && cd.name) || cid); }
-  field = String(field).replace(/#/g, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
-  const show = (v, gone) => gone ? 'removed' : v === undefined || v === null || v === '' ? 'empty' : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (v ? 'yes' : 'no') : typeof v === 'string' ? (v.length > 28 ? v.slice(0, 27) + '…' : v) : 'changed';
+  // PSS #466 (his report, Oct 2026: the popup showed "sc-85b683bce33fa"): ids are shown as what they name. The lookup reads the
+  // COMBINED data (d), since an id made on the other device is not in this device's own lists yet.
+  const key = String(P[P.length - 1] || '');
+  const FIELD = { categoryId:'category', accountId:'account', fromAccountId:'from account', toAccountId:'to account', toAmount:'amount received', notes:'note' };
+  field = FIELD[key] && field === key ? FIELD[key] : String(field).replace(/#/g, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  const catName = id => { for (const c of [...((d.categories || {}).expense || []), ...((d.categories || {}).income || [])]) { if (c.id === id) return c.name; const s = (c.subcats || []).find(x => x.id === id); if (s) return s.name; } return 'a removed category'; };
+  const acctName = id => ((d.accounts || []).find(a => a.id === id) || {}).name || 'a removed account';
+  const show = (v, gone) => gone ? 'removed' : v === undefined || v === null || v === '' ? 'empty'
+    : key === 'categoryId' ? catName(v) : /^(from|to)?[aA]ccountId$/.test(key) ? acctName(v)
+    : (key === 'amount' && rec && typeof v === 'number') ? fmt(v, rec.currency) : (key === 'date' && typeof v === 'string') ? fmtDFull(v)
+    : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (v ? 'yes' : 'no') : typeof v === 'string' ? (v.length > 28 ? v.slice(0, 27) + '…' : v) : 'changed';
   if (c.kind === 'deleted') return { title, sub: 'Deleted on one device, edited on the other', mine: c.mineGone ? 'delete it' : 'keep the edit', theirs: c.theirsGone ? 'delete it' : 'keep the edit' };
   if (c.kind === 'record') { const amt = r => (col === 'transactions' && r && typeof r.amount === 'number') ? fmt(r.amount, r.currency) : 'this version'; // PLS #451
     return { title, sub: 'Different on the two devices', mine: amt(c.mine), theirs: amt(c.theirs) }; }
-  return { title, sub: field ? `Both devices changed ${field}` : 'Both devices changed this', mine: show(c.mine, c.mineGone), theirs: show(c.theirs, c.theirsGone) };
+  const mine = show(c.mine, c.mineGone), theirs = show(c.theirs, c.theirsGone), F = field ? field[0].toUpperCase() + field.slice(1) : 'This';
+  return { title, sub: mine === theirs ? `Same ${field || 'value'} on both, either one is fine` : `${F} is different on the two`, mine, theirs };
+}
+// PSS #467 (his ask, Oct 2026: "ang complikado ng wordings sa sync"): every sync popup and toast in short, plain words.
+// PSS #468: names for the two sides. Until the first sync after a Replace all, this side is the imported file, and a
+// Drive save made by this same device is "This device" (what it held before the import), not its device name.
+function _syncSides(p) {
+  const s = db.settings || {}, imp = !!s.importedAt && (!s.lastDriveSync || s.importedAt > s.lastDriveSync);
+  const same = p.meta.deviceName === getDeviceName();
+  return { mine: imp ? 'Imported file' : 'This device', theirs: imp && same ? 'This device' : p.meta.deviceName,
+    mineIn: imp ? 'the imported file' : 'this device', theirsIn: imp && same ? 'this device' : p.meta.deviceName };
 }
 function _syncAskConflicts() {
-  const p = window._syncPending; if (!p) return; const dev = p.meta.deviceName; const n = p.out.conflicts.length;
+  const p = window._syncPending; if (!p) return; const S = _syncSides(p); const n = p.out.conflicts.length;
   const rows = p.out.conflicts.map((c, i) => { const L = _syncDescribe(c, p.merged);
     return `<div class="fs-row" style="flex-direction:column;align-items:stretch;gap:8px"><div><div class="fs-t" style="white-space:normal">${_esc(L.title)}</div><div class="fs-s">${_esc(L.sub)}</div></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="chip${p.choices[i] === 'mine' ? ' active' : ''}" id="sync-c-${i}-mine" onclick="_syncPick(${i},'mine')">This device: ${_esc(L.mine)}</button><button type="button" class="chip${p.choices[i] === 'theirs' ? ' active' : ''}" id="sync-c-${i}-theirs" onclick="_syncPick(${i},'theirs')">${_esc(dev)}: ${_esc(L.theirs)}</button></div></div>`; }).join('');
-  openDlg('Choose what to keep', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">Both devices changed the same ${n === 1 ? 'item' : n + ' items'}. Everything else was combined.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="chip${p.choices[i] === 'mine' ? ' active' : ''}" id="sync-c-${i}-mine" onclick="_syncPick(${i},'mine')">${_esc(S.mine)}: ${_esc(L.mine)}</button><button type="button" class="chip${p.choices[i] === 'theirs' ? ' active' : ''}" id="sync-c-${i}-theirs" onclick="_syncPick(${i},'theirs')">${_esc(S.theirs)}: ${_esc(L.theirs)}</button></div></div>`; }).join('');
+  openDlg('Choose what to keep', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">${n === 1 ? 'This is' : 'These ' + n + ' are'} different between ${_esc(S.mineIn)} and ${_esc(S.theirsIn)}. Pick the one to keep. Everything else is already synced.</div>
     <div class="fs-card fs-feed" style="margin-bottom:10px">${rows}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="chip" onclick="_syncPickAll('mine')">All from this device</button><button type="button" class="chip" onclick="_syncPickAll('theirs')">All from ${_esc(dev)}</button></div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Not now</button><button class="btn btn-primary btn-sm" onclick="_syncApplyChoices()">Apply</button>`);
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="chip" onclick="_syncPickAll('mine')">Keep all from ${_esc(S.mineIn)}</button><button type="button" class="chip" onclick="_syncPickAll('theirs')">Keep all from ${_esc(S.theirsIn)}</button></div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Later</button><button class="btn btn-primary btn-sm" onclick="_syncApplyChoices()">Save</button>`);
 }
 function _syncPick(i, side) { const p = window._syncPending; if (!p) return; p.choices[i] = side; ['mine', 'theirs'].forEach(s => { const b = document.getElementById(`sync-c-${i}-${s}`); if (b) b.classList.toggle('active', s === side); }); }
 function _syncPickAll(side) { const p = window._syncPending; if (!p) return; p.out.conflicts.forEach((c, i) => _syncPick(i, side)); }
-function _syncCancel() { window._syncPending = null; closeDlg(); showToast('Nothing was changed, sync again when you are ready'); }
+function _syncCancel() { window._syncPending = null; closeDlg(); showToast('Nothing changed. Sync again when ready'); }
 function _syncApplyChoices() {
   const p = window._syncPending; if (!p || !p.merged) return;
   p.out.conflicts.forEach((c, i) => { const side = p.choices[i]; const P = c.pathArr; let node = p.merged;
@@ -26791,16 +26822,16 @@ function _syncApplyChoices() {
     if (c.kind === 'record') { if (Array.isArray(node)) { const ix = node.findIndex(x => x && x.id === last.slice(1)); if (ix >= 0) node[ix] = JSON.parse(JSON.stringify(side === 'mine' ? c.mine : c.theirs)); } return; } // PLS #451
     const gone = side === 'mine' ? c.mineGone : c.theirsGone; if (gone) { delete node[last]; return; }
     node[last] = side === 'mine' ? c.mine : c.theirs; });
-  if (!_syncValid(p.merged)) { showToast('That choice could not be applied, nothing was changed'); return; }
+  if (!_syncValid(p.merged)) { showToast('Could not save that. Nothing changed'); return; }
   closeDlg(); _syncBusy = true; _syncFinishMerge().finally(() => { _syncBusy = false; });
 }
 // No common save point (first sync after this update, or the old file is gone): the user picks a side, and the other side is kept
 function _syncAskSides() {
-  const p = window._syncPending; if (!p) return; const row = (t, s, a) => `<div class="fs-row"><div style="flex:1;min-width:0"><div class="fs-t">${t}</div><div class="fs-s">${s}</div></div><div class="fs-a" style="font-weight:400;color:var(--text2)">${a}</div></div>`;
-  openDlg('Two different saves', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">This device and Google Drive have different data, and there is no shared starting point to combine them from. Nothing was overwritten.</div>
-    <div class="fs-card fs-feed" style="margin-bottom:12px">${row('On Google Drive', `${_esc(_syncWhen(p.meta.at))}, from ${_esc(p.meta.deviceName)}`, `${p.meta.txCount} transactions`)}${row('This device', 'Has changes that are not synced', `${db.transactions.length} transactions`)}</div>
-    <div style="font-size:12px;color:var(--text3);line-height:1.5">Whichever you pick, the other one is kept: this device's data can be brought back with Undo last sync, and the Drive save stays in your backups.</div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Not now</button><button class="btn btn-ghost btn-sm" onclick="_syncSide('mine')">Keep this device</button><button class="btn btn-primary btn-sm" onclick="_syncSide('theirs')">Load Drive save</button>`);
+  const p = window._syncPending; if (!p) return; const S = _syncSides(p); const row = (t, s, a) => `<div class="fs-row"><div style="flex:1;min-width:0"><div class="fs-t">${t}</div><div class="fs-s">${s}</div></div><div class="fs-a" style="font-weight:400;color:var(--text2)">${a}</div></div>`;
+  openDlg('Pick which data to use', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">${S.mine} and Google Drive have different data and cannot be combined. Nothing was changed yet.</div>
+    <div class="fs-card fs-feed" style="margin-bottom:12px">${row('On Google Drive', `${_esc(_syncWhen(p.meta.at))}, from ${_esc(p.meta.deviceName)}`, `${p.meta.txCount} transactions`)}${row(S.mine, 'Has changes not yet on Drive', `${db.transactions.length} transactions`)}</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.5">The one you do not pick is not lost. Get this device's data back from Undo last sync, or the Drive data from Backups.</div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Later</button><button class="btn btn-ghost btn-sm" onclick="_syncSide('mine')">Use ${S.mineIn}</button><button class="btn btn-primary btn-sm" onclick="_syncSide('theirs')">Use Drive</button>`);
 }
 async function _syncSide(side) {
   const p = window._syncPending; if (!p) return; closeDlg(); window._syncPending = null;
@@ -26808,13 +26839,13 @@ async function _syncSide(side) {
   try { localStorage.setItem('tb_premerge', JSON.stringify({ at: new Date().toISOString(), from: p.meta.deviceName, db })); } catch(e) {}
   _syncReplaceDB(p.theirs, p.latest.id, p.meta.deviceName); db.settings.lastSyncedHash = _syncHash(); saveDB();
   await _syncKeepBase(p.latest.id, p.theirs); // PLS #450
-  showToast(`Loaded the save from ${p.meta.deviceName}`); setTimeout(() => location.reload(), 900);
+  showToast(`Updated with the data from ${p.meta.deviceName}`); setTimeout(() => location.reload(), 900);
 }
 function syncHasUndo() { try { return !!localStorage.getItem('tb_premerge'); } catch(e) { return false; } }
 function syncUndoLast() {
   let pm = null; try { pm = JSON.parse(localStorage.getItem('tb_premerge') || 'null'); } catch(e) {}
   if (!pm || !_syncValid(pm.db)) { showToast('Nothing to undo'); return; }
-  openDlg('Undo last sync', `<div style="font-size:13px;color:var(--text2);line-height:1.5">This puts back this device's data from before it was combined on ${_esc(_syncWhen(pm.at))}, and makes it the newest save on Google Drive. The combined save stays in your backups.</div>`,
+  openDlg('Undo last sync', `<div style="font-size:13px;color:var(--text2);line-height:1.5">This brings back this device's data from before the sync on ${_esc(_syncWhen(pm.at))} and saves it to Google Drive. The synced version stays in Backups.</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button><button class="btn btn-primary btn-sm" onclick="_syncDoUndo()">Undo</button>`);
 }
 function _syncDoUndo() {
@@ -26822,7 +26853,7 @@ function _syncDoUndo() {
   if (!pm || !_syncValid(pm.db)) { closeDlg(); showToast('Nothing to undo'); return; }
   _syncReplaceDB(pm.db, db.settings.lastSyncedFileId, null); db.settings.forcePush = true; delete db.settings.lastSyncedHash; db.settings.lastLocalEditAt = new Date().toISOString(); saveDB();
   try { localStorage.removeItem('tb_premerge'); } catch(e) {}
-  closeDlg(); showToast('Put back, syncing'); setTimeout(() => location.reload(), 900);
+  closeDlg(); showToast('Brought back. Syncing'); setTimeout(() => location.reload(), 900);
 }
 // -- PERSONAL STRUCTURE SET #443 -- Sync status on the diskette (his pick A; replaces the reminder row of #442 and the header text badge).
 // Safari cannot renew the Google sign-in quietly, so the iPhone needs one tap: the amber dot asks for it, and tapping the
@@ -26842,7 +26873,7 @@ function _syncDiskRender() {
   const st = _syncDiskState(), onDash = (typeof currentPage !== 'undefined' && currentPage === 'dashboard');
   if (!onDash && st !== 'signin' && st !== 'behind') { if (slot.innerHTML) slot.innerHTML = ''; slot.dataset.state = ''; return; }
   if (slot.dataset.state === st && slot.innerHTML) return;
-  const tip = st === 'signin' ? 'Not synced, tap to sync' : st === 'behind' ? 'Newer save on Google Drive, tap to sync' : st === 'saving' ? 'Syncing' : st === 'off' ? 'Backups, Google Drive is not connected' : 'Synced, tap for backups';
+  const tip = st === 'signin' ? 'Not synced, tap to sync' : st === 'behind' ? 'Newer data on Drive, tap to sync' : st === 'saving' ? 'Syncing' : st === 'off' ? 'Backups, Google Drive is not connected' : 'Synced, tap for backups';
   const dot = st === 'signin' ? 'var(--amber)' : st === 'behind' ? 'var(--accent)' : '';
   const glyph = st === 'saving'
     ? `<span style="display:flex;color:var(--accent)"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span>`
