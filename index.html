@@ -757,6 +757,7 @@ option{background:var(--bg3);color:var(--text)}
 .f6 .ef .f6-grid > .form-group > .form-label > .f6-ico{display:flex;color:var(--accent)}
 .f6 .ef .f6-grid .form-input,.f6 .ef .f6-grid .ef-field input,.f6 .ef .f6-grid .ef-field select{text-align:left!important;text-align-last:auto!important;padding:0!important;font-size:13px;font-weight:600;width:100%;min-height:0;height:auto}
 .f6 .ef .f6-grid select.form-input{padding-right:16px!important}
+.ec-pick{display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}.ec-pick #edit-cat-val{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ec-pick .ec-chev{color:var(--text3);display:inline-flex;flex:none}
 .f6 .ef .f6-grid textarea.form-input{text-align:left;min-height:20px;font-weight:500}
 .f6 .ef .f6-grid .dt-row,.f6 .ef .f6-grid .dt-field{justify-content:flex-start}
 .f6 .ef .f6-grid .dt-display{justify-content:flex-start;padding:0!important;padding-left:0!important;margin-left:0!important;text-indent:0;font-size:13px;font-weight:600;min-height:0}
@@ -2682,13 +2683,13 @@ function defaultDB() {
           {id:'sc-office',name:'Office Supplies',icon:'📎',archived:false},
         ]},
         {id:'c-financial',name:'Financial',icon:'💱',archived:false,subcats:[
-          {id:'sc-remittance',name:'Remittance',icon:'📤',archived:false,autoOnly:true},
-          {id:'sc-remittancefee',name:'Remittance Fee',icon:'💸',archived:false,autoOnly:true},
-          {id:'sc-externalin',name:'External In',icon:'📥',archived:false,autoOnly:true},
-          {id:'sc-externalout',name:'External Out',icon:'📤',archived:false,autoOnly:true},
-          {id:'sc-forexloss',name:'Forex Loss',icon:'📉',archived:false,autoOnly:true},
+          {id:'sc-remittance',name:'International Transfer',icon:'📤',archived:false,autoOnly:true},
+          {id:'sc-remittancefee',name:'Transfer Fee',icon:'💸',archived:false,autoOnly:true},
+          {id:'sc-externalin',name:'Incoming Transfer',icon:'📥',archived:false,autoOnly:true},
+          {id:'sc-externalout',name:'Outgoing Transfer',icon:'📤',archived:false,autoOnly:true},
+          {id:'sc-forexloss',name:'FX Loss',icon:'📉',archived:false,autoOnly:true},
           {id:'sc-writeoff',name:'Write-off',icon:'✗',archived:false,autoOnly:true},
-          {id:'sc-investloss',name:'Investment Loss',icon:'📉',archived:false,autoOnly:true},
+          {id:'sc-investloss',name:'Realized Loss',icon:'📉',archived:false,autoOnly:true},
           {id:'sc-misc',name:'Miscellaneous',icon:'📌',archived:false},
         ]},
       ],
@@ -2700,8 +2701,8 @@ function defaultDB() {
         ]},
         {id:'c-returns',name:'Returns & Gains',icon:'📈',archived:false,subcats:[
           {id:'sc-investreturns',name:'Investment Returns',icon:'📈',archived:false},
-          {id:'sc-forexgain',name:'Forex Gain',icon:'📊',archived:false,autoOnly:true},
-          {id:'sc-debtforgiven',name:'Forgiven Debt',icon:'🕊',archived:false,autoOnly:true},
+          {id:'sc-forexgain',name:'FX Gain',icon:'📈',archived:false,autoOnly:true},
+          {id:'sc-debtforgiven',name:'Debt Relief',icon:'🕊',archived:false,autoOnly:true},
           {id:'sc-dividends',name:'Dividends',icon:'💵',archived:false},
         ]},
         {id:'c-otherincome',name:'Other Income',icon:'💰',archived:false,subcats:[
@@ -2772,10 +2773,24 @@ let db = (() => {
     if (!parsed.targets) parsed.targets = [];
     // Migration: mark system-only subcategories as autoOnly (hidden from manual picker)
     const AUTO_ONLY_IDS = new Set(['sc-remittance','sc-externalin','sc-externalout','sc-forexloss','sc-forexgain','sc-remittancefee']);
+    // -- PERSONAL LOGIC SET #461 -- (his ask, Oct 2026: "yung mga auto sa financials dapat hard-coded na yan, hindi na
+    // dapat makikita sa cats para hindi editable ang looks"). The app files these entries itself and recomputes them,
+    // so they are not his categories to edit: Settings > Categories no longer lists them, and their name and icon are
+    // fixed here on every load (an old edit or an older seed is put back). They stay in the data because entries
+    // point at their ids. An archived one is brought back, since nothing could un-archive it once hidden.
+    const AUTO_LOOK = {
+      // PLS #462 (his pick, Oct 2026): fintech names, Write-off kept as the word most people know
+      'sc-remittancefee': ['Transfer Fee', '\u{1F4B8}'], 'sc-remittance': ['International Transfer', '\u{1F4E4}'],
+      'sc-externalin': ['Incoming Transfer', '\u{1F4E5}'], 'sc-externalout': ['Outgoing Transfer', '\u{1F4E4}'],
+      'sc-forexgain': ['FX Gain', '\u{1F4C8}'], 'sc-forexloss': ['FX Loss', '\u{1F4C9}'],
+      'sc-writeoff': ['Write-off', '\u2717'], 'sc-investloss': ['Realized Loss', '\u{1F4C9}'], 'sc-debtforgiven': ['Debt Relief', '\u{1F54A}'],
+    };
     for (const type of ['expense','income']) {
       for (const cat of (parsed.categories?.[type] || [])) {
         for (const sc of (cat.subcats || [])) {
           if (AUTO_ONLY_IDS.has(sc.id) && !sc.autoOnly) sc.autoOnly = true;
+          const lk = sc.autoOnly && AUTO_LOOK[sc.id];
+          if (lk) { if (sc.name !== lk[0]) sc.name = lk[0]; if (sc.icon !== lk[1]) sc.icon = lk[1]; if (sc.archived) sc.archived = false; }
         }
       }
     }
@@ -2789,12 +2804,12 @@ let db = (() => {
         // Older databases predate several of these; txs referencing them showed "Deleted Category"
         // (e.g. every remittance parent, which is created with categoryId:'sc-remittance').
         const SEED_DEFS = [
-          {id:'sc-remittancefee', name:'Remittance Fee', icon:'💸'},
-          {id:'sc-remittance',    name:'Remittance',     icon:'📤'},
-          {id:'sc-externalin',    name:'External In',    icon:'⬇️'},
-          {id:'sc-externalout',   name:'External Out',   icon:'⬆️'},
-          {id:'sc-forexloss',     name:'Forex Loss',     icon:'📉'},
-          {id:'sc-forexgain',     name:'Forex Gain',     icon:'📈'}
+          {id:'sc-remittancefee', name:'Transfer Fee', icon:'💸'},
+          {id:'sc-remittance',    name:'International Transfer', icon:'📤'},
+          {id:'sc-externalin',    name:'Incoming Transfer', icon:'📥'},
+          {id:'sc-externalout',   name:'Outgoing Transfer', icon:'📤'},
+          {id:'sc-forexloss',     name:'FX Loss',     icon:'📉'},
+          {id:'sc-forexgain',     name:'FX Gain',     icon:'📈'}
         ];
         for (const def of SEED_DEFS) {
           if (!financialCat.subcats.some(s => s.id === def.id)) {
@@ -3591,16 +3606,16 @@ function getCategoryDisplay(catId) {
 const _SYSTEM_CAT_LABELS = {
   'sc-reimbreceived': {name:'Reimbursement Received', icon:'💰'}, // batch reimbursement (receivable, PLS #48)
   'sc-investreturns': {name:'Investment Returns', icon:'📈'},
-  'sc-investloss':    {name:'Investment Loss',    icon:'📉'},
+  'sc-investloss':    {name:'Realized Loss',      icon:'📉'},
   'sc-writeoff':      {name:'Write-off',          icon:'✗'},
-  'sc-debtforgiven':  {name:'Forgiven Debt',      icon:'🕊'},
-  'sc-forexgain':     {name:'Forex Gain',         icon:'📊'},
-  'sc-forexloss':     {name:'Forex Loss',         icon:'📉'},
+  'sc-debtforgiven':  {name:'Debt Relief',        icon:'🕊'},
+  'sc-forexgain':     {name:'FX Gain',            icon:'📈'},
+  'sc-forexloss':     {name:'FX Loss',            icon:'📉'},
   'sc-bankcharges':   {name:'Bank Charges',       icon:'🏦'},
-  'sc-remittance':    {name:'Remittance',         icon:'📤'},
-  'sc-remittancefee': {name:'Remittance Fee',     icon:'💸'},
-  'sc-externalin':    {name:'External In',        icon:'📥'},
-  'sc-externalout':   {name:'External Out',       icon:'📤'},
+  'sc-remittance':    {name:'International Transfer', icon:'📤'},
+  'sc-remittancefee': {name:'Transfer Fee',       icon:'💸'},
+  'sc-externalin':    {name:'Incoming Transfer',  icon:'📥'},
+  'sc-externalout':   {name:'Outgoing Transfer',  icon:'📤'},
   'sc-misc':          {name:'Miscellaneous',      icon:'📌'},
 };
 // 📖 USER STORY: Auto-generated children (gain/loss) ay may dedicated display labels imbes
@@ -3614,7 +3629,7 @@ function txCategoryDisplay(tx) {
   // PLS #268: the write-off carries isBatchSettlement so the batch machinery can see it, so it has
   // to be named BEFORE that line -- otherwise it reads "Loan Settlement Received", the exact
   // opposite of what happened. Nothing was received.
-  if ((tx.isBatchWriteOff || tx.isLoanSettlementLoss) && tx.type === 'income') return tx.writeOffReason === 'Exchange rate difference' ? {icon:'📈', name:'Forex Gain'} : {icon:'📈', name:'Debt Discount'}; // PLS #444: a debt not paid in full is a gain, it used to read "Loan Write-off" / "Loan Settlement Loss"
+  if ((tx.isBatchWriteOff || tx.isLoanSettlementLoss) && tx.type === 'income') return tx.writeOffReason === 'Exchange rate difference' ? {icon:'📈', name:'FX Gain'} : {icon:'📈', name:'Debt Relief'}; // PLS #444: a debt not paid in full is a gain, it used to read "Loan Write-off" / "Loan Settlement Loss"
   if (tx.isLoanSettlementLoss && /^(Interest paid|Overpayment) to /.test(tx.notes || '')) return {icon:'📉', name:'Interest Paid'}; // PLS #444
   if (tx.isBatchWriteOff)        return {icon:'✖️', name:'Loan Write-off'};
   if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
@@ -3634,8 +3649,8 @@ function txCategoryDisplay(tx) {
   if (_missing) {
     if (tx.isAutoReimb)    return {icon:'💰', name:'Reimbursement Received'};
     if (tx.isCorrection || tx.type === 'correction') return {icon:'⚖️', name:'Balance Correction'};
-    if (tx.isAutoForex)    return {icon:'💱', name:tx.type === 'income' ? 'Forex Gain' : 'Forex Loss'};
-    if (tx.isAutoFee)      return {icon:'🧾', name:'Remittance Fee'};
+    if (tx.isAutoForex)    return {icon:'💱', name:tx.type === 'income' ? 'FX Gain' : 'FX Loss'};
+    if (tx.isAutoFee)      return {icon:'🧾', name:'Transfer Fee'};
     if (tx.isSettlement && tx.parentId) return {icon:'🤝', name:'Loan Payment'};
   }
   return _c;
@@ -5652,6 +5667,9 @@ const APP_CHANGELOG = [
     '✨ New look for every Edit form: the amount on top, details in tiles, and Save, Cancel and Archive at the bottom', // PLS #457
     '🛠️ Fixed: saving an investment with Add capital entries no longer takes the money from the account a second time', // PLS #458
     '🛠️ Fixed: editing a settled loan in another currency keeps the rate in its entry note', // PLS #459
+    '🏷️ Edit transaction: Category opens the same picker as Add, showing only the categories for that type', // PLS #460
+    '🔒 Categories the app files on its own are no longer listed in Settings, so their name and icon stay fixed', // PLS #461
+    '💱 Clearer names for those categories: Transfer Fee, International Transfer, Incoming and Outgoing Transfer, FX Gain and FX Loss, Realized Loss, Debt Relief', // PLS #462
   ]},
   { ver: '1.2.13', date: 'October 2026', changes: [
     '₿ A Crypto Wallet can hold any coin (BTC, ETH, BNB and more), not only USDT. USDT is still the default, and a new coin asks for its rate first', // PLS #447
@@ -6952,12 +6970,44 @@ function onAddDateChange(v) {
   }
 }
 
+// -- PERSONAL LOGIC SET #460 -- (his ask, Oct 2026: "pag nag eedit ako ng transaction mejo magulo yung cats and subcats
+// drop down"). Edit transaction opens this same picker: only the categories of the entry's own type, subcategories
+// only (all his entries are filed under a subcategory; a main category picked from the old list matched no budget
+// and no Recent), with search, Recent and the Add tile (#455). window._cpEdit marks the edit mode; pickSubCat then
+// fills the edit form instead of the Add form. The picker type comes from _cpType() in both modes.
+function _cpType() { return window._cpEdit ? window._cpEdit.type : (_addState && _addState.type === 'income' ? 'income' : 'expense'); }
+function _ecLabel(id) {
+  for (const t of ['expense', 'income']) for (const c of (db.categories[t] || [])) {
+    if (c.id === id) return `${c.icon || ''} ${_esc(c.name)}`;
+    const sc = (c.subcats || []).find(x => x.id === id); if (sc) return `${sc.icon || ''} ${_esc(sc.name)}`;
+  }
+  const d = getCategoryDisplay(id); return `${d.icon || ''} ${_esc(d.name)}`;
+}
+function _cpOpenEdit(type) {
+  try { npClose(); } catch (e) {}
+  const cur = document.getElementById('edit-cat')?.value || '';
+  const parent = (db.categories[type] || []).find(c => (c.subcats || []).some(x => x.id === cur));
+  window._catGroupOpen = parent ? parent.id : null;
+  window._cpEdit = { type };
+  _cpOverlay(type);
+  // the current pick's group opens in view, so the entry's own subcategory shows without scrolling
+  const g = document.querySelector('#cat-picker-overlay .cat-group.open'); if (g) g.scrollIntoView({ block: 'center' });
+}
+function _cpEditPick(subCatId) {
+  const h = document.getElementById('edit-cat'); if (!h) return;
+  h.value = subCatId;
+  const v = document.getElementById('edit-cat-val'); if (v) v.innerHTML = _ecLabel(subCatId);
+}
 function openCatPickerSheet() {
   const s = _addState;
   const txType = s.type === 'income' ? 'income' : 'expense';
   // Open category picker as inline overlay
   const body = document.getElementById('add-body');
   if (!body) return;
+  window._cpEdit = null;
+  _cpOverlay(txType);
+}
+function _cpOverlay(txType) {
   const overlay = document.createElement('div');
   overlay.id = 'cat-picker-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent';
@@ -6975,6 +7025,7 @@ function openCatPickerSheet() {
 function closeCatPickerSheet() {
   const overlay = document.getElementById('cat-picker-overlay');
   if (overlay) overlay.remove();
+  window._cpEdit = null; // PLS #460
 }
 
 // Wraps shared form for the unified flow
@@ -7183,7 +7234,7 @@ function _cpFilter(q) {
   q = String(q||'').trim().toLowerCase();
   const main = document.getElementById('cp-main'), res = document.getElementById('cp-results'); if (!main || !res) return;
   if (!q) { main.style.display = ''; res.style.display = 'none'; return; }
-  const forType = _addState.type === 'income' ? 'income' : 'expense'; const hits = [];
+  const forType = _cpType(); const hits = []; // PLS #460
   (db.categories[forType]||[]).filter(c=>!c.archived).forEach(c => (c.subcats||[]).filter(sc=>!sc.archived && !sc.autoOnly)
     .forEach(sc => { if (sc.name.toLowerCase().includes(q)) hits.push([sc,c]); })); // subcategory names only, so results stay short
   res.innerHTML = hits.length ? `<div class="cat-grid">${hits.slice(0,24).map(([sc,c]) => `<div class="cat-tile" onclick="pickSubCat('${c.id}','${sc.id}')"><div class="cat-tile-icon">${sc.icon}</div><div class="cat-tile-name">${_esc(sc.name)}</div></div>`).join('')}</div>`
@@ -7197,7 +7248,7 @@ function _cpFilter(q) {
 // each group, or "Add ... as a subcategory" when a search finds nothing. Saved into the same list Settings > Categories
 // uses, then picked right away, so the form he was filling keeps everything he typed.
 function _cpNewSub(catId, name) {
-  const forType = _addState.type === 'income' ? 'income' : 'expense';
+  const forType = _cpType(); // PLS #460
   const cats = (db.categories[forType] || []).filter(c => !c.archived);
   if (!cats.length) return;
   const sel = catId || window._catGroupOpen || cats[0].id;
@@ -7219,7 +7270,7 @@ function _cpNewSub(catId, name) {
 }
 function _cpBack() {
   const box = document.querySelector('#cat-picker-overlay .cat-picker-wrap'); if (!box) return;
-  const forType = _addState.type === 'income' ? 'income' : 'expense';
+  const forType = _cpType(); // PLS #460
   box.outerHTML = renderCatPicker(forType);
 }
 function _cpSaveSub(forType) {
@@ -7259,6 +7310,7 @@ function toggleCatGroup(catId) {
 }
 
 function pickSubCat(catId, subCatId) {
+  if (window._cpEdit) { closeCatPickerSheet(); _cpEditPick(subCatId); return; } // PLS #460: the Edit transaction form
   _addState.catId = catId;
   _addState.subCatId = subCatId;
   _addState.step = 2;
@@ -8214,7 +8266,7 @@ function updateTransferPreview() {
         const isLoss = diff < 0;
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
-        const label = isLoss ? 'Forex Loss' : 'Forex Gain';
+        const label = isLoss ? 'FX Loss' : 'FX Gain';
         fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + sym(home) + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span> <span style="color:var(--text3)">logged automatically</span>';
       } else if (!useSnapshot && userToAmount > 0 && snapRate > 0) {
         // User entered actual received only — diff vs snapshot
@@ -8223,7 +8275,7 @@ function updateTransferPreview() {
         const isLoss = diff < 0;
         const color = isLoss ? 'var(--red)' : 'var(--green)';
         const icon = isLoss ? '📉' : '📈';
-        const label = isLoss ? 'Forex Loss' : 'Forex Gain';
+        const label = isLoss ? 'FX Loss' : 'FX Gain';
         fxExtra.innerHTML = '<span style="color:' + color + ';font-weight:600">' + icon + ' ' + label + ': ' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + toCurr + '</span> <span style="color:var(--text3)">vs the saved rate</span>';
       } else {
         fxExtra.innerHTML = '';
@@ -9577,7 +9629,7 @@ function openTxDetail(txId) {
       else if (c.isLoanSettlementLoss) childLabel = 'Loan settlement loss';
       else if (c.isReimbSettlementGain) childLabel = 'Reimbursement gain';
       else if (c.isReimbSettlementLoss) childLabel = 'Reimbursement loss';
-      else if (c.isAutoForex) childLabel = (c.type === 'income' ? 'Forex gain' : 'Forex loss');
+      else if (c.isAutoForex) childLabel = (c.type === 'income' ? 'FX gain' : 'FX loss'); // PLS #462
       else if (c.isBatchReimbSettlement) childLabel = `Batch reimb from ${_esc(c.batchPerson || c.reimbPerson || 'someone')}`;
       else if (c.isBatchSettlement) childLabel = `Batch settlement (${_esc(c.batchPerson||'someone')})`;
       else if (c.isAutoReimb) childLabel = `Reimb. from ${_esc(c.reimbPerson||'someone')}`;
@@ -9741,10 +9793,10 @@ function openTxReceipt(txId) {
     const childLines = activeChildren.map(c => {
       const cAmt = txAmountDisplay(c);
       const cLabel = c.isAutoForex
-        ? (c.type === 'income' ? 'Forex Gain' : 'Forex Loss')
+        ? (c.type === 'income' ? 'FX Gain' : 'FX Loss')
         : c.isAutoReimb
         ? `Reimb. from ${c.reimbPerson || '—'}`
-        : c.isAutoFee ? 'Remittance Fee'
+        : c.isAutoFee ? 'Transfer Fee'
         : (c.notes || 'Child');
       return `<div class="rcpt-line-item"><span>${cLabel}</span><span style="font-family:var(--mono)">${cAmt.str}</span></div>`;
     }).join('');
@@ -9930,11 +9982,11 @@ function openEditTx(txId) {
   const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===tx.currency?'selected':''}>${c}</option>`).join('');
   const acctOpts = accts.map(a=>`<option value="${a.id}" ${a.id===tx.accountId?'selected':''}>${acctLabel(a)}</option>`).join('');
 
-  const allCats = [...db.categories.expense, ...db.categories.income].filter(c=>!c.archived);
-  const catOpts = allCats.flatMap(c=>[
-    `<option value="${c.id}" ${c.id===(tx.subCatId||tx.categoryId)?'selected':''}>${c.icon} ${_esc(c.name)}</option>`,
-    ...(c.subcats||[]).filter(sc=>!sc.archived).map(sc=>`<option value="${sc.id}" ${sc.id===(tx.subCatId||tx.categoryId)?'selected':''}>&nbsp;&nbsp;${sc.icon} ${_esc(sc.name)}</option>`)
-  ]).join('');
+  // PLS #460: Category uses the same picker as Add transaction (was one long select of every expense AND income
+  // category where a main category could be picked). The pick lives in a hidden #edit-cat, so Save and the
+  // "Discard changes?" check read it as before.
+  const _ecCur = tx.subCatId || tx.categoryId || '';
+  const _ecType = tx.type === 'income' ? 'income' : 'expense';
 
   const snapRate = tx.fxSnapshot?.[tx.currency];
   const fxBadgeHTML = (tx.currency!==_homeBase()&&snapRate)
@@ -9984,7 +10036,7 @@ function openEditTx(txId) {
 
   window._f6Meta = ({ expense:{badge:'Expense',tone:'out'}, income:{badge:'Income',tone:'in'}, shared:{badge:'Shared',tone:'out'} })[tx.type] || null; // PLS #457
   openSheet('gen', 'Edit transaction', `
-    <div class="form-group"><label class="form-label" for="edit-cat">Category</label><select class="form-input" id="edit-cat">${catOpts}</select></div>
+    <div class="form-group"><label class="form-label" for="edit-cat-btn">Category</label><input type="hidden" id="edit-cat" value="${escapeAttr(_ecCur)}"><div class="form-input ec-pick" id="edit-cat-btn" role="button" tabindex="0" onclick="_cpOpenEdit('${_ecType}')"><span id="edit-cat-val">${_ecLabel(_ecCur)}</span><span class="ec-chev">${_ico('chev',14)}</span></div></div>
     ${sharedFieldsHTML}
     <div class="form-group">
       <label class="form-label">Date & time</label>
@@ -10310,7 +10362,7 @@ function updateEditTransferPreview() {
       const effRate = customRate > 0 ? customRate : (txCurr === home ? amount / actualToAmt : actualToAmt / amount);
       fxPrev.style.display = 'block';
       fxPrev.innerHTML = `<div style="color:var(--text3);font-size:11px;margin-bottom:4px">Snapshot: 1 ${foreignCurr} = ${sym(_homeBase())}${fmtRate(snapRate)} | Transaction rate: ${sym(_homeBase())}${fmtRate(effRate)}</div>
-        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 Forex Loss':'📈 Forex Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text3)">(logged automatically)</span></div>`;
+        <div style="color:${isLoss?'var(--red)':'var(--green)'};font-weight:600">${isLoss?'📉 FX Loss':'📈 FX Gain'}: ${sym(_homeBase())}${Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} <span style="font-size:11px;font-weight:normal;color:var(--text3)">(logged automatically)</span></div>`;
     } else { fxPrev.style.display = 'none'; }
   } else if (fxPrev) { fxPrev.style.display = 'none'; }
 }
@@ -10750,9 +10802,9 @@ function archiveTx(txId, skipConfirm) {
   if (children.length > 0 && !skipConfirm) {
     // Summarize linked children for the warning
     const summary = children.map(c => {
-      const typeLabel = c.isAutoForex ? 'Forex ' + (c.type === 'income' ? 'Gain' : 'Loss')
+      const typeLabel = c.isAutoForex ? 'FX ' + (c.type === 'income' ? 'Gain' : 'Loss')
                       : c.isAutoReimb ? `Reimbursement from ${c.reimbPerson || 'someone'}`
-                      : c.isAutoFee ? 'Remittance Fee'
+                      : c.isAutoFee ? 'Transfer Fee'
                       : c.type;
       return `• ${typeLabel}: ${fmt(c.amount, c.currency)}`;
     }).join('<br>');
@@ -16376,7 +16428,7 @@ function renderAnalyticsOverview() {
     if (tx.isInvestmentReturn) {
       const _ig = _investmentGL(tx, dispCurr);
       if (_ig.expense > 0) {
-        const _iname = 'Investment Loss';
+        const _iname = 'Realized Loss'; // PLS #462: same bucket name as the category
         expCats[_iname] = (expCats[_iname] || {total:0, icon:'\u{1F4C9}', color:'', txs:[]});
         expCats[_iname].total += _ig.expense;
         expCats[_iname].txs.push(tx);
@@ -21800,7 +21852,7 @@ function renderCatsTab() {
     h += _sSec(forType === 'expense' ? 'Expense categories' : 'Income categories',
       `<button class="set-link" onclick="openAddMajorCat('${forType}')">Add</button>`);
     h += _sGrp(cats.map(cat => {
-      const subcats = (cat.subcats || []).filter(sc => !sc.archived);
+      const subcats = (cat.subcats || []).filter(sc => !sc.archived && !sc.autoOnly); // PLS #461: the app's own entries are not listed
       // Tapping a major expands its subcategories in place; the chevron turns down while open.
       return _sRow({ ico:_catMajorIco(cat), label:_esc(cat.name), // PLS #380
           value:`${subcats.length}`, onclick:`toggleCatExpand('cat-${cat.id}')`, chev:true })
@@ -23844,8 +23896,8 @@ function saveEditCat(catId, forType) {
 function showArchivedCatsPage() {
   const expArchived = db.categories.expense.filter(c=>c.archived);
   const incArchived = db.categories.income.filter(c=>c.archived);
-  const expSubArchived = db.categories.expense.flatMap(c=>(c.subcats||[]).filter(s=>s.archived).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'expense',parentId:c.id})));
-  const incSubArchived = db.categories.income.flatMap(c=>(c.subcats||[]).filter(s=>s.archived).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'income',parentId:c.id})));
+  const expSubArchived = db.categories.expense.flatMap(c=>(c.subcats||[]).filter(s=>s.archived && !s.autoOnly).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'expense',parentId:c.id})));
+  const incSubArchived = db.categories.income.flatMap(c=>(c.subcats||[]).filter(s=>s.archived && !s.autoOnly).map(s=>({...s,parentName:c.name,parentIcon:c.icon,forType:'income',parentId:c.id})));
   const all = [
     ...expArchived.map(c=>({...c,forType:'expense',isParent:true})),
     ...incArchived.map(c=>({...c,forType:'income',isParent:true})),
@@ -27246,8 +27298,8 @@ function ensureDBIntegrity() {
   (function(){
     const need = [
       ['expense','sc-writeoff',   'Write-off',      '\u2717', 'c-financial'],
-      ['expense','sc-investloss','Investment Loss','\ud83d\udcc9', 'c-financial'],
-      ['income', 'sc-debtforgiven','Forgiven Debt','\ud83d\udd4a', 'c-returns'],
+      ['expense','sc-investloss','Realized Loss','\ud83d\udcc9', 'c-financial'],
+      ['income', 'sc-debtforgiven','Debt Relief','\ud83d\udd4a', 'c-returns'],
     ];
     need.forEach(([kind, id, name, icon, parent]) => {
       const list = (db.categories && db.categories[kind]) || [];
