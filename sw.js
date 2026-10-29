@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-14-2'; // v1.2.14 continued: Edit transaction category picker, fixed auto categories, fintech names (PLS #460-#462)
+const CACHE = 'trackbudget-v1-2-14-4'; // v1.2.14 continued: PLS / PSS split in comments, unused payday + recurring code and the one-record #304 repair removed
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', e => {
