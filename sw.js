@@ -4,7 +4,7 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-14-7'; // v1.2.14 continued: Excel export offline, receivables per person, plain wording, bigger tap areas, Add from an account, no Idle alert (PLS #473-#474, #477-#478, PSS #475-#476)
+const CACHE = 'trackbudget-v1-2-14-9'; // -9: Undo last sync copy moved to IndexedDB (PLS #479). -8: account sheet buttons no longer spread out on PC (PSS #477 fix). v1.2.14 continued: Excel export offline, receivables per person, plain wording, bigger tap areas, Add from an account, no Idle alert (PLS #473-#474, #477-#478, PSS #475-#476)
 const APP_SHELL = ['./', './index.html'];
 // PLS #473: the Excel export library lives on cdnjs; keep a copy so export works offline
 const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';

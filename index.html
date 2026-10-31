@@ -1536,7 +1536,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .fs-herolbl{font-size:12px;color:var(--text3);margin-top:2px}
 .fs-pill{display:inline-block;margin-top:10px;font-weight:600}
 .fs-acts{display:flex;justify-content:center;gap:18px;margin:18px 0 4px;flex-wrap:wrap}
-.fs-acts:has(> :nth-child(5)){gap:6px;justify-content:space-between;flex-wrap:nowrap} /* PSS #477: five round buttons (account sheet with Add) stay on one row */
+.fs-acts:has(> :nth-child(5)){gap:max(4px, min(18px, calc((100% - 300px) / 4)));flex-wrap:nowrap} /* PSS #477: five round buttons stay on one row; centred with the usual gap on PC, tighter on a phone */
 .fs-btn{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:6px;font:inherit;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;min-width:52px}
 .fs-ico{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent-bg);color:var(--accent)}
 .fs-card{background:var(--bg3);border-radius:18px;padding:4px 16px;margin-top:14px;overflow:hidden}
@@ -5721,6 +5721,7 @@ const APP_CHANGELOG = [
     '✏️ Help, alerts and Insights tips read as plain sentences, without a long dash joining two thoughts', // PSS #475
     '👆 Edit or undo this settlement, Customize and the Related links on Insights are easier to tap on a phone', // PSS #476
     '🔕 No more Idle tags on accounts or Idle line in Insights', // PLS #478
+    '💾 The Undo last sync copy is kept in a bigger storage space, so your data has about twice the room', // PLS #479
     '➕ Add a transaction straight to an account: the + on its card in grid view, or Add inside the account. That account is already picked', // PLS #477
   ]},
   { ver: '1.2.13', date: 'October 2026', changes: [
@@ -26793,7 +26794,7 @@ async function syncNow(opts) {
 async function _syncFinishMerge() {
   const p = window._syncPending; if (!p || !p.merged) return;
   if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Data changed while syncing. Trying again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
-  try { localStorage.setItem('tb_premerge', JSON.stringify({ at: new Date().toISOString(), from: p.meta.deviceName, db })); } catch(e) {}   // Undo last sync; skipped if the phone has no room
+  _premergeSave(p.meta.deviceName); // PLS #479: the copy is taken right here; the IndexedDB write finishes on its own
   const mineTx = db.transactions.length;
   _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); saveDB();
   showLoading('Syncing...');
@@ -26885,23 +26886,63 @@ function _syncAskSides() {
 async function _syncSide(side) {
   const p = window._syncPending; if (!p) return; closeDlg(); window._syncPending = null;
   if (side === 'mine') { db.settings.forcePush = true; saveDB(); return syncNow(); }
-  try { localStorage.setItem('tb_premerge', JSON.stringify({ at: new Date().toISOString(), from: p.meta.deviceName, db })); } catch(e) {}
+  await _premergeSave(p.meta.deviceName); // PLS #479
   _syncReplaceDB(p.theirs, p.latest.id, p.meta.deviceName); db.settings.lastSyncedHash = _syncHash(); saveDB();
   await _syncKeepBase(p.latest.id, p.theirs); // PLS #450
   showToast(`Updated with the data from ${p.meta.deviceName}`); setTimeout(() => location.reload(), 900);
 }
-function syncHasUndo() { try { return !!localStorage.getItem('tb_premerge'); } catch(e) { return false; } }
-function syncUndoLast() {
-  let pm = null; try { pm = JSON.parse(localStorage.getItem('tb_premerge') || 'null'); } catch(e) {}
+// -- PERSONAL LOGIC SET #479 -- The "Undo last sync" copy is a whole second copy of the data, so it no longer sits in
+// localStorage (about 5 MB, shared with the data itself). It lives in IndexedDB, which has far more room. localStorage keeps
+// only its time (tb_premerge_at) so the Undo button can show without waiting. If IndexedDB is not available, the old
+// localStorage copy is used as before. An old copy left in localStorage is moved over once on start.
+const _TB_IDB = 'trackbudget', _TB_IDB_STORE = 'kv';
+function _tbIdb() {
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('no IndexedDB'));
+    const r = indexedDB.open(_TB_IDB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(_TB_IDB_STORE);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function _tbIdbDo(mode, fn) {
+  const d = await _tbIdb();
+  return new Promise((res, rej) => {
+    const t = d.transaction(_TB_IDB_STORE, mode); const out = fn(t.objectStore(_TB_IDB_STORE));
+    t.oncomplete = () => { d.close(); res(out && out.result); }; t.onerror = t.onabort = () => { d.close(); rej(t.error); };
+  });
+}
+async function _premergeSave(from) {
+  const v = { at: new Date().toISOString(), from, db: JSON.parse(JSON.stringify(db)) }; // copied now, before the data is replaced
+  try {
+    await _tbIdbDo('readwrite', s => s.put(v, 'premerge'));
+    localStorage.setItem('tb_premerge_at', v.at); localStorage.removeItem('tb_premerge');
+  } catch(e) { try { localStorage.setItem('tb_premerge', JSON.stringify(v)); } catch(x) {} } // Undo last sync; skipped if there is no room
+}
+async function _premergeLoad() {
+  try { const v = await _tbIdbDo('readonly', s => s.get('premerge')); if (v) return v; } catch(e) {}
+  try { return JSON.parse(localStorage.getItem('tb_premerge') || 'null'); } catch(e) { return null; }
+}
+async function _premergeClear() {
+  try { await _tbIdbDo('readwrite', s => s.delete('premerge')); } catch(e) {}
+  try { localStorage.removeItem('tb_premerge'); localStorage.removeItem('tb_premerge_at'); } catch(e) {}
+}
+setTimeout(async () => { // move an old localStorage copy over once
+  let raw = null; try { raw = localStorage.getItem('tb_premerge'); } catch(e) {}
+  if (!raw) return;
+  try { const v = JSON.parse(raw); await _tbIdbDo('readwrite', s => s.put(v, 'premerge')); localStorage.setItem('tb_premerge_at', v.at || ''); localStorage.removeItem('tb_premerge'); } catch(e) {}
+}, 3000);
+function syncHasUndo() { try { return !!(localStorage.getItem('tb_premerge_at') || localStorage.getItem('tb_premerge')); } catch(e) { return false; } }
+async function syncUndoLast() {
+  const pm = await _premergeLoad(); // PLS #479
   if (!pm || !_syncValid(pm.db)) { showToast('Nothing to undo'); return; }
   openDlg('Undo last sync', `<div style="font-size:13px;color:var(--text2);line-height:1.5">This brings back this device's data from before the sync on ${_esc(_syncWhen(pm.at))} and saves it to Google Drive. The synced version stays in Backups.</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button><button class="btn btn-primary btn-sm" onclick="_syncDoUndo()">Undo</button>`);
 }
-function _syncDoUndo() {
-  let pm = null; try { pm = JSON.parse(localStorage.getItem('tb_premerge') || 'null'); } catch(e) {}
+async function _syncDoUndo() {
+  const pm = await _premergeLoad(); // PLS #479
   if (!pm || !_syncValid(pm.db)) { closeDlg(); showToast('Nothing to undo'); return; }
   _syncReplaceDB(pm.db, db.settings.lastSyncedFileId, null); db.settings.forcePush = true; delete db.settings.lastSyncedHash; db.settings.lastLocalEditAt = new Date().toISOString(); saveDB();
-  try { localStorage.removeItem('tb_premerge'); } catch(e) {}
+  await _premergeClear(); // PLS #479
   closeDlg(); showToast('Brought back. Syncing'); setTimeout(() => location.reload(), 900);
 }
 // -- PERSONAL STRUCTURE SET #443 -- Sync status on the diskette (his pick A; replaces the reminder row of #442 and the header text badge).
