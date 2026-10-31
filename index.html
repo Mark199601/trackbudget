@@ -161,6 +161,7 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .acp-n{font-size:13px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acp-s{font-size:11px;color:var(--text3);margin-top:1px}
 .acp-b{font-size:13px;font-weight:400;color:var(--text2);white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+.acp-b.neg{color:var(--red)} /* PLS #470: money owed */
 .acp-ck{width:14px;flex-shrink:0;color:var(--accent);font-size:13px;text-align:right;visibility:hidden}
 .acp-row.on .acp-ck{visibility:visible}
 .acp-empty{padding:18px 16px;font-size:13px;color:var(--text3);text-align:center}
@@ -1433,6 +1434,16 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .lp-tiles{display:flex;gap:10px}
 .lp-tile{flex:1;min-width:0;background:var(--bg2);border-radius:14px;padding:12px 14px;border:1.5px solid transparent;cursor:pointer;text-align:left;color:var(--text);font:inherit;transition:border-color var(--transition)}
 .lp-tile.on{border-color:var(--accent)}
+@media (min-width:1024px){ /* PSS #472 */
+  .lp-tiles:not(.lp-swipe .lp-tiles){background:var(--bg2);border-radius:16px;padding:6px;gap:6px}
+  .lp-tiles:not(.lp-swipe .lp-tiles) > .lp-tile{background:transparent;border-color:transparent;border-radius:12px;padding:14px 22px;position:relative}
+  .lp-tiles:not(.lp-swipe .lp-tiles) > .lp-tile + .lp-tile::before{content:'';position:absolute;left:-3px;top:16px;bottom:16px;width:1px;background:var(--border)}
+  .lp-tiles:not(.lp-swipe .lp-tiles) > .lp-tile.on{background:var(--accent-bg)}
+  .lp-tiles:not(.lp-swipe .lp-tiles) > .lp-tile.on::before,.lp-tiles:not(.lp-swipe .lp-tiles) > .lp-tile.on + .lp-tile::before{display:none}
+  .lp-tiles:not(.lp-swipe .lp-tiles) .lp-tile-lbl{font-size:12px}
+  .lp-tiles:not(.lp-swipe .lp-tiles) .lp-tile-amt{font-size:24px;margin-top:6px}
+  .lp-tiles:not(.lp-swipe .lp-tiles) .lp-tile-sub{font-size:12px;margin-top:4px}
+}
 .lp-tile-lbl{font-size:11px;color:var(--text3);font-weight:500}
 .lp-tile-amt{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lp-tile-sub{font-size:11px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3024,6 +3035,7 @@ function saveDBWithSync() {
   // survives force-close) — this is what lets the app detect on next open whether the last
   // edit made it to Drive or got interrupted before it could sync.
   db.settings.lastLocalEditAt = new Date().toISOString();
+  window._pageStale = true; // PLS #471
   saveDB();
   _hasUnsavedChanges = true;
   if (db.settings.googleDriveConnected) setSyncStatus('unsaved');
@@ -4046,6 +4058,16 @@ function openSheet(sheetId, title, html) {
 function closeSheet(sheetId) {
   document.getElementById(sheetId+'-overlay').classList.remove('open');
   document.getElementById(sheetId+'-sheet').classList.remove('open');
+  setTimeout(_refreshIfStale, 0); // PLS #471
+}
+// PLS #471: redraw the page you are on after a saved change, once nothing is open over it
+function _refreshIfStale() {
+  if (!window._pageStale) return;
+  if (document.querySelector('[id$="-sheet"].open, #dlg-overlay.open')) return; // still inside a form: wait for the last one
+  window._pageStale = false;
+  const fn = { dashboard: renderDashboard, transactions: renderTransactions, accounts: renderAccounts, loans: renderLoans,
+    reimbursements: renderReimbursementsPage, investments: renderInvestmentsPage, installments: renderInstallments }[currentPage];
+  if (fn) try { fn(); } catch (e) { console.error('refresh', e); }
 }
 
 // Swipe-down to dismiss sheets (mobile only)
@@ -4343,6 +4365,7 @@ function closeDlg(force) {
   if (force !== true && typeof window._dlgCloseGuard === 'function' && window._dlgCloseGuard() === false) return;
   window._dlgCloseGuard = null;
   document.getElementById('dlg-overlay').classList.remove('open');
+  setTimeout(_refreshIfStale, 0); // PLS #471
 }
 
 // ── Reusable info popover (tappable (i) icons open this) ──
@@ -5689,6 +5712,9 @@ const APP_CHANGELOG = [
     '🏷️ Transaction details show the type by name, like Remittance or External in', // PSS #465
     '🔄 Sync popups use plain words and show the real names (category, account), not codes. After an import they say Imported file and This device', // PSS #466 #467 #468
     '📥 After Replace all, the next sync saves the imported file to Google Drive as is, without combining or asking. The old save stays in Backups', // PLS #469
+    '➖ A credit card you owe on shows its balance with a minus sign in red when you pick an account', // PLS #470
+    '🔄 After you edit something, the page you are on shows the new numbers right away', // PLS #471
+    '🖥️ On a computer, the summary cards on Accounts, Loans, Reimbursements and Investments sit in one band', // PSS #472
   ]},
   { ver: '1.2.13', date: 'October 2026', changes: [
     '₿ A Crypto Wallet can hold any coin (BTC, ETH, BNB and more), not only USDT. USDT is still the default, and a new coin asks for its rate first', // PLS #447
@@ -6919,8 +6945,9 @@ function _axOpenAcctList(selId) {
   const rows = [...sel.options].filter(o => o.value && !o.disabled).map(o => {
     const a = db.accounts.find(x => x.id === o.value);
     const sub = a ? [a.type, a.currency].filter(Boolean).join(' · ') : '';
-    const bal = a ? fmt(getAcctBalance(a.id), a.currency || _homeBase()) : '';
-    return `<button type="button" class="acp-row${o.value === sel.value ? ' on' : ''}" data-id="${escapeAttr(o.value)}"><span class="acp-t"><span class="acp-n">${_esc(a ? a.name : o.textContent)}</span>${sub ? `<span class="acp-s">${_esc(sub)}</span>` : ''}</span><span class="acp-b">${bal}</span><span class="acp-ck" aria-hidden="true">✓</span></button>`;
+    const bv = a ? getAcctBalance(a.id) : 0; // PLS #470: a debt keeps its minus sign
+    const bal = a ? fmt(bv, a.currency || _homeBase(), bv < -0.004) : '';
+    return `<button type="button" class="acp-row${o.value === sel.value ? ' on' : ''}" data-id="${escapeAttr(o.value)}"><span class="acp-t"><span class="acp-n">${_esc(a ? a.name : o.textContent)}</span>${sub ? `<span class="acp-s">${_esc(sub)}</span>` : ''}</span><span class="acp-b${bv < -0.004 ? ' neg' : ''}">${bal}</span><span class="acp-ck" aria-hidden="true">✓</span></button>`;
   }).join('');
   const ov = document.createElement('div'); ov.id = 'acp-overlay'; ov.className = 'gz-pick-overlay';
   ov.innerHTML = `<div class="gz-pick-panel acp-panel" role="dialog" aria-label="${escapeAttr(sel.getAttribute('aria-label') || 'Account')}"><div class="acp-head"><span class="gz-pick-title">Choose an account</span><button type="button" class="sheet-close" aria-label="Close" onclick="_axCloseAcctList()">✕</button></div><div class="acp-list">${rows || '<div class="acp-empty">No accounts yet</div>'}</div></div>`;
@@ -20668,7 +20695,7 @@ function logRecurringNow(id) {
   if (matchingAccts.length === 1) {
     finalizeRecurringLog(r, matchingAccts[0].id);
   } else {
-    const acctOpts = matchingAccts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${fmt(getAcctBalance(a.id),a.currency)})</option>`).join('');
+    const acctOpts = matchingAccts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${fmt(getAcctBalance(a.id),a.currency,getAcctBalance(a.id)<-0.004)})</option>`).join('');
     window._efNext = true; // PSS #361
     openDlg(`Log: ${_esc(r.name)}`,
       `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">${fmt(r.amount,r.currency)} · ${getCategoryDisplay(r.categoryId).icon} ${getCategoryDisplay(r.categoryId).name}</div>
@@ -20971,7 +20998,7 @@ function renderContractTab() {
     const acctBoxes = allAccounts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${linked.includes(a.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${a.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
       <span style="flex:1;color:var(--text2)">${_esc(a.name)}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${a.currency} · ${fmt(getAcctBalance(a.id),a.currency)}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${a.currency} · ${fmt(getAcctBalance(a.id),a.currency,getAcctBalance(a.id)<-0.004)}</span>
     </label>`).join('');
     const invBoxes = activeInvs.map(iv=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
       <input type="checkbox" ${linked.includes(iv.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${iv.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
