@@ -4,13 +4,18 @@
 // falling back to cache when offline), cache-first for static assets,
 // always skip Google API calls (they need fresh auth).
 
-const CACHE = 'trackbudget-v1-2-14-6'; // v1.2.14 continued: debt minus sign, refresh after edit, PC summary band (PLS #470-#471, PSS #472)
+const CACHE = 'trackbudget-v1-2-14-7'; // v1.2.14 continued: Excel export offline, receivables per person, plain wording, bigger tap areas, Add from an account, no Idle alert (PLS #473-#474, #477-#478, PSS #475-#476)
 const APP_SHELL = ['./', './index.html'];
+// PLS #473: the Excel export library lives on cdnjs; keep a copy so export works offline
+const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(APP_SHELL).catch(() => {}))
+    caches.open(CACHE).then(cache => Promise.all([
+      cache.addAll(APP_SHELL).catch(() => {}),
+      cache.add(new Request(XLSX_URL, { mode: 'cors' })).catch(() => {}) // PLS #473
+    ]))
   );
 });
 
@@ -55,7 +60,7 @@ self.addEventListener('fetch', e => {
       if (cached) {
         // Return cached, refresh in background
         fetch(e.request).then(resp => {
-          if (resp && resp.status === 200 && resp.type === 'basic') {
+          if (resp && resp.status === 200 && (resp.type === 'basic' || url === XLSX_URL)) { // PLS #473
             caches.open(CACHE).then(cache => cache.put(e.request, resp));
           }
         }).catch(() => {});
@@ -63,7 +68,7 @@ self.addEventListener('fetch', e => {
       }
       // Not cached — fetch and cache
       return fetch(e.request).then(resp => {
-        if (resp && resp.status === 200 && resp.type === 'basic') {
+        if (resp && resp.status === 200 && (resp.type === 'basic' || url === XLSX_URL)) { // PLS #473
           const respClone = resp.clone();
           caches.open(CACHE).then(cache => cache.put(e.request, respClone));
         }

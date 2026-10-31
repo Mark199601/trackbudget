@@ -854,6 +854,11 @@ option{background:var(--bg3);color:var(--text)}
 /* inside .section-hdr the wrapper owns the spacing, so the heading must not add its own */
 .section-hdr .section-title{margin-bottom:0}
 .section-action{font-size:12px;color:var(--accent);cursor:pointer}
+/* PSS #476: more small links get the bigger invisible tap area (same idea as line ~1053); look and layout stay the same */
+.tap-x,.tap-y{position:relative}
+.tap-x{z-index:1} /* sits above the next row so the area below it works too */
+.tap-x::after{content:'';position:absolute;inset:-10px -6px -6px}
+.tap-y::after{content:'';position:absolute;inset:-8px 0}
 
 
 .ai-card{display:flex;gap:10px;align-items:flex-start;padding:12px 15px;background:linear-gradient(135deg,rgba(124,109,240,0.06),rgba(176,126,240,0.06));border:1px solid rgba(124,109,240,0.15);border-radius:var(--r-lg)}
@@ -1145,6 +1150,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .acct-group-total{font-family:var(--mono);font-size:13px;font-weight:500}
 .acct-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 @media(max-width:480px){.acct-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}}
+.acct-add{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;border:0;padding:0;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1} /* PLS #477 */
 .acct-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:15px;cursor:pointer;transition:border-color var(--transition)}
 .acct-card:hover{border-color:var(--border2)}
 .acct-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
@@ -1530,6 +1536,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .fs-herolbl{font-size:12px;color:var(--text3);margin-top:2px}
 .fs-pill{display:inline-block;margin-top:10px;font-weight:600}
 .fs-acts{display:flex;justify-content:center;gap:18px;margin:18px 0 4px;flex-wrap:wrap}
+.fs-acts:has(> :nth-child(5)){gap:6px;justify-content:space-between;flex-wrap:nowrap} /* PSS #477: five round buttons (account sheet with Add) stay on one row */
 .fs-btn{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:6px;font:inherit;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;min-width:52px}
 .fs-ico{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent-bg);color:var(--accent)}
 .fs-card{background:var(--bg3);border-radius:18px;padding:4px 16px;margin-top:14px;overflow:hidden}
@@ -1570,7 +1577,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 @keyframes tbspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .spin{animation:tbspin 1s linear infinite}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" defer></script><!-- PLS #473: CORS load so sw.js can keep a copy for offline Excel export -->
 </head>
 <body>
 <!-- ONBOARDING -->
@@ -4374,9 +4381,9 @@ function showInfo(title, htmlText) {
 }
 function showBucketInfo(key) {
   const m = {
-    rate: ['Annual rate %', 'The expected yearly return. It sets the displayed label and the auto-balance weight — a higher rate earns a bigger share, before the risk adjustment.'],
-    risk: ['Risk level', 'Conservative auto-balance gives a smaller share to riskier buckets, even at a higher rate.<br><br>🛡️ <b>Insured</b> — banks, time deposit, MP2, treasury bonds<br>🟢 <b>Low</b> — government bonds<br>🟡 <b>Medium</b> — REITs, mutual funds, real estate<br>🔴 <b>High</b> — crypto, stocks, VUL'],
-    alloc: ['Allocation type', '🔒 <b>Fixed</b> — a locked amount. Counted as its % of the target and excluded from auto-distribute.<br><br>🌊 <b>Dynamic</b> — fluid. Shares the remaining pool and rebalances to 100% with other Dynamic buckets.']
+    rate: ['Annual rate %', 'The expected yearly return. It sets the displayed label and the auto-balance weight. A higher rate earns a bigger share, before the risk adjustment.'],
+    risk: ['Risk level', 'Conservative auto-balance gives a smaller share to riskier buckets, even at a higher rate.<br><br>🛡️ <b>Insured</b>: banks, time deposit, MP2, treasury bonds<br>🟢 <b>Low</b>: government bonds<br>🟡 <b>Medium</b>: REITs, mutual funds, real estate<br>🔴 <b>High</b>: crypto, stocks, VUL'],
+    alloc: ['Allocation type', '🔒 <b>Fixed</b>: a locked amount. Counted as its % of the target and excluded from auto-distribute.<br><br>🌊 <b>Dynamic</b>: fluid. Shares the remaining pool and rebalances to 100% with other Dynamic buckets.']
   };
   const e = m[key]; if (e) showInfo(e[0], e[1]);
 }
@@ -4386,19 +4393,19 @@ const _WIDGET_INFO = {
   'velocity': {title:'Spending velocity', body:'Shows your <b>daily spending rate</b> for the current month and projects where you\'ll end up by month-end at this pace. Green = healthy pace · Amber = slightly above your average · Red = overspending. Helps you adjust before the month ends.<br><br>Counts your <b>usual spending</b>. One-time losses are left out (loan write-offs, settlement losses, investments sold below cost). FX losses and fees are included.'}, // PSS #293
   'runway': {title:'Cash runway', body:'How many <b>months your liquid cash can last</b> at your <b>6-month average</b> spending rate. Red zone (under 3 months) means you need a buffer or income soon. Useful for emergency planning.'},
   'anomaly': {title:'Unusual transactions', body:'Highlights transactions that are <b>much larger than your usual spend in that category</b> (more than 2× your category average). Helps catch unusual or accidental large purchases you might want to review.'},
-  'forecast': {title:'Month-end forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range — actual numbers usually land within it.'},
-  'subscription': {title:'Recurring commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection — useful for spotting "money leaks."'},
+  'forecast': {title:'Month-end forecast', body:'Predicts your <b>final income, expense, and net for the month</b> based on your daily pace so far. The confidence band shows the realistic range. Actual numbers usually land within it.'},
+  'subscription': {title:'Recurring commitments', body:'Lists patterns that look like <b>monthly subscriptions or recurring bills</b> (same amount, same category, every ~30 days). Shows total monthly cost plus yearly projection. Useful for spotting "money leaks."'},
   'savings': {title:'Savings rate trend', body:'Your <b>savings rate</b> = (income − expense) ÷ income, shown over the last 6 months. A rising line means you\'re saving more of what you earn. Compares current month vs the previous one.'},
-  'fixed': {title:'Fixed vs discretionary', body:'Splits your expenses into <b>Fixed</b> (rent, bills, subscriptions — hard to change) and <b>Discretionary</b> (dining, shopping — easier to control). The discretionary % is what you can actually adjust to save more.'},
-  'pareto': {title:'80/20 Analysis', body:'Identifies the few <b>categories that make up 80% of your spending</b>. Based on the Pareto principle — usually 20% of your categories drive 80% of your expense. Focus optimization here for biggest impact.'},
-  'dow': {title:'Day-of-Week Pattern', body:'Shows your <b>average spending per day of the week</b> over the last 90 days. Reveals patterns — e.g. "Friday is your highest spending day." Useful for habit awareness.'},
-  'frequent': {title:'Most frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total — shows where small habits add up.'},
-  'timeofday': {title:'Time-of-Day Pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven — this widget helps you spot if that\'s happening.'},
-  'distribution': {title:'Transaction sizes', body:'Histogram showing what <b>size of transactions you make most often</b> — e.g. "30% of your transactions are 100–500 in your display currency." Reveals your spending "zones" and shopping habits.'},
+  'fixed': {title:'Fixed vs discretionary', body:'Splits your expenses into <b>Fixed</b> (rent, bills, subscriptions; hard to change) and <b>Discretionary</b> (dining, shopping; easier to control). The discretionary % is what you can actually adjust to save more.'},
+  'pareto': {title:'80/20 Analysis', body:'Identifies the few <b>categories that make up 80% of your spending</b>. Based on the Pareto principle: usually 20% of your categories drive 80% of your expense. Focus optimization here for biggest impact.'},
+  'dow': {title:'Day-of-Week Pattern', body:'Shows your <b>average spending per day of the week</b> over the last 90 days. Reveals patterns, e.g. "Friday is your highest spending day." Useful for habit awareness.'},
+  'frequent': {title:'Most frequent', body:'Your <b>top categories by transaction count</b> this month, with average per transaction. "You ate out 14 times" is more actionable than just a total. It shows where small habits add up.'},
+  'timeofday': {title:'Time-of-Day Pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven. This widget helps you spot if that\'s happening.'},
+  'distribution': {title:'Transaction sizes', body:'Histogram showing what <b>size of transactions you make most often</b>, e.g. "30% of your transactions are 100–500 in your display currency." Reveals your spending "zones" and shopping habits.'},
   'yoy': {title:'Year-on-Year', body:'Compares this month to the <b>same month last year</b>, side by side. Shows whether you\'re spending more, less, or the same vs your past self. Only appears if you have data from that period.'},
-  'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk — e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
-  'goal': {title:'Savings goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker — so you can see if you\'re on track, ahead, or behind.'},
-  'concentration': {title:'Account concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place — e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
+  'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk, e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
+  'goal': {title:'Savings goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker, so you can see if you\'re on track, ahead, or behind.'},
+  'concentration': {title:'Account concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place, e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
   'accthealth': {title:'Account health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg transaction</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
 };
 function _widgetInfo(key) {
@@ -4962,8 +4969,8 @@ function generateInsights() {
     ).reduce((s,t)=>s+(t.type==='shared' ? (t.myShare||t.amount) : t.amount), 0);
     const effLimit = bgt.limit + (bgt.rollover ? (bgt.rolloverAmount||0) : 0);
     const pct = spent / effLimit;
-    if (pct > 1) insights.push({icon:'🔴',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} budget exceeded</strong> — spent ${fmt(spent, bgt.currency)} of ${fmt(effLimit, bgt.currency)} limit this month.`});
-    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong> — ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
+    if (pct > 1) insights.push({icon:'🔴',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} budget exceeded</strong>. Spent ${fmt(spent, bgt.currency)} of ${fmt(effLimit, bgt.currency)} limit this month.`});
+    else if (pct > monthPct + 0.15) insights.push({icon:'⚠️',go:"nav('planning');setPlanTab('budgets')",urgent:true,text:`<strong>${bgt.location} spending is ahead of pace</strong>: ${(pct*100).toFixed(0)}% of budget used with ${(monthPct*100).toFixed(0)}% of month elapsed.`});
   }
 
   // MoM change
@@ -4976,17 +4983,17 @@ function generateInsights() {
   const recentSalary = db.transactions.filter(t=>t.type==='income'&&!t.isSettlement&&t.date&&t.date.startsWith(mk)).slice(-1)[0];
   if (recentSalary && recentSalary.currency !== (_homeBase())) {
     const home = _homeBase();
-    insights.push({icon:'💱',go:"_insGo('income')",urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong> — update your ${home} exchange rate for accurate tracking.`});
+    insights.push({icon:'💱',go:"_insGo('income')",urgent:true,text:`Salary received in <strong>${recentSalary.currency}</strong>. Update your ${home} exchange rate for accurate tracking.`});
   }
 
   // Drive sync reminder
   if (!db.settings.lastDriveSync || new Date()-new Date(db.settings.lastDriveSync) > 86400000*2) {
-    insights.push({icon:'☁️',go:"nav('settings');setSettingsTab('export')",urgent:true,text:`Backup is <strong>overdue</strong> — last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
+    insights.push({icon:'☁️',go:"nav('settings');setSettingsTab('export')",urgent:true,text:`Backup is <strong>overdue</strong>. Last sync was ${db.settings.lastDriveSync ? fmtDFull(db.settings.lastDriveSync.split('T')[0]) : 'never'}. Save to Google Drive.`, actions:true});
   }
 
   // Loan deadline
   const urgentLoans = [...db.loans.lent, ...db.loans.borrowed].filter(l=>!l.settled&&l.dueDate&&daysUntil(l.dueDate)!==null&&daysUntil(l.dueDate)<=7);
-  for (const l of urgentLoans) insights.push({icon:'🤝',go:"nav('loans')",urgent:true,text:`Loan <strong>${_esc(l.personName)}</strong> due in ${daysUntil(l.dueDate)} day(s) — ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
+  for (const l of urgentLoans) insights.push({icon:'🤝',go:"nav('loans')",urgent:true,text:`Loan <strong>${_esc(l.personName)}</strong> due in ${daysUntil(l.dueDate)} day(s). ${fmt(l.remaining||l.amount,l.currency)} remaining.`});
 
   // No income this month
   if (dayOfMonth > 10 && curr.income === 0) {
@@ -4997,11 +5004,11 @@ function generateInsights() {
   if (curr.income > 0 && curr.expense > 0 && curr.net > 0) {
     const _sr = Math.round(curr.net / curr.income * 100);
     const _mom = prev.income > 0 ? curr.net - prev.net : null;
-    const _momStr = _mom === null ? '' : (_mom >= 0 ? ` — ${fmt(_mom, _homeBase())} more than last month` : ` — ${fmt(Math.abs(_mom), _homeBase())} less than last month`);
+    const _momStr = _mom === null ? '' : (_mom >= 0 ? `, ${fmt(_mom, _homeBase())} more than last month` : `, ${fmt(Math.abs(_mom), _homeBase())} less than last month`);
     insights.push({icon:'✅',urgent:false,text:`Saving <strong>${_sr}%</strong> of income this month (${fmt(curr.net, _homeBase())} net)${_momStr}.`});
   }
 
-  if (insights.length === 0) insights.push({icon:'✨',urgent:false,text:`No alerts this month — budgets, loan deadlines, and spending pace are all within range.`});
+  if (insights.length === 0) insights.push({icon:'✨',urgent:false,text:`No alerts this month. Budgets, loan deadlines, and spending pace are all within range.`});
   return insights;
 }
 
@@ -5051,15 +5058,9 @@ function checkAlerts() {
     }
   }
 
-  // Idle accounts (60 days)
-  for (const acct of db.accounts.filter(a=>!a.archived)) {
-    const txs = db.transactions.filter(t=>t.accountId===acct.id||t.fromAccountId===acct.id||t.toAccountId===acct.id).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''));
-    const lastDate = txs[0]?.date;
-    if (lastDate) {
-      const daysOld = Math.floor((now - new Date(lastDate+'T12:00')) / 86400000);
-      if (daysOld >= 60) _alertCache.push({type:'idle', id:acct.id, msg:`${acct.name} idle for ${daysOld} ${aiPlural(daysOld,'day')}`});
-    }
-  }
+  // PLS #478 (his call Oct 31, "wala namang bearing"): no more Idle alert for an account with no activity in 60 days.
+  // It changed no number, so the Idle pill on Accounts and the "N accounts idle" line in Insights are gone too.
+  // Analytics > Account health still shows how long each account has been quiet; that report is about exactly that.
 
   // Low balance
   for (const acct of db.accounts.filter(a=>!a.archived && a.alertThreshold)) {
@@ -5104,7 +5105,7 @@ function checkAlerts() {
     const lastSync = new Date(db.settings.lastDriveSync);
     const daysSince = Math.floor((Date.now() - lastSync.getTime()) / 86400000);
     if (daysSince >= 7) {
-      _alertCache.push({type:'backup', msg:`☁️ Last backup was ${daysSince} ${aiPlural(daysSince,'day')} ago — sync now to be safe`});
+      _alertCache.push({type:'backup', msg:`☁️ Last backup was ${daysSince} ${aiPlural(daysSince,'day')} ago. Sync now to be safe`});
     }
   }
 
@@ -5612,7 +5613,7 @@ function renderDashboard() {
 
   // Customize button (small, below hero card)
   const customizeBtn = !_dashReorderMode ? `<div style="text-align:center;margin:4px 0 12px"><!-- PSS #397: at the bottom now -->
-    <button onclick="toggleDashReorderMode()" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;padding:4px 0">${_ico('cog',12)} Customize</button>
+    <button class="tap-x" onclick="toggleDashReorderMode()" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;padding:4px 0">${_ico('cog',12)} Customize</button>
   </div>` : '';
 
   document.getElementById('page-content').innerHTML = `<div class="page-pad page-anim dash-fz">
@@ -5715,6 +5716,12 @@ const APP_CHANGELOG = [
     '➖ A credit card you owe on shows its balance with a minus sign in red when you pick an account', // PLS #470
     '🔄 After you edit something, the page you are on shows the new numbers right away', // PLS #471
     '🖥️ On a computer, the summary cards on Accounts, Loans, Reimbursements and Investments sit in one band', // PSS #472
+    '📴 Excel export works offline after you open the app once with internet', // PLS #473
+    '🤲 Analytics, Wealth: money owed to you shows one row per person, loans and reimbursements together', // PLS #474
+    '✏️ Help, alerts and Insights tips read as plain sentences, without a long dash joining two thoughts', // PSS #475
+    '👆 Edit or undo this settlement, Customize and the Related links on Insights are easier to tap on a phone', // PSS #476
+    '🔕 No more Idle tags on accounts or Idle line in Insights', // PLS #478
+    '➕ Add a transaction straight to an account: the + on its card in grid view, or Add inside the account. That account is already picked', // PLS #477
   ]},
   { ver: '1.2.13', date: 'October 2026', changes: [
     '₿ A Crypto Wallet can hold any coin (BTC, ETH, BNB and more), not only USDT. USDT is still the default, and a new coin asks for its rate first', // PLS #447
@@ -6292,11 +6299,11 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     // the only one named.
     const batchRoute = tx.isBatchWriteOff ? `
       <div onclick="event.stopPropagation();undoBatchWriteOff('${tx.id}')"
-           style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+           class="tap-x" style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
            role="link" tabindex="0">Undo this write-off <span style="font-size:13px;line-height:1">&rsaquo;</span></div>`
       : tx.isBatchSettlement ? `
       <div onclick="event.stopPropagation();openBatchSettleEdit('${tx.id}','${tx.batchDirection||tx.loanDirection||'lent'}')"
-           style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+           class="tap-x" style="margin:6px 0 0 56px;font-size:11px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px"
            role="link" tabindex="0">Edit or undo this settlement <span style="font-size:13px;line-height:1">&rsaquo;</span></div>` : '';
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
@@ -6607,6 +6614,7 @@ function openAddSheet(prefill={}) {
   window._catGroupOpen = null;
   openSheet('add','Add transaction','');
   renderAddSheet();
+  if (prefill.accountId) _addRestoreCommon({ account: prefill.accountId }); // PLS #477: opened from an account, so it is picked (From on Transfer and Remittance)
   if (typeof NP_IS_MOBILE !== 'undefined' && !NP_IS_MOBILE) setTimeout(_npPcAuto, 380); // PLS #437: after the sheet has slid in, so the calculator lines up beside it
 }
 
@@ -9462,7 +9470,7 @@ function openTxDetail(txId) {
         <div class="detail-label">Written off from</div>
         <div class="detail-value" style="color:var(--accent)">${_esc(_ln.personName||'loan')} &rsaquo;</div></div>
         <div class="detail-row"><div class="detail-label">Reason</div><div class="detail-value">${_esc(tx.writeOffReason||'—')}</div></div>
-        <div class="detail-row"><div class="detail-label" style="font-size:11px;color:var(--text3)">Edit this in Loans — changing it here would leave the loan and the entry disagreeing</div><div class="detail-value"></div></div>`;
+        <div class="detail-row"><div class="detail-label" style="font-size:11px;color:var(--text3)">Edit this in Loans. Changing it here would leave the loan and the entry disagreeing</div><div class="detail-value"></div></div>`;
     }
   }
   if (tx.isInvestmentReturn) {
@@ -9477,7 +9485,7 @@ function openTxDetail(txId) {
       const _c = _rg > 0 ? 'var(--green)' : _rg < 0 ? 'var(--red)' : 'var(--text3)';
       const _w = _rg > 0 ? 'Realized gain' : _rg < 0 ? 'Realized loss' : 'Realized result';
       rows += `<div class="detail-row"><div class="detail-label">${_w}</div><div class="detail-value" style="font-family:var(--mono);color:${_c};font-weight:600">${fmt(_rg, tx.currency, true)}</div></div>`;
-      rows += `<div class="detail-row"><div class="detail-label">Counts as</div><div class="detail-value" style="font-size:12px;color:var(--text3)">${_rg===0?'nothing — break even':(_rg>0?'income':'expense')+' of '+fmt(Math.abs(_rg), tx.currency)}</div></div>`;
+      rows += `<div class="detail-row"><div class="detail-label">Counts as</div><div class="detail-value" style="font-size:12px;color:var(--text3)">${_rg===0?'nothing, break even':(_rg>0?'income':'expense')+' of '+fmt(Math.abs(_rg), tx.currency)}</div></div>`;
     }
   } else
   rows += `<div class="detail-row"><div class="detail-label">Type</div><div class="detail-value"><span class="pill pill-${txTypeColor(tx.type)}">${_txTypeName(tx.type)}</span></div></div>`; // PSS #465
@@ -11628,7 +11636,7 @@ function openReimbDialog(person) {
     const cat = getCategoryDisplay(tx.categoryId);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="flex:1;min-width:0">
-        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtDFull(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:11px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense — collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
+        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtDFull(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:11px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense. Collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
         ${e.paid>0?`<div style="color:var(--text3);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
       </div>
       <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
@@ -11726,7 +11734,7 @@ function updateReimbBatchPreview(person) {
 
   const diff = received - grandTotal;
   if (Math.abs(diff) < 0.01) {
-    preview.innerHTML = `<div style="color:var(--green)">✓ Exact — settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
+    preview.innerHTML = `<div style="color:var(--green)">✓ Exact: settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
   } else if (diff > 0) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>
       <div style="color:var(--text3);margin-top:3px">Excess: <strong style="font-family:var(--mono);color:var(--green)">+${fmt(diff, targetCurr)}</strong> → logged as Reimbursement Gain</div>`;
@@ -11749,7 +11757,7 @@ function updateReimbBatchPreview(person) {
       else break;
     }
     const untouched = entries.length - fullyPaid - (partialAmt > 0 ? 1 : 0);
-    let msg = `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
+    let msg = `<div style="color:var(--amber)">Partial: settles ${fullyPaid} of ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
     if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next entry: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
     if (untouched > 0) msg += `<div style="color:var(--text3);margin-top:2px">${untouched} ${untouched>1?'entries':'entry'} untouched</div>`;
     preview.innerHTML = msg;
@@ -12109,8 +12117,10 @@ function renderActiveAccounts() {
     const v = bal(a);
     const idle = _alertCache.filter(al => (al.type==='idle'||al.type==='low') && al.id===a.id)[0];
     const idleDays = idle && (idle.msg.match(/(\d+)\s*days?/) || [])[1];
-    return `<div class="acct-card" onclick="openAcctDetail('${a.id}')" style="padding:13px 14px">
-      <div class="lp-name" style="white-space:normal;align-items:flex-start"><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3">${_esc(a.name)}</span></div>
+    // PLS #477 (his pick): in grid view a small + at the top right adds a transaction to this account
+    return `<div class="acct-card" onclick="openAcctDetail('${a.id}')" style="padding:13px 14px;position:relative">
+      ${a.archived ? '' : `<button type="button" class="acct-add tap-x" aria-label="Add transaction to ${escapeAttr(a.name)}" onclick="event.stopPropagation();openAddSheet({accountId:'${a.id}'})">${_ico('plus',14)}</button>`}
+      <div class="lp-name" style="white-space:normal;align-items:flex-start;padding-right:30px"><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3">${_esc(a.name)}</span></div>
       <!-- PSS #396: the Idle / Low pill sits at the right end of the type line instead of on its own line under the
            balance, so a card with a pill is exactly as tall as one without; a long type or note shortens with "…" -->
       <div class="lp-meta" style="display:flex;align-items:center;gap:8px;min-height:22px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(a.type || 'Other')}${a.note ? ' · ' + _esc(a.note) : ''}</span>${idle ? `<span class="lp-pill due" style="flex-shrink:0;margin:0" title="${_esc(idle.msg)}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span>` : ''}</div>
@@ -12229,7 +12239,10 @@ function openAcctDetail(acctId) {
   // the actions sit in the round-button row; recent transactions keep the app's own row renderer.
   const _typeIco = { 'Savings':'bank', 'Checking':'bank', 'Bank':'bank', 'E-Wallet':'phone', 'Cash':'cash', 'Credit Card':'card', 'Investment':'trend' }[a.type] || 'wallet';
   const _home = _homeBase();
-  const acts = (!a.archived ? _fsAct('scale', 'Reconcile', `openBalanceCorrection('${acctId}')`, ['var(--accent)','#fff']) : '')
+  // PLS #477: Add opens Add transaction with this account already picked (his ask Oct 31). Plain Add elsewhere
+  // still starts with no account (PLS #83).
+  const acts = (!a.archived ? _fsAct('plus', 'Add', `closeSheet('gen');setTimeout(()=>openAddSheet({accountId:'${acctId}'}),60)`, ['var(--accent)','#fff']) : '')
+    + (!a.archived ? _fsAct('scale', 'Reconcile', `openBalanceCorrection('${acctId}')`) : '')
     + _fsAct('list', 'Transactions', `nav('transactions');closeSheet('gen')`)
     + _fsAct('cog', 'Edit', `openEditAccount('${acctId}')`)
     + (!a.archived ? _fsAct('archive', 'Archive', `archiveAccount('${acctId}')`, ['var(--amber-bg)','var(--amber)'])
@@ -12322,7 +12335,7 @@ function previewBalanceCorrection(acctId, appBal) {
     preview.style.display = 'block';
     preview.style.background = 'var(--green-bg)';
     preview.style.color = 'var(--green)';
-    preview.innerHTML = `✓ Already in sync — no correction needed.`;
+    preview.innerHTML = `✓ Already in sync. No correction needed.`;
     if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '0.5'; }
     return;
   }
@@ -14099,7 +14112,7 @@ function updateBatchSettlePreview(direction, person) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${loans.length} ${loans.length>1?_nn:_n1} in full</div>`
       + _pg('Projected loss', '-' + fmt(diff, dispCurr), 'red', ', logged as Interest paid');
   } else if (Math.abs(diff) < 0.01) {
-    preview.innerHTML = `<div style="color:var(--green)">✓ Exact — settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
+    preview.innerHTML = `<div style="color:var(--green)">✓ Exact: settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
   } else if (diff > 0) {
     // Sobra — gain for lent, loss for borrowed
     const excessIsGain = direction === 'lent';
@@ -14134,7 +14147,7 @@ function updateBatchSettlePreview(direction, person) {
     }
     const untouched = loans.length - fullyPaid - (partialAmt > 0 ? 1 : 0);
     let msg = _D ? `<div style="color:var(--amber)">Partial, settles ${fullyPaid} of ${loans.length} ${loans.length>1?_nn:_n1} in full</div>`
-      : `<div style="color:var(--amber)">Partial — settles ${fullyPaid} of ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
+      : `<div style="color:var(--amber)">Partial: settles ${fullyPaid} of ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
     if (partialAmt > 0) msg += `<div style="color:var(--text3);margin-top:3px">Next ${_n1}: ${fmt(partialAmt, targetCurr)} applied (partial)</div>`;
     if (untouched > 0) msg += `<div style="color:var(--text3);margin-top:2px">${untouched} ${untouched>1?_nn:_n1} untouched</div>`;
     if (_D) msg += _pg('Projected gain', '+' + fmt(-diff, targetCurr), 'green', ' if you record the rest as gain'); // PLS #445
@@ -15829,7 +15842,7 @@ function renderAnalytics() {
   // Subscriptions sat under 'people' though it is a recurring expense, not a person.
   // Do not "tidy" these back toward the old spending/cashflow/people names.
   const TAB_REGISTRY = {
-    overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance — net worth, income vs expense, cashflow, and budget.'},
+    overview:   {label:'Overview',       icon:'📊', section:'home', desc:'Your key money metrics at a glance: net worth, income vs expense, cashflow, and budget.'},
     aisummary:  {label:'Insights',     icon:'🤖', section:'home', desc:'Plain-language insights and patterns auto-detected from your transactions.'},
     cashflow:   {label:'Cashflow',       icon:'💰', section:'patterns', desc:'Money in vs money out over time, and what is left over each month.'},
     calendar:   {label:'Calendar',       icon:'📅', section:'patterns', desc:'Daily spending mapped onto a calendar so you can spot heavy days.'},
@@ -17468,8 +17481,8 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   const dots = plotted.map((mo, i) => {
     const L = (xAt(i)/W*100).toFixed(2);
     if (mo.rate === null) {
-      const _why = mo.partial ? `${mo.label} is a partial month — logging began mid-month, so it has no comparable savings rate`
-                              : `No income logged in ${mo.label} — no savings rate to compute`;
+      const _why = mo.partial ? `${mo.label} is a partial month. Logging began mid-month, so it has no comparable savings rate`
+                              : `No income logged in ${mo.label}, so no savings rate to compute`;
       // PLS #239: sit on the chart FLOOR (where a 0% would plot), not at top:100%. At 100% the
       // marker straddles the container edge and half of it lands on the month label underneath.
       // Using yAt(0) keeps it inside the box and in the same coordinate system as the real dots.
@@ -19856,6 +19869,14 @@ function renderAnalyticsWealth() {
     for (const r of rows) {
       if (!map[r.type]) map[r.type] = { total: 0, accounts: [] };
       map[r.type].total += r.phpBal;
+      if (r.type === 'Receivable') {
+        // PLS #474: one row per person (loans + reimbursements together, per currency), not one per entry
+        const who = String(r.name || '').replace(/ \(Reimb\.\)$/, '');
+        const same = map[r.type].accounts.find(x => x.name === who && x.currency === r.currency);
+        if (same) { same.bal += r.bal; same.phpBal += r.phpBal; continue; }
+        map[r.type].accounts.push({ ...r, name: who });
+        continue;
+      }
       map[r.type].accounts.push(r);
     }
     return Object.entries(map)
@@ -19907,7 +19928,7 @@ function renderAnalyticsWealth() {
             </div>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2">${g.type}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${g.accounts.length} account${g.accounts.length>1?'s':''} · ${pct.toFixed(0)}%</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${g.type === 'Receivable' ? `${new Set(g.accounts.map(a => a.name)).size} ${new Set(g.accounts.map(a => a.name)).size>1?'people':'person'}` : `${g.accounts.length} account${g.accounts.length>1?'s':''}`} · ${pct.toFixed(0)}%<!-- PLS #474 --></div>
             </div>
             <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${accentColor};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(fromPhp(g.total,disp),disp)}</div>
             <!-- iOS native chevron -->
@@ -20904,7 +20925,7 @@ function renderContractTab() {
     const goalHit = totalActual >= safeGoal;
     return `<div class="page-pad">
       <div class="hero-card" style="margin-bottom:16px;${goalHit?'border-color:var(--green)':'border-color:var(--amber)'}">
-        <div class="hero-label">Contract Ended — ${active.location}</div>
+        <div class="hero-label">Contract ended: ${active.location}</div>
         <div style="font-size:28px;margin-bottom:4px">${goalHit?'🎉':'💪'}</div>
         <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:${goalHit?'var(--green)':'var(--amber)'}">${goalHit?'Goal Reached!':'Goal Not Reached'}</div>
         <div class="hero-row">
@@ -21321,7 +21342,7 @@ function saveContractWizard() {
     milestones: [
       { label:'Contract start', date:startDate, note:'Day 1 begins' },
       { label:`Month ${Math.round(totalMonths/2)}`, date: (() => { const d=addMonthsClamped(new Date(startDate+'T00:00:00'), Math.round(totalMonths/2)); return localDate(d); })(), note:'Midpoint review' },
-      { label:`Month ${totalMonths} — end`, date:endDate, note:'Final deployment' },
+      { label:`Month ${totalMonths}: end`, date:endDate, note:'Final deployment' },
     ],
     lastCheckin: null,
     checkinHistory: [],
@@ -23168,7 +23189,7 @@ function aiAllocateBudget(bgtId, results, totalLimit) {
     // Needs alone exceed budget — proportionally scale needs, zero wants
     const scale = usableBudget / needsTotal;
     needs.forEach(r => { allocations[r.catId] = Math.round(r.predicted * scale); });
-    warning = `⚠ Your essential spending (${fmt(needsTotal, db.budgets.find(b=>b.id===bgtId)?.currency||_homeBase())}) already exceeds your budget. Allocations scaled proportionally — consider raising your limit.`;
+    warning = `⚠ Your essential spending (${fmt(needsTotal, db.budgets.find(b=>b.id===bgtId)?.currency||_homeBase())}) already exceeds your budget. Allocations scaled proportionally. Consider raising your limit.`;
   } else {
     // Needs at full
     needs.forEach(r => { allocations[r.catId] = r.predicted; });
@@ -23821,7 +23842,7 @@ function aiCatSuggest(input) {
   if (wordCount >= 2 || (bestSubScore < 30 && bestCatScore < 20)) {
     return {
       type: 'major',
-      reason: `"${input}" seems broad — might be a new major category`,
+      reason: `"${input}" seems broad. It might be a new major category`,
       confidence: 'low',
     };
   }
@@ -24793,7 +24814,8 @@ function mergeImport() {
 
 function exportXLSX() {
   if (typeof XLSX === 'undefined') {
-    showToast('⏳ Excel library loading, try again in a moment');
+    // PLS #473: offline and never saved yet -> say so, instead of 'try again' forever
+    showToast(navigator.onLine ? '⏳ Excel library loading, try again in a moment' : '📴 Excel needs internet once to set up. Use CSV for now', UX_TOAST_DUR_LONG);
     return;
   }
   showLoading('Generating Excel file...');
@@ -26287,7 +26309,7 @@ function _setSyncBlockState(state, opts={}) {
 async function retrySyncBlock() {
   _setSyncBlockState('syncing');
   if (!navigator.onLine) {
-    _setSyncBlockState('failed', { reason: "You're offline — connect to the internet and retry." });
+    _setSyncBlockState('failed', { reason: "You're offline. Connect to the internet and retry." });
     return;
   }
   clearTimeout(_autoSaveTimer);
@@ -26340,7 +26362,7 @@ function _renderSyncNudge(info) {
     target.insertBefore(badge, target.firstChild);
   }
   badge.innerHTML = `<span style="width:6px;height:6px;background:var(--accent);border-radius:var(--r-full);display:inline-block"></span>New backup`;
-  badge.title = `Newer backup on ${_esc(info.deviceName)} — tap to review and load`;
+  badge.title = `Newer backup on ${_esc(info.deviceName)}. Tap to review and load`;
   badge.onclick = () => { badge.style.display='none'; checkDriveForBackup(); };
   badge.style.display = 'inline-flex';
 }
@@ -27735,7 +27757,7 @@ function _renderOfflineBadge(isOffline) {
       badge.id = 'offline-badge';
       badge.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:4px 9px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);border-radius:var(--r-full);font-size:11px;font-weight:600;cursor:default;user-select:none';
       badge.innerHTML = '<span style="width:6px;height:6px;background:var(--amber);border-radius:var(--r-full);display:inline-block"></span>Offline';
-      badge.title = 'No internet — changes saved locally';
+      badge.title = 'No internet. Changes saved locally';
       // Inject into page header (right side) for desktop / status spot for mobile
       const target = document.querySelector('#page-header .ph-right') || document.body;
       target.insertBefore(badge, target.firstChild);
@@ -27907,9 +27929,9 @@ function aiBudgetIntelligence() {
         `Overshooting your ${bgt.location} budget`,
       ];
       const bodies = [
-        `You're ${sev} over — averaging ${fmtB(avgSpend)}/mo against your ${fmtB(bgt.limit)} limit. ${fmtB(newLimit)} would match your real spend.`,
+        `You're ${sev} over, averaging ${fmtB(avgSpend)}/mo against your ${fmtB(bgt.limit)} limit. ${fmtB(newLimit)} would match your real spend.`,
         `Your ${bgt.location} spend is ${sev} above plan: ${fmtB(avgSpend)} vs ${fmtB(bgt.limit)}. Consider raising to ${fmtB(newLimit)}.`,
-        `Three-month average says ${fmtB(avgSpend)} — that's ${(ratio*100-100).toFixed(0)}% past your ${fmtB(bgt.limit)} cap. ${fmtB(newLimit)} would fit better.`,
+        `Three-month average says ${fmtB(avgSpend)}. That's ${(ratio*100-100).toFixed(0)}% past your ${fmtB(bgt.limit)} cap. ${fmtB(newLimit)} would fit better.`,
         `Spending ${fmtB(overshoot)} more than budgeted on average. ${fmtB(newLimit)} matches your actual pace.`,
       ];
       insights.push({id,type:'budget',priority:'high',icon:'📈',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review budget limit'});
@@ -27926,10 +27948,10 @@ function aiBudgetIntelligence() {
         `${bgt.location}: more headroom than expected`,
       ];
       const bodies = [
-        `Averaging ${fmtB(avgSpend)}/mo — that's ${pct}% under limit. ${fmtB(headroom)} could go to savings.`,
-        `${pct}% under the cap — ${fmtB(headroom)}/mo unused, enough for a recurring transfer to savings.`,
-        `Only ${fmtB(avgSpend)} of ${fmtB(bgt.limit)} used — the extra ${fmtB(headroom)}/mo could be auto-saved.`,
-        `Consistently ${pct}% below limit — could lower the cap or move ${fmtB(headroom)} to investments.`,
+        `Averaging ${fmtB(avgSpend)}/mo. That's ${pct}% under limit. ${fmtB(headroom)} could go to savings.`,
+        `${pct}% under the cap: ${fmtB(headroom)}/mo unused, enough for a recurring transfer to savings.`,
+        `Only ${fmtB(avgSpend)} of ${fmtB(bgt.limit)} used. The extra ${fmtB(headroom)}/mo could be auto-saved.`,
+        `Consistently ${pct}% below limit. You could lower the cap or move ${fmtB(headroom)} to investments.`,
       ];
       insights.push({id,type:'budget',priority:'low',icon:'📉',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Consider reallocating'});
     }
@@ -27958,7 +27980,7 @@ function aiBudgetIntelligence() {
           ];
           const bodies = [
             `${sym}${_money2(spent)} spent of ${sym}${_money2(limAmt)} allocated (${(subRatio*100).toFixed(0)}%) for ${bgt.location}.`,
-            `${catName} is at ${(subRatio*100).toFixed(0)}% of allocation — ${sym}${_money2(spent-limAmt)} over.`,
+            `${catName} is at ${(subRatio*100).toFixed(0)}% of allocation, ${sym}${_money2(spent-limAmt)} over.`,
             `Crossed the ${catName} line: ${sym}${_money2(spent)} vs ${sym}${_money2(limAmt)} allowed.`,
           ];
           insights.push({id,type:'budget',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review allocation'});
@@ -27998,10 +28020,10 @@ function aiAnomalyDetection() {
         `Spending more on ${catName} than usual`,
       ];
       const bodies = [
-        `${sev} above your norm — ${fmt(curAmt, _homeBase())} this month vs ${fmt(avg, _homeBase())} average. That's ${pctOver}% higher.`,
-        `${catName} jumped to ${fmt(curAmt, _homeBase())} — ${pctOver}% above your typical ${fmt(avg, _homeBase())}.`,
+        `${sev} above your norm: ${fmt(curAmt, _homeBase())} this month vs ${fmt(avg, _homeBase())} average. That's ${pctOver}% higher.`,
+        `${catName} jumped to ${fmt(curAmt, _homeBase())}, ${pctOver}% above your typical ${fmt(avg, _homeBase())}.`,
         `Your ${catName} expenses are ${sev} elevated: ${fmt(curAmt, _homeBase())} vs the usual ${fmt(avg, _homeBase())}.`,
-        `${pctOver}% spike in ${catName} — ${fmt(curAmt-avg, _homeBase())} more than your historical average.`,
+        `${pctOver}% spike in ${catName}: ${fmt(curAmt-avg, _homeBase())} more than your historical average.`,
       ];
       insights.push({id,type:'anomaly',priority:'medium',icon:'⚠️',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -28079,7 +28101,7 @@ function aiSavingsPace() {
     ];
     const status = onTrack
       ? `Projected ${sym(_homeBase())}${fmtPHP(projected)} still reaches the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal if the monthly pace holds.`
-      : `At this pace the projected total is ${sym(_homeBase())}${fmtPHP(projected)} — ${sym(_homeBase())}${fmtPHP(targetAmount-projected)} short. Raising the monthly amount closes it.`;
+      : `At this pace the projected total is ${sym(_homeBase())}${fmtPHP(projected)}, ${sym(_homeBase())}${fmtPHP(targetAmount-projected)} short. Raising the monthly amount closes it.`;
     const bodies = [
       `${dayCounter}. ${paceLine} Expected: ${sym(_homeBase())}${fmtPHP(targetNow)} · Actual: ${sym(_homeBase())}${fmtPHP(actualTotal)}. ${status}`,
       `${dayCounter}. You're at ${actualPct.toFixed(1)}%, target says ${expectedPct.toFixed(1)}% by now. ${status}`,
@@ -28099,8 +28121,8 @@ function aiSavingsPace() {
       `Running ahead by ${sym(_homeBase())}${fmtPHP(ahead)}`,
     ];
     const bodies = [
-      `${dayCounter}. ${paceLine} Projected ${sym(_homeBase())}${fmtPHP(projected)} — about ${sym(_homeBase())}${fmtPHP(Math.abs(overGoal))} ${overGoal>=0?'over':'under'} the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal.`,
-      `${dayCounter}. The ${sym(_homeBase())}${fmtPHP(ahead)} surplus is roughly ${monthsBuffer.toFixed(1)} ${aiPlural(Math.round(monthsBuffer),'month')} of contributions — could move to investments or front-load another goal.`,
+      `${dayCounter}. ${paceLine} Projected ${sym(_homeBase())}${fmtPHP(projected)}, about ${sym(_homeBase())}${fmtPHP(Math.abs(overGoal))} ${overGoal>=0?'over':'under'} the ${sym(_homeBase())}${fmtPHP(targetAmount)} goal.`,
+      `${dayCounter}. The ${sym(_homeBase())}${fmtPHP(ahead)} surplus is roughly ${monthsBuffer.toFixed(1)} ${aiPlural(Math.round(monthsBuffer),'month')} of contributions. You could move it to investments or front-load another goal.`,
       `${dayCounter}. At ${actualPct.toFixed(1)}% vs ${expectedPct.toFixed(1)}% expected. Raising the monthly goal would finish the target early; otherwise the surplus compounds better in a yield bucket.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'🚀', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
@@ -28115,8 +28137,8 @@ function aiSavingsPace() {
     ];
     const bodies = [
       `${dayCounter}. ${paceLine} Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
-      `${dayCounter}. At ${actualPct.toFixed(1)}% — exactly where you should be. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
-      `${dayCounter}. ${sym(_homeBase())}${fmtPHP(actualTotal)} saved, target ${sym(_homeBase())}${fmtPHP(targetNow)} — on pace. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
+      `${dayCounter}. At ${actualPct.toFixed(1)}%, exactly where you should be. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
+      `${dayCounter}. ${sym(_homeBase())}${fmtPHP(actualTotal)} saved, target ${sym(_homeBase())}${fmtPHP(targetNow)}. On pace. Projected: ${sym(_homeBase())}${fmtPHP(projected)}.`,
     ];
     insights.push({id, type:'savings', priority:'low', icon:'✅', title:aiPick(titles,id), body:aiPick(bodies,id), action:null});
   }
@@ -28145,8 +28167,8 @@ function aiFxAdvisor() {
       `Rate ${diffPct}% above your recent average`,
     ];
     const bodies = [
-      `Current ${fmt(current, _homeBase())}/${FX} is above the recent avg ${fmt(last3Avg, _homeBase())} — +${diffPct}%. Converting now stretches each ${FX} a little further.`,
-      `Rate is ${diffPct}% better than your 3-period average — a more efficient window if you have ${FX} to move.`,
+      `Current ${fmt(current, _homeBase())}/${FX} is above the recent avg ${fmt(last3Avg, _homeBase())} (+${diffPct}%). Converting now stretches each ${FX} a little further.`,
+      `Rate is ${diffPct}% better than your 3-period average. A more efficient window if you have ${FX} to move.`,
       `Above your typical ${fmt(last3Avg, _homeBase())} by ${diffPct}%. On a ~${fmt(10000,FX)} remit, that's about ${fmt((current-last3Avg)*10000, _homeBase())} more than average.`,
     ];
     insights.push({id,type:'fx',priority:'medium',icon:'💱',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Log remittance'});
@@ -28157,12 +28179,12 @@ function aiFxAdvisor() {
     const titles = [
       'FX rate below average',
       `${FX} softening lately`,
-      'Rate dipped — maybe hold',
+      'Rate dipped, maybe hold',
     ];
     const bodies = [
       `Current ${fmt(current, _homeBase())}/${FX} below recent avg ${fmt(last3Avg, _homeBase())}. Consider waiting if not urgent.`,
-      `Rate is ${diffPct}% below your typical conversion — holding is more efficient if the remit isn't urgent.`,
-      `${diffPct}% below your 3-period average — waiting could recover ${fmt((last3Avg-current)*10000, _homeBase())} on a ~${fmt(10000,FX)} remit.`,
+      `Rate is ${diffPct}% below your typical conversion. Holding is more efficient if the remit isn't urgent.`,
+      `${diffPct}% below your 3-period average. Waiting could recover ${fmt((last3Avg-current)*10000, _homeBase())} on a ~${fmt(10000,FX)} remit.`,
     ];
     insights.push({id,type:'fx',priority:'low',icon:'⏳',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
   }
@@ -28242,8 +28264,8 @@ function aiCashFlowForecast() {
       ];
       const bodies = [
         `At ${fmt(daily, _homeBase())}/day, projected ${fmt(projected, _homeBase())} vs budget ${sym(_homeBase())}${bgt.limit}. ${sev} above plan.`,
-        `Burning ${fmt(daily, _homeBase())}/day — at this pace, you'll close at ${fmt(projected, _homeBase())} (budget ${sym(_homeBase())}${bgt.limit}).`,
-        `${daysPassed} ${aiPlural(daysPassed,'day')} in, daily rate of ${fmt(daily, _homeBase())} projects ${fmt(projected, _homeBase())} — that's ${aiAmt(overshoot)} over.`,
+        `Burning ${fmt(daily, _homeBase())}/day. At this pace, you'll close at ${fmt(projected, _homeBase())} (budget ${sym(_homeBase())}${bgt.limit}).`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, daily rate of ${fmt(daily, _homeBase())} projects ${fmt(projected, _homeBase())}. That's ${aiAmt(overshoot)} over.`,
         `Current trajectory ends ${aiAmt(overshoot)} past your ${sym(_homeBase())}${bgt.limit} cap. ${daysLeft} ${aiPlural(daysLeft,'day')} left to adjust.`,
       ];
       insights.push({id,type:'cashflow',priority:'high',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Review spending'});
@@ -28258,8 +28280,8 @@ function aiCashFlowForecast() {
       ];
       const bodies = [
         `Projected month-end: ${fmt(projected, _homeBase())} (budget: ${sym(_homeBase())}${bgt.limit}). Daily rate: ${fmt(daily, _homeBase())}.`,
-        `${daysPassed} ${aiPlural(daysPassed,'day')} in, ${fmt(daily, _homeBase())}/day average — projected to finish at ${fmt(projected, _homeBase())}, ${fmt(headroom, _homeBase())} under budget.`,
-        `Daily burn ${fmt(daily, _homeBase())} — month-end estimate ${fmt(projected, _homeBase())}. ${headroom.toFixed(0)} room to spare.`,
+        `${daysPassed} ${aiPlural(daysPassed,'day')} in, ${fmt(daily, _homeBase())}/day average, projected to finish at ${fmt(projected, _homeBase())}, ${fmt(headroom, _homeBase())} under budget.`,
+        `Daily burn ${fmt(daily, _homeBase())}. Month-end estimate ${fmt(projected, _homeBase())}. ${headroom.toFixed(0)} room to spare.`,
       ];
       insights.push({id,type:'cashflow',priority:'low',icon:'🔮',title:aiPick(titles,id),body:aiPick(bodies,id),action:null});
     }
@@ -28282,10 +28304,10 @@ function aiReimbursementNudge() {
         `Time to nudge ${persons}`,
       ];
       const bodies = [
-        `${days} ${aiPlural(days,'day')} pending — owes ${fmt(owed,tx.currency)}.`,
+        `${days} ${aiPlural(days,'day')} pending. Owes ${fmt(owed,tx.currency)}.`,
         `${fmt(owed,tx.currency)} outstanding for ${days} ${aiPlural(days,'day')}. A friendly reminder might help.`,
-        `${days} ${aiPlural(days,'day')} since the shared expense — ${fmt(owed,tx.currency)} still owed.`,
-        days >= 14 ? `Two weeks overdue — ${fmt(owed,tx.currency)} from ${persons}.` : `${days} ${aiPlural(days,'day')}, ${fmt(owed,tx.currency)} pending.`,
+        `${days} ${aiPlural(days,'day')} since the shared expense. ${fmt(owed,tx.currency)} still owed.`,
+        days >= 14 ? `Two weeks overdue: ${fmt(owed,tx.currency)} from ${persons}.` : `${days} ${aiPlural(days,'day')}, ${fmt(owed,tx.currency)} pending.`,
       ];
       insights.push({id,type:'reimbursement',priority:days>=14?'high':'medium',icon:'🤝',title:aiPick(titles,id),body:aiPick(bodies,id),action:'Go to Reimbursements'});
     }
@@ -28327,10 +28349,10 @@ function aiAccountBalanceAlert() {
         `${acct.name} won't last long`,
       ];
       const bodies = [
-        `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend — ~${daysLeft} ${aiPlural(daysLeft,'day')} remaining.`,
+        `${fmt(bal,acct.currency)} left at ${fmt(avgDaily,acct.currency)}/day spend, about ${daysLeft} ${aiPlural(daysLeft,'day')} remaining.`,
         `Burn rate ${fmt(avgDaily,acct.currency)}/day means ${fmt(bal,acct.currency)} runs out in ~${daysLeft} ${aiPlural(daysLeft,'day')}.`,
         `${daysLeft} ${aiPlural(daysLeft,'day')} of runway at current pace (${fmt(avgDaily,acct.currency)}/day, ${fmt(bal,acct.currency)} left).`,
-        daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left — ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days of runway at ${fmt(avgDaily,acct.currency)}/day — plan a top-up.`,
+        daysLeft <= 5 ? `Only ${daysLeft} ${aiPlural(daysLeft,'day')} left: ${fmt(bal,acct.currency)} at ${fmt(avgDaily,acct.currency)}/day.` : `~${daysLeft} days of runway at ${fmt(avgDaily,acct.currency)}/day. Plan a top-up.`,
       ];
       insights.push({
         id, type: 'balance',
@@ -28373,7 +28395,7 @@ function aiInstallmentReminder() {
       ];
       const bodies = [
         `~${fmt(inst.monthlyAmount, inst.currency || _homeBase())} • Month ${totalPaid+1}/${inst.totalMonths} • ${remaining} ${aiPlural(remaining,'payment')} left.`,
-        `Month ${totalPaid+1} of ${inst.totalMonths} — ~${fmt(inst.monthlyAmount, inst.currency || _homeBase())}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
+        `Month ${totalPaid+1} of ${inst.totalMonths}: about ${fmt(inst.monthlyAmount, inst.currency || _homeBase())}. ${remaining} ${aiPlural(remaining,'payment')} after this.`,
         `${remaining} more ${aiPlural(remaining,'payment')} of ~${fmt(inst.monthlyAmount, inst.currency || _homeBase())} to go.`,
       ];
       insights.push({
@@ -28407,12 +28429,12 @@ function aiLoanOverdueAlert() {
     const isLent = loan._direction === 'lent';
     const titles = [
       `${loan.personName} loan ${overdueDays}d overdue`,
-      `Overdue: ${loan.personName} — ${overdueDays} ${aiPlural(overdueDays,'day')} past due`,
-      `${loan.personName} hasn't ${isLent?'paid':'been paid'} — ${overdueDays}d overdue`,
+      `Overdue: ${loan.personName}, ${overdueDays} ${aiPlural(overdueDays,'day')} past due`,
+      `${loan.personName} hasn't ${isLent?'paid':'been paid'}, ${overdueDays}d overdue`,
     ];
     const bodies = [
       `${fmt(remaining, loan.currency)} still ${isLent?'owed to you':'owed by you'}. Consider writing off as a loss if uncollectible.`,
-      `${fmt(remaining, loan.currency)} outstanding. Past your ${LOAN_OVERDUE_DAYS}-day threshold — review and decide.`,
+      `${fmt(remaining, loan.currency)} outstanding. Past your ${LOAN_OVERDUE_DAYS}-day threshold. Review and decide.`,
       `${fmt(remaining, loan.currency)} unsettled. Tap to write off if you've given up on collecting.`,
     ];
     insights.push({
@@ -28460,8 +28482,8 @@ function aiSpendingVelocity() {
         `Down ${Math.abs(change).toFixed(0)}% from last month`,
       ];
       const bodies = [
-        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month — about ${fmt(lastMonth.expense-projectedFullMonth, thisMonth.currency)} freed up if the pace holds.`,
-        `On track to spend ${fmt(projectedFullMonth, thisMonth.currency)} — ${Math.abs(change).toFixed(0)}% less than last month's ${fmt(lastMonth.expense, lastMonth.currency)}. Worth moving the difference to savings before it's reabsorbed.`,
+        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. About ${fmt(lastMonth.expense-projectedFullMonth, thisMonth.currency)} freed up if the pace holds.`,
+        `On track to spend ${fmt(projectedFullMonth, thisMonth.currency)}, ${Math.abs(change).toFixed(0)}% less than last month's ${fmt(lastMonth.expense, lastMonth.currency)}. Worth moving the difference to savings before it's reabsorbed.`,
         `Trajectory shows ${Math.abs(change).toFixed(0)}% lighter spend. If it sticks, it's a candidate for a lower budget cap next month.`,
       ];
       insights.push({id, type: 'velocity', priority: 'low', icon: '📉', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
@@ -28475,9 +28497,9 @@ function aiSpendingVelocity() {
         `Heading for a bigger spend month`,
       ];
       const bodies = [
-        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month — about ${fmt(projectedFullMonth-lastMonth.expense, thisMonth.currency)} more if it holds.`,
-        `At current rate, you'll close at ${fmt(projectedFullMonth, thisMonth.currency)} — ${change.toFixed(0)}% above last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
-        `${change.toFixed(0)}% faster than last month — check which categories drove it.`,
+        `Projected ${fmt(projectedFullMonth, thisMonth.currency)} vs ${fmt(lastMonth.expense, lastMonth.currency)} last month. About ${fmt(projectedFullMonth-lastMonth.expense, thisMonth.currency)} more if it holds.`,
+        `At current rate, you'll close at ${fmt(projectedFullMonth, thisMonth.currency)}, ${change.toFixed(0)}% above last month's ${fmt(lastMonth.expense, lastMonth.currency)}.`,
+        `${change.toFixed(0)}% faster than last month. Check which categories drove it.`,
       ];
       insights.push({id, type: 'velocity', priority: change > 50 ? 'high' : 'medium', icon: '📈', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
     }
@@ -28496,7 +28518,7 @@ function aiSpendingVelocity() {
         `Budget pacing tighter than expected`,
       ];
       const bodies = [
-        `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed — ${daysInMonth-dayOfMonth} ${aiPlural(daysInMonth-dayOfMonth,'day')} left.`,
+        `${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)} consumed, ${daysInMonth-dayOfMonth} ${aiPlural(daysInMonth-dayOfMonth,'day')} left.`,
         `Used ${(consumed*100).toFixed(0)}% (${fmt(thisMonth.expense, thisMonth.currency)} of ${fmt(bgt.limit, bgt.currency)}) with ${daysInMonth-dayOfMonth} ${aiPlural(daysInMonth-dayOfMonth,'day')} remaining.`,
         `${daysInMonth-dayOfMonth} ${aiPlural(daysInMonth-dayOfMonth,'day')} left, ${(100-consumed*100).toFixed(0)}% budget remaining (${fmt(bgt.limit-thisMonth.expense, bgt.currency)}).`,
       ];
@@ -28541,7 +28563,7 @@ function aiSavingRate() {
     const bodies = [
       `Net ${fmt(net, totals.currency)} from ${fmt(totals.income, totals.currency)} income.${streakMsg} Sustained, that's about ${fmt(net*12, totals.currency)} a year.`,
       `Kept ${fmt(net, totals.currency)} of your ${fmt(totals.income, totals.currency)}.${streakMsg} Worth auto-moving it to a savings or investment bucket before it's spent.`,
-      `${savingRate.toFixed(0)}% saved — ${fmt(net, totals.currency)} not spent.${streakMsg}`,
+      `${savingRate.toFixed(0)}% saved: ${fmt(net, totals.currency)} not spent.${streakMsg}`,
     ];
     insights.push({id, type: 'saverate', priority: 'low', icon: '💎', title:aiPick(titles,id), body:aiPick(bodies,id), action: null});
   } else if (savingRate < 0 && dayOfMonth >= 15) {
@@ -28551,11 +28573,11 @@ function aiSavingRate() {
       `Spending more than earning this month`,
       `In the red this month`,
       `Expenses outpacing income`,
-      `Net negative — heads up`,
+      `Net negative, heads up`,
     ];
     const bodies = [
       `Expenses ${fmt(overspend, totals.currency)} over income. Review categories.`,
-      `Spent ${fmt(overspend, totals.currency)} more than earned (${fmt(totals.expense, totals.currency)} vs ${fmt(totals.income, totals.currency)}) — review top categories to close the gap.`,
+      `Spent ${fmt(overspend, totals.currency)} more than earned (${fmt(totals.expense, totals.currency)} vs ${fmt(totals.income, totals.currency)}). Review top categories to close the gap.`,
       `${fmt(overspend, totals.currency)} gap between expenses and income this month.`,
     ];
     insights.push({id, type: 'saverate', priority: 'high', icon: '⚠️', title:aiPick(titles,id), body:aiPick(bodies,id), action: 'Review spending'});
@@ -28586,7 +28608,7 @@ function aiContractMilestone() {
       ];
       const bodies = [
         ms.note || `Milestone date: ${dateStr}.`,
-        ms.note ? `${ms.note} (${dateStr})` : `Coming up on ${dateStr} — ${daysUntil} ${aiPlural(daysUntil,'day')} away.`,
+        ms.note ? `${ms.note} (${dateStr})` : `Coming up on ${dateStr}, ${daysUntil} ${aiPlural(daysUntil,'day')} away.`,
         `${daysUntil} ${aiPlural(daysUntil,'day')} until ${ms.label}.${ms.note?' '+ms.note:''}`,
       ];
       insights.push({
@@ -28620,7 +28642,7 @@ function aiTransferActivity() {
     ];
     const bodies = [
       `Frequent moves between accounts. Consider consolidating to reduce friction or fees.`,
-      `${transfers.length} transfers in 30 days (${(transfers.length/30).toFixed(1)}/day) — consolidating cuts any per-transfer fees.`,
+      `${transfers.length} transfers in 30 days (${(transfers.length/30).toFixed(1)}/day). Consolidating cuts any per-transfer fees.`,
       `That's ${transfers.length} transfers in a month. Could simplify your account structure.`,
     ];
     insights.push({
@@ -28672,7 +28694,7 @@ function aiWeeklyRecap() {
     priority: 'low', icon: '📊',
     title: aiPick([
       `Week recap: Net ${fmt(net, currency, true)}`,
-      `Sunday recap — net ${fmt(net, currency, true)}`,
+      `Sunday recap: net ${fmt(net, currency, true)}`,
       `Your week in numbers`,
       `Weekly snapshot`,
     ], 'weekly-recap'),
@@ -28712,7 +28734,7 @@ function aiAtmFeeWaste() {
     body: aiPick([
       `Total: ${fmt(total, atmTxs[0].currency)}. Consider digital transfers (often free) for routine moves.`,
       `${fmt(total, atmTxs[0].currency)} in fees across ${atmTxs.length} withdrawals. E-wallet transfers usually skip these.`,
-      `${atmTxs.length} ATM hits totaling ${fmt(total, atmTxs[0].currency)} — switching some to digital could save the fees.`,
+      `${atmTxs.length} ATM hits totaling ${fmt(total, atmTxs[0].currency)}. Switching some to digital could save the fees.`,
     ], 'atm-waste-body'),
     action: null
   });
@@ -28749,7 +28771,7 @@ function aiSmartSuggestion() {
         body: aiPick([
           `Total receivable: ${fmt(total, pendingReimbs[0].currency)}. A quick follow-up could help.`,
           `${fmt(total, pendingReimbs[0].currency)} owed across ${pendingReimbs.length} pending splits. Worth chasing.`,
-          `Sitting on ${fmt(total, pendingReimbs[0].currency)} in receivables — a friendly reminder rarely hurts.`,
+          `Sitting on ${fmt(total, pendingReimbs[0].currency)} in receivables. A friendly reminder rarely hurts.`,
         ], id+'-body'),
         action: 'Go to Reimbursements'
       });
@@ -29827,7 +29849,7 @@ function renderInsights() {
   const related = `<div class="page-pad" style="margin-top:0;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)">
       <span style="font-size:11px;color:var(--text3)">Related</span>
-      ${kin.map(([k,n])=>`<span onclick="_insGo('${k}')" role="link" tabindex="0"
+      ${kin.map(([k,n])=>`<span class="tap-y" onclick="_insGo('${k}')" role="link" tabindex="0"
         style="font-size:11px;color:var(--accent);cursor:pointer;padding:3px 9px;border:1px solid var(--border);border-radius:var(--r-full);background:var(--bg2);white-space:nowrap">${n}</span>`).join('')}
     </div></div>`;
   const mk = _insMk || currMonthKey(), isCur = !_insMk; // PLS #354
