@@ -964,9 +964,9 @@ option{background:var(--bg3);color:var(--text)}
 .ov-heroA>.ov-tall{grid-column:1;grid-row:1/3}
 /* PLS #406: Overview budget card */
 .bgr-card{container-type:inline-size}
-.bgr-well{flex:1;position:relative;min-height:230px}
-.bgr-scroll{position:absolute;inset:0;overflow-y:auto;padding:0 2px 26px 0;scrollbar-width:thin}
-.bgr-well::after{content:'';position:absolute;left:0;right:0;bottom:0;height:28px;background:linear-gradient(transparent,var(--bg2));pointer-events:none;border-radius:0 0 14px 14px} /* hints there is more below */
+.bgr-well{flex:1;position:relative} /* PSS #485: no inner scroll box. On PC the second location was cut in half behind a fade */
+.bgr-scroll{position:static;padding:0}
+
 .bgr-groups{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @container (min-width:560px){.bgr-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .bgr-g{background:var(--bg3);border-radius:14px;padding:12px}
@@ -1047,7 +1047,7 @@ option{background:var(--bg3);color:var(--text)}
 .dlg-overlay.open .dlg{transform:scale(1)}
 /* PSS #427: UI audit fixes (Oct 2026) */
 @media(max-width:640px){.pie-list-well{min-height:0!important}.pie-list-well>div{position:static!important;max-height:320px}} /* 1: one column: the list takes its own height (scrolls past 320px), no empty floor */
-@media(max-width:480px){.kpi-mo{display:none}} /* 2: "Income", "Expenses", "19 accounts" fit their tiles */
+@media(max-width:480px){.kpi-mo{display:none}.kpi-ic{display:none!important}} /* PSS #485: the small icon square gives way so Expenses is not cut to Expen... */ /* 2: "Income", "Expenses", "19 accounts" fit their tiles */
 .ins-pane .metric-label{min-height:0!important} /* 6: Insights tiles, no blank line under the label */
 .kpi-val .metric-value+div{white-space:nowrap} /* 2: "19 accounts" on one line */
 .ps-strip.fade-l{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 28px);mask-image:linear-gradient(to right,transparent 0,#000 28px)} /* 1 */
@@ -1082,9 +1082,44 @@ option{background:var(--bg3);color:var(--text)}
 .wts-rc{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:12px 14px;margin-bottom:8px}
 .wts-rch{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:4px}.wts-rch b{color:var(--text)}
 .wts-rl{font-size:12px;color:var(--text2);margin-top:4px}
-.wts-dash{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--accent-bg);display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text);cursor:pointer}
+.wts-dash{margin-top:12px;padding:12px;border-radius:12px;background:var(--accent-bg);font-size:13px;color:var(--text);cursor:pointer}
+.wts-dk{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text3)}
+.wts-dhv{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--green);margin:8px 0 2px} /* PSS #488: same as the Income / Spent figures (his note: app wide fonts) */
+.wts-ds{font-size:11px;color:var(--text3)}
+.wts-dt{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:13px}
+.wts-dti{flex-shrink:0;font-size:14px}.wts-dtt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}.wts-dtt b{font-weight:500;color:var(--text)}
+.wts-in{margin:0}
 .wts-dv{color:var(--accent);font-weight:600}
-.wts-add{padding:0 16px 12px;margin-top:-4px;font-size:12px;color:var(--amber);line-height:1.4}.wts-add.over{color:var(--red)}
+/* PSS #487: Ways to save as a list going down */
+.wts-h>span:first-child{display:inline-flex;align-items:center;gap:6px}.wts-h svg{color:var(--accent)}
+.wts-list{display:flex;flex-direction:column;gap:8px}
+.wts-list .wts-card{flex:none;max-width:none;flex-direction:row;align-items:flex-start;gap:12px;padding:11px 14px;border-radius:var(--r-lg)}
+.wts-list .wts-ico{flex-shrink:0}
+.wts-cb{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.wts-list .wts-card{cursor:pointer;align-items:center}.wts-list .wts-card.op{align-items:flex-start}
+.wts-list .wts-ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wts-list .wts-ct{font-size:13px;font-weight:500}
+.wts-list .wts-eq{font-size:11px;color:var(--text3);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.wts-list .wts-more{display:none;flex-direction:column;gap:6px;align-items:flex-start;margin-top:4px}
+.wts-list .op .wts-ct{white-space:normal}.wts-list .op .wts-eq{-webkit-line-clamp:unset;color:var(--accent);font-size:12px}.wts-list .op .wts-more{display:flex}
+.wts-list .wts-ico{width:32px;height:32px;font-size:15px;border-radius:10px}
+.wts-hero{border-radius:var(--r-lg);padding:14px 16px;margin-bottom:16px;background:linear-gradient(135deg,var(--green-bg),var(--bg2));border:1px solid var(--border)}
+.wts-hk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)}.wts-hk svg{color:var(--green)}
+.wts-hv{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--green);letter-spacing:-.3px;margin:4px 0 2px} /* PSS #487: app sizes (his note: fonts too big). Section 12, row 13 / 11, big figure 22 */
+.wts-hs{font-size:11px;color:var(--text3)}
+.wts-sec{font-size:12px;font-weight:500;color:var(--text3);margin:0 2px 8px}
+.wts-amt{flex-shrink:0;font-family:var(--mono);font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;background:var(--green-bg);color:var(--green);white-space:nowrap}
+.wts-amt.over{background:var(--red-bg,rgba(239,68,68,.12));color:var(--red);font-family:inherit}
+.wts-full{font-size:12px;color:var(--accent);line-height:1.45}
+.wts-act{margin-top:4px;border:0;border-radius:10px;padding:8px 12px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.wts-chev{color:var(--text3);opacity:.6;font-size:18px;flex-shrink:0;transition:transform .15s}.op .wts-chev{transform:rotate(90deg)}
+.wts .wts-x{display:none}.wts.open .wts-x{display:flex}
+.wts-all{display:block;width:100%;margin:8px 0 12px;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--bg2);color:var(--accent);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.wts-list+.wts-bh,.wts-list+.wts-tiles{margin-top:14px}
+.wts-dash span:first-child{display:inline-flex;align-items:center;gap:6px}.wts-dash svg{color:var(--accent)}
+.wts-new{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--red);color:#fff}
+.wts-add{margin:2px 0 12px;padding:10px 12px;border-radius:12px;background:var(--amber-bg);border:1px solid var(--amber);line-height:1.4}.wts-add.over{background:var(--red-bg);border-color:var(--red)}
+.wts-at{font-size:13px;font-weight:600;color:var(--amber)}.wts-add.over .wts-at{color:var(--red)}.wts-as{font-size:11px;color:var(--text2);margin-top:2px}
 /* PSS #423 / #422 editor actions and warning */
 .al-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:10px 0 2px}
 .al-act{border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer}
@@ -5311,7 +5346,7 @@ function _fzMonthStats(curr, disp, now) {
     ${cell('Spent per day', fmt(exp / day, disp))}
     ${cell('Spent most on', topCat ? `${_esc(topCat[0])} · ${fmt(topCat[1], disp)}` : '—')}
     ${cell('Spending', vs, vsCol)}
-  </div>${_wtsDashLine()}`; // PLS #415: one line, only when something new went off track
+  </div>${_wtsDashLine()}`; // PLS #415 / PSS #487: one line whenever there are ways to save
 }
 function _fzTopHTML(curr, disp, netWorthPhp) {
   const nick = _esc(db.profile?.nickname || '');
@@ -5746,12 +5781,22 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.15'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
-const APP_VERSION_DATE = 'October 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
+const APP_VERSION = '1.2.16'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.16', date: 'November 2026', changes: [
+    '💡 Ways to save now sits on the Dashboard: how much you could still save this month and your top tip. Tap it for the full list', // PSS #488
+    '🔔 The full list opens by itself once when a category newly goes over its plan', // PLS #488
+    '⚠️ Adding an entry in a category near or over its plan shows a clear warning before you save', // PSS #488
+    '📋 Ways to save tips are one row each with the amount you could save, and See entries opens the entries behind a tip', // PSS #487
+    '🧾 Insights: Summary is back on top, with Ways to save right under it', // PSS #488
+    '➖ Analytics: a month that spent more than it earned shows a minus in Saved, and drops below zero in Savings rate trend', // PLS #484
+    '📐 Analytics: Expenses shows in full on a phone, and Budgets on a computer shows every location', // PSS #485
+    '🔗 Analytics: a category in 80/20 opens that month only in Transactions', // PLS #486
+  ]},
   { ver: '1.2.15', date: 'October 2026', changes: [
     '🧭 New Transactions filter: pick several types, accounts and categories at once, an amount range and quick dates. A summary of Out, In and Net sits on top', // PLS #481
     '🔎 Transactions inside an account now shows only that account. Tap its name at the top to see all again', // PLS #480
@@ -9196,7 +9241,7 @@ function openTxnsForMonth(mk) {
   window._txDateTo = `${mk}-${String(new Date(_y, _m, 0).getDate()).padStart(2,'0')}`;
   nav('transactions');
 }
-function openTxnsForCategory(name, id) {
+function openTxnsForCategory(name, id, mk) { // PLS #486: mk = the month (or year) the card was showing
   // PSS #134 fix: 80/20 & Spending rows aggregate at SUBCATEGORY level, so resolve by id first
   // (passed via data-cat-id); fall back to name across top-level THEN subcats.
   const tops = [...db.categories.expense, ...db.categories.income];
@@ -9212,6 +9257,9 @@ function openTxnsForCategory(name, id) {
   if (!targetId) { showToast('Category not found'); return; }
   clearAllTxFilters();
   _txCats = [targetId]; // PLS #481
+  // PLS #486: 80/20 on the Overview shows October, so its rows open October only (they opened all time).
+  if (mk && /^\d{4}-\d{2}$/.test(mk)) { const [_y,_m] = mk.split('-').map(Number); window._txDateFrom = `${mk}-01`; window._txDateTo = `${mk}-${String(new Date(_y, _m, 0).getDate()).padStart(2,'0')}`; }
+  else if (mk && /^\d{4}$/.test(mk)) { window._txDateFrom = `${mk}-01-01`; window._txDateTo = `${mk}-12-31`; }
   nav('transactions');
 }
 function _txfReset() {
@@ -16868,7 +16916,7 @@ function renderAnalyticsOverview() {
 
 
   const chgBadge = (chg) => chg===null ? '' :
-    `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:6px;font-family:var(--mono);font-size:11px;flex-shrink:0;background:${chg>=0?'rgba(16,185,129,0.1)':'rgba(113,113,122,0.14)'};border:1px solid ${chg>=0?'rgba(16,185,129,0.22)':'rgba(113,113,122,0.28)'};color:${chg>=0?'#34d399':'var(--text3)'}">${chg>=0?'↑':'↓'} ${Math.abs(chg).toFixed(1)}%</span>`;
+    `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:6px;font-family:var(--mono);font-size:11px;flex-shrink:0;background:${chg>=0?'rgba(16,185,129,0.1)':'rgba(113,113,122,0.14)'};border:1px solid ${chg>=0?'rgba(16,185,129,0.22)':'rgba(113,113,122,0.28)'};color:${chg>=0?'#34d399':'var(--text3)'}">${chg>=0?'↑':'↓'} ${Math.abs(chg).toFixed(Math.abs(chg) >= 100 ? 0 : 1)}%</span>`; // PSS #485: no decimal at 100% and up
   const _kIco = (k) => ({
     up:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
     card:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
@@ -16971,7 +17019,7 @@ function renderAnalyticsOverview() {
              one you are editing. -->
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('income')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Income<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Income<span class="kpi-mo"> this month</span>':'Income<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PSS #404: no caps, no dash --></span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span class="kpi-ic" style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('up')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Income<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Income<span class="kpi-mo"> this month</span>':'Income<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PSS #404: no caps, no dash --></span></div>
             ${chgBadge(incomeChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -16981,7 +17029,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="setAnalyticsTab('spending')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Expenses<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Expenses<span class="kpi-mo"> this month</span>':'Expenses<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PSS #404 --></span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span class="kpi-ic" style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('card')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_ovYear ? 'Expenses<span class="kpi-mo"> in '+metricLabel+'</span>' : period==='ytd'?'Expenses<span class="kpi-mo"> this month</span>':'Expenses<span class="kpi-mo"> in '+metricLabel.split(' ')[0]+'</span>'}<!-- PSS #404 --></span></div>
             ${chgBadge(expChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -16991,7 +17039,7 @@ function renderAnalyticsOverview() {
         </div>
         <div class="metric-card" style="position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Savings rate</span></div><!-- PSS #404 -->
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span class="kpi-ic" style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('zap')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Savings rate</span></div><!-- PSS #404 -->
             
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -17003,7 +17051,7 @@ function renderAnalyticsOverview() {
             if (curr.expense > curr.income) {
               const overPct = Math.round((curr.expense / curr.income - 1) * 100);
               const display = overPct > 999 ? '>999%' : overPct + '%';
-              return `<div class="metric-value" style="font-size:16px;color:var(--red)">−${display}</div>
+              return `<div class="metric-value" style="font-size:16px;color:var(--red);white-space:nowrap">−${display}</div>
                       <div style="font-size:11px;color:var(--text3)">overspending</div>`;
             }
             const savedPct = Math.round((1 - curr.expense / curr.income) * 100);
@@ -17034,7 +17082,7 @@ function renderAnalyticsOverview() {
           const nWith = liqAccts.filter(a => getAcctBalance(a.id) > 0).length;
           return `<div class="metric-card" style="cursor:pointer;position:relative;overflow:hidden;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between" onclick="nav('accounts')">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Liquidity</span></div><!-- PSS #404 -->
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:normal;color:var(--text3);min-width:0"><span class="kpi-ic" style="width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${_kIco('layers')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Liquidity</span></div><!-- PSS #404 -->
             ${chgBadge(ohChg)}
           </div>
           <div class="kpi-val" style="position:relative;z-index:1;padding-right:88px">
@@ -17658,7 +17706,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     const _partial = !!(_fcFloor && k < _fcFloor);
     // NOT-A-BUG (PSS #242 item 7): a null here is correct, not a missing calculation. The month
     // keeps its axis slot and gets a hollow marker; it simply has no rate to state.
-    const rate = (!_partial && t.income > 0) ? Math.max(0, (1 - t.expense/t.income) * 100) : null;
+    const rate = (!_partial && t.income > 0) ? (1 - t.expense/t.income) * 100 : null; // PLS #484: no floor at 0. The tile said −38% while this chart said 0%
     months.push({key: k, label: d.toLocaleString('en',{month:'short'}), rate, partial: _partial, income: t.income, expense: t.expense});
   }
   const validRates = months.filter(mo => mo.rate !== null).map(mo => mo.rate);
@@ -17710,8 +17758,9 @@ function buildSavingsSparkline(metricMk, dispCurr) {
   const W = 240, H = 40, padX = 2, padY = 4;
   const cw = W - padX*2, ch = H - padY*2;
   const maxRate = Math.max(...validRates, 50);
+  const minRate = Math.min(...validRates, 0); // PLS #484: room below zero for a month that overspent
   const xAt = (i) => padX + (n === 1 ? cw/2 : (i / (n-1)) * cw);
-  const yAt = (r) => padY + ch - (r / maxRate) * ch;
+  const yAt = (r) => padY + ch - ((r - minRate) / (maxRate - minRate)) * ch;
   // One path per unbroken run of rated months, so a gap leaves a real break in the line
   // instead of a straight segment jumping across the missing month.
   const _segs = [];
@@ -17739,8 +17788,9 @@ function buildSavingsSparkline(metricMk, dispCurr) {
       return `<div title="${_why}" style="position:absolute;left:${L}%;top:${_floorT}%;width:6px;height:6px;border-radius:50%;background:transparent;border:1.5px dashed var(--text4);transform:translate(-50%,-50%)"></div>`;
     }
     const T = (yAt(mo.rate)/H*100).toFixed(2);
-    return `<div style="position:absolute;left:${L}%;top:${T}%;width:6px;height:6px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)"></div>
-    <div style="position:absolute;left:${L}%;top:${T}%;transform:translate(-50%,-165%);font-size:11px;font-family:var(--mono);color:var(--text3);white-space:nowrap">${Math.round(mo.rate)}%</div>`;
+    const _neg = mo.rate < 0; // PLS #484
+    return `<div style="position:absolute;left:${L}%;top:${T}%;width:6px;height:6px;border-radius:50%;background:${_neg ? 'var(--red)' : 'var(--accent)'};transform:translate(-50%,-50%)"></div>
+    <div style="position:absolute;left:${L}%;top:${T}%;transform:translate(-50%,${_neg ? '65%' : '-165%'});font-size:11px;font-family:var(--mono);color:${_neg ? 'var(--red)' : 'var(--text3)'};white-space:nowrap">${_neg ? '−' : ''}${Math.abs(Math.round(mo.rate))}%</div>`;
   }).join('');
   // PLS #239: state WHY a month has no rate. "partial month" and "no income" are different
   // facts and the user acts on them differently.
@@ -17759,6 +17809,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     </div>
     <div style="position:relative;margin-bottom:6px">
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="trend-svg">
+        ${minRate < 0 ? `<line x1="0" x2="${W}" y1="${yAt(0).toFixed(1)}" y2="${yAt(0).toFixed(1)}" stroke="var(--border2)" stroke-width="1" stroke-dasharray="3,3" vector-effect="non-scaling-stroke"/>` : ''}
         <path d="${_slPath}" stroke="#2dd4bf" stroke-width="1.8" fill="none" vector-effect="non-scaling-stroke"/>
       </svg>
       ${dots}
@@ -17770,7 +17821,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:1px solid var(--border)">
       <div class="kpi-label">Current month</div>
       <div style="text-align:right">
-        <span class="kpi-value-cur">${currentRate !== null ? currentRate.toFixed(0) + '%' : '—'}</span>
+        <span class="kpi-value-cur"${currentRate !== null && currentRate < 0 ? ' style="color:var(--red)"' : ''}>${currentRate !== null ? (currentRate < 0 ? '−' : '') + Math.abs(currentRate).toFixed(0) + '%' : '—'}</span>
         ${/* PLS #246: at most TWO items on this line. Value + trend + "day 15 of 30" is three, and
              on a phone the third wraps under a baseline-aligned row and looks broken. The day
              marker moves to the sub-line below, which already exists for the average. */''}
@@ -17794,7 +17845,7 @@ function buildSavingsSparkline(metricMk, dispCurr) {
           // PLS #246: the day marker lives here when the trend is shown above, so that line stays
           // at two items. When it is too early the marker is already up there instead.
           const _dayBit = (_curIsNow && !_tooEarly) ? ` · day ${_dayOfMonth} of ${_daysInMonth}` : '';
-          return `<div class="kpi-sub" style="margin-top:3px;font-family:var(--mono)">${rates.length}mo avg ${avg.toFixed(0)}%${_tooEarly?'' : ` · ${gap>=0?'+':'−'}${Math.abs(gap).toFixed(0)}pp`}${_dayBit}</div>`;
+          return `<div class="kpi-sub" style="margin-top:3px;font-family:var(--mono)">${rates.length}mo avg ${avg < 0 ? '−' : ''}${Math.abs(avg).toFixed(0)}%${_tooEarly?'' : ` · ${gap>=0?'+':'−'}${Math.abs(gap).toFixed(0)}pp`}${_dayBit}</div>`;
         })()}
       </div>
     </div>
@@ -17927,7 +17978,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
     ${entries.slice(0, Math.min(5, topCount + 1)).map(([name, v], i) => {
       const pct = (v.total / total * 100);
       const isInTop = i <= eightyIdx;
-      return `<div style="cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat, this.dataset.catId)" data-cat="${_esc(name)}" data-cat-id="${v.id||''}" title="View transactions">
+      return `<div style="cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat, this.dataset.catId, this.dataset.mk)" data-cat="${_esc(name)}" data-cat-id="${v.id||''}" data-mk="${metricMk}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span><span style="opacity:0.7">${v.icon || '•'}</span> ${name}</span>
           <span style="font-family:var(--mono);color:${isInTop ? 'var(--text)' : 'var(--text4)'}">${pct.toFixed(0)}%</span>
@@ -18754,8 +18805,8 @@ function buildCashflowRunway(metricMk, dispCurr) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
       <span style="font-size:11px;color:var(--text3);width:60px;flex-shrink:0">${label}</span>
       <div style="flex:1;height:8px;background:var(--bg3);border-radius:var(--r-full);overflow:hidden"><div style="height:100%;width:${(Math.abs(val)/mx*100).toFixed(1)}%;background:${color};border-radius:var(--r-full)"></div></div>
-      <span style="font-family:var(--mono);font-size:12px;color:var(--text2);flex-shrink:0">${fmt(val, dispCurr)}</span>
-    </div>`;
+      <span style="font-family:var(--mono);font-size:12px;color:${val < 0 ? 'var(--red)' : 'var(--text2)'};flex-shrink:0">${fmt(val, dispCurr, val < 0)}</span>
+    </div>`; // PLS #484: a month that spent more than it earned shows −₱, not a plain amount in a red bar
   // Runway (same math as the old Cash Runway card — PLS #124 source of truth)
   const monthlyBurn = avgMonthlyExpense6mo();
   let liquid = 0;
@@ -18834,7 +18885,7 @@ function buildCashflowRunway(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:3px">
       <span>0mo</span><span>3mo</span><span>6mo · healthy</span><span>12mo+</span>
     </div>
-    ${depletionLabel ? `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:auto;padding-top:10px">
+    ${depletionLabel ? `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding-top:10px">
       <span>At this burn rate, lasts until</span>
       <span style="font-family:var(--mono);font-weight:600;color:${rColor}">${depletionLabel}</span>
     </div>` : ''}
@@ -23124,7 +23175,7 @@ function _wtsBudget(b, now) {
     let pill = '';
     if (pk) { const rest = (parseFloat(plan.alloc[pk]) || 0) - (sp.byCat[pk] || 0);
       if (rest > 0) { sub += ` ${money(rest)} left in this month's ${_wtsCatName(pk)} plan, about ${Math.floor(rest / avg)} more.`; pill = `${money(rest)} left`; } }
-    out.tips.push({ kind: 'freq', save: 0, ico: getCategoryDisplay(ck)?.icon || '🛍️', title: `${_wtsCap(freq.m)} · ${freq.n} times since ${firstName}`, eq: `That adds up to ${money(freq.total)}, ${_wtsEq(freq.total, anchor)}.`, sub, pill });
+    out.tips.push({ kind: 'freq', q: freq.m, save: 0, ico: getCategoryDisplay(ck)?.icon || '🛍️', title: `${_wtsCap(freq.m)} · ${freq.n} times since ${firstName}`, eq: `That adds up to ${money(freq.total)}, ${_wtsEq(freq.total, anchor)}.`, sub, pill });
     out.freqName = _wtsCap(freq.m); out.freqAvg = avg;
   }
   // C. the biggest one-off of the last 6 months
@@ -23144,7 +23195,7 @@ function _wtsBudget(b, now) {
     if (rest > 0) {
       const hk = hist.filter(t => _txMatchesAlloc(t, anchor.key, keys)), months = Math.max(1, new Set(hk.map(t => t.date.slice(0,7))).size);
       const perWeek = hk.length / months / 4.33, avgT = hk.length ? hk.reduce((s, t) => s + _wtsAmt(t), 0) / hk.length : 0;
-      out.tips.push({ kind: 'daily', save: 0, ico: getCategoryDisplay(anchor.key)?.icon || '🛒', title: `${anchor.name} · ${money(rest)} left`,
+      out.tips.push({ kind: 'daily', key: anchor.key, save: 0, ico: getCategoryDisplay(anchor.key)?.icon || '🛒', title: `${anchor.name} · ${money(rest)} left`,
         eq: `That is about ${money(rest / left)} a day for the next ${left} days.`,
         sub: hk.length ? `You usually buy it ${perWeek < 1.5 ? 'about once' : `${Math.floor(perWeek)}–${Math.ceil(perWeek)} times`} a week, around ${money(avgT)} each time.` : '' });
     }
@@ -23175,7 +23226,7 @@ function _wtsGeneral(now, anchors, freqByCur) {
           const thisM = db.transactions.some(t => t.categoryId === sc.id && t.date && t.date.startsWith(cm) && t.currency === cur);
           if (lastT && !thisM && +lastT.date.slice(8,10) >= now.getDate()) soon.push(`${_stripIcon(sc.name)} ${money(_wtsAmt(lastT))}`); }
       }
-      if (names.length >= 2 && monthly > 0) tips.push({ kind: 'subs', save: 0, ico: '📱', title: `Subscriptions · about ${money(monthly)} a month`,
+      if (names.length >= 2 && monthly > 0) tips.push({ kind: 'subs', key: subP.id, save: 0, ico: '📱', title: `Subscriptions · about ${money(monthly)} a month`,
         eq: `That is about ${money(monthly * 12)} a year${anchor ? `, ${_wtsEq(monthly * 12, anchor)}` : ''}.`, sub: `${names.join(', ')}.` });
     }
     // G. fees
@@ -23184,7 +23235,7 @@ function _wtsGeneral(now, anchors, freqByCur) {
     const topFee = Object.entries(fee).filter(([, v]) => v.n >= 3).sort((x, y) => y[1].total - x[1].total)[0];
     if (topFee) { const [name, v] = topFee, f = freqByCur[cur];
       const eq = f && f.avg > 0 ? `${v.n} times, about ${money(v.total / v.n)} each. That is about ${Math.round(v.total / f.avg)} ${f.name} visits.` : `${v.n} times, about ${money(v.total / v.n)} each${anchor ? `, ${_wtsEq(v.total, anchor)}` : ''}.`;
-      tips.push({ kind: 'fee', save: 0, ico: '🏦', title: `${name} · ${money(v.total)} since ${firstName}`, eq, sub: 'Fewer, bigger transfers or withdrawals mean fewer fees.' }); }
+      tips.push({ kind: 'fee', catName: name, save: 0, ico: '🏦', title: `${name} · ${money(v.total)} since ${firstName}`, eq, sub: 'Fewer, bigger transfers or withdrawals mean fewer fees.' }); }
     // H. money to collect
     const open = ((db.loans && db.loans.lent) || []).filter(l => !l.settled && !l.archived && l.currency === cur && (parseFloat(l.remaining ?? l.amount) || 0) > 0);
     if (open.length) { const total = open.reduce((s, l) => s + (parseFloat(l.remaining ?? l.amount) || 0), 0);
@@ -23214,9 +23265,19 @@ function _wtsCompute() {
   const skip = per.flatMap(x => x.tips.filter(t => t.kind === 'skip' || t.kind === 'over')).sort((a, b) => b.save - a.save);
   const rest = per.flatMap(x => x.tips.filter(t => t.kind !== 'skip' && t.kind !== 'over'));
   const tips = [...skip, ...rest, ...gen.tips.filter(t => t.kind !== 'win'), ...gen.tips.filter(t => t.kind === 'win')];
+  per.forEach(x => x.tips.forEach(t => { t.cur = x.b.currency; t.loc = per.length > 1 ? x.b.location : ''; })); // PSS #487 v3: a tip knows its money, for the total on top
   return { now, early, per, tips, soon: gen.soon, offKeys: per.flatMap(x => x.offKeys) };
 }
-function _wtsHTML() {
+// PSS #487 v2: the budget pace tiles sit apart from the tips, under the Summary
+// PSS #488: the "you could save" total, shared by the Dashboard card and the list. A future saving, so today's rate
+function _wtsSaveSum(w) {
+  const dl = w.per.length ? w.per[0].daysLeft : 0;
+  const sk = dl > 0 ? w.tips.filter(t => t.kind === 'skip' && t.save > 0 && t.cur) : [];
+  return { save: sk.reduce((sm, t) => sm + toPhp(t.save, t.cur), 0), nSave: sk.length, dl };
+}
+function _wtsStatsHTML() { return window._wtsStatsLast || ''; }
+function _wtsHTML(inSheet) {
+  window._wtsStatsLast = '';
   let w; try { w = _wtsCompute(); } catch (e) { console.warn('Ways to save failed:', e); return ''; }
   window._wtsLast = w;
   if (!w.tips.length && (w.early || !w.per.length)) return '';
@@ -23230,12 +23291,33 @@ function _wtsHTML() {
       <div class="wts-tiles">${tile(money(x.perDay), 'spent a day so far')}${tile('~' + money(x.pace), `by ${_wtsMonthName(x.mk)} ${x.dim} at this pace`, x.pace > x.lim ? red : '')}${tile(money(Math.abs(over)), over > 0 ? 'over the plan' : 'left in the plan', over > 0 ? red : 'var(--green)')}</div>${better}`;
   }).join('');
   const dl = w.per.length ? w.per[0].daysLeft : 0;
-  const card = t => `<div class="wts-card"><div class="wts-ch"><span class="wts-ico">${t.ico}</span>${t.pill ? `<span class="wts-pill${t.kind === 'freq' ? ' alt' : ''}">${t.pill}</span>` : ''}</div>
-      <div class="wts-ct">${_esc(t.title)}</div>${t.eq ? `<div class="wts-eq">${t.eq}</div>` : ''}${t.sub ? `<div class="wts-cs">${t.sub}</div>` : ''}</div>`;
-  return `<div class="wts" id="wts">
-    <div class="wts-h"><span>Ways to save</span><span class="wts-hr">${w.early ? 'Over plan so far' : `${dl} ${dl === 1 ? 'day' : 'days'} left`}</span></div>
-    ${stats}
-    ${w.tips.length ? `<div class="wts-rail">${w.tips.map(card).join('')}</div>` : ''}
+  window._wtsStatsLast = stats ? `<div class="wts wts-pace"><div class="wts-h"><span>Budget pace</span><span class="wts-hr">${dl} ${dl === 1 ? 'day' : 'days'} left</span></div>${stats}</div>` : '';
+  // PSS #487 (his ask Nov 1: the tips were too hidden): a list going down, top 3 showing, See all for the rest.
+  // PSS #487 v3 (his ask: fintech style): one big "you could save" figure on top, each tip one row with its amount,
+  // and a button inside each tip that opens the entries behind it. Buttons only go to screens the app already has.
+  const _mkNow = currMonthKey();
+  const _cs = inSheet ? "closeSheet('gen');" : ''; // PSS #488: leave the pop-up before going to the entries
+  const _act = t => {
+    if ((t.kind === 'skip' || t.kind === 'over' || t.kind === 'daily' || t.kind === 'subs') && t.key) return [`openTxnsForCategory('', '${t.key}', '${t.kind === 'subs' ? '' : _mkNow}')`, 'See entries'];
+    // fees: no button. Most fee entries sit inside their transfer, so a list of them came up empty
+    if (t.kind === 'freq' && t.q) return [`clearAllTxFilters();window._txSearchQuery=${JSON.stringify(t.q).replace(/"/g, '&quot;')};nav('transactions')`, 'See entries'];
+    if (t.kind === 'collect') return [`nav('loans')`, 'Open Loans'];
+    return null;
+  };
+  const _amtPill = t => t.kind === 'skip' && t.save > 0 && t.cur && dl > 0 ? `<span class="wts-amt">~${fmt(t.save, t.cur)}</span>` : t.kind === 'over' ? `<span class="wts-amt over">Over</span>` : '';
+  const card = (t, i) => { const a = _act(t);
+    return `<div class="wts-card${i >= 3 ? ' wts-x' : ''}" onclick="this.classList.toggle('op')"><span class="wts-ico">${t.ico}</span><div class="wts-cb">
+      ${(() => { const ix = t.title.indexOf(' · '), head = ix > 0 ? t.title.slice(0, ix) : t.title, tail = ix > 0 ? (t.loc ? getFlag(t.loc) + ' ' : '') + t.title.slice(ix + 3) : '';
+        // the row reads "Clothing / 6 times this month"; the longer sentence waits inside
+        return tail ? `<div class="wts-ct">${_esc(head)}</div><div class="wts-eq">${_esc(tail)}</div><div class="wts-more">${t.eq ? `<div class="wts-full">${t.eq}</div>` : ''}${t.sub ? `<div class="wts-cs">${t.sub}</div>` : ''}`
+                    : `<div class="wts-ct">${_esc(head)}</div>${(t.eq || t.sub) ? `<div class="wts-eq">${t.eq || t.sub}</div>` : ''}<div class="wts-more">${(t.eq && t.sub) ? `<div class="wts-cs">${t.sub}</div>` : ''}`; })()}${a ? `<button type="button" class="wts-act" onclick="event.stopPropagation();${_cs}${a[0]}">${a[1]} ›</button>` : ''}</div></div>${_amtPill(t)}<span class="wts-chev">›</span></div>`; };
+  const { save: _saveHome, nSave: _nSave } = _wtsSaveSum(w);
+  const nT = w.tips.length;
+  return `<div class="wts${inSheet ? ' open wts-in' : ''}" id="wts">
+    ${_saveHome > 0 ? `<div class="wts-hero"><div class="wts-hk">${_ico('sparkle', 14)} You could save about</div><div class="wts-hv">${fmt(_inDisplay(_saveHome), _displayCurrency())}</div><div class="wts-hs">by skipping a few of the top ${_nSave} before ${_wtsMonthName(_mkNow)} ${w.per[0] ? w.per[0].dim : ''} · ${dl} ${dl === 1 ? 'day' : 'days'} left</div></div>
+    <div class="wts-sec">Ways to save · ${nT}</div>`
+    : `<div class="wts-h"><span>${_ico('sparkle', 16)} ${nT ? `${nT} ${nT === 1 ? 'way' : 'ways'} to save` : 'Ways to save'}</span><span class="wts-hr">${w.early ? 'Over plan so far' : `${dl} ${dl === 1 ? 'day' : 'days'} left`}</span></div>`}
+    ${nT ? `<div class="wts-list">${w.tips.map(card).join('')}</div>${nT > 3 && !inSheet ? `<button type="button" class="wts-all" onclick="const s=document.getElementById('wts');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'Show fewer':'See all ${nT}'">See all ${nT}</button>` : ''}` : ''}
     ${w.soon.length ? `<div class="wts-soon">Coming up: ${w.soon.join(', ')}, usually around this date.</div>` : ''}
   </div>`;
 }
@@ -23261,13 +23343,26 @@ function _wtsRecapHTML() {
 function _wtsDashLine() {
   try {
     const w = _wtsCompute(); if (!w.tips.length) return '';
+    // PSS #488 (his ask Nov 1: impulse buyer, cutting spending is the priority): a card that shows the amount and the top tip
+    // right on the Dashboard. A tap opens the full list in a pop-up.
     const seen = new Set((db.settings && db.settings.wtsSeen) || []);
-    if (!w.offKeys.some(k => !seen.has(k))) return '';
-    const n = w.tips.length;
-    return `<div class="wts-dash" onclick="event.stopPropagation();_wtsOpen()"><span><b>${n} ${n === 1 ? 'way' : 'ways'} to save</b></span><span class="wts-dv">View ›</span></div>`;
+    const isNew = w.offKeys.some(k => !seen.has(k));
+    const n = w.tips.length, { save } = _wtsSaveSum(w), t = w.tips[0];
+    const ix = t.title.indexOf(' · '), head = ix > 0 ? t.title.slice(0, ix) : t.title, tail = ix > 0 ? t.title.slice(ix + 3) : (t.eq || t.sub || '');
+    // PLS #488: it opens by itself only when a category newly goes over plan, once per app open. Not on every open.
+    if (isNew && !window._wtsAutoDone) { window._wtsAutoDone = true;
+      setTimeout(() => { if (currentPage === 'dashboard' && !document.querySelector('.overlay.open, .dlg-overlay.open, [id$="-sheet"].open')) _wtsOpen(); }, 700); }
+    return `<div class="wts-dash" onclick="event.stopPropagation();_wtsOpen()">
+      <div class="wts-dk"><span>${_ico('sparkle', 14)} Ways to save · ${n}${isNew ? ' <span class="wts-new">New</span>' : ''}</span><span class="wts-dv">View all ›</span></div>
+      ${save > 0 ? `<div class="wts-dhv">~${fmt(_inDisplay(save), _displayCurrency())}</div><div class="wts-ds">you could still save this month</div>` : ''}
+      <div class="wts-dt"><span class="wts-dti">${t.ico}</span><span class="wts-dtt"><b>${_esc(head)}</b>${tail ? ` · ${_esc(String(tail).replace(/<[^>]*>/g, ''))}` : ''}</span></div>
+    </div>`;
   } catch (e) { return ''; }
 }
-function _wtsOpen() { nav('insights'); requestAnimationFrame(() => { const el = document.getElementById('wts'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }
+function _wtsOpen() {
+  const html = _wtsHTML(true); if (!html) return;
+  openSheet('gen', 'Ways to save', html);
+}
 // Add transaction: one line under Category when that category is at 80%+ of its plan
 function _wtsAddNote() {
   try {
@@ -23289,7 +23384,10 @@ function _wtsAddNote() {
     if (!el) { el = document.createElement('div'); el.id = 'wts-add-note'; row.after(el); }
     const money = v => fmt(v, best.b.currency);
     el.className = 'wts-add' + (best.pct > 1 ? ' over' : '');
-    el.innerHTML = `${_esc(_wtsCatName(best.k))}: <b>${money(best.spent)} of ${money(best.p)}</b> this month · ${best.n} ${best.n === 1 ? 'time' : 'times'} so far`;
+    // PSS #488: a clear box, so it is seen before saving (his ask: impulse buys)
+    const nm = _esc(_wtsCatName(best.k)), gap = Math.abs(best.p - best.spent);
+    el.innerHTML = `<div class="wts-at">${best.pct > 1 ? `⚠️ ${nm} is ${money(gap)} over plan` : `⚠️ ${nm} is at ${Math.round(best.pct * 100)}% of plan`}</div>
+      <div class="wts-as">${money(best.spent)} of ${money(best.p)} this month · ${best.n} ${best.n === 1 ? 'time' : 'times'} so far${best.pct > 1 ? '' : ` · ${money(gap)} left`}</div>`;
   } catch (e) {}
 }
 
@@ -30468,8 +30566,9 @@ function renderAnalyticsAISummary(mkSel) {
       <div style="font-size:13px;font-weight:600;color:${verdictTone};line-height:1.5;margin-bottom:12px">${verdict}</div>
       <div style="font-size:13px;line-height:1.55;color:var(--text2)">${bulletHtml}</div>
     </div>
+    ${isCur ? _wtsSlot : ''}${/* PSS #488: Summary on top, Ways to save right under it */''}
+    ${isCur ? _wtsStatsHTML() : ''}
     ${_insAttentionSlot}
-    ${isCur ? _wtsSlot : ''}
     ${isCur ? _wtsRecapHTML() : ''}
 
     <div class="metric-grid fr2-always" style="margin-bottom:16px">
