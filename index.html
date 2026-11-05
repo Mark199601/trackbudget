@@ -176,6 +176,16 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .acp-ck{width:14px;flex-shrink:0;color:var(--accent);font-size:13px;text-align:right;visibility:hidden}
 .acp-row.on .acp-ck{visibility:visible}
 .acp-empty{padding:18px 16px;font-size:13px;color:var(--text3);text-align:center}
+/* PSS #534: Paid by someone who owes you (PLS #533) -- the hint under the card and the ask when the bill is more than they owe */
+.pb-sec{font-size:12px;font-weight:500;color:var(--text3);padding:12px 16px 4px}
+.pb-hint{font-size:11px;color:var(--text3);margin:-6px 4px 12px;line-height:1.45}
+.pb-ask{background:var(--bg3);border-radius:16px;padding:14px 16px;margin:0 0 14px}
+.pb-t{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px}
+.pb-s{font-size:11px;color:var(--text3);margin-bottom:4px;line-height:1.45}
+.pb-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;margin-top:8px;font-size:13px;color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pb-r{width:16px;height:16px;border-radius:50%;border:2px solid var(--text4);flex-shrink:0;box-sizing:border-box}
+.pb-opt.on{border-color:var(--accent)}.pb-opt.on .pb-r{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 40%,transparent 46%)}
+.pb-osub{display:block;font-size:11px;color:var(--text3);margin-top:2px}
 /* PSS #439: no focus box around the note field (his report: it looked wrong on PC); the blinking cursor already shows where you are */
 .ax-note textarea:focus,.ax-note textarea:focus-visible{box-shadow:none;border-color:transparent!important;outline:0}
 .ax-note textarea{flex:1;background:transparent;border:0;outline:0;resize:none;color:var(--text);font:inherit;font-size:13px;padding:6px 0;min-height:22px;overflow:hidden}
@@ -5533,6 +5543,7 @@ function renderDashboard() {
     if (t.archived) return false;
     if (t.isAutoFee && t.parentId) return false;
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
+    if (t.inKindExpId) return false; // PLS #533: shown as its expense
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
@@ -5880,12 +5891,16 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.17'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.18'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.18', date: 'November 2026', changes: [
+    '🍽️ Paid by: when someone who owes you pays for something of yours, like dinner, pick them in Add expense under Paid by. It counts as your expense and lowers what they owe, and no money leaves your accounts', // PLS #533 / PSS #534
+    '🤝 If the bill is more than they owe, choose if the rest was their treat or money you will pay back. Undo takes back both entries', // PLS #533
+  ]},
   { ver: '1.2.17', date: 'November 2026', changes: [
     '💱 Calendar, Spending and Income now match the monthly totals to the centavo, and foreign amounts show about how much they are in your home currency', // PLS #495 / PSS #496
     '🌍 Every currency in the list works, including whole-number currencies like JPY and KRW and 3-decimal dinars', // PSS #498 / #500
@@ -6606,6 +6621,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     detail = `${tx.type==='lend'?'To':'From'}: ${_esc(tx.personName||'?')} · <span class="acct-pill">${_esc(acct.name)}</span>`;
   } else if (tx.type==='shared') {
     detail = `Shared w/ ${_esc(tx.sharedWith||'?')} · <span class="acct-pill">${_esc(acct.name)}</span>`;
+  } else if (tx.paidByPerson && !tx.accountId) {
+    detail = `<span class="acct-pill">Paid by ${_esc(tx.paidByPerson)}</span>`; // PLS #533
   } else {
     detail = `<span class="acct-pill">${_esc(acct.name)}</span>`;
   }
@@ -6986,6 +7003,7 @@ function _renderAddSheetInner() {
   body.innerHTML = typePillsHTML + renderUnifiedAmountForm();
   setTimeout(() => {
     syncAddCurrency();
+    if (s.type === 'expense' && s.paidBy) _pbApply(); // PLS #533
     if (s.type === 'shared') afterRenderShared();
   }, 50);
 }
@@ -7039,6 +7057,7 @@ function renderUnifiedAmountForm() {
         <div class="ax-l">Category</div>
         <div class="ax-v${displayCat?'':' ax-ph'}"><span class="ax-emo" id="cat-fr-icon">${displayCat?displayCat.icon:''}</span><span id="cat-fr-value">${displayCat?_esc(displayCat.name):'Choose'}</span></div>
       </div>
+      ${s.type === 'expense' ? _pbRow() : ''}<!-- PLS #533 -->
       ${_axAcctRow(acctOpts)}
       <div class="ax-row ax-when">
         <div class="ax-l">When</div>
@@ -7094,7 +7113,8 @@ function _bigAmtDecorate() {
     const curSel  = ['tf-currency','ext-currency','add-currency'].map(id => document.getElementById(id)).find(e => e && e.offsetParent);
     const acct = acctSel && db.accounts.find(a => a.id === acctSel.value);
     const cur = (curSel && curSel.value) || (acct && acct.currency) || _homeBase();
-    sub.textContent = acct ? `${cur} · ${acct.name}` : `${cur} · choose an account`;
+    const _pb533 = _addState && _addState.type === 'expense' && _addState.paidBy && inp.id === 'add-amount';
+    sub.textContent = _pb533 ? `${_addState.pbCur || cur} · paid by ${_addState.paidBy}` : acct ? `${cur} · ${acct.name}` : `${cur} · choose an account`; // PLS #533
     _bigAmtFit(inp);
     if (!hero._npTap) { hero._npTap = true; hero.style.cursor = 'text'; // the whole amount area opens the keypad, not just the digits
       hero.addEventListener('click', e => { if (e.target !== inp && !e.target.closest('button,select,a')) { e.stopPropagation(); /* else the "tap outside closes the keypad" handler shuts it again */ npOpen(inp); /* PLS #437: PC too, a click anywhere on the amount area opens the calculator */ } }); }
@@ -7220,6 +7240,233 @@ function _addPickAcct(id) {
   sel.value = id; sel.dispatchEvent(new Event('change', { bubbles:true })); syncAddCurrency(); updateBigAmtCurr(); updateAcctDisplay();
   document.querySelectorAll('#add-quick-acct .chip').forEach(b => b.classList.toggle('active', b.dataset.acct === id));
   _axAcctRefresh(); // PLS #381
+}
+// -- PERSONAL LOGIC SET #533 -- (his ask Nov 5, pick A) A loan paid back IN KIND: Mike pays for your dinner instead
+// of handing you cash. Add expense > Paid by > someone who owes you. One save makes two linked entries and moves no
+// money in any account:
+//   the expense (your Dining Out K80, no account, skipBalance) -> counted in spending and budgets like any expense
+//   a loan payment from that person for the same K80 (no account, batch shape, oldest loan first like Receive
+//   payment) -> lowers what they owe; never counted as income (PLS #17)
+// A bill bigger than what they owe asks about the rest: "treated me" = your expense is only what came off the loan
+// (the rest was their treat, not your money); "I will pay back" = the full bill is your expense and the rest is a new
+// debt to them (no money moved, like PLS #511). Paid in your home currency for a loan in another currency books the
+// PLS #506 exchange rate entry; other currencies never do (PLS #504). Undo = archive the expense: the payment, its
+// entries and the new debt go with it, the loans are counted again, and Restore brings them all back only while
+// the loans still have that much open. Amount and currency are not edited: undo and add it again.
+function _pbLoans(person) {
+  return (db.loans.lent || []).filter(l => !l.settled && !l.archived && (l.personName || '').trim() === person && (l.remaining ?? l.amount) > 0.005)
+    .sort((a, b) => ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || '')));
+}
+function _pbOwedStr(person) {
+  const by = {}; for (const l of _pbLoans(person)) { const c = l.currency || _homeBase(); by[c] = (by[c] || 0) + (l.remaining ?? l.amount); }
+  return Object.entries(by).map(([c, v]) => fmt(v, c)).join(' + ');
+}
+function _pbPeople() {
+  const seen = []; for (const l of (db.loans.lent || [])) { const p = (l.personName || '').trim(); if (p && !seen.includes(p) && _pbLoans(p).length) seen.push(p); }
+  return seen.sort((a, b) => a.localeCompare(b));
+}
+// what the person owes, in the bill's currency, at the bill's date and time
+function _pbOwedIn(person, cur, snap) {
+  const home = _homeBase(), conv = (a, f, t) => f === t ? a : fromPhp(toPhp(a, f, snap), t, snap);
+  return roundMoney(_pbLoans(person).reduce((t, l) => t + conv(l.remaining ?? l.amount, l.currency || home, cur), 0), cur);
+}
+function _pbRow() {
+  const p = _addState.paidBy;
+  return `<div class="ax-row" id="pb-row" onclick="_pbOpen()"><div class="ax-l">Paid by${p ? '<span class="ax-sub">No money leaves your accounts</span>' : ''}</div><div class="ax-v"><span id="pb-val">${p ? _esc(p) : 'Me'}</span></div></div>`;
+}
+function _pbClose() { const o = document.getElementById('pb-overlay'); if (o) o.remove(); }
+function _pbOpen() {
+  _pbClose(); try { if (document.getElementById('tb-numpad')?.classList.contains('open')) npConfirm(); } catch(e) {}
+  const cur = _addState.paidBy || '';
+  const row = (val, name, sub, amt) => `<button type="button" class="acp-row${val === cur ? ' on' : ''}" data-p="${escapeAttr(val)}"><span class="acp-t"><span class="acp-n">${_esc(name)}</span>${sub ? `<span class="acp-s">${sub}</span>` : ''}</span>${amt ? `<span class="acp-b">${amt}</span>` : ''}<span class="acp-ck" aria-hidden="true">✓</span></button>`;
+  const people = _pbPeople();
+  const ov = document.createElement('div'); ov.id = 'pb-overlay'; ov.className = 'gz-pick-overlay';
+  ov.innerHTML = `<div class="gz-pick-panel acp-panel" role="dialog" aria-label="Who paid"><div class="acp-head"><span class="gz-pick-title">Who paid?</span><button type="button" class="sheet-close" aria-label="Close" onclick="_pbClose()">✕</button></div>
+    <div class="acp-list">${row('', 'Me', 'From one of your accounts', '')}
+    <div class="pb-sec">Someone who owes you</div>
+    ${people.length ? people.map(p => row(p, p, 'Owes you', _esc(_pbOwedStr(p)))).join('') : '<div class="acp-empty">Nobody owes you right now</div>'}</div></div>`;
+  ov.addEventListener('click', e => {
+    const r = e.target.closest('.acp-row');
+    if (r) { _pbPick(r.dataset.p || null); _pbClose(); return; }
+    if (e.target === ov) _pbClose();
+  });
+  document.body.appendChild(ov);
+}
+function _pbPick(person) {
+  const s = _addState; s.paidBy = person || null; s.pbExtra = null;
+  if (person) { const l = _pbLoans(person)[0]; s.pbCur = (l && l.currency) || _homeBase(); }
+  _pbApply();
+}
+function _pbApply() {
+  const s = _addState; if (!s || s.type !== 'expense') return;
+  const row = document.getElementById('pb-row'); if (!row) return;
+  const p = s.paidBy;
+  row.outerHTML = _pbRow();
+  const acctRow = document.getElementById('add-account')?.closest('.ax-row');
+  const curSel = document.getElementById('add-currency');
+  let curRow = document.getElementById('pb-cur-row');
+  if (p) {
+    if (acctRow) acctRow.style.display = 'none';
+    const sel = document.getElementById('add-account'); if (sel) sel.value = '';
+    if (curSel) curSel.value = s.pbCur || curSel.value;
+    if (!curRow && acctRow) {
+      acctRow.insertAdjacentHTML('afterend', `<div class="ax-row" id="pb-cur-row" style="position:relative"><div class="ax-l">Currency</div><div class="ax-v"><span id="pb-cur-val"></span></div>
+        <select class="ax-sel" id="pb-cur" aria-label="Currency" onchange="_addState.pbCur=this.value;document.getElementById('add-currency').value=this.value;_pbApply()">${(db.trackedCurrencies || [_homeBase()]).map(c => `<option value="${c}">${c}</option>`).join('')}</select></div>`);
+      curRow = document.getElementById('pb-cur-row');
+    }
+    const ps = document.getElementById('pb-cur'); if (ps) ps.value = s.pbCur;
+    const pv = document.getElementById('pb-cur-val'); if (pv) pv.textContent = s.pbCur;
+    const sym$ = document.getElementById('big-amt-curr-sym'); if (sym$) sym$.textContent = sym(s.pbCur);
+  } else {
+    if (acctRow) acctRow.style.display = '';
+    if (curRow) curRow.remove();
+    try { syncAddCurrency(); updateBigAmtCurr(); } catch(e) {}
+    const sym$ = document.getElementById('big-amt-curr-sym'); if (sym$ && !document.getElementById('add-account')?.value) sym$.textContent = sym(_homeBase());
+  }
+  const more = document.getElementById('add-more-row')?.parentElement; if (more) more.style.display = p ? 'none' : ''; // PLS #463 rows need an account
+  const amt = document.getElementById('add-amount');
+  if (amt && !amt._pb) { amt._pb = 1; amt.addEventListener('input', _pbHint); }
+  ['add-date', 'add-time'].forEach(id => { const el = document.getElementById(id); if (el && !el._pb) { el._pb = 1; el.addEventListener('change', _pbHint); } });
+  _pbHint();
+  try { _bigAmtDecorate(); } catch(e) {}
+}
+function _pbHint() {
+  const s = _addState; let box = document.getElementById('pb-hint');
+  if (!s || !s.paidBy || s.type !== 'expense') { if (box) box.remove(); return; }
+  if (!box) { const card = document.querySelector('#add-body .ax-card'); if (!card) return; card.insertAdjacentHTML('afterend', '<div id="pb-hint"></div>'); box = document.getElementById('pb-hint'); }
+  const p = s.paidBy, cur = s.pbCur || _homeBase();
+  const date = parseInputDate(document.getElementById('add-date')?.value) || today(), time = document.getElementById('add-time')?.value || nowTime();
+  const owed = _pbOwedIn(p, cur, buildFxSnapshot(date, time));
+  const amount = roundMoney(parseFloat(document.getElementById('add-amount')?.value) || 0, cur);
+  const extra = roundMoney(amount - owed, cur);
+  if (extra < 0.01) {
+    box.className = 'pb-hint';
+    box.textContent = amount > 0
+      ? `${p} owes you ${fmt(owed, cur)}. This counts as a payment of ${fmt(amount, cur)}, so ${p} will owe you ${fmt(roundMoney(owed - amount, cur), cur)}.`
+      : `${p} owes you ${fmt(owed, cur)}. What they pay for you comes off it.`;
+    s.pbExtra = null; return;
+  }
+  const debtNow = (db.loans.borrowed || []).filter(l => !l.settled && !l.archived && (l.personName || '').trim() === p && (l.currency || _homeBase()) === cur)
+    .reduce((t, l) => t + (l.remaining ?? l.amount), 0);
+  const opt = (v, t, sub) => `<div class="pb-opt${s.pbExtra === v ? ' on' : ''}" onclick="_addState.pbExtra='${v}';_pbHint()"><span class="pb-r"></span><div>${t}<span class="pb-osub">${sub}</span></div></div>`;
+  box.className = 'pb-ask';
+  box.innerHTML = `<div class="pb-t">${_esc(p)} owes you only ${fmt(owed, cur)}</div>
+    <div class="pb-s">${fmt(owed, cur)} pays off the loan. What about the other ${fmt(extra, cur)}?</div>
+    ${opt('treat', `${_esc(p)} treated me`, `Your ${_esc(_pbCatName())} expense is ${fmt(owed, cur)}`)}
+    ${opt('owe', `I will pay ${_esc(p)} back`, debtNow > 0.005 ? `You owe ${_esc(p)} ${fmt(debtNow, cur)}, this makes it ${fmt(roundMoney(debtNow + extra, cur), cur)}` : `You will owe ${_esc(p)} ${fmt(extra, cur)}`)}`;
+}
+function _pbCatName() {
+  const s = _addState, cat = s.catId ? (db.categories.expense || []).find(c => c.id === s.catId) : null;
+  const sub = cat && s.subCatId ? (cat.subcats || []).find(x => x.id === s.subCatId) : null;
+  return (sub || cat)?.name || 'expense';
+}
+function _pbSave() {
+  if (window._pbSaving) return; window._pbSaving = true; setTimeout(() => { window._pbSaving = false; }, 800); // PLS #148
+  const s = _addState, person = s.paidBy, home = _homeBase();
+  const currency = s.pbCur || document.getElementById('add-currency')?.value || home;
+  const amount = roundMoney(parseFloat(document.getElementById('add-amount')?.value), currency); // PLS #122
+  const date = parseInputDate(document.getElementById('add-date')?.value);
+  const time = document.getElementById('add-time')?.value || nowTime();
+  const notes = document.getElementById('add-notes')?.value?.trim() || '';
+  if (!amount || amount <= 0) { showToast('Enter a valid amount'); return; }
+  if (!date) { showToast('Select a date'); return; }
+  const loans = _pbLoans(person);
+  if (!loans.length) { showToast(`${person} does not owe you anything now`); return; }
+  const snap = buildFxSnapshot(date, time);
+  const conv = (a, f, t) => f === t ? a : fromPhp(toPhp(a, f, snap), t, snap);
+  const owed = _pbOwedIn(person, currency, snap);
+  const extra = roundMoney(amount - owed, currency);
+  const mode = extra >= 0.01 ? s.pbExtra : null;
+  if (extra >= 0.01 && !mode) { showToast(`Choose what the other ${fmt(extra, currency)} is`); return; }
+  const covered = extra >= 0.01 ? owed : amount;
+  // oldest loan first, the same walk as Receive payment (confirmBatchSettleLoans)
+  let left = covered; const done = [];
+  for (const loan of loans) {
+    if (left <= 0.001) break;
+    const lc = loan.currency || home, remain = loan.remaining ?? loan.amount, remainIn = conv(remain, lc, currency);
+    const costPerUnit = remain > 0 ? loanHomeValue(loan) / remain : 0; // PLS #506
+    if (left >= remainIn - 0.01) {
+      left -= remainIn; loan.remaining = 0; loan.settled = true; loan.settledDate = date;
+      done.push({ loan, inBill: remainIn, inLoan: remain, costHome: costPerUnit * remain });
+    } else {
+      const inLoan = conv(left, currency, lc);
+      loan.remaining = roundMoney(Math.max(0, remain - inLoan), lc);
+      done.push({ loan, inBill: left, inLoan, costHome: costPerUnit * inLoan }); left = 0; break;
+    }
+  }
+  const catId = s.subCatId || s.catId, catName = _pbCatName();
+  const expId = genId(), payId = 'tx-' + genId(), now = new Date().toISOString();
+  db.transactions.push({
+    id: payId, type: 'income', amount: covered, currency, accountId: null, skipBalance: true, date, time,
+    notes: `${person} paid for your ${catName}`, isSettlement: true, isLoanPayment: true, isBatchSettlement: true,
+    loanDirection: 'lent', parentId: done[0].loan.id, batchLoanIds: done.map(d => d.loan.id),
+    batchBreakdown: done.map(d => ({ loanId: d.loan.id, amount: d.inLoan, currency: d.loan.currency || home })), // PLS #130
+    batchPerson: person, batchDirection: 'lent', categoryId: 'sc-investreturns', fxSnapshot: snap, createdAt: now, inKindExpId: expId,
+  });
+  if (currency === home) { // PLS #506
+    const fx = roundMoney(done.filter(d => (d.loan.currency || home) !== home).reduce((t, d) => t + (d.inBill - (d.costHome || 0)), 0), home);
+    if (Math.abs(fx) >= 0.01) {
+      const gain = fx > 0;
+      db.transactions.push({ id: 'tx-' + genId(), type: gain ? 'income' : 'expense', amount: Math.abs(fx), currency: home, accountId: null, date, time,
+        notes: `Exchange rate ${gain ? 'gain' : 'loss'} on loan to ${person}`, isLoanSettlementGain: gain, isLoanSettlementLoss: !gain, isSettlement: true,
+        isFxRealized: true, parentId: payId, batchPerson: person, categoryId: gain ? 'sc-forexgain' : 'sc-forexloss', fxSnapshot: snap, createdAt: now });
+    }
+  }
+  const exp = { id: expId, type: 'expense', amount: mode === 'treat' ? covered : amount, currency, categoryId: catId, accountId: null, skipBalance: true,
+    date, time, notes, fxSnapshot: JSON.parse(JSON.stringify(snap)), createdAt: now, paidByPerson: person, inKindPayId: payId };
+  if (mode === 'treat') exp.inKindTreat = extra;
+  if (mode === 'owe') {
+    const debt = { id: genId(), personName: person, amount: extra, currency, accountId: null, remaining: extra, date, time, dueDate: null, settled: false,
+      fromInKindTxId: expId, notes: `The rest of the ${catName} ${person} paid for (${fmtDFull(date)}), to pay back` };
+    db.loans.borrowed.push(debt); exp.inKindDebtId = debt.id;
+  }
+  db.transactions.push(exp);
+  saveDBWithSync();
+  closeSheet('add'); checkAlerts();
+  if (currentPage === 'dashboard') renderDashboard(); else if (currentPage === 'transactions') renderTransactions(); else if (currentPage === 'loans') renderLoans();
+  const still = _pbOwedStr(person);
+  showToast(still ? `Saved. ${person} owes you ${still}` : `Saved. ${person}'s loan is paid off`);
+}
+// Undo (archive) the expense: its payment and that payment's entries go to the archive with it; the new debt is set aside on it
+function _pbArchive(txId, ok) {
+  const tx = db.transactions.find(t => t.id === txId); if (!tx) return;
+  const pay = db.transactions.find(t => t.id === tx.inKindPayId);
+  const debt = tx.inKindDebtId && (db.loans.borrowed || []).find(l => l.id === tx.inKindDebtId);
+  if (debt && getLoanPayments(debt.id).length) { showToast(`You already paid ${tx.paidByPerson} back on the rest. Undo that payment first`, 3500); return; }
+  if (!ok) {
+    openDlg('Undo this?', `<div class="dlg-ask">The ${fmt(tx.amount, tx.currency)} expense is archived${pay ? `, and the ${fmt(pay.amount, pay.currency)} goes back on what ${_esc(tx.paidByPerson)} owes you` : ''}${debt ? `. The ${fmt(debt.amount, debt.currency)} you owe ${_esc(tx.paidByPerson)} is removed` : ''}.</div>`,
+      `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button><button class="btn btn-warning" onclick="_pbArchive('${txId}',true)">Undo</button>`);
+    return;
+  }
+  const stamp = today(), moved = pay ? [pay, ...db.transactions.filter(t => t.parentId === pay.id)] : [];
+  for (const m of moved) { const i = db.transactions.indexOf(m); if (i >= 0) db.transactions.splice(i, 1); m.archivedAt = stamp; m.cascadedFrom = txId; db.archivedTransactions.push(m); }
+  if (pay) (pay.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l) _loanRecount(l); }); // PLS #518
+  if (debt) { db.loans.borrowed.splice(db.loans.borrowed.indexOf(debt), 1); tx._ikDebt = debt; }
+  const i = db.transactions.indexOf(tx); db.transactions.splice(i, 1); tx.archivedAt = stamp; db.archivedTransactions.push(tx);
+  saveDBWithSync(); closeDlg(); closeSheet('gen');
+  if (currentPage === 'transactions') renderTransactions(); else if (currentPage === 'dashboard') renderDashboard(); else if (currentPage === 'loans') renderLoans();
+  showToast(pay ? `Undone. ${tx.paidByPerson} owes you ${_pbOwedStr(tx.paidByPerson) || 'nothing'}` : 'Transaction archived');
+}
+// Restore is refused when the loans no longer have that much open (paid another way since): add it again instead
+function _pbRestoreOk(txData) {
+  const pay = db.archivedTransactions.find(t => t.id === txData.inKindPayId && t.cascadedFrom === txData.id);
+  if (!pay) return true;
+  for (const b of (pay.batchBreakdown || [])) {
+    const l = (db.loans.lent || []).find(x => x.id === b.loanId);
+    if (!l || l.archived || (l.remaining ?? l.amount) < b.amount - 0.01) { showToast(`${txData.paidByPerson}'s loan has changed since. Add it again instead`, 3500); return false; }
+  }
+  return true;
+}
+function _pbAfterRestore(tx) {
+  const pay = db.transactions.find(t => t.id === tx.inKindPayId);
+  if (pay) (pay.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l) _loanRecount(l); });
+  if (tx._ikDebt) { if (!(db.loans.borrowed || []).some(l => l.id === tx._ikDebt.id)) db.loans.borrowed.push(tx._ikDebt); delete tx._ikDebt; }
+}
+// the payment is managed from its expense
+function _pbToExp(payTx) {
+  const e = payTx && payTx.inKindExpId && db.transactions.find(t => t.id === payTx.inKindExpId);
+  if (!e) return false;
+  closeDlg(); closeSheet('gen'); setTimeout(() => openTxDetail(e.id), 120); return true;
 }
 function _addIsDirty() {
   if (!document.getElementById('add-sheet')?.classList.contains('open')) return false;
@@ -7399,6 +7646,7 @@ function setAddType(type) {
   if (arrow) arrow.style.transform = '';
   const _keep = _addCaptureCommon(); // PLS #370: switching type keeps what you already typed
   _addState.type = type;
+  if (type !== 'expense') { _addState.paidBy = null; _addState.pbExtra = null; } // PLS #533: only an expense can be paid by someone who owes you
   _addState.step = 1;
   _addState.catId = null;
   _addState.subCatId = null;
@@ -8672,6 +8920,7 @@ function syncAddCurrency() {
 
 function submitAddTx() {
   const s = _addState;
+  if (s.type === 'expense' && s.paidBy) return _pbSave(); // PLS #533
   const currency = document.getElementById('add-currency')?.value;
   const accountId = document.getElementById('add-account')?.value;
   const date = parseInputDate(document.getElementById('add-date')?.value);
@@ -9125,6 +9374,7 @@ function renderTxLog() {
     // Loan payments shown as children under parent — hide from main list unless 'loans' filter
     // BUT show batch settlement parents (even if isLoanPayment) since they are actual cash movement
     if (t.isLoanPayment && !t.isBatchSettlement && !_txTypes.includes('loans')) return false;
+    if (t.inKindExpId && !_txTypes.includes('loans')) return false; // PLS #533: shown as its expense
     // Hide auto-generated reimbursement children from main log (visible in Reimbursements tab)
     // BUT show batch reimb settlement parents since they are actual cash movement
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
@@ -9802,6 +10052,10 @@ function _openSharedFs(tx, footer, fxBadge) {
 function openTxDetail(txId) {
   const tx = db.transactions.find(t=>t.id===txId) || db.archivedTransactions.find(t=>t.id===txId);
   if (!tx) return;
+  if (tx.inKindExpId) { // PLS #533: a loan paid in kind is shown and managed as the expense it paid for
+    const e = db.transactions.find(t => t.id === tx.inKindExpId) || db.archivedTransactions.find(t => t.id === tx.inKindExpId);
+    if (e) return openTxDetail(e.id);
+  }
 
   // ── isLoanTx: parent loan transaction ──
   if (tx.isLoanTx) {
@@ -9947,6 +10201,12 @@ function openTxDetail(txId) {
     const to = getAccountDisplay(tx.toAccountId);
     rows += `<div class="detail-row"><div class="detail-label">From</div><div class="detail-value">${_esc(from.name)}</div></div>`;
     rows += `<div class="detail-row"><div class="detail-label">To</div><div class="detail-value">${_esc(to.name)} ${tx.toAmount?`(${fmt(tx.toAmount,to.currency)})`:''}</div></div>`;
+  } else if (tx.paidByPerson && !tx.accountId) { // PLS #533
+    rows += `<div class="detail-row"><div class="detail-label">Paid by</div><div class="detail-value">${_esc(tx.paidByPerson)}</div></div>`;
+    rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value" style="color:var(--text3)">No account, nothing moved</div></div>`;
+    if (tx.inKindTreat > 0) rows += `<div class="detail-row"><div class="detail-label">Their treat</div><div class="detail-value">${fmt(tx.inKindTreat, tx.currency)}</div></div>`;
+    const _d533 = tx.inKindDebtId && [...(db.loans.borrowed || []), ...(db.archivedLoans || [])].find(l => l.id === tx.inKindDebtId);
+    if (_d533 || tx._ikDebt) rows += `<div class="detail-row"><div class="detail-label">You owe them</div><div class="detail-value">${fmt((_d533 || tx._ikDebt).amount, (_d533 || tx._ikDebt).currency)}</div></div>`;
   } else if (tx.skipBalance && !tx.accountId) {
     // PLS #116: write-off tx has no account (analytics-only, no real cash moved)
     rows += `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value" style="color:var(--text3);font-style:italic">— (no cash account)</div></div>`;
@@ -10108,6 +10368,10 @@ function openTxDetail(txId) {
         <span>💡 Auto-generated reimbursement gain. Manage it from the original settlement.</span>
         ${parentExists ? `<span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap;margin-left:10px" onclick="closeDlg();setTimeout(()=>openTxDetail('${tx.parentId}'),50)">View parent</span>` : ''}
       </div>`;
+    } else if (tx.inKindPayId) { // PLS #533: Undo takes the loan payment with it
+      footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openTxReceipt('${tx.id}')" style="display:inline-flex;align-items:center;gap:5px">${_ico('receipt',14)}Receipt</button>
+       <button class="btn btn-ghost btn-sm" onclick="closeDlg();openEditTx('${tx.id}')">Edit</button>
+       <button class="btn btn-warning btn-sm" onclick="archiveTx('${tx.id}')">Undo</button>`;
     } else if (tx.isReimbSettlementLoss && tx.writeOffReason) { // PLS #530: undo, then write off again to change the amount
       footer = `<button class="btn btn-ghost btn-sm" onclick="closeDlg();openTxReceipt('${tx.id}')" style="display:inline-flex;align-items:center;gap:5px">${_ico('receipt',14)}Receipt</button>
        <button class="btn btn-ghost btn-sm" onclick="closeDlg();openEditTx('${tx.id}')">Edit</button>
@@ -10314,7 +10578,9 @@ function openTxReceipt(txId) {
     }
   } else {
     const acct = getAccountDisplay(tx.accountId);
-    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Account</div><div class="rcpt-row-value">${_esc(acct.name)}</div></div>`;
+    rowsHTML += tx.paidByPerson && !tx.accountId // PLS #533
+      ? `<div class="rcpt-row"><div class="rcpt-row-label">Paid by</div><div class="rcpt-row-value">${_esc(tx.paidByPerson)}</div></div>`
+      : `<div class="rcpt-row"><div class="rcpt-row-label">Account</div><div class="rcpt-row-value">${_esc(acct.name)}</div></div>`;
     rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Category</div><div class="rcpt-row-value">${cat.icon} ${_stripIcon(cat.name)}</div></div>`;
     if (tx.personName) {
       rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Person</div><div class="rcpt-row-value">${_esc(tx.personName)}</div></div>`;
@@ -10560,7 +10826,7 @@ function openEditTx(txId) {
   // -- PERSONAL LOGIC SET #530 -- (Nov 4 scan #4 item 4, his pick B) a split-bill write-off's amount is not edited
   // here: P15 cut to P7.50 left the bill reading fully covered. Undo the write-off and write it off again, same as
   // a loan write-off (PLS #297). Date and notes stay editable.
-  const _wo530 = !!(tx.isReimbSettlementLoss && tx.writeOffReason);
+  const _wo530 = !!(tx.isReimbSettlementLoss && tx.writeOffReason) || !!tx.inKindPayId; // PLS #533: paid by someone who owes you, same lock
   // PLS #460: Category uses the same picker as Add transaction (was one long select of every expense AND income
   // category where a main category could be picked). The pick lives in a hidden #edit-cat, so Save and the
   // "Discard changes?" check read it as before.
@@ -10605,7 +10871,7 @@ function openEditTx(txId) {
       <div class="form-group"><label class="form-label" for="edit-amount">Amount *</label><input class="form-input numpad-input" type="number" id="edit-amount"  value="${tx.amount}" step="any" inputmode="none"${_wo530 ? ' readonly style="opacity:.6"' : ''}></div>
       <div class="form-group"><label class="form-label" for="edit-currency">Currency</label><select class="form-input" id="edit-currency"${_wo530 ? ' disabled' : ''}>${currOpts}</select></div>
     </div>
-    ${_wo530 ? `<div style="font-size:11px;color:var(--text3);margin:-6px 0 12px">To change the amount, undo the write-off and write it off again.</div>` : ''}
+    ${_wo530 ? `<div style="font-size:11px;color:var(--text3);margin:-6px 0 12px">${tx.inKindPayId ? 'To change the amount, undo it and add it again.' : 'To change the amount, undo the write-off and write it off again.'}</div>` : ''}
     ${fxBadgeHTML}
     <div class="form-group"><label class="form-label" for="edit-account">Account</label>${acctField}</div>
     ${tx.personName?`<div class="form-group"><label class="form-label" for="edit-person">Person</label><input class="form-input" id="edit-person" value="${escapeAttr(tx.personName||'')}"></div>`:''}
@@ -10739,7 +11005,7 @@ function saveEditTx(txId, overpayChoice) {
   const newDate = document.getElementById('edit-date')?.value;
 
   tx.categoryId = document.getElementById('edit-cat')?.value || tx.categoryId;
-  tx.currency = (tx.isReimbSettlementLoss && tx.writeOffReason) ? _origEditCurrency : (document.getElementById('edit-currency')?.value || tx.currency); // PLS #530
+  tx.currency = ((tx.isReimbSettlementLoss && tx.writeOffReason) || tx.inKindPayId) ? _origEditCurrency : (document.getElementById('edit-currency')?.value || tx.currency); // PLS #530, #533
   tx.accountId = document.getElementById('edit-account')?.value || tx.accountId;
   tx.notes = document.getElementById('edit-notes')?.value?.trim() || '';
   const _oldTime279 = tx.time; // PLS #279: remember before the edit overwrites it
@@ -10825,7 +11091,7 @@ function saveEditTx(txId, overpayChoice) {
   } else {
     const amount = parseFloat(document.getElementById('edit-amount')?.value);
     if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
-    tx.amount = (tx.isReimbSettlementLoss && tx.writeOffReason) ? _origEditAmt530 : roundMoney(amount, tx.currency); // PLS #122 (#530: a write-off keeps its amount)
+    tx.amount = ((tx.isReimbSettlementLoss && tx.writeOffReason) || tx.inKindPayId) ? _origEditAmt530 : roundMoney(amount, tx.currency); // PLS #122 (#530: a write-off keeps its amount; #533 too)
     if (document.getElementById('edit-person')) tx.personName = document.getElementById('edit-person').value.trim();
     if (document.getElementById('edit-duedate')) tx.dueDate = document.getElementById('edit-duedate').value;
   }
@@ -10835,6 +11101,13 @@ function saveEditTx(txId, overpayChoice) {
     // PLS #279: snapshot follows date AND time. A rate logged mid-day (PLS #118, e.g. the Sep 11
   // 09:31 remittance) must not reach a tx made earlier that day, and moving only the time must re-anchor too.
     tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
+    if (tx.inKindPayId) { // PLS #533: its loan payment and that payment's entries keep the same day and time (the split stays as saved)
+      const _p533 = db.transactions.find(t => t.id === tx.inKindPayId);
+      if (_p533) [_p533, ...db.transactions.filter(t => t.parentId === _p533.id)].forEach(t => { t.date = tx.date; t.time = tx.time; });
+      if (_p533) (_p533.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l && l.settled) l.settledDate = getLoanPayments(l.id).filter(q => loanPaymentContribution(q, l) > 0).map(q => q.date).sort().pop() || l.settledDate; });
+      const _d533 = tx.inKindDebtId && (db.loans.borrowed || []).find(l => l.id === tx.inKindDebtId);
+      if (_d533) { _d533.date = tx.date; _d533.time = tx.time; }
+    }
   }
   // -- PERSONAL LOGIC SET #228 -- An investment sale carries a DERIVED figure: realizedGL is
   // proceeds minus cost basis. Editing the proceeds here used to leave realizedGL untouched, so a
@@ -11447,6 +11720,8 @@ function recomputeTransferForexChild(parentId) {
 function archiveTx(txId, skipConfirm) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) return;
+  if (tx.inKindPayId) return _pbArchive(txId, skipConfirm); // PLS #533: its loan payment goes with it
+  if (tx.inKindExpId && _pbToExp(tx)) return; // PLS #533: managed from its expense
 
   // Block archiving auto-generated transactions directly
   if (tx.isAutoForex) {
@@ -11686,6 +11961,7 @@ function restoreTx(txId) {
     }
   }
 
+  if (txData.inKindPayId && !_pbRestoreOk(txData)) return; // PLS #533
   // If this tx is itself a cascaded child, prompt user to restore the parent instead
   if (txData.cascadedFrom) {
     const parentInArchive = db.archivedTransactions.find(t => t.id === txData.cascadedFrom);
@@ -11741,6 +12017,7 @@ function restoreTx(txId) {
       restored++;
     }
   }
+  if (tx.inKindPayId) _pbAfterRestore(tx); // PLS #533: loans counted again, the debt it made comes back
 
   saveDBWithSync();
   closeDlg();
@@ -12905,6 +13182,7 @@ function openAcctDetail(acctId) {
     // PSS #114 + #12 revised: hide children that are shown nested under their parent
     if (t.isAutoFee && t.parentId) return false;
     if (t.isLoanPayment && !t.isBatchSettlement) return false;
+    if (t.inKindExpId) return false; // PLS #533: shown as its expense
     if (t.isAutoReimb && !t.isBatchReimbSettlement) return false;
     if (t.isFeeReimbursable) return false;
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
@@ -14258,6 +14536,7 @@ function toggleLoanPersonGroup(direction, person) {
 function openBatchSettleEdit(txId, direction) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
+  if (tx.inKindExpId && _pbToExp(tx)) return; // PLS #533
   // -- PERSONAL LOGIC SET #269 -- This sheet edits "how much was received". A write-off received
   // nothing, so every field here is meaningless for it and saving would write a cash figure onto
   // an entry whose whole point is that no cash arrived. It became reachable only because PLS #268
@@ -14363,6 +14642,7 @@ function undoBatchSettlement(txId, direction) {
   // no screen would ever clear. Delegate instead of duplicating, so there is one undo and it is
   // always the correct one, whichever button the user found.
   if (tx.isBatchWriteOff) return undoBatchWriteOff(txId);
+  if (tx.inKindExpId && db.transactions.some(t => t.id === tx.inKindExpId)) { closeDlg(); return _pbArchive(tx.inKindExpId); } // PLS #533: undo the expense, the payment goes with it
   const ids = tx.batchLoanIds || (tx.parentId ? [tx.parentId] : []);
   const bd = Array.isArray(tx.batchBreakdown) ? tx.batchBreakdown : [];
   const list = db.loans[direction] || [];
@@ -15385,13 +15665,13 @@ function openLoanDetail(loanId, direction) {
   const feed = _tl.map(p => { const acct = db.accounts.find(a => a.id === p.accountId);
       const split = !p._wo && (p.currency !== loan.currency || Math.abs(p.amount - p._share) > 0.005);
       return _fsRow({ ico:_ico(p._wo ? 'x' : 'inCircle', 17), icoBg:p._wo ? 'var(--red-bg)' : 'var(--green-bg)', icoCol:p._wo ? 'var(--red)' : 'var(--green)',
-        title:p._wo ? 'Written off' : isLent ? 'Repayment received' : 'Payment made',
-        sub:`${fmtDFull(p.date)}${p._wo && p.writeOffReason ? ' · ' + _esc(p.writeOffReason) : acct ? ' · ' + _esc(acct.name) : ''}`,
+        title:p._wo ? 'Written off' : p.inKindExpId ? _esc(p.notes || 'Paid for you') : isLent ? 'Repayment received' : 'Payment made',
+        sub:`${fmtDFull(p.date)}${p._wo && p.writeOffReason ? ' · ' + _esc(p.writeOffReason) : p.inKindExpId ? ' · no money moved' : acct ? ' · ' + _esc(acct.name) : ''}`, // PLS #533
         amt:(p._wo ? '' : '+') + fmt(p._share, loan.currency), amtCol:p._wo ? 'var(--red)' : 'var(--green)',
         amt2:`${split ? `of ${fmt(p.amount, p.currency)} · ` : ''}Bal ${fmt(p.balAfter, loan.currency, p.balAfter < -0.005)}`,
         onclick:`editLoanPayment('${p.id}','${loanId}','${direction}')` }); }).join('')
     + _fsRow({ ico:_ico(isLent ? 'outCircle' : 'inCircle', 17), icoBg:isLent ? 'var(--amber-bg)' : 'var(--red-bg)', icoCol:accentColor,
-        title:loan.fromOverpayTxId ? 'Extra they paid on a split bill' : isLent ? 'You lent' : 'You borrowed', sub:`${fmtDFull(loan.date)}${loan.fromOverpayTxId ? ' · no new money moved' : sourceAcct ? ' · ' + _esc(sourceAcct.name) : ''}`, // PLS #511
+        title:loan.fromOverpayTxId ? 'Extra they paid on a split bill' : loan.fromInKindTxId ? 'The rest of a bill they paid for you' : isLent ? 'You lent' : 'You borrowed', sub:`${fmtDFull(loan.date)}${loan.fromOverpayTxId || loan.fromInKindTxId ? ' · no new money moved' : sourceAcct ? ' · ' + _esc(sourceAcct.name) : ''}`, // PLS #511, #533
         amt:fmt(loan.amount, loan.currency), amtCol:accentColor });
   const linkedFeed = linkedTxs.map(t => { const cat = txCategoryDisplay(t), amtD = txAmountDisplay(t), n = (t.batchLoanIds || []).length;
       const share = t.isBatchSettlement && n > 1 ? loanPaymentContribution(t, loan) : null; // PSS #339
@@ -17352,6 +17632,7 @@ function openCalDay(dateStr) {
         if (t.isAutoForex) return '';
         if (t.isAutoFee && t.parentId) return '';
         if (t.isLoanPayment && !t.isBatchSettlement) return '';
+        if (t.inKindExpId) return ''; // PLS #533
         if (t.isAutoReimb && !t.isBatchReimbSettlement) return '';
         if (t.isFeeReimbursable) return '';
         if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return '';
@@ -25969,7 +26250,7 @@ function exportXLSX() {
         cat.name || '', cat.subName || '',
         tx.amount, tx.currency,
         Math.round(phpEq * 100) / 100,
-        acct.name || '', toAcct.name || '',
+        (tx.paidByPerson && !tx.accountId) ? 'Paid by ' + tx.paidByPerson : tx.inKindExpId ? 'No account' : (acct.name || ''), toAcct.name || '', // PLS #533
         tx.notes || '', tags
       ]);
     }
