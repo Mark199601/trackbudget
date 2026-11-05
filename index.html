@@ -5927,6 +5927,8 @@ const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
     '💵 Every loan payment now shows what you earned on it, in the currency it was paid: Loan profit for what you put on top, and Rate change when your rate moved before it was paid', // PLS #542 / #544
     '📊 Loan profit and Rate change show in Transactions, Dashboard, Calendar and Analytics (Income or Spending). They never change your balances, so nothing is counted twice', // PLS #544 / #545
+    '🏷️ A loan payment shows a green or red pill with what it earned or lost, in Transactions and in Loans > Settled', // PSS #548
+    '🔄 Sync no longer asks about Insights notes. The app makes them, so the newer one is kept', // PLS #549
     '✏️ Edit can change who paid for an expense: an account to a person who owes you, or back', // PLS #537
     '📈 The net worth trend now counts what people owed you at each month end', // PLS #538
     '🪙 Every amount is saved to the centavo', // PLS #543
@@ -6603,7 +6605,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
-        <div class="tx-name">${label}</div>
+        ${(() => { const _gp = tx.isBatchWriteOff || tx.writeOffReason ? '' : _payGainPill(tx.id); // PSS #548: what this payment earned or lost
+          return _gp ? `<div class="tx-name" style="display:flex;align-items:center;gap:6px;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis">${label}</span>${_gp}</div>` : `<div class="tx-name">${label}</div>`; })()}
         <div class="tx-detail"><span class="acct-pill">${(tx.inKindExpId || tx.isFxRealized) && !tx.accountId ? 'No account' : _esc(acct.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div><!-- PSS #536 -->
       </div>
       <div class="tx-right">
@@ -14454,6 +14457,18 @@ function renderLoanList(direction) {
 // PSS #287: settled loans, in the page (not a sheet), newest month first. A batch is one row
 // (tap to see its loans and to Edit / Undo); a write-off says "Written off" instead of posing
 // as a settlement (PLS #269's batch write-off used to show as "Batch Settlement").
+// -- PERSONAL STRUCTURE SET #548 -- (his ask Nov 5, "may label pill dn ng gain/loss like this") one pill with what a
+// loan payment earned or lost: Loan profit + Rate change + sobra (Settlement gain / Interest paid), in the payment's
+// currency. Same pill on the Transactions row and on Loans > Settled. Write-offs keep their own label.
+function _payGainPill(payIds) {
+  const ids = new Set(Array.isArray(payIds) ? payIds : [payIds]); const by = {};
+  for (const t of db.transactions) {
+    if (t.archived || !ids.has(t.parentId) || t.writeOffReason || !(t.isLoanSettlementGain || t.isLoanSettlementLoss)) continue;
+    const c = t.currency || _homeBase(); by[c] = (by[c] || 0) + (t.type === 'income' ? 1 : -1) * (Number(t.amount) || 0);
+  }
+  return Object.entries(by).map(([c, v]) => { v = roundMoney(v, c); if (Math.abs(v) < 0.005) return '';
+    return `<span class="lp-pill ${v > 0 ? 'gain' : 'wo'}">${v > 0 ? '+' : '−'}${fmt(Math.abs(v), c)}</span>`; }).join('');
+}
 function _loanSettledView(direction, settled) {
   if (!settled.length) return `<div class="lp-empty">Nothing settled yet.</div>`;
   const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && t.batchDirection === direction);
@@ -14482,11 +14497,7 @@ function _loanSettledView(direction, settled) {
       if (c.batch) {
         const bp = c.batch, key = 'S:' + bp.id, open = !!_loanPersonExpanded[direction + ':' + key];
         const people = [...new Set(c.loans.map(l => (l.personName||'Unknown').trim()))];
-        const gain = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementGain);
-        const loss = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementLoss);
-        const pill = bp.isBatchWriteOff ? `<span class="lp-pill wo">Written off</span>`
-          : gain ? `<span class="lp-pill gain">+${fmt(gain.amount, gain.currency)}</span>`
-          : loss ? `<span class="lp-pill wo">-${fmt(loss.amount, loss.currency)}</span>` : '';
+        const pill = bp.isBatchWriteOff ? `<span class="lp-pill wo">Written off</span>` : _payGainPill(bp.id); // PSS #548: profit + rate change + sobra
         html += `<div class="reimb-person-card"><div class="lp-row" onclick="toggleLoanPersonGroup('${direction}','${key}')">
           ${av(people.length === 1 ? people[0] : '+' + people.length)}
           <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(people.length === 1 ? people[0] : people.length + ' people')}</span>${pill}</div>
@@ -14504,7 +14515,7 @@ function _loanSettledView(direction, settled) {
       } else {
         const l = c.loan;
         html += `<div class="lp-row" onclick="openLoanDetail('${l.id}','${direction}')">${av(l.personName)}
-          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(l.personName||'Unknown')}</span></div>
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(l.personName||'Unknown')}</span>${_payGainPill(db.transactions.filter(t => !t.archived && t.isLoanPayment && t.parentId === l.id).map(t => t.id))}</div>
           <div class="lp-meta">1 loan · paid ${fmtDFull(l.settledDate || l.date)}</div></div>
           <div class="lp-amt">${fmt(l.amount, l.currency)}</div><span class="lp-chev">›</span></div>`;
       }
@@ -27316,6 +27327,10 @@ const _syncR2 = n => Math.round(n * 100) / 100;
 function _syncMerge3(base, mine, theirs, path, out) {
   const p = path.join('.');
   if (_SYNC_LOCAL.has(p)) return mine;
+  // -- PERSONAL LOGIC SET #549 -- (his report Nov 5: "Choose what to keep" asked about "Ai insights last run" and insight
+  // titles he could not read) Insights notes are made by the app and rebuilt on every run, so they are never asked:
+  // the newer run is kept.
+  if (p === 'settings.aiInsights') { const lr = v => (v && v.lastRun) || ''; return lr(theirs) >= lr(mine) ? theirs : mine; }
   if (_syncEq(mine, base)) return theirs;                    // only the other device changed it
   if (_syncEq(theirs, base)) return mine;                    // only this device changed it
   if (typeof mine === 'number' && typeof theirs === 'number' && (_SYNC_DELTA.some(r => r.test(p)) || out.deltaPaths.has(p))) {   // before "same on both": 50 paid on each device is two payments, not one
