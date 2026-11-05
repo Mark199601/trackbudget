@@ -21,6 +21,17 @@
 <meta property="og:description" content="Personal dual-currency budget and expense tracker.">
 <meta property="og:type" content="website">
 <script>
+// -- PERSONAL STRUCTURE SET #547 -- (his ask, Nov 5: "iretire mo na yung walang pakinabang") RETIRED RULES.
+// Their code never ran any more (nothing called it) or a newer rule replaced it. Removed on Nov 5 with 60 functions
+// nothing called (about 950 lines). Do not bring them back without his say.
+//   #41, #42 settled split bills sheet; #60, #61 settled loans sheet; #241 sold investments and finished
+//     installments sheets. All replaced by the Active / Settled chips in the page (PSS #287, #288).
+//   #539 settled loans total at cost basis: it lived only in that sheet, so it never showed.
+//   #78 second action map of the old AI page; #91 Overview accordion; #156 last device pill.
+//   Payday and Recurring screens (removed earlier, PSS #305, #315): their leftover functions.
+//   #504, #506 loan gain rules: replaced by PLS #542 / #544 (every payment, profit + rate change).
+//   #68 store FX amounts raw: replaced for amounts by PLS #543 (centavos); rates keep full precision.
+//   #158 unsynced edit popup: retired by PLS #540. #44, #45 USDT lock: replaced by PLS #447.
 // Detect Apple devices — they get native SF Pro (free, no download)
 // Non-Apple devices (Windows/Android/Linux) get Inter font from CDN (Apple-look)
 (function(){
@@ -1871,19 +1882,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
   </div>
 </div>
 
-<!-- PLS #158: unsynced-edit block gate. Separate from dlg-overlay on purpose — no backdrop
-     click-to-close, no ✕ button. Only JS (hideSyncBlockModal) closes it, either on confirmed
-     sync or via the explicit "Continue anyway" escape hatch once retry has failed. -->
-<div class="dlg-overlay" id="sync-block-overlay" role="dialog" aria-modal="true" aria-labelledby="syncblock-title" style="z-index:400">
-  <div class="dlg" style="max-width:320px;text-align:center;padding:32px 24px 24px">
-    <div id="syncblock-icon" style="width:36px;height:36px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:var(--accent)">
-      <svg class="spin" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-    </div>
-    <div id="syncblock-title" style="font-size:16px;font-weight:600;margin-bottom:6px">Syncing your last edit...</div>
-    <div id="syncblock-sub" style="font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:4px">Please wait before switching devices.</div>
-    <div id="syncblock-actions" style="display:none;gap:8px;justify-content:center;margin-top:16px"></div>
-  </div>
-</div>
+<!-- PLS #158 retired (PLS #540, his pick Nov 5): the old unsynced-edit popup was replaced by PLS #441 and removed. -->
 
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
@@ -2909,6 +2908,7 @@ function defaultDB() {
         {id:'c-returns',name:'Returns & Gains',icon:'📈',archived:false,subcats:[
           {id:'sc-investreturns',name:'Investment Returns',icon:'📈',archived:false},
           {id:'sc-forexgain',name:'FX Gain',icon:'📈',archived:false,autoOnly:true},
+          {id:'sc-loanprofit',name:'Loan Profit',icon:'💵',archived:false,autoOnly:true}, // PLS #544
           {id:'sc-debtforgiven',name:'Debt Relief',icon:'🕊',archived:false,autoOnly:true},
           {id:'sc-dividends',name:'Dividends',icon:'💵',archived:false},
         ]},
@@ -2979,7 +2979,7 @@ let db = (() => {
     if (!parsed.installments) parsed.installments = [];
     if (!parsed.targets) parsed.targets = [];
     // Migration: mark system-only subcategories as autoOnly (hidden from manual picker)
-    const AUTO_ONLY_IDS = new Set(['sc-remittance','sc-externalin','sc-externalout','sc-forexloss','sc-forexgain','sc-remittancefee']);
+    const AUTO_ONLY_IDS = new Set(['sc-remittance','sc-externalin','sc-externalout','sc-forexloss','sc-forexgain','sc-remittancefee','sc-loanprofit']);
     // -- PERSONAL LOGIC SET #461 / PSS #461 -- (his ask, Oct 2026: "yung mga auto sa financials dapat hard-coded na yan, hindi na
     // dapat makikita sa cats para hindi editable ang looks"). The app files these entries itself and recomputes them,
     // so they are not his categories to edit: Settings > Categories no longer lists them, and their name and icon are
@@ -2989,7 +2989,7 @@ let db = (() => {
       // PSS #462 (his pick, Oct 2026): fintech names, Write-off kept as the word most people know
       'sc-remittancefee': ['Remittance Fee', '\u{1F4B8}'], 'sc-remittance': ['Remittance', '\u{1F4E4}'],
       'sc-externalin': ['External In', '\u{1F4E5}'], 'sc-externalout': ['External Out', '\u{1F4E4}'],
-      'sc-forexgain': ['FX Gain', '\u{1F4C8}'], 'sc-forexloss': ['FX Loss', '\u{1F4C9}'],
+      'sc-forexgain': ['FX Gain', '\u{1F4C8}'], 'sc-forexloss': ['FX Loss', '\u{1F4C9}'], 'sc-loanprofit': ['Loan Profit', '\u{1F4B5}'],
       'sc-writeoff': ['Write-off', '\u2717'], 'sc-investloss': ['Realized Loss', '\u{1F4C9}'], 'sc-debtforgiven': ['Debt Relief', '\u{1F54A}'],
     };
     for (const type of ['expense','income']) {
@@ -3001,6 +3001,15 @@ let db = (() => {
         }
       }
     }
+    // PLS #544: Loan Profit (what he put on top of a loan) is filed by the app under Returns & Gains, so Analytics Income
+    // shows it on its own line. Seeded once into the income group that holds Investment Returns (or the first one).
+    try {
+      const inc = parsed.categories?.income || [];
+      if (inc.length && !inc.some(c => (c.subcats || []).some(s => s.id === 'sc-loanprofit'))) {
+        const home = inc.find(c => (c.subcats || []).some(s => s.id === 'sc-investreturns')) || inc.find(c => c.id === 'c-returns') || inc[0];
+        (home.subcats = home.subcats || []).push({ id:'sc-loanprofit', name:'Loan Profit', icon:'\u{1F4B5}', archived:false, autoOnly:true });
+      }
+    } catch(e) { /* defensive */ }
     // ── PERSONAL STRUCTURE SET #114 ── Seed missing sc-remittancefee subcategory.
     // Older databases were missing this entry, causing "Deleted Category" labels
     // on remittance fee txs that reference 'sc-remittancefee' as categoryId.
@@ -3218,6 +3227,8 @@ function saveDBWithSync() {
   // edit made it to Drive or got interrupted before it could sync.
   db.settings.lastLocalEditAt = new Date().toISOString();
   window._pageStale = true; // PLS #471
+  try { _loanGainSync(); } catch (e) { console.error('loan gain', e); } // PLS #542
+  try { _centsSync(); } catch (e) { console.error('cents', e); } // PLS #543
   saveDB();
   _hasUnsavedChanges = true;
   if (db.settings.googleDriveConnected) setSyncStatus('unsaved');
@@ -3429,6 +3440,56 @@ function getAcctBalance(acctId) {
   return bal;
 }
 
+// -- PERSONAL LOGIC SET #538 -- (his pick, Nov 5) the net worth trend counts what was really owed at each month end.
+// It used to add TODAY's loans and split bills to every past month, so a loan paid back into an account looked like
+// new money (Oct 31 was about P20,792 short in his data). Loans: what is open now plus the payments and write-offs
+// dated after that day, at cost basis (PLS #139). Split bills: what is still owed now plus what came in after that
+// day, at the bill's own rate (PLS #505). Loans and bills dated after that day are left out. Investments are still
+// taken as they are today. Archived items count nowhere (PLS #80). One helper for the Dashboard and Analytics.
+function _nwAcctsAsOf(dateStr) {
+  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet','Other']; // PLS #495
+  let net = 0;
+  for (const a of db.accounts) {
+    if (a.archived) continue;
+    let bal = dateStr ? getAcctBalanceAsOf(a.id, dateStr) : getAcctBalance(a.id);
+    if (Math.abs(bal) < 0.005) bal = 0; // PLS #316
+    if (assetTypes.includes(a.type) || a.type === 'Credit Card') net += toPhp(bal, a.currency); // PLS #15
+  }
+  return net;
+}
+function _nwOwedAsOf(dateStr) {
+  let net = 0;
+  for (const dir of ['lent', 'borrowed']) for (const l of (db.loans[dir] || [])) {
+    if (dateStr && (l.date || '') > dateStr) continue;
+    let rem = l.settled ? 0 : (l.remaining != null ? Number(l.remaining) : Number(l.amount) || 0);
+    if (dateStr) rem += getLoanPayments(l.id).filter(p => (p.date || '') > dateStr).reduce((t, p) => t + loanPaymentContribution(p, l), 0);
+    rem = Math.min(Math.max(0, rem), Number(l.amount) || 0);
+    if (rem <= 0.005) continue;
+    const v = loanHomeValue(Object.assign({}, l, { remaining: rem }));
+    net += dir === 'lent' ? v : -v;
+  }
+  const later = {};
+  if (dateStr) { const al = _reimbAllocAll(); for (const e of db.transactions) if (!e.archived && (e.date || '') > dateStr && al.byPayment[e.id]) {
+    const person = e.batchPerson || e.reimbPerson || ((e.notes || '').match(/from ([^—]+?) —/)?.[1] || '').trim();
+    al.byPayment[e.id].forEach(r => { const k = r.billId + '|' + person; later[k] = (later[k] || 0) + (Number(r.amount) || 0); }); } }
+  for (const tx of db.transactions) {
+    if (tx.type !== 'shared' || tx.archived || tx.isFeeReimbursable) continue; // PSS #46
+    if (dateStr && (tx.date || '') > dateStr) continue;
+    for (const p of (tx.persons || [])) {
+      const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? (Number(tx.paidSoFar[p.name]) || 0) : 0;
+      const open = tx.settled ? 0 : Math.max(0, (p.share || 0) - paid); // a settled bill is owed nothing now, same as getNetWorth
+      const rem = Math.min(p.share || 0, open + (later[tx.id + '|' + p.name] || 0));
+      if (rem > 0.01) net += txAmtIn(rem, tx, _homeBase()); // PLS #505
+    }
+  }
+  return net;
+}
+// Net worth at a past day: accounts then + owed then + what the rest (investments) is today, so today's point is
+// exactly getNetWorth().
+function _nwAsOfFn() {
+  const rest = getNetWorth().net - _nwAcctsAsOf(null) - _nwOwedAsOf(null);
+  return dateStr => _nwAcctsAsOf(dateStr) + _nwOwedAsOf(dateStr) + rest;
+}
 function loanHomeValue(loan) {
   const home = _homeBase();
   const remain = (loan.remaining != null) ? loan.remaining : loan.amount;
@@ -3819,6 +3880,7 @@ const _SYSTEM_CAT_LABELS = {
   'sc-debtforgiven':  {name:'Debt Relief',        icon:'🕊'},
   'sc-forexgain':     {name:'FX Gain',            icon:'📈'},
   'sc-forexloss':     {name:'FX Loss',            icon:'📉'},
+  'sc-loanprofit':    {name:'Loan Profit',        icon:'💵'}, // PLS #544
   'sc-bankcharges':   {name:'Bank Charges',       icon:'🏦'},
   'sc-remittance':    {name:'Remittance', icon:'📤'},
   'sc-remittancefee': {name:'Remittance Fee',       icon:'💸'},
@@ -3841,7 +3903,7 @@ function txCategoryDisplay(tx) {
   if (tx.isLoanSettlementLoss && /^(Interest paid|Overpayment) to /.test(tx.notes || '')) return {icon:'📉', name:'Interest Paid'}; // PSS #444
   if (tx.isBatchWriteOff)        return {icon:'✖️', name:'Write-off'}; // PSS #464: same name as the category
   if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
-  if (tx.isFxRealized)           return tx.type === 'income' ? {icon:'📈', name:'FX Gain'} : {icon:'📉', name:'FX Loss'}; // PLS #506
+  if (tx.isFxRealized)           return tx.isLoanRateChange ? (tx.type === 'income' ? {icon:'📈', name:'Rate change'} : {icon:'📉', name:'Rate change'}) : (tx.type === 'income' ? {icon:'💵', name:'Loan profit'} : {icon:'📉', name:'Loan loss'}); // PLS #544 (was #506 FX Gain / FX Loss)
   if (tx.isLoanSettlementGain)   return {icon:'📈', name:'Loan Settlement Gain'};
   if (tx.isLoanSettlementLoss)   return {icon:'📉', name:'Loan Settlement Loss'};
   if (tx.isReimbSettlementGain)  return {icon:'📈', name:'Reimbursement Gain'};
@@ -4176,21 +4238,6 @@ function renderPageHeader(page) {
   updateSyncIndicator();
 }
 
-// PSS #309: wrap a row of tiles; 3 or more become a swipe row with desktop arrows.
-function _tilesRow(tilesHTML, count) {
-  if (count <= 2) return `<div class="lp-tiles">${tilesHTML}</div>`;
-  const id = 'lps-' + Math.random().toString(36).slice(2, 8);
-  return `<div class="lp-swipe"><button class="lp-swipe-btn prev" aria-label="Previous" disabled onclick="_tilesScroll('${id}',-1)">‹</button>
-    <div class="lp-tiles" id="${id}" onscroll="_tilesArrows('${id}')">${tilesHTML}</div>
-    <button class="lp-swipe-btn next" aria-label="Next" onclick="_tilesScroll('${id}',1)">›</button></div>`;
-}
-function _tilesScroll(id, dir) { const el = document.getElementById(id); if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' }); }
-function _tilesArrows(id) {
-  const el = document.getElementById(id); if (!el) return;
-  const w = el.parentElement; const p = w.querySelector('.prev'), n = w.querySelector('.next');
-  if (p) p.disabled = el.scrollLeft <= 2;
-  if (n) n.disabled = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
-}
 // PSS #287: the "..." page menu. Only things that already exist on that page, rarely used ones.
 function openPageMenu(ev, page) {
   ev && ev.stopPropagation();
@@ -4734,7 +4781,6 @@ function npRender() {
 // An unfinished sum ("12+") keeps the last good number; a result below zero is not written.
 // -- PERSONAL LOGIC SET #383 -- amounts from the keypad show full centavos: 45.5 -> "45.50", 46 stays "46"
 function _npCents(v) { const r = Math.round(v * 100) / 100; return Number.isInteger(r) ? String(r) : r.toFixed(2); }
-function _npRefit() { document.querySelectorAll('.big-amt-input').forEach(i => { try { _bigAmtFit(i); } catch(e) {} }); }
 function _npLive() {
   if (!_npTarget) return;
   if (!_npExpr) { if (_npTarget.value !== '') { _npTarget.value = ''; _npTarget.dispatchEvent(new Event('input', { bubbles:true })); } return; }
@@ -4798,19 +4844,6 @@ function npDel() {
   npRender();
 }
 
-function npEval() {
-  // PLS #110: rate fields keep full precision; amount fields round to cents.
-  try {
-    const safe = _npSafe(_npExpr);
-    const val = Function('"use strict";return (' + safe + ')')();
-    if (typeof val === 'number' && isFinite(val)) {
-      const targetId = _npTarget?.id || '';
-      const isRateField = /rate/i.test(targetId);
-      _npExpr = isRateField ? String(val) : String(Math.round(val * 100) / 100);
-      npRender();
-    }
-  } catch(e) {}
-}
 
 function npConfirm() {
   // ── PERSONAL LOGIC SET #110 ── Numpad respects field precision intent.
@@ -5375,24 +5408,18 @@ function runCountUpAnimations() {
 // PLS #400: net worth at each of the last 6 month-ends, the same way the Net worth trend widget works
 // (account balances as of that date, anchored so the last point equals today's total balance)
 function _fzNwSeries(disp) {
-  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet','Other']; // PLS #495: 'Other' counts too
   const dates = (db.transactions || []).filter(t => !t.archived && t.date).map(t => t.date);
   const first = dates.length ? dates.reduce((a, b) => a < b ? a : b) : null;
-  const now = new Date(); const pts = [];
+  const now = new Date(); const pts = []; const nwAt = _nwAsOfFn(); // PLS #538
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const eom = i === 0 ? now : new Date(d.getFullYear(), d.getMonth() + 1, 0);
     const eomStr = `${eom.getFullYear()}-${String(eom.getMonth()+1).padStart(2,'0')}-${String(eom.getDate()).padStart(2,'0')}`;
     if (!first || eomStr < first) continue;
-    let net = 0;
-    for (const a of db.accounts) { if (a.archived) continue;
-      const v = toPhp(getAcctBalanceAsOf(a.id, eomStr), a.currency);
-      if (assetTypes.includes(a.type)) net += v; else if (a.type === 'Credit Card') net += v; }
-    pts.push({ label: d.toLocaleString('en', { month:'short' }), php: net });
+    pts.push({ label: d.toLocaleString('en', { month:'short' }), php: i === 0 ? getNetWorth().net : nwAt(eomStr) });
   }
   if (pts.length < 2) return null;
-  const off = getNetWorth().net - pts[pts.length - 1].php;
-  return pts.map(p => ({ label: p.label, v: fromPhp(p.php + off, disp) }));
+  return pts.map(p => ({ label: p.label, v: fromPhp(p.php, disp) }));
 }
 function _fzNwPanel(disp) { // PSS #403: phones show it too (inside the hero, above the buttons)
   let ser = null; try { ser = _fzNwSeries(disp); } catch(e) { ser = null; }
@@ -5549,7 +5576,7 @@ function renderDashboard() {
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false; // PSS #545: profit and rate change rows show, as in Transactions
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,16); // PLS #399: PC fills its taller column; phones still show 8 (CSS)
   let txHTML = recentTxs.length > 0 ? recentTxs.map(tx=>renderTxRow(tx, true)).join('') :
@@ -5891,12 +5918,21 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_VERSION = '1.2.18'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
+const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
 // toasts, dialogs, empty states, microcopy) are written in English. Taglish appears only in
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
+  { ver: '1.2.19', date: 'November 2026', changes: [
+    '💵 Every loan payment now shows what you earned on it, in the currency it was paid: Loan profit for what you put on top, and Rate change when your rate moved before it was paid', // PLS #542 / #544
+    '📊 Loan profit and Rate change show in Transactions, Dashboard, Calendar and Analytics (Income or Spending). They never change your balances, so nothing is counted twice', // PLS #544 / #545
+    '✏️ Edit can change who paid for an expense: an account to a person who owes you, or back', // PLS #537
+    '📈 The net worth trend now counts what people owed you at each month end', // PLS #538
+    '🪙 Every amount is saved to the centavo', // PLS #543
+    '🧹 Archiving many entries at once works like Undo, and entries without an account say No account', // PLS #535 / PSS #536
+    '🧽 Old screens that could no longer be opened were removed, and the New loan form says Projected profit', // PSS #547 / PLS #546
+  ]},
   { ver: '1.2.18', date: 'November 2026', changes: [
     '🍽️ Paid by: when someone who owes you pays for something of yours, like dinner, pick them in Add expense under Paid by. It counts as your expense and lowers what they owe, and no money leaves your accounts', // PLS #533 / PSS #534
     '🤝 If the bill is more than they owe, choose if the rest was their treat or money you will pay back. Undo takes back both entries', // PLS #533
@@ -6251,6 +6287,7 @@ function confirmBulkArchive() {
     const idx = db.transactions.findIndex(t => t.id === id);
     if (idx < 0) continue;
     if (_inMultiPay(id)) { skipped++; continue; }
+    if (db.transactions[idx].inKindPayId) { if (_pbUndoCore(db.transactions[idx], false)) archived++; else skipped++; continue; } // PLS #535
     const children = _linked2(id); // PLS #521
     const tx = db.transactions.splice(idx, 1)[0];
     tx.archivedAt = today();
@@ -6272,7 +6309,7 @@ function confirmBulkArchive() {
   closeDlg();
   exitTxBulkMode();
   showToast((cascaded > 0 ? `Archived ${archived} (+ ${cascaded} linked)` : `Archived ${archived} ${aiPlural(archived,'transaction')}`)
-    + (skipped ? `. ${skipped} skipped, part of a bigger payment` : ''), skipped ? 3500 : undefined);
+    + (skipped ? `. ${skipped} skipped, part of a bigger payment or already partly paid back` : ''), skipped ? 3500 : undefined);
 }
 
 function bulkDeleteTxns() {
@@ -6293,6 +6330,8 @@ function confirmBulkDelete() {
   let deleted = 0, cascaded = 0, skipped = 0;
   for (const id of ids) {
     if (db.transactions.some(t => t.id === id) && _inMultiPay(id)) { skipped++; continue; } // PLS #521
+    const _ik535 = db.transactions.find(t => t.id === id && t.inKindPayId);
+    if (_ik535) { if (_pbUndoCore(_ik535, true)) deleted++; else skipped++; continue; } // PLS #535
     const childrenToDelete = _linked2(id);
     for (const child of childrenToDelete) {
       const ci = db.transactions.findIndex(t => t.id === child.id);
@@ -6565,7 +6604,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
       <div class="tx-meta">
         <div class="tx-name">${label}</div>
-        <div class="tx-detail"><span class="acct-pill">${_esc(acct.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
+        <div class="tx-detail"><span class="acct-pill">${(tx.inKindExpId || tx.isFxRealized) && !tx.accountId ? 'No account' : _esc(acct.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div><!-- PSS #536 -->
       </div>
       <div class="tx-right">
         <div class="tx-amount ${amtD.cls}">${amtD.str}</div>
@@ -6748,8 +6787,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   if (tx.isBatchSettlement && Array.isArray(tx.batchLoanIds)) {
     const direction = tx.batchDirection || 'lent';
     const linkedLoans = tx.batchLoanIds.map(id => db.loans[direction]?.find(l => l.id === id)).filter(Boolean);
-    const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementGain);
-    const lossChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementLoss);
+    const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementGain && !t.isFxRealized); // PLS #544: sobra only
+    const lossChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isLoanSettlementLoss && !t.isFxRealized);
     if (linkedLoans.length > 0 || gainChild || lossChild) {
       // -- PERSONAL STRUCTURE SET #258 -- openBatchSettleEdit was reachable from exactly one place:
       // the Settled sheet on the Loans page. From the transaction log — where you actually notice
@@ -7143,13 +7182,6 @@ function _addRecentCats(txType, n) {
   }
   return out;
 }
-function _addRecentAccts(n) {
-  const out = []; const live = new Set(db.accounts.filter(a => !a.archived).map(a => a.id));
-  const txs = (db.transactions || []).filter(t => t.accountId && live.has(t.accountId))
-    .sort((a,b) => ((b.date||'')+(b.time||'')+(b.createdAt||'')).localeCompare((a.date||'')+(a.time||'')+(a.createdAt||'')));
-  for (const t of txs) { if (!out.includes(t.accountId)) out.push(t.accountId); if (out.length >= n) break; }
-  return out.map(id => db.accounts.find(a => a.id === id));
-}
 function _addQuickCatsHTML() {
   const s = _addState; const r = _addRecentCats(s.type === 'income' ? 'income' : 'expense', 4);
   if (!r.length) return '';
@@ -7171,27 +7203,6 @@ function _axPickRow(o) {
   return `<div class="ax-row ax-pick" onclick="_axOpenAcctList('${o.sel}')"><div class="ax-l">${o.label}</div><div class="ax-v ax-ph" id="${o.chipsId}" data-sel="${o.sel}">Choose</div>
     <select class="ax-sel" id="${o.sel}" aria-label="${o.label}" onchange="${o.onchange};_axRefreshFor('${o.sel}')">${o.opts}</select></div>`;
 }
-// Recent accounts for a field: "to" learns from where transfers went, the rest from where money came from
-function _axRecent(kind, n, excludeId) {
-  const live = new Set(db.accounts.filter(a => !a.archived).map(a => a.id)); const out = [];
-  const txs = (db.transactions || []).slice().sort((a,b) => ((b.date||'')+(b.time||'')+(b.createdAt||'')).localeCompare((a.date||'')+(a.time||'')+(a.createdAt||'')));
-  for (const t of txs) {
-    const id = kind === 'to' ? t.toAccountId : (t.accountId || t.fromAccountId);
-    if (id && live.has(id) && id !== excludeId && !out.includes(id)) out.push(id);
-    if (out.length >= n) break;
-  }
-  return out.map(id => db.accounts.find(a => a.id === id));
-}
-function _axChipsFor(selId, kind, val) {
-  const live = db.accounts.filter(a => !a.archived);
-  const pair = { 'tf-from':'tf-to', 'tf-to':'tf-from', 'rem-from-acct':'rem-to-acct', 'rem-to-acct':'rem-from-acct' }; // the other side of a From/To pair
-  const other = pair[selId] ? document.getElementById(pair[selId])?.value : '';
-  const list = _axRecent(kind, 2, other).filter(Boolean);
-  live.forEach(a => { if (list.length < 2 && !list.includes(a) && a.id !== other) list.push(a); });
-  const cur = live.find(a => a.id === val);
-  if (cur && !list.includes(cur)) { if (list.length >= 2) list.pop(); list.unshift(cur); } // the account picked from More takes the first chip; still 2 chips, so nothing gets cut off
-  return list.map(a => `<button type="button" class="chip${a.id===val?' active':''}" data-acct="${a.id}" onclick="_axPick('${selId}','${a.id}')">${_esc(a.name)}</button>`).join('');
-}
 function _axPick(selId, id) {
   const sel = document.getElementById(selId); if (!sel) return;
   sel.value = id; sel.dispatchEvent(new Event('change', { bubbles:true })); // runs the field's own onchange (currency, caption, preview)
@@ -7202,7 +7213,6 @@ function _axRefreshFor(selId) {
     v.textContent = a ? a.name : 'Choose'; v.classList.toggle('ax-ph', !a);
   });
 }
-function _axAcctRefresh() { _axRefreshFor('add-account'); }
 // -- PERSONAL STRUCTURE SET #438 -- (his ask, Oct 2026) The account field opens the app's own list instead of the
 // browser's dropdown (ugly on PC), and every account shows its current balance, on PC and phone. The hidden
 // <select> still holds the value, so every existing onchange (currency, caption, preview, save) runs as before.
@@ -7230,17 +7240,6 @@ function _axOpenAcctList(selId) {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('acp-overlay')) { e.stopPropagation(); _axCloseAcctList(); } }, true);
 function _axGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } // the note row grows with what you type
-function _addQuickAcctHTML() {
-  const r = _addRecentAccts(2); if (!r.length) return '';
-  return `<div class="add-quick add-quick-acct" id="add-quick-acct">${r.map(a => `<button type="button" class="chip" data-acct="${a.id}" onclick="_addPickAcct('${a.id}')">${_esc(a.name)}</button>`).join('')}</div>`;
-}
-function _addPickAcct(id) {
-  const sel = document.getElementById('add-account'); if (!sel) return;
-  if (sel.closest('.ax-pick')) { _axPick('add-account', id); return; } // PLS #381, #390
-  sel.value = id; sel.dispatchEvent(new Event('change', { bubbles:true })); syncAddCurrency(); updateBigAmtCurr(); updateAcctDisplay();
-  document.querySelectorAll('#add-quick-acct .chip').forEach(b => b.classList.toggle('active', b.dataset.acct === id));
-  _axAcctRefresh(); // PLS #381
-}
 // -- PERSONAL LOGIC SET #533 -- (his ask Nov 5, pick A) A loan paid back IN KIND: Mike pays for your dinner instead
 // of handing you cash. Add expense > Paid by > someone who owes you. One save makes two linked entries and moves no
 // money in any account:
@@ -7250,9 +7249,11 @@ function _addPickAcct(id) {
 // A bill bigger than what they owe asks about the rest: "treated me" = your expense is only what came off the loan
 // (the rest was their treat, not your money); "I will pay back" = the full bill is your expense and the rest is a new
 // debt to them (no money moved, like PLS #511). Paid in your home currency for a loan in another currency books the
-// PLS #506 exchange rate entry; other currencies never do (PLS #504). Undo = archive the expense: the payment, its
+// gain from PLS #542 at save (#504 and #506 retired). Undo = archive the expense: the payment, its
 // entries and the new debt go with it, the loans are counted again, and Restore brings them all back only while
-// the loans still have that much open. Amount and currency are not edited: undo and add it again.
+// the loans still have that much open. Amount and currency are not edited while the same person paid: undo and add
+// it again. PLS #537 (his pick A, Nov 5): Edit can change who paid (an account to a person, a person back to an
+// account, or another person); the old link is taken off first and the loans are counted again.
 function _pbLoans(person) {
   return (db.loans.lent || []).filter(l => !l.settled && !l.archived && (l.personName || '').trim() === person && (l.remaining ?? l.amount) > 0.005)
     .sort((a, b) => ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || '')));
@@ -7275,11 +7276,11 @@ function _pbRow() {
   return `<div class="ax-row" id="pb-row" onclick="_pbOpen()"><div class="ax-l">Paid by${p ? '<span class="ax-sub">No money leaves your accounts</span>' : ''}</div><div class="ax-v"><span id="pb-val">${p ? _esc(p) : 'Me'}</span></div></div>`;
 }
 function _pbClose() { const o = document.getElementById('pb-overlay'); if (o) o.remove(); }
-function _pbOpen() {
+function _pbOpen(forEdit) {
   _pbClose(); try { if (document.getElementById('tb-numpad')?.classList.contains('open')) npConfirm(); } catch(e) {}
-  const cur = _addState.paidBy || '';
+  const cur = (forEdit ? window._pbEdit?.person : _addState.paidBy) || '';
   const row = (val, name, sub, amt) => `<button type="button" class="acp-row${val === cur ? ' on' : ''}" data-p="${escapeAttr(val)}"><span class="acp-t"><span class="acp-n">${_esc(name)}</span>${sub ? `<span class="acp-s">${sub}</span>` : ''}</span>${amt ? `<span class="acp-b">${amt}</span>` : ''}<span class="acp-ck" aria-hidden="true">✓</span></button>`;
-  const people = _pbPeople();
+  const people = _pbPeople(); if (forEdit && window._pbEdit?.orig && !people.includes(window._pbEdit.orig)) people.unshift(window._pbEdit.orig);
   const ov = document.createElement('div'); ov.id = 'pb-overlay'; ov.className = 'gz-pick-overlay';
   ov.innerHTML = `<div class="gz-pick-panel acp-panel" role="dialog" aria-label="Who paid"><div class="acp-head"><span class="gz-pick-title">Who paid?</span><button type="button" class="sheet-close" aria-label="Close" onclick="_pbClose()">✕</button></div>
     <div class="acp-list">${row('', 'Me', 'From one of your accounts', '')}
@@ -7287,7 +7288,7 @@ function _pbOpen() {
     ${people.length ? people.map(p => row(p, p, 'Owes you', _esc(_pbOwedStr(p)))).join('') : '<div class="acp-empty">Nobody owes you right now</div>'}</div></div>`;
   ov.addEventListener('click', e => {
     const r = e.target.closest('.acp-row');
-    if (r) { _pbPick(r.dataset.p || null); _pbClose(); return; }
+    if (r) { forEdit ? _pbEditPick(r.dataset.p || null) : _pbPick(r.dataset.p || null); _pbClose(); return; } // PLS #537
     if (e.target === ov) _pbClose();
   });
   document.body.appendChild(ov);
@@ -7329,6 +7330,7 @@ function _pbApply() {
   ['add-date', 'add-time'].forEach(id => { const el = document.getElementById(id); if (el && !el._pb) { el._pb = 1; el.addEventListener('change', _pbHint); } });
   _pbHint();
   try { _bigAmtDecorate(); } catch(e) {}
+  try { _wtsAddNote(); } catch(e) {} // PLS #535: the budget warning follows the bill's currency
 }
 function _pbHint() {
   const s = _addState; let box = document.getElementById('pb-hint');
@@ -7360,6 +7362,81 @@ function _pbCatName() {
   const sub = cat && s.subCatId ? (cat.subcats || []).find(x => x.id === s.subCatId) : null;
   return (sub || cat)?.name || 'expense';
 }
+function _pbCatNameOf(catId) { const c = catId && getCategoryDisplay(catId); return (c && c.name && c.name !== 'Deleted Category' ? _stripIcon(c.name) : '') || 'expense'; }
+// the ask when a bill is more than they owe; pick = the JS that stores the choice (VAL is replaced by treat / owe)
+function _pbAskHTML(p, cur, owed, extra, sel, pick, catName) {
+  const debtNow = (db.loans.borrowed || []).filter(l => !l.settled && !l.archived && (l.personName || '').trim() === p && (l.currency || _homeBase()) === cur)
+    .reduce((t, l) => t + (l.remaining ?? l.amount), 0);
+  const opt = (v, t, sub) => `<div class="pb-opt${sel === v ? ' on' : ''}" onclick="${pick.replace('VAL', v)}"><span class="pb-r"></span><div>${t}<span class="pb-osub">${sub}</span></div></div>`;
+  return `<div class="pb-t">${_esc(p)} owes you only ${fmt(owed, cur)}</div>
+    <div class="pb-s">${fmt(owed, cur)} pays off the loan. What about the other ${fmt(extra, cur)}?</div>
+    ${opt('treat', `${_esc(p)} treated me`, `Your ${_esc(catName)} expense is ${fmt(owed, cur)}`)}
+    ${opt('owe', `I will pay ${_esc(p)} back`, debtNow > 0.005 ? `You owe ${_esc(p)} ${fmt(debtNow, cur)}, this makes it ${fmt(roundMoney(debtNow + extra, cur), cur)}` : `You will owe ${_esc(p)} ${fmt(extra, cur)}`)}`;
+}
+// -- PERSONAL LOGIC SET #537 -- (his pick A, Nov 5: "Paid by" in Edit too, both ways) one link step shared by Add and Edit.
+// Ties an expense (its amount = the full bill, its currency, date and time) to what `person` owes: oldest loan first,
+// the treat / pay back split (the gain comes from PLS #542 at save). Sets the expense to no account. Returns false (nothing
+// changed) when the person owes nothing or the choice for the rest is missing.
+function _pbLink(exp, person, mode) {
+  const home = _homeBase(), currency = exp.currency || home, amount = Number(exp.amount) || 0, date = exp.date, time = exp.time || nowTime();
+  const loans = _pbLoans(person);
+  if (!loans.length) { showToast(`${person} does not owe you anything now`); return false; }
+  const snap = buildFxSnapshot(date, time);
+  const conv = (a, f, t) => f === t ? a : fromPhp(toPhp(a, f, snap), t, snap);
+  const owed = _pbOwedIn(person, currency, snap);
+  const extra = roundMoney(amount - owed, currency);
+  if (extra >= 0.01 && mode !== 'treat' && mode !== 'owe') { showToast(`Choose what the other ${fmt(extra, currency)} is`); return false; }
+  if (extra < 0.01) mode = null;
+  const covered = mode ? owed : amount;
+  // oldest loan first, the same walk as Receive payment (confirmBatchSettleLoans)
+  let left = covered; const done = [];
+  for (const loan of loans) {
+    if (left <= 0.001) break;
+    const lc = loan.currency || home, remain = loan.remaining ?? loan.amount, remainIn = conv(remain, lc, currency);
+    if (left >= remainIn - 0.01) {
+      left -= remainIn; loan.remaining = 0; loan.settled = true; loan.settledDate = date;
+      done.push({ loan, inBill: remainIn, inLoan: remain });
+    } else {
+      const inLoan = conv(left, currency, lc);
+      loan.remaining = roundMoney(Math.max(0, remain - inLoan), lc);
+      done.push({ loan, inBill: left, inLoan }); left = 0; break;
+    }
+  }
+  const catName = _pbCatNameOf(exp.subCatId || exp.categoryId);
+  const payId = 'tx-' + genId(), now = new Date().toISOString();
+  db.transactions.push({
+    id: payId, type: 'income', amount: covered, currency, accountId: null, skipBalance: true, date, time,
+    notes: `${person} paid for your ${catName}`, isSettlement: true, isLoanPayment: true, isBatchSettlement: true,
+    loanDirection: 'lent', parentId: done[0].loan.id, batchLoanIds: done.map(d => d.loan.id),
+    batchBreakdown: done.map(d => ({ loanId: d.loan.id, amount: d.inLoan, currency: d.loan.currency || home })), // PLS #130
+    batchPerson: person, batchDirection: 'lent', categoryId: 'sc-investreturns', fxSnapshot: snap, createdAt: now, inKindExpId: exp.id,
+  });
+  // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
+  exp.accountId = null; exp.skipBalance = true; exp.paidByPerson = person; exp.inKindPayId = payId;
+  delete exp.inKindTreat; delete exp.inKindDebtId;
+  if (mode === 'treat') { exp.amount = covered; exp.inKindTreat = extra; }
+  if (mode === 'owe') {
+    const debt = { id: genId(), personName: person, amount: extra, currency, accountId: null, remaining: extra, date, time, dueDate: null, settled: false,
+      fromInKindTxId: exp.id, notes: `The rest of the ${catName} ${person} paid for (${fmtDFull(date)}), to pay back` };
+    db.loans.borrowed.push(debt); exp.inKindDebtId = debt.id;
+  }
+  return true;
+}
+// Edit: take the link off (its payment and entries deleted, loans counted again, the debt it made removed). False when
+// the rest was already partly paid back.
+function _pbUnlink(tx) {
+  const debt = tx.inKindDebtId && (db.loans.borrowed || []).find(l => l.id === tx.inKindDebtId);
+  if (debt && getLoanPayments(debt.id).length) return false;
+  const pay = db.transactions.find(t => t.id === tx.inKindPayId);
+  if (pay) {
+    db.transactions = db.transactions.filter(t => t.id !== pay.id && t.parentId !== pay.id);
+    (pay.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l) _loanRecount(l); }); // PLS #518
+  }
+  if (debt) db.loans.borrowed.splice(db.loans.borrowed.indexOf(debt), 1);
+  if (tx.inKindTreat > 0) tx.amount = roundMoney((Number(tx.amount) || 0) + tx.inKindTreat, tx.currency); // back to the full bill
+  ['inKindPayId', 'paidByPerson', 'inKindTreat', 'inKindDebtId', 'skipBalance'].forEach(k => delete tx[k]);
+  return true;
+}
 function _pbSave() {
   if (window._pbSaving) return; window._pbSaving = true; setTimeout(() => { window._pbSaving = false; }, 800); // PLS #148
   const s = _addState, person = s.paidBy, home = _homeBase();
@@ -7370,62 +7447,72 @@ function _pbSave() {
   const notes = document.getElementById('add-notes')?.value?.trim() || '';
   if (!amount || amount <= 0) { showToast('Enter a valid amount'); return; }
   if (!date) { showToast('Select a date'); return; }
-  const loans = _pbLoans(person);
-  if (!loans.length) { showToast(`${person} does not owe you anything now`); return; }
-  const snap = buildFxSnapshot(date, time);
-  const conv = (a, f, t) => f === t ? a : fromPhp(toPhp(a, f, snap), t, snap);
-  const owed = _pbOwedIn(person, currency, snap);
-  const extra = roundMoney(amount - owed, currency);
-  const mode = extra >= 0.01 ? s.pbExtra : null;
-  if (extra >= 0.01 && !mode) { showToast(`Choose what the other ${fmt(extra, currency)} is`); return; }
-  const covered = extra >= 0.01 ? owed : amount;
-  // oldest loan first, the same walk as Receive payment (confirmBatchSettleLoans)
-  let left = covered; const done = [];
-  for (const loan of loans) {
-    if (left <= 0.001) break;
-    const lc = loan.currency || home, remain = loan.remaining ?? loan.amount, remainIn = conv(remain, lc, currency);
-    const costPerUnit = remain > 0 ? loanHomeValue(loan) / remain : 0; // PLS #506
-    if (left >= remainIn - 0.01) {
-      left -= remainIn; loan.remaining = 0; loan.settled = true; loan.settledDate = date;
-      done.push({ loan, inBill: remainIn, inLoan: remain, costHome: costPerUnit * remain });
-    } else {
-      const inLoan = conv(left, currency, lc);
-      loan.remaining = roundMoney(Math.max(0, remain - inLoan), lc);
-      done.push({ loan, inBill: left, inLoan, costHome: costPerUnit * inLoan }); left = 0; break;
-    }
-  }
-  const catId = s.subCatId || s.catId, catName = _pbCatName();
-  const expId = genId(), payId = 'tx-' + genId(), now = new Date().toISOString();
-  db.transactions.push({
-    id: payId, type: 'income', amount: covered, currency, accountId: null, skipBalance: true, date, time,
-    notes: `${person} paid for your ${catName}`, isSettlement: true, isLoanPayment: true, isBatchSettlement: true,
-    loanDirection: 'lent', parentId: done[0].loan.id, batchLoanIds: done.map(d => d.loan.id),
-    batchBreakdown: done.map(d => ({ loanId: d.loan.id, amount: d.inLoan, currency: d.loan.currency || home })), // PLS #130
-    batchPerson: person, batchDirection: 'lent', categoryId: 'sc-investreturns', fxSnapshot: snap, createdAt: now, inKindExpId: expId,
-  });
-  if (currency === home) { // PLS #506
-    const fx = roundMoney(done.filter(d => (d.loan.currency || home) !== home).reduce((t, d) => t + (d.inBill - (d.costHome || 0)), 0), home);
-    if (Math.abs(fx) >= 0.01) {
-      const gain = fx > 0;
-      db.transactions.push({ id: 'tx-' + genId(), type: gain ? 'income' : 'expense', amount: Math.abs(fx), currency: home, accountId: null, date, time,
-        notes: `Exchange rate ${gain ? 'gain' : 'loss'} on loan to ${person}`, isLoanSettlementGain: gain, isLoanSettlementLoss: !gain, isSettlement: true,
-        isFxRealized: true, parentId: payId, batchPerson: person, categoryId: gain ? 'sc-forexgain' : 'sc-forexloss', fxSnapshot: snap, createdAt: now });
-    }
-  }
-  const exp = { id: expId, type: 'expense', amount: mode === 'treat' ? covered : amount, currency, categoryId: catId, accountId: null, skipBalance: true,
-    date, time, notes, fxSnapshot: JSON.parse(JSON.stringify(snap)), createdAt: now, paidByPerson: person, inKindPayId: payId };
-  if (mode === 'treat') exp.inKindTreat = extra;
-  if (mode === 'owe') {
-    const debt = { id: genId(), personName: person, amount: extra, currency, accountId: null, remaining: extra, date, time, dueDate: null, settled: false,
-      fromInKindTxId: expId, notes: `The rest of the ${catName} ${person} paid for (${fmtDFull(date)}), to pay back` };
-    db.loans.borrowed.push(debt); exp.inKindDebtId = debt.id;
-  }
+  const exp = { id: genId(), type: 'expense', amount, currency, categoryId: s.subCatId || s.catId, accountId: null, skipBalance: true,
+    date, time, notes, fxSnapshot: buildFxSnapshot(date, time), createdAt: new Date().toISOString() };
+  if (!_pbLink(exp, person, s.pbExtra)) return;
   db.transactions.push(exp);
   saveDBWithSync();
   closeSheet('add'); checkAlerts();
   if (currentPage === 'dashboard') renderDashboard(); else if (currentPage === 'transactions') renderTransactions(); else if (currentPage === 'loans') renderLoans();
   const still = _pbOwedStr(person);
   showToast(still ? `Saved. ${person} owes you ${still}` : `Saved. ${person}'s loan is paid off`);
+}
+// what the person will owe again once this link is taken off (Edit: back to Me)
+function _pbOwedAfterUndo(tx) {
+  const p = tx.paidByPerson, by = {};
+  for (const l of _pbLoans(p)) { const c = l.currency || _homeBase(); by[c] = (by[c] || 0) + (l.remaining ?? l.amount); }
+  const pay = db.transactions.find(t => t.id === tx.inKindPayId);
+  for (const b of (pay?.batchBreakdown || [])) { const c = b.currency || _homeBase(); by[c] = (by[c] || 0) + (Number(b.amount) || 0); }
+  return Object.entries(by).map(([c, v]) => fmt(roundMoney(v, c), c)).join(' + ');
+}
+function _pbEditRow(tx) {
+  const p = tx.paidByPerson || null;
+  window._pbEdit = { txId: tx.id, person: p, orig: p, extra: null, amt0: tx.amount, full: roundMoney((Number(tx.amount) || 0) + (Number(tx.inKindTreat) || 0), tx.currency) };
+  return `<div class="form-group ef-stack" id="edit-pb-grp"><label class="form-label"><span class="f6-ico">${_ico('users', 14)}</span>Paid by</label><div class="form-input ec-pick" role="button" tabindex="0" onclick="_pbOpen(true)"><span id="edit-pb-val">${p ? _esc(p) : 'Me'}</span><span class="ec-chev">${_ico('chev', 14)}</span></div></div>
+    <div id="edit-pb-hint" style="grid-column:1/-1;display:none"></div>`;
+}
+function _pbEditPick(person) { const e = window._pbEdit; if (!e) return; e.person = person || null; e.extra = null; _pbEditApply(); }
+function _pbEditApply() {
+  const e = window._pbEdit; if (!e) return;
+  const tx = db.transactions.find(t => t.id === e.txId); if (!tx) return;
+  const v = document.getElementById('edit-pb-val'); if (v) v.textContent = e.person || 'Me';
+  const acctG = document.getElementById('edit-account')?.closest('.form-group');
+  const amt = document.getElementById('edit-amount'), cur = document.getElementById('edit-currency'), lock = document.getElementById('edit-lock-note');
+  const same = e.person === e.orig;
+  if (acctG) { acctG.style.setProperty('display', e.person ? 'none' : '', 'important'); if (!e.person) acctG.style.removeProperty('display');
+    let nx = acctG.nextElementSibling; while (nx && !nx.classList.contains('form-group')) nx = nx.nextElementSibling;
+    if (nx) { if (nx._pbW === undefined) nx._pbW = nx.classList.contains('f6-wide'); nx.classList.toggle('f6-wide', nx._pbW || !!e.person); } }
+  const locked = !!e.orig && same; // the saved link keeps its amount (undo it, or change who paid, to change it)
+  if (amt) { amt.readOnly = locked; amt.style.opacity = locked ? '.6' : '';
+    if (e.orig && !same && Number(amt.value) === Number(e.amt0)) amt.value = e.full;
+    if (locked) amt.value = e.amt0; }
+  if (cur) cur.disabled = locked;
+  if (lock) lock.style.display = locked ? '' : 'none';
+  _pbEditHint();
+}
+function _pbEditHint() {
+  const e = window._pbEdit, box = document.getElementById('edit-pb-hint'); if (!e || !box) return;
+  const tx = db.transactions.find(t => t.id === e.txId); if (!tx) return;
+  const cur = document.getElementById('edit-currency')?.value || tx.currency;
+  const amount = roundMoney(parseFloat(document.getElementById('edit-amount')?.value) || 0, cur);
+  const parts = [];
+  if (e.orig && e.person !== e.orig) parts.push(`${_esc(e.orig)}'s ${fmt(db.transactions.find(t => t.id === tx.inKindPayId)?.amount || 0, tx.currency)} payment is removed, so ${_esc(e.orig)} owes you ${_esc(_pbOwedAfterUndo(tx))} again.`);
+  if (!e.person) { if (e.orig) parts.push('Pick the account you paid from.'); }
+  else if (e.person !== e.orig) {
+    const date = document.getElementById('edit-date')?.value || tx.date, time = document.getElementById('edit-time')?.value || tx.time;
+    const owed = _pbOwedIn(e.person, cur, buildFxSnapshot(date, time)), extra = roundMoney(amount - owed, cur);
+    const back = tx.accountId ? ` The ${fmt(tx.amount, tx.currency)} goes back to ${_esc(getAccountDisplay(tx.accountId).name)}.` : '';
+    if (extra >= 0.01) {
+      box.style.display = ''; box.className = 'pb-ask';
+      box.innerHTML = (parts.length ? `<div class="pb-s">${parts.join(' ')}</div>` : '') + _pbAskHTML(e.person, cur, owed, extra, e.extra, "window._pbEdit.extra='VAL';_pbEditHint()", _pbCatNameOf(document.getElementById('edit-cat')?.value || tx.categoryId))
+        + (back ? `<div class="pb-s" style="margin-top:8px">${back.trim()}</div>` : '');
+      return;
+    }
+    e.extra = null;
+    parts.push(`${_esc(e.person)} owes you ${fmt(owed, cur)}. This counts as a payment of ${fmt(amount, cur)}, so ${_esc(e.person)} will owe you ${fmt(roundMoney(owed - amount, cur), cur)}.${back}`);
+  }
+  box.className = 'pb-hint'; box.style.margin = '-2px 4px 2px';
+  box.innerHTML = parts.join(' '); box.style.display = parts.length ? '' : 'none';
 }
 // Undo (archive) the expense: its payment and that payment's entries go to the archive with it; the new debt is set aside on it
 function _pbArchive(txId, ok) {
@@ -7438,14 +7525,30 @@ function _pbArchive(txId, ok) {
       `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button><button class="btn btn-warning" onclick="_pbArchive('${txId}',true)">Undo</button>`);
     return;
   }
-  const stamp = today(), moved = pay ? [pay, ...db.transactions.filter(t => t.parentId === pay.id)] : [];
-  for (const m of moved) { const i = db.transactions.indexOf(m); if (i >= 0) db.transactions.splice(i, 1); m.archivedAt = stamp; m.cascadedFrom = txId; db.archivedTransactions.push(m); }
-  if (pay) (pay.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l) _loanRecount(l); }); // PLS #518
-  if (debt) { db.loans.borrowed.splice(db.loans.borrowed.indexOf(debt), 1); tx._ikDebt = debt; }
-  const i = db.transactions.indexOf(tx); db.transactions.splice(i, 1); tx.archivedAt = stamp; db.archivedTransactions.push(tx);
+  _pbUndoCore(tx, false);
   saveDBWithSync(); closeDlg(); closeSheet('gen');
   if (currentPage === 'transactions') renderTransactions(); else if (currentPage === 'dashboard') renderDashboard(); else if (currentPage === 'loans') renderLoans();
   showToast(pay ? `Undone. ${tx.paidByPerson} owes you ${_pbOwedStr(tx.paidByPerson) || 'nothing'}` : 'Transaction archived');
+}
+// -- PERSONAL LOGIC SET #535 -- (Nov 5 check, his pick A) one undo for every route: the Undo button, bulk archive and
+// bulk delete. del = permanent (bulk delete): the payment and its entries are deleted instead of archived. A payment
+// that went to the archive with its loan is tied to this expense instead, so restoring the loan does not bring it back
+// without the expense. Returns false when the rest was already partly paid back (undo that payment first).
+function _pbUndoCore(tx, del) {
+  const debt = tx.inKindDebtId && (db.loans.borrowed || []).find(l => l.id === tx.inKindDebtId);
+  if (debt && getLoanPayments(debt.id).length) return false;
+  const pay = db.transactions.find(t => t.id === tx.inKindPayId);
+  const stamp = today(), moved = pay ? [pay, ...db.transactions.filter(t => t.parentId === pay.id)] : [];
+  for (const m of moved) { const i = db.transactions.indexOf(m); if (i >= 0) db.transactions.splice(i, 1); if (!del) { m.archivedAt = stamp; m.cascadedFrom = tx.id; db.archivedTransactions.push(m); } }
+  if (pay) (pay.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l) _loanRecount(l); }); // PLS #518
+  if (!pay) { // archived together with its loan: no longer follows the loan
+    const ap = (db.archivedTransactions || []).find(t => t.id === tx.inKindPayId);
+    if (ap) [ap, ...db.archivedTransactions.filter(t => t.parentId === ap.id)].forEach(t => { if (del) db.archivedTransactions.splice(db.archivedTransactions.indexOf(t), 1); else t.cascadedFrom = tx.id; });
+  }
+  if (debt) { db.loans.borrowed.splice(db.loans.borrowed.indexOf(debt), 1); if (!del) tx._ikDebt = debt; }
+  const i = db.transactions.indexOf(tx); if (i >= 0) db.transactions.splice(i, 1);
+  if (!del) { tx.archivedAt = stamp; db.archivedTransactions.push(tx); }
+  return true;
 }
 // Restore is refused when the loans no longer have that much open (paid another way since): add it again instead
 function _pbRestoreOk(txData) {
@@ -7505,14 +7608,6 @@ function updateAcctDisplay() {
   }
 }
 
-function onAddDateChange(v) {
-  if (!v) v = document.getElementById('add-date-native')?.value || '';
-  const dispEl = document.getElementById('add-date-display');
-  if (dispEl) {
-    if (!v || v === today()) dispEl.textContent = 'Today';
-    else dispEl.textContent = fmtD(v);
-  }
-}
 
 // -- PERSONAL LOGIC SET #460 / PSS #460 -- (his ask, Oct 2026: "pag nag eedit ako ng transaction mejo magulo yung cats and subcats
 // drop down"). Edit transaction opens this same picker: only the categories of the entry's own type, subcategories
@@ -8099,9 +8194,6 @@ function _xcPick(k, i, id) {
   const el = document.getElementById(k + '-cat-' + i);
   if (el) { el.innerHTML = _ecLabel(id); el.classList.remove('ax-ph'); }
 }
-// DEBUG_SCANNER_NOTE: goBack() is currently orphaned (no caller) — retained as a safe
-// no-op helper for the multi-step add flow. Harmless dead code; do not flag.
-function goBack() { _addState.step=1; _sharedPersons=[]; renderAddSheet(); }
 
 // After shared form renders, populate the persons list
 function renderRemittanceForm() {
@@ -8497,17 +8589,6 @@ function updateExtAcctDisplay() {
   }
 }
 
-// DEBUG_SCANNER_NOTE: toggleExtMore() is ORPHANED — External form no longer has More Options
-// (Time + Notes are always visible now). Kept for safety in case caller is added later.
-// Defensive null check inside makes it safe — no crash if ext-more-row doesn't exist.
-function toggleExtMore() {
-  const row = document.getElementById('ext-more-row');
-  const chev = document.getElementById('ext-more-chevron');
-  if (!row) return;
-  const open = row.style.display !== 'none';
-  row.style.display = open ? 'none' : 'block';
-  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
-}
 
 function syncExtCurrency() {
   const acctId = document.getElementById('ext-account')?.value;
@@ -9062,16 +9143,16 @@ function submitTransfer() {
         actualToAmount = snapshotToAmount;
       }
 
-      toAmount = actualToAmount; // PLS #68: store raw
+      toAmount = actualToAmount; // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
 
       // forexDiff in home = (actual - snapshot) × snapRate(toCurr→home) when foreign↔home
       if (toAcct2.currency === home) {
         // Receiving home currency — diff is already in home
-        forexDiff = toAmount - snapshotToAmount; // PLS #68: store raw
+        forexDiff = toAmount - snapshotToAmount; // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
       } else {
         // Receiving foreign — convert diff to home
         const diffInForeign = toAmount - snapshotToAmount;
-        forexDiff = diffInForeign * snapshotRate; // PLS #68: store raw
+        forexDiff = diffInForeign * snapshotRate; // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
       }
     } else {
       toAmount = convert(amount, currency, toAcct2.currency);
@@ -9393,7 +9474,8 @@ function renderTxLog() {
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
+    // PLS #544 (his ask, Nov 5 "sa txn din sana"): a loan's Profit and Rate change are their own rows here.
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
     // -- PERSONAL LOGIC SET #226 -- Investment fund/return txs used to bypass the type filter
@@ -9525,7 +9607,8 @@ function renderTxLog() {
   if ((activeFilterCount > 0 || searchActive) && txs.length) {
     let _out = 0, _in = 0;
     for (const t of txs) {
-      if (t.isSettlement || t.isAutoReimb) continue; // same rule as the day totals
+      const _gl545 = t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss;
+      if ((t.isSettlement || t.isAutoReimb) && !_gl545) continue; // PLS #545: gains and losses count, same rule as the day totals
       if (t.type === 'income') _in += txAmtIn(t.amount, t);
       else if (t.type === 'expense') _out += txAmtIn(t.amount, t);
       else if (t.type === 'shared') _out += txAmtIn(t.myShare ?? t.amount, t);
@@ -9664,17 +9747,6 @@ function clearTxSearch() {
   renderTransactions();
 }
 
-function setTxDateRange(which, val) {
-  if (which === 'from') window._txDateFrom = val || null;
-  else if (which === 'to') window._txDateTo = val || null;
-  renderTransactions();
-}
-function clearTxDateRange() {
-  window._txDateFrom = null;
-  window._txDateTo = null;
-  window._txDateRangeOpen = false;
-  renderTransactions();
-}
 
 
 
@@ -9684,18 +9756,11 @@ function clearTxDateRange() {
 // dropdown that toggleTxFilterPanel replaced. It cost two DOM queries on EVERY click in the app.
 
 function setTxFilter(f) { _txTypes = (!f || f === 'all') ? [] : [f]; _txQuick = []; renderTransactions(); } // PLS #481: one type, kept for old callers
-function setTxAcctFilter(a) { _txAccts = (!a || a === 'all') ? [] : [a]; renderTransactions(); }
 // PLS #480 (his report Oct 31): Transactions inside an account opens the list filtered to that account, not the general list.
 // Other filters are cleared so nothing hides its entries. The account pill at the top clears the filter.
 function openAcctTransactions(acctId) {
   _txfReset(); _txAccts = [acctId]; window._txSearchQuery = ''; // PLS #481: all other filters off
   nav('transactions');
-}
-function setTxBudgetFilter(v) { _txBudgetFilter = v; renderTransactions(); }
-function setTxSort(s) { _txSort = s; renderTransactions(); }
-function toggleTxAdvanced() {
-  window._txAdvancedOpen = !window._txAdvancedOpen;
-  renderTransactions();
 }
 
 function toggleTxFilterPanel() { _txfShow('main'); } // PLS #481: the filter is a sheet now
@@ -10819,7 +10884,13 @@ function openEditTx(txId) {
   // -- PERSONAL LOGIC SET #512 -- an entry with NO account (a write-off: nothing moved) showed the account
   // list with nothing picked, so the browser showed the FIRST account and Save filed it there (Beep Card).
   // No account in = no account out: a read-only line, and Save keeps it empty.
-  const acctField = tx.accountId
+  // PLS #537: a plain expense gets the Paid by row; one paid by someone keeps a real account list (hidden) for going back to Me
+  const _pbOk537 = tx.type === 'expense' && !tx.parentId && !tx.isSettlement && !tx.isAutoFee && !tx.isAutoForex && !tx.isInvestmentFund && !tx.isInvestmentReturn
+    && !tx.writeOffReason && !tx.isFeeReimbursable && !tx.isAutoReimb && !tx.isLoanTx && !!(tx.accountId || tx.inKindPayId);
+  if (!_pbOk537) window._pbEdit = null;
+  const acctField = tx.inKindPayId && _pbOk537
+    ? `<select class="form-input" id="edit-account" onchange="_editAcctCur('${txId}')"><option value="" selected>Choose</option>${accts.filter(a => !a.archived).map(a => `<option value="${a.id}">${acctLabel(a)}</option>`).join('')}</select><div id="edit-cur-hint" style="font-size:11px;color:var(--amber);margin-top:4px;display:none"></div>`
+    : tx.accountId
     ? `<select class="form-input" id="edit-account" onchange="_editAcctCur('${txId}')">${acctOpts}</select><div id="edit-cur-hint" style="font-size:11px;color:var(--amber);margin-top:4px;display:none"></div>`
     : `<input type="hidden" id="edit-account" value=""><div class="form-input" style="color:var(--text3);pointer-events:none">No account, nothing moved</div>`;
 
@@ -10871,9 +10942,10 @@ function openEditTx(txId) {
       <div class="form-group"><label class="form-label" for="edit-amount">Amount *</label><input class="form-input numpad-input" type="number" id="edit-amount"  value="${tx.amount}" step="any" inputmode="none"${_wo530 ? ' readonly style="opacity:.6"' : ''}></div>
       <div class="form-group"><label class="form-label" for="edit-currency">Currency</label><select class="form-input" id="edit-currency"${_wo530 ? ' disabled' : ''}>${currOpts}</select></div>
     </div>
-    ${_wo530 ? `<div style="font-size:11px;color:var(--text3);margin:-6px 0 12px">${tx.inKindPayId ? 'To change the amount, undo it and add it again.' : 'To change the amount, undo the write-off and write it off again.'}</div>` : ''}
+    ${_wo530 ? `<div id="edit-lock-note" style="font-size:11px;color:var(--text3);margin:-6px 0 12px">${tx.inKindPayId ? 'To change the amount, undo it and add it again.' : 'To change the amount, undo the write-off and write it off again.'}</div>` : ''}
     ${fxBadgeHTML}
-    <div class="form-group"><label class="form-label" for="edit-account">Account</label>${acctField}</div>
+    ${_pbOk537 ? _pbEditRow(tx) : ''}
+    <div class="form-group"${tx.inKindPayId && _pbOk537 ? ' style="display:none !important"' : ''}><label class="form-label" for="edit-account">Account</label>${acctField}</div>
     ${tx.personName?`<div class="form-group"><label class="form-label" for="edit-person">Person</label><input class="form-input" id="edit-person" value="${escapeAttr(tx.personName||'')}"></div>`:''}
     ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label" for="edit-duedate">Due date</label>${dtField('edit-duedate','date','Due Date',tx.dueDate||'')}</div>`:''}
   `;
@@ -10899,6 +10971,7 @@ function openEditTx(txId) {
     ${tx.isAutoReimb ? `<div style="margin-top:10px;font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Archive or delete it from the original shared expense.</div>` : ''}
   `);
   if (isShared) setTimeout(()=>onEditSharedRecalc(txId), 0);
+  if (_pbOk537) setTimeout(() => { ['edit-amount','edit-currency','edit-date','edit-time'].forEach(id => { const el = document.getElementById(id); if (el) { el.addEventListener('input', _pbEditHint); el.addEventListener('change', _pbEditHint); } }); }, 0); // PLS #537
 }
 
 function addEditPerson(txId) {
@@ -10990,6 +11063,21 @@ function saveEditTx(txId, overpayChoice) {
   const tx = db.transactions.find(t=>t.id===txId);
   if (!tx) { showToast('TX not found'); return; }
   const isShared = tx.type === 'shared';
+  // PLS #537: who paid changed in Edit; checked before anything is saved
+  const _pe = window._pbEdit && window._pbEdit.txId === txId ? window._pbEdit : null;
+  const _pbChg = !!_pe && _pe.person !== _pe.orig;
+  if (_pbChg) {
+    const debt = tx.inKindDebtId && (db.loans.borrowed || []).find(l => l.id === tx.inKindDebtId);
+    if (debt && getLoanPayments(debt.id).length) { showToast(`You already paid ${tx.paidByPerson} back on the rest. Undo that payment first`, 3500); return; }
+    if (!_pe.person && !document.getElementById('edit-account')?.value) { showToast('Pick the account you paid from'); return; }
+    if (_pe.person) {
+      const c = document.getElementById('edit-currency')?.value || tx.currency, a = roundMoney(parseFloat(document.getElementById('edit-amount')?.value) || 0, c);
+      const owedNow = _pbOwedIn(_pe.person, c, buildFxSnapshot(document.getElementById('edit-date')?.value || tx.date, document.getElementById('edit-time')?.value || tx.time));
+      if (!(owedNow > 0)) { showToast(`${_pe.person} does not owe you anything now`); return; }
+      if (a - owedNow >= 0.01 && !_pe.extra) { showToast(`Choose what the other ${fmt(roundMoney(a - owedNow, c), c)} is`); return; }
+    }
+  }
+  const _pbSame537 = !!tx.inKindPayId && !_pbChg;
   // PLS #511: a share cut below what that person already paid on THIS bill asks first (his pick A+B)
   if (isShared && !overpayChoice) {
     const over = _sharedOverpaid(tx);
@@ -11005,7 +11093,7 @@ function saveEditTx(txId, overpayChoice) {
   const newDate = document.getElementById('edit-date')?.value;
 
   tx.categoryId = document.getElementById('edit-cat')?.value || tx.categoryId;
-  tx.currency = ((tx.isReimbSettlementLoss && tx.writeOffReason) || tx.inKindPayId) ? _origEditCurrency : (document.getElementById('edit-currency')?.value || tx.currency); // PLS #530, #533
+  tx.currency = ((tx.isReimbSettlementLoss && tx.writeOffReason) || _pbSame537) ? _origEditCurrency : (document.getElementById('edit-currency')?.value || tx.currency); // PLS #530, #533
   tx.accountId = document.getElementById('edit-account')?.value || tx.accountId;
   tx.notes = document.getElementById('edit-notes')?.value?.trim() || '';
   const _oldTime279 = tx.time; // PLS #279: remember before the edit overwrites it
@@ -11091,7 +11179,7 @@ function saveEditTx(txId, overpayChoice) {
   } else {
     const amount = parseFloat(document.getElementById('edit-amount')?.value);
     if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
-    tx.amount = ((tx.isReimbSettlementLoss && tx.writeOffReason) || tx.inKindPayId) ? _origEditAmt530 : roundMoney(amount, tx.currency); // PLS #122 (#530: a write-off keeps its amount; #533 too)
+    tx.amount = ((tx.isReimbSettlementLoss && tx.writeOffReason) || _pbSame537) ? _origEditAmt530 : roundMoney(amount, tx.currency); // PLS #122 (#530: a write-off keeps its amount; #533 too)
     if (document.getElementById('edit-person')) tx.personName = document.getElementById('edit-person').value.trim();
     if (document.getElementById('edit-duedate')) tx.dueDate = document.getElementById('edit-duedate').value;
   }
@@ -11101,7 +11189,7 @@ function saveEditTx(txId, overpayChoice) {
     // PLS #279: snapshot follows date AND time. A rate logged mid-day (PLS #118, e.g. the Sep 11
   // 09:31 remittance) must not reach a tx made earlier that day, and moving only the time must re-anchor too.
     tx.fxSnapshot = buildFxSnapshot(tx.date, tx.time);
-    if (tx.inKindPayId) { // PLS #533: its loan payment and that payment's entries keep the same day and time (the split stays as saved)
+    if (_pbSame537) { // PLS #533: its loan payment and that payment's entries keep the same day and time (the split stays as saved)
       const _p533 = db.transactions.find(t => t.id === tx.inKindPayId);
       if (_p533) [_p533, ...db.transactions.filter(t => t.parentId === _p533.id)].forEach(t => { t.date = tx.date; t.time = tx.time; });
       if (_p533) (_p533.batchLoanIds || []).forEach(id => { const l = (db.loans.lent || []).find(x => x.id === id); if (l && l.settled) l.settledDate = getLoanPayments(l.id).filter(q => loanPaymentContribution(q, l) > 0).map(q => q.date).sort().pop() || l.settledDate; });
@@ -11131,6 +11219,14 @@ function saveEditTx(txId, overpayChoice) {
       tx.realizedGL = roundMoney((Number(tx.amount) || 0) - tx.costBasis, tx.currency); // PLS #122
       if (inv) { inv.realizedGL = tx.realizedGL; inv.soldProceeds = tx.amount; inv.currentValue = tx.amount; }
     }
+  }
+  if (_pbChg) { // PLS #537: take the old link off, then tie it to the new person (or keep the account picked)
+    if (tx.inKindPayId) { tx.amount = roundMoney(tx.amount - (Number(tx.inKindTreat) || 0), tx.currency); _pbUnlink(tx); }
+    if (_pe.person) {
+      if (!_pbLink(tx, _pe.person, _pe.extra)) { showToast('Could not link it. Nothing about who paid was changed', 3500); }
+      else _overpayMsg = (() => { const st = _pbOwedStr(_pe.person); return st ? `${_pe.person} owes you ${st}` : `${_pe.person}'s loan is paid off`; })();
+    } else if (_pe.orig) _overpayMsg = `${_pe.orig} owes you ${_pbOwedStr(_pe.orig) || 'nothing'} again`;
+    window._pbEdit = null;
   }
   saveDBWithSync();
   closeDlg(); closeSheet('gen');
@@ -11591,9 +11687,9 @@ function saveEditTransfer(txId) {
       if (userToAmountEdit > 0) actualToAmount = userToAmountEdit;
       else if (customRate > 0) actualToAmount = tx.currency === home ? tx.amount / customRate : tx.amount * customRate;
       else actualToAmount = snapshotToAmount;
-      tx.toAmount = actualToAmount; // PLS #68: store raw
+      tx.toAmount = actualToAmount; // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
       tx.toAmountIsActual = true; // signals getAcctBalance to skip isAutoForex child
-      // forexDiff in home — PLS #68: store raw
+      // forexDiff in home (PLS #543: the child amount rounds to centavos at save)
       const forexDiff = toAcct2.currency === home
         ? (tx.toAmount - snapshotToAmount)
         : (tx.toAmount - snapshotToAmount) * snapRate2;
@@ -11627,7 +11723,7 @@ function saveEditTransfer(txId) {
       // amount x rate(from) / rate(to), each side from the tx's snapshot (home = 1).
       const _rFrom = _txSnapRate(tx.currency, tx.date, tx.time, tx.fxSnapshot);
       const _rTo   = _txSnapRate(toAcct2.currency, tx.date, tx.time, tx.fxSnapshot);
-      tx.toAmount = tx.amount * _rFrom / _rTo; // PLS #68: store raw
+      tx.toAmount = tx.amount * _rFrom / _rTo; // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
       delete tx.toAmountIsActual; // snapshot mode — forex child handles diff
       db.transactions = db.transactions.filter(t => !(t.parentId === txId && t.isAutoForex));
     }
@@ -12387,130 +12483,6 @@ function toggleReimbPerson(id) {
   if (ch && el) ch.classList.toggle('open', el.style.display !== 'none');
 }
 
-// 📖 USER STORY: Pag na-settle na ang isang shared txn (fully paid by all persons), hindi na siya
-// lumalabas sa main reimbursement list. Para makita pa rin yung history ng nai-settle, may
-// dedicated "Settled" sheet (grouped by month-year, iOS style).
-// ── PERSONAL STRUCTURE SET #41 ── settled shared txs hidden from active list; viewable via openSettledReimbSheet
-function openSettledReimbSheet() {
-  window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
-  const settled = db.transactions
-    .filter(t => t.type === 'shared' && !t.archived && t.settled);
-
-  if (settled.length === 0) {
-    openSheet('gen', 'Settled reimbursements',
-      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled reimbursements yet</div><div class="empty-sub">Fully paid shared transactions will appear here.</div></div>`
-    );
-    return;
-  }
-
-  // 📖 USER STORY: Yung mga shared txs na sabay-sabay nai-settle via batch ay grouped under
-  // isang Batch Settlement card. Yung individually-settled txs ay standalone rows. Sort by
-  // latest activity (batch settlement date or settledAt), newest on top.
-  // ── PERSONAL STRUCTURE SET #42 ── settled reimb sheet: groups shared txs by batch reimb settlement parent (db.transactions where isBatchReimbSettlement && batchTxIds includes tx.id); individuals shown standalone; sorted by activity date newest first
-  const batchParents = db.transactions.filter(t => !t.archived && t.isBatchReimbSettlement)
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const settledIdsInBatch = new Set();
-  for (const bp of batchParents) (bp.batchTxIds||[]).forEach(id => settledIdsInBatch.add(id));
-  const individualSettled = settled.filter(tx => !settledIdsInBatch.has(tx.id));
-
-  const cards = [];
-  for (const bp of batchParents) {
-    const linkedTxs = (bp.batchTxIds||[]).map(id => settled.find(t => t.id === id)).filter(Boolean);
-    if (linkedTxs.length === 0) continue;
-    cards.push({ type:'batch', sortDate: bp.date || '', batchTx: bp, txs: linkedTxs });
-  }
-  for (const tx of individualSettled) {
-    cards.push({ type:'individual', sortDate: tx.settledAt || tx.date || '', tx });
-  }
-  cards.sort((a,b)=>(b.sortDate||'').localeCompare(a.sortDate||''));
-
-  // Group by month-year
-  const byPeriod = {};
-  const periodOrder = [];
-  for (const card of cards) {
-    const dt = card.sortDate ? new Date(card.sortDate) : new Date();
-    const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
-    const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
-    if (!byPeriod[key]) { byPeriod[key] = {label, cards:[]}; periodOrder.push(key); }
-    byPeriod[key].cards.push(card);
-  }
-  periodOrder.sort((a,b)=>b.localeCompare(a));
-
-  // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
-  // was live when it happened. Using a live rate here lets a rate update rewrite the past.
-  const totalPhp = settled.reduce((s,t)=>s+txAmtIn(t.totalBill||t.amount, t),0);
-
-  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ${sym(_homeBase())}${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
-
-  for (const key of periodOrder) {
-    const period = byPeriod[key];
-    body += `<div style="font-size:11px;letter-spacing:0.06em;color:var(--text3);font-weight:600;padding:14px 20px 6px">${period.label}</div>`;
-
-    for (const card of period.cards) {
-      if (card.type === 'batch') {
-        const bp = card.batchTx;
-        const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isReimbSettlementGain);
-        const gainBadge = gainChild
-          ? `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
-          : '';
-        const periodPill = `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--accent-bg);color:var(--accent);font-weight:600">Batch · ${fmtDFull(bp.date)}</span>`;
-        const personName = bp.batchPerson || bp.reimbPerson || 'Unknown';
-        const nestedRows = card.txs.map(tx => {
-          const cat = getCategoryDisplay(tx.categoryId);
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${cat.icon}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:500">${_stripIcon(cat.name)}</div>
-              <div style="font-size:11px;color:var(--text3)">${fmtDFull(tx.date)}</div>
-            </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0">${fmt(tx.totalBill||tx.amount, tx.currency)}</div>
-          </div>`;
-        }).join('');
-        const batchId = 'ssrbatch-'+bp.id;
-        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;cursor:pointer" onclick="toggleSpendingDrill('${batchId}')">
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-                <span style="font-size:13px;font-weight:600">💰 Batch Settlement</span>
-                ${periodPill}
-                ${gainBadge}
-              </div>
-              <div style="font-size:11px;color:var(--text3)">${card.txs.length} ${aiPlural(card.txs.length,'entry','entries')} · ${personName} · ${fmt(bp.amount, bp.currency)}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button>
-              <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-          </div>
-          <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
-            ${nestedRows}
-          </div>
-        </div>`;
-      } else {
-        // Individual settled
-        const tx = card.tx;
-        const cat = getCategoryDisplay(tx.categoryId);
-        const personNames = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
-        const personLabel = personNames.length === 1 ? personNames[0]
-          : personNames.length === 2 ? personNames.join(' & ')
-          : `${personNames[0]} +${personNames.length-1}`;
-        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openTxDetail('${tx.id}'),200)">
-          <div style="width:34px;height:34px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cat.icon}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500">${_stripIcon(cat.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtDFull(tx.date)} · ${personLabel}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(tx.totalBill || tx.amount, tx.currency)}</div>
-            <div style="color:var(--text3);font-size:14px">›</div>
-          </div>
-        </div>`;
-      }
-    }
-  }
-
-  openSheet('gen', `Settled reimbursements (${settled.length})`, body);
-}
 
 function settleReim(person) {
   // Open unified reimbursement dialog with checkboxes per pending parent tx
@@ -12853,17 +12825,17 @@ function confirmReimbSettlement(person) {
     const remainInTarget = conv(e.remaining, txCurr, targetCurr);
     if (remainingReceived >= remainInTarget - 0.01) {
       remainingReceived -= remainInTarget;
-      settledNow.push({ entry: e, paidInTarget: remainInTarget, paidInTxCurr: e.remaining, full: true, costHome: txAmtIn(e.remaining, e.tx, _homeBase()) });
+      settledNow.push({ entry: e, paidInTarget: remainInTarget, paidInTxCurr: e.remaining, full: true });
     } else {
       const partialInTarget = remainingReceived;
       const partialInTxCurr = conv(partialInTarget, targetCurr, txCurr);
-      settledNow.push({ entry: e, paidInTarget: partialInTarget, paidInTxCurr: partialInTxCurr, full: false, costHome: txAmtIn(partialInTxCurr, e.tx, _homeBase()) });
+      settledNow.push({ entry: e, paidInTarget: partialInTarget, paidInTxCurr: partialInTxCurr, full: false });
       remainingReceived = 0;
       break;
     }
   }
 
-  const excess = remainingReceived;
+  const excess = roundMoney(Math.max(0, remainingReceived), targetCurr); // PLS #541: centavos (PLS #122)
   if (settledNow.length === 0 && excess <= 0) { showToast('Nothing settled'); return; }
 
   // Update each parent tx's paidSoFar (in tx's own currency)
@@ -12959,25 +12931,7 @@ function confirmReimbSettlement(person) {
     });
   }
 
-  // -- PERSONAL LOGIC SET #506 -- same rule for a split bill: paid back in pesos = realized FX gain/loss
-  // (pesos received minus the bill-date cost, PLS #505); paid back in kina = no entry (PLS #504).
-  const _home506 = _homeBase();
-  if (targetCurr === _home506) {
-    const fx = settledNow.filter(x => (x.entry.tx.currency || _home506) !== _home506)
-      .reduce((t, x) => t + (x.paidInTarget - (x.costHome || 0)), 0);
-    const fxR = roundMoney(fx, _home506);
-    if (Math.abs(fxR) >= 0.01) {
-      const isGain = fxR > 0;
-      db.transactions.push({
-        id: 'tx-'+genId(), type: isGain ? 'income' : 'expense', amount: Math.abs(fxR), currency: _home506,
-        accountId: acctId, date, time,
-        notes: `Exchange rate ${isGain ? 'gain' : 'loss'} on reimbursement from ${person}`,
-        isReimbSettlementGain: isGain, isReimbSettlementLoss: !isGain, isSettlement: true, isFxRealized: true,
-        parentId: parentTxId, batchPerson: person,
-        categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss', fxSnapshot: snap, createdAt: new Date().toISOString(),
-      });
-    }
-  }
+  // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
   saveDBWithSync();
   closeDlg();
@@ -13124,20 +13078,6 @@ function renderActiveAccounts() {
   return html;
 }
 
-function renderAcctCard(a) {
-  const bal = getAcctBalance(a.id);
-  const alerts = _alertCache.filter(al=>(al.type==='idle'||al.type==='low')&&al.id===a.id);
-  return `<div class="acct-card" onclick="openAcctDetail('${a.id}')">
-    <div class="acct-card-top">
-      <div class="acct-name">${_esc(a.name)}</div>
-      <div class="acct-type-badge">${a.type || 'Other'}</div>
-    </div>
-    ${a.note?`<div style="font-size:11px;color:var(--text3);margin-bottom:4px;overflow-wrap:anywhere">${_esc(a.note)}</div>`:''}
-    <div class="acct-balance" style="color:${bal<0?'var(--red)':bal===0?'var(--text3)':'var(--text)'}">${fmt(bal,a.currency,bal<0)}</div>
-    ${a.currency!==_displayCurrency()?`<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px">≈ ${sym(_displayCurrency())}${_inDisplay(toPhp(bal,a.currency)).toFixed(0)}</div>`:''}
-    ${alerts.length>0?`<div style="margin-top:6px;font-size:11px;color:var(--amber)">⚠ ${alerts[0].msg}</div>`:''}
-  </div>`;
-}
 
 function renderArchivedAccounts() {
   const accts = db.accounts.filter(a=>a.archived);
@@ -13188,7 +13128,7 @@ function openAcctDetail(acctId) {
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false; // PSS #545: profit and rate change rows show, as in Transactions
     return true;
   }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
 
@@ -13593,30 +13533,6 @@ function invTypeIcon(type) {
   return map[type]||'📈';
 }
 
-// PSS #241: closed positions and archived investments each live in a sheet, matching
-// openSettledReimbSheet / openSettledLoansSheet. Reached from the quiet-rows at the foot of the list.
-function openSoldInvSheet() {
-  window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
-  const sold = (db.investments || []).filter(i => i.status === 'sold' && !i.archived);
-  const rows = sold.map(inv => {
-    const gl = Number(inv.realizedGL) || 0;
-    const cls = gl > 0 ? 'tx-pos' : gl < 0 ? 'tx-neg' : 'tx-neu';
-    return `<div class="list-row" onclick="closeSheet('gen');openInvDetail('${inv.id}')">
-      <div style="font-size:18px;flex-shrink:0">${invTypeIcon(inv.type)}</div>
-      <div class="list-row-meta">
-        <div class="list-row-title">${_esc(inv.name)}</div>
-        <div class="list-row-sub">${inv.type} &middot; Sold ${inv.soldDate?fmtDFull(inv.soldDate):''}</div>
-      </div>
-      <div class="list-row-right">
-        <div class="list-row-amt ${cls}">${fmt(gl, inv.currency, true)}</div>
-        <div class="list-row-date">realized</div>
-      </div>
-    </div>`;
-  }).join('');
-  openSheet('gen', 'Closed / sold', sold.length
-    ? `<div style="padding:4px 4px 12px"><div class="list-card">${rows}</div></div>`
-    : `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing closed yet</div><div class="empty-sub">Positions you sell collect here with their realized result</div></div>`);
-}
 function openInvArchiveSheet() {
   window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
   const arch = (db.investments || []).filter(i => i.archived);
@@ -14301,6 +14217,80 @@ function loanPaymentContribution(payment, loan) {
   return payment.currency === loanCurr ? payment.amount : conv(payment.amount, payment.currency, loanCurr);
 }
 
+// -- PERSONAL LOGIC SET #542 -- (his rule, Nov 5; replaces #504 and #506) ONE gain rule for every loan payment.
+// PLS #544 (his pick, Nov 5: "may pinatong ako, yung isa depende sa fluctuation ng remittance ko"): it is booked as two
+// entries, Profit (his rate vs the market rate on the loan day) and Rate change (market on the loan day vs the rate
+// when paid), so he can see if he really earns. Rule:
+// gain = what came in for that loan minus what left your account for that part of it, both in the currency the
+// payment was made in, at the rate in effect when it was paid (the last remittance or rate entry before it, PLS #118).
+// Steven: P1,324.58 out for K120 owed; paid K120 when 1 K = P13.1988, so P1,324.58 = K100.36 and the gain is K19.64.
+// A loan paid back in pesos for kina that left a kina account is like a remittance: no gain (PLS #508). The rate
+// moving after the loan can make it a loss. Money owed to you, and on a debt the other way round. The sobra gain
+// (paid more than owed) stays its own entry. Analytics-only child of the payment (no account moves, PLS #12):
+// one per payment, id 'lg-' + payment id so two devices make the same one. _loanGainSync keeps them right on
+// every save, so old payments got theirs too (his pick A).
+function _loanGainOf(t, l) { // PLS #544: split in two, { p: profit, r: rate change }, in the payment's currency
+  const home = _homeBase(), lc = l.currency || home;
+  const c = loanPaymentContribution(t, l);
+  if (!(c > 0) || !(Number(l.amount) > 0)) return { p: 0, r: 0 };
+  const hasCost = l.agreedRate && l.loanedAmount != null; // same test as loanHomeValue (PLS #139)
+  const cc = hasCost ? (l.loanedCurrency || home) : lc, cost = hasCost ? Number(l.loanedAmount) * c / Number(l.amount) : c;
+  const pc = t.currency || lc, snap = t.fxSnapshot || buildFxSnapshot(t.date, t.time);
+  const ltx = db.transactions.find(x => x.isLoanTx && x.loanId === l.id);
+  const ms = ltx?.fxSnapshot || buildFxSnapshot(l.date, l.time); // market on the loan day (same as the loan page)
+  const cv = (a, f, to, sn) => f === to ? a : fromPhp(toPhp(a, f, sn), to, sn);
+  const total = cv(c, lc, pc, snap) - cv(cost, cc, pc, snap);
+  const profit = cv(c - cv(cost, cc, lc, ms), lc, pc, snap); // what you put on top, at the market rate that day
+  const sg = (t.batchDirection || t.loanDirection || 'lent') === 'borrowed' ? -1 : 1;
+  return { p: sg * profit, r: sg * (total - profit) };
+}
+// -- PERSONAL LOGIC SET #543 -- (his pick, Nov 5: "tama yang centavos, 2 decimals lang") every amount is money in
+// its currency's own places (PLS #122: 2 for pesos and kina, 8 for crypto); only rates keep full precision. This
+// retires PLS #68 (store FX amounts raw) for amounts: forex children, received amounts and gains were long
+// floats (K25.060087200538334). Runs on every save and at open, so old entries got rounded too (44 in his data).
+function _centsSync() {
+  let changed = false; const accCur = id => (db.accounts.find(a => a.id === id) || {}).currency;
+  const fix = (t, f, cur) => { const v = t[f]; if (typeof v !== 'number' || !isFinite(v) || !cur) return; const r = roundMoney(v, cur); if (r !== v) { t[f] = r; changed = true; } };
+  for (const list of [db.transactions || [], db.archivedTransactions || []]) for (const t of list) {
+    fix(t, 'amount', t.currency || _homeBase());
+    if (t.toAmount != null) fix(t, 'toAmount', accCur(t.toAccountId));
+  }
+  return changed;
+}
+function _loanGainSync() {
+  const home = _homeBase(); let changed = false;
+  const live = new Map(); db.transactions.forEach(t => { if (!t.archived) live.set(t.id, t); });
+  const want = new Map(); // child id -> fields
+  for (const t of db.transactions) {
+    if (t.archived || !t.isLoanPayment || t.isBatchWriteOff || t.writeOffReason || (t.type !== 'income' && t.type !== 'expense')) continue;
+    const dir = t.batchDirection || t.loanDirection || 'lent';
+    const ids = (t.batchLoanIds && t.batchLoanIds.length) ? t.batchLoanIds : (t.parentId ? [t.parentId] : []);
+    let gp = 0, gr = 0;
+    for (const id of ids) { const l = (db.loans[dir] || []).find(x => x.id === id); if (l) { const g = _loanGainOf(t, l); gp += g.p; gr += g.r; } }
+    const pc = t.currency || home, who = t.batchPerson || '', to = dir === 'borrowed' ? 'debt to' : 'loan to';
+    const mk = (amt, rate) => { const gain = amt > 0; return { type: gain ? 'income' : 'expense', amount: Math.abs(amt), currency: pc, accountId: t.accountId || null,
+      date: t.date, time: t.time, isSettlement: true, isFxRealized: true, isLoanRateChange: rate, isLoanSettlementGain: gain, isLoanSettlementLoss: !gain,
+      parentId: t.id, batchPerson: who, fxSnapshot: t.fxSnapshot || buildFxSnapshot(t.date, t.time),
+      notes: (rate ? `Rate change on ${to} ${who}` : `${gain ? 'Profit' : 'Loss'} on ${to} ${who}`).trim(),
+      categoryId: rate ? (gain ? 'sc-forexgain' : 'sc-forexloss') : (gain ? 'sc-loanprofit' : 'sc-forexloss') }; };
+    const p = roundMoney(gp, pc), r = roundMoney(gr, pc);
+    if (Math.abs(p) >= 0.01) want.set('tx-lg-' + t.id, mk(p, false));
+    if (Math.abs(r) >= 0.01) want.set('tx-lr-' + t.id, mk(r, true));
+  }
+  // every exchange-rate child that is not a wanted one goes (old PLS #506 ones, split-bill ones, orphans)
+  for (let i = db.transactions.length - 1; i >= 0; i--) {
+    const k = db.transactions[i];
+    if (k.archived || !k.isFxRealized || want.has(k.id)) continue;
+    db.transactions.splice(i, 1); changed = true;
+  }
+  for (const [id, fields] of want) {
+    let k = live.get(id);
+    if (!k) { k = { id, createdAt: (live.get(fields.parentId) || {}).createdAt || new Date().toISOString() }; db.transactions.push(k); changed = true; }
+    for (const [f, v] of Object.entries(fields)) if (JSON.stringify(k[f]) !== JSON.stringify(v)) { k[f] = v; changed = true; }
+  }
+  return changed;
+}
+
 function getLoanPayments(loanId) {
   // ── PERSONAL LOGIC SET #52 ── batch settlements may have parentId pointing to a different loan
   // (the "primary" in the batch). Include them if this loan is in their batchLoanIds array.
@@ -14694,7 +14684,7 @@ function undoBatchWriteOff(txId) {
 // first: this payment's own loans, then the person's other open loans dated on or before the payment.
 // Each loan can take only what is open on it apart from this payment. What is left over (sobra) is the
 // only gain (money lent) or interest (money borrowed), as in confirmBatchSettleLoans. Loans are
-// recomputed from all their payments; the PLS #506 FX entry follows the new split. Child entries keep
+// recomputed from all their payments; the PLS #542 gain follows the new split at save. Child entries keep
 // their ids. A written-off loan keeps its part as it was.
 function confirmBatchSettleEdit(txId, direction) {
   const tx = db.transactions.find(t => t.id === txId);
@@ -14780,18 +14770,7 @@ function confirmBatchSettleEdit(txId, direction) {
       categoryId: sameKind ? c.categoryId : (isGain ? 'sc-investreturns' : 'sc-misc') });
   } else if (sob[0]) db.transactions.splice(db.transactions.indexOf(sob[0]), 1);
 
-  // PLS #506: paid in the home currency = realized FX on the foreign loans it covered
-  const fxc = db.transactions.find(t => !t.archived && t.parentId === txId && t.isFxRealized);
-  let fxR = 0;
-  if (cur === home) fxR = roundMoney(parts.filter(p => !p.fixed && (p.loan.currency || home) !== home)
-    .reduce((s, p) => s + (p.inPay - loanHomeValue({ ...p.loan, remaining: p.inLoan })), 0), home);
-  if (Math.abs(fxR) >= 0.01) {
-    const g = dir === 'lent' ? fxR > 0 : fxR < 0;
-    const c = fxc || (db.transactions.push({ id: 'tx-' + genId(), createdAt: new Date().toISOString() }), db.transactions[db.transactions.length - 1]);
-    Object.assign(c, base, { type: g ? 'income' : 'expense', amount: Math.abs(fxR), currency: home, isFxRealized: true,
-      notes: `Exchange rate ${g ? 'gain' : 'loss'} on ${dir === 'lent' ? 'loan to' : 'debt to'} ${person}`,
-      isLoanSettlementGain: g, isLoanSettlementLoss: !g, categoryId: g ? 'sc-forexgain' : 'sc-forexloss' });
-  } else if (fxc) db.transactions.splice(db.transactions.indexOf(fxc), 1);
+  // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
   saveDBWithSync();
   closeDlg();
@@ -14803,7 +14782,7 @@ function confirmBatchSettleEdit(txId, direction) {
 // -- PERSONAL LOGIC SET #526 -- (his pick A, Nov 4) editing a bulk payment (loans or split bills) and picking an
 // account in another currency switches the amount to that currency: you type what actually came in. The entry
 // kept the old currency (K163.07 "into" GCash, counted as P2,164.16 at that day's rate) and no FX entry was made.
-// Now it follows the account; paid in pesos for kina loans or bills makes the PLS #506 FX entry.
+// Now it follows the account; the gain on a loan payment comes from PLS #542 at save.
 function _payAcctCur(pfx, txId, label) {
   const tx = db.transactions.find(t => t.id === txId); if (!tx) return;
   const c = db.accounts.find(a => a.id === document.getElementById(pfx + '-acct')?.value)?.currency || tx.currency;
@@ -14992,12 +14971,7 @@ function confirmBatchReimbSettleEdit(txId) {
   if (excess > 0.01) Object.assign(gains[0] || pushNew(), common, { type: 'income', amount: excess, currency: cur,
     notes: `Reimbursement gain from ${person}`, isReimbSettlementGain: true, categoryId: gains[0]?.categoryId || 'sc-investreturns' });
   else if (gains[0]) db.transactions.splice(db.transactions.indexOf(gains[0]), 1);
-  // PLS #506: paid in pesos for bills in another currency = realized FX
-  const fxc = kids().find(t => t.isFxRealized);
-  const fxR = cur === home ? roundMoney(parts.filter(p => (p.b.currency || home) !== home).reduce((s, p) => s + (p.inPay - txAmtIn(p.inBill, p.b, home)), 0), home) : 0;
-  if (Math.abs(fxR) >= 0.01) { const g = fxR > 0; Object.assign(fxc || pushNew(), common, { type: g ? 'income' : 'expense', amount: Math.abs(fxR), currency: home, isFxRealized: true,
-    notes: `Exchange rate ${g ? 'gain' : 'loss'} on reimbursement from ${person}`, isReimbSettlementGain: g, isReimbSettlementLoss: !g, categoryId: g ? 'sc-forexgain' : 'sc-forexloss' }); }
-  else if (fxc) db.transactions.splice(db.transactions.indexOf(fxc), 1);
+  // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
   const open = touched.filter(b => !b.settled).length;
   done(excess > 0.01 ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
@@ -15421,7 +15395,6 @@ function confirmBatchSettleLoans(direction, person) {
     const loanCurr = loan.currency || _homeBase();
     const loanRemain = loan.remaining || loan.amount;
     const loanRemainInTarget = conv(loanRemain, loanCurr, targetCurr);
-    const costPerUnit = loanRemain > 0 ? loanHomeValue(loan) / loanRemain : 0; // PLS #506: home cost of 1 unit still owed
 
     if (remainingReceived >= loanRemainInTarget - 0.01) {
       // Full settle
@@ -15429,26 +15402,24 @@ function confirmBatchSettleLoans(direction, person) {
       loan.remaining = 0;
       loan.settled = true;
       loan.settledDate = date;
-      settledNow.push({loan, paidInTarget: loanRemainInTarget, paidInLoanCurr: loanRemain, full: true, costHome: costPerUnit * loanRemain});
+      settledNow.push({loan, paidInTarget: loanRemainInTarget, paidInLoanCurr: loanRemain, full: true});
     } else {
       // Partial settle — convert received-remainder back to loan currency
       const partialInTarget = remainingReceived;
       const partialInLoanCurr = conv(partialInTarget, targetCurr, loanCurr);
       loan.remaining = Math.max(0, loanRemain - partialInLoanCurr);
-      settledNow.push({loan, paidInTarget: partialInTarget, paidInLoanCurr: partialInLoanCurr, full: false, costHome: costPerUnit * partialInLoanCurr});
+      settledNow.push({loan, paidInTarget: partialInTarget, paidInLoanCurr: partialInLoanCurr, full: false});
       remainingReceived = 0;
       break;
     }
   }
 
-  // -- PERSONAL LOGIC SET #504 -- (owner's rule, Nov 3) A cross-currency loan paid back in its own currency
-  // (lent K100 for P1,300 at 13.00, paid back K100 into a kina account) makes NO FX gain/loss entry, ever.
-  // The K100 is just kina in the account (shown at the latest rate, projected only). The rate difference
-  // (13.00 vs the saved rate) is never booked as a gain at repayment.
-  // Only sobra (received more than owed) makes a settlement gain below. Until repaid, a loan shows at
+  // PLS #504 retired by PLS #542 (Nov 5): every loan payment gets its profit and rate change from _loanGainSync
+  // at save, in any currency. Sobra (received more than owed) still makes its own settlement gain below. Until repaid, a loan shows at
   // cost basis everywhere (PLS #139, #503).
-  // Excess (sobra) — gain
-  const excess = remainingReceived;
+  // Excess (sobra) — gain. PLS #541 (Nov 5, his data: Ronald's K25.060087200538334): rounded to the currency's
+  // centavos like every amount (PLS #122); the same-day rate made a long float.
+  const excess = roundMoney(Math.max(0, remainingReceived), targetCurr);
 
   if (settledNow.length === 0 && excess <= 0) { showToast('Nothing settled'); return; }
 
@@ -15513,28 +15484,7 @@ function confirmBatchSettleLoans(direction, person) {
     });
   }
 
-  // -- PERSONAL LOGIC SET #506 -- (owner's rule, Nov 3) paid back in the HOME currency = realized. A loan in
-  // another currency (K100 lent for P1,300) paid back in pesos (P1,319.88) books the FX difference
-  // (+P19.88) as its own gain/loss entry: pesos received minus the home cost (PLS #139). Paid back in
-  // the loan's own currency or a third currency = not realized, no entry (PLS #504). Analytics-only
-  // child like the sobra gain (PLS #12): the parent already moved the cash.
-  const _home506 = _homeBase();
-  if (targetCurr === _home506) {
-    const fx = settledNow.filter(x => (x.loan.currency || _home506) !== _home506)
-      .reduce((t, x) => t + (x.paidInTarget - (x.costHome || 0)), 0);
-    const fxR = roundMoney(fx, _home506);
-    if (Math.abs(fxR) >= 0.01) {
-      const isGain = direction === 'lent' ? fxR > 0 : fxR < 0;
-      db.transactions.push({
-        id: 'tx-'+genId(), type: isGain ? 'income' : 'expense', amount: Math.abs(fxR), currency: _home506,
-        accountId: acctId, date, time,
-        notes: `Exchange rate ${isGain ? 'gain' : 'loss'} on ${direction === 'lent' ? 'loan to' : 'debt to'} ${person}`,
-        isLoanSettlementGain: isGain, isLoanSettlementLoss: !isGain, isSettlement: true, isFxRealized: true,
-        parentId: parentTxId, batchPerson: person,
-        categoryId: isGain ? 'sc-forexgain' : 'sc-forexloss', fxSnapshot: snap, createdAt: new Date().toISOString(),
-      });
-    }
-  }
+  // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
   saveDBWithSync();
   closeDlg();
@@ -15895,7 +15845,7 @@ function editLoanPayment(paymentId, loanId, direction) {
 // actually came in, and the original account brings the original amount back. On Save the loan is recounted
 // (only payments made before this one count as already paid, as in PLS #517); money above what was still owed
 // becomes a gain (money lent) or "Interest paid" (money borrowed); paid in the home currency for a loan in another
-// currency books the PLS #506 exchange-rate entry. Those entries hang off the payment (parentId = payment id).
+// currency gets its gain from PLS #542 at save. Those entries hang off the payment (parentId = payment id).
 function _ep2Cur(paymentId) {
   const p = db.transactions.find(t => t.id === paymentId); if (!p) return;
   const $ = id => document.getElementById(id);
@@ -15945,13 +15895,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
       notes: isGain ? `Settlement gain from ${person}` : `Interest paid to ${person}`, isLoanSettlementGain: isGain, isLoanSettlementLoss: !isGain,
       categoryId: (sob[0] && !!sob[0].isLoanSettlementGain === isGain) ? sob[0].categoryId : (isGain ? 'sc-investreturns' : 'sc-misc') });
     else if (sob[0]) db.transactions.splice(db.transactions.indexOf(sob[0]), 1);
-    const fxc = kids().find(t => t.isFxRealized);
-    const fxR = (cur === home && lc !== home && inLoan > 0.0001) ? roundMoney(conv(inLoan, lc, cur) - loanHomeValue({ ...loan, remaining: inLoan }), home) : 0;
-    if (Math.abs(fxR) >= 0.01) { const g = direction === 'lent' ? fxR > 0 : fxR < 0;
-      Object.assign(fxc || pushNew(), base, { type: g ? 'income' : 'expense', amount: Math.abs(fxR), currency: home, isFxRealized: true,
-        notes: `Exchange rate ${g ? 'gain' : 'loss'} on ${direction === 'lent' ? 'loan to' : 'debt to'} ${person}`,
-        isLoanSettlementGain: g, isLoanSettlementLoss: !g, categoryId: g ? 'sc-forexgain' : 'sc-forexloss' }); }
-    else if (fxc) db.transactions.splice(db.transactions.indexOf(fxc), 1);
+    // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
   }
   // Recalculate loan remaining
   const allPayments = getLoanPayments(loanId);
@@ -16181,129 +16125,6 @@ function confirmWriteOffLoan(loanId, direction) {
   showToast(`Wrote off ${fmt(remaining, loan.currency)} loss`);
 }
 
-// 📖 USER STORY: Pag na-settle na ang loan ni isang tao, hindi na siya lumalabas sa active list mo —
-// para malinis lang ang tingin. Para makita mo sila, i-tap mo yung "Settled" button sa taas. Nandoon
-// pa rin sila, hindi nawawala — naka-tago lang para hindi mag-clutter.
-// ── PERSONAL STRUCTURE SET #60 ── settled loans hidden from active list; viewable via openSettledLoansSheet, still in db.loans[direction]
-function openSettledLoansSheet(direction) {
-  window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
-  const settled = db.loans[direction].filter(l=>l.settled);
-  if (settled.length === 0) {
-    openSheet('gen', `Settled ${direction==='lent'?'loans out':'debts'}`, /* PSS #432: sentence case */
-      `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">No settled ${direction==='lent'?'loans':'debts'} yet</div><div class="empty-sub">Settled ${direction==='lent'?'loans':'debts'} will appear here once paid in full.</div></div>`
-    );
-    return;
-  }
-
-  // 📖 USER STORY: Yung mga loans na sabay-sabay nai-settle via batch ay grouped under isang
-  // Batch Settlement card. Yung individually-settled loans ay standalone rows pa rin. Sort
-  // by latest activity (batch settlement date or loan settledDate), newest on top.
-  // ── PERSONAL STRUCTURE SET #61 ── settled loans sheet: groups loans by batch settlement parent (db.transactions where isBatchSettlement && batchLoanIds includes loan.id); individually-settled loans shown standalone; sorted by activity date newest first
-  // Build groups: batch parents (each = one card) + individual settled loans
-  const batchParents = db.transactions.filter(t => !t.archived && t.isBatchSettlement && t.batchDirection === direction)
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const settledIdsInBatch = new Set();
-  for (const bp of batchParents) (bp.batchLoanIds||[]).forEach(id => settledIdsInBatch.add(id));
-  const individualSettled = settled.filter(l => !settledIdsInBatch.has(l.id));
-
-  // Build unified list of cards: each card = {type, sortDate, content...}
-  const cards = [];
-  for (const bp of batchParents) {
-    const linkedLoans = (bp.batchLoanIds||[]).map(id => settled.find(l => l.id === id)).filter(Boolean);
-    if (linkedLoans.length === 0) continue; // batch parent exists but linked loans gone
-    cards.push({ type:'batch', sortDate: bp.date || '', batchTx: bp, loans: linkedLoans });
-  }
-  for (const loan of individualSettled) {
-    cards.push({ type:'individual', sortDate: loan.settledDate || loan.date || '', loan });
-  }
-  cards.sort((a,b)=>(b.sortDate||'').localeCompare(a.sortDate||''));
-
-  // Group cards by month-year of sortDate
-  const byPeriod = {};
-  const periodOrder = [];
-  for (const card of cards) {
-    const dt = card.sortDate ? new Date(card.sortDate) : new Date();
-    const key = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
-    const label = dt.toLocaleString('en', {month:'long', year:'numeric'});
-    if (!byPeriod[key]) { byPeriod[key] = {label, cards:[]}; periodOrder.push(key); }
-    byPeriod[key].cards.push(card);
-  }
-  periodOrder.sort((a,b)=>b.localeCompare(a));
-
-  const totalPhp = settled.reduce((s,l)=>s+toPhp(l.amount,l.currency),0);
-
-  let body = `<div style="padding:0 16px 8px"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">${settled.length} settled · ${sym(_homeBase())}${totalPhp.toLocaleString('en',{maximumFractionDigits:0})} total</div></div>`;
-
-  for (const key of periodOrder) {
-    const period = byPeriod[key];
-    body += `<div style="font-size:11px;letter-spacing:0.06em;color:var(--text3);font-weight:600;padding:14px 20px 6px">${period.label}</div>`;
-
-    for (const card of period.cards) {
-      if (card.type === 'batch') {
-        const bp = card.batchTx;
-        const gainChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementGain);
-        const lossChild = db.transactions.find(t => !t.archived && t.parentId === bp.id && t.isLoanSettlementLoss);
-        const gainBadge = gainChild
-          ? `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
-          : lossChild
-          ? `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--red-bg);color:var(--red);font-weight:600">-${fmt(lossChild.amount,lossChild.currency)} loss</span>`
-          : '';
-        const periodPill = `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--accent-bg);color:var(--accent);font-weight:600">Batch · ${fmtDFull(bp.date)}</span>`;
-        const nestedRows = card.loans.map(loan => {
-          const payments = getLoanPayments(loan.id);
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px 8px 28px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
-            <div class="pool-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:500">${loan.personName||'Unknown'}</div>
-              <div style="font-size:11px;color:var(--text3)">${fmtDFull(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
-            </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0">${fmt(loan.amount, loan.currency)}</div>
-          </div>`;
-        }).join('');
-        const batchId = 'sslbatch-'+bp.id;
-        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;cursor:pointer" onclick="toggleSpendingDrill('${batchId}')">
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-                ${bp.isBatchWriteOff ? '<span style="font-size:13px;font-weight:600;color:var(--red)">Batch write-off</span>' : '<span style="font-size:13px;font-weight:600">Batch settlement</span>'}
-                ${periodPill}
-                ${gainBadge}
-              </div>
-              <div style="font-size:11px;color:var(--text3)">${card.loans.length} ${aiPlural(card.loans.length,'loan')} · ${fmt(bp.amount, bp.currency)}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${bp.isBatchWriteOff
-                ? /* PLS #269: nothing to edit on a write-off -- undo is the whole vocabulary */
-                  `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();undoBatchWriteOff('${bp.id}')">Undo</button>`
-                : `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();openBatchSettleEdit('${bp.id}','${direction}')">Edit</button>`}
-              <svg id="${batchId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(180deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-          </div>
-          <div id="${batchId}" style="display:block;border-top:1px solid var(--border)">
-            ${nestedRows}
-          </div>
-        </div>`;
-      } else {
-        // Individual settled loan
-        const loan = card.loan;
-        const payments = getLoanPayments(loan.id);
-        body += `<div style="margin:6px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);display:flex;align-items:center;gap:12px;padding:12px;cursor:pointer" onclick="closeSheet('gen');setTimeout(()=>openLoanDetail('${loan.id}','${direction}'),200)">
-          <div class="pool-avatar" style="flex-shrink:0">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500">${loan.personName||'Unknown'}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtDFull(loan.date)} · ${payments.length} payment${payments.length!==1?'s':''}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">${fmt(loan.amount, loan.currency)}</div>
-            <div style="color:var(--text3);font-size:14px">›</div>
-          </div>
-        </div>`;
-      }
-    }
-  }
-
-  openSheet('gen', `Settled ${direction==='lent'?'loans out':'debts'} (${settled.length})`, body);
-}
 
 
 function openLoanArchiveSheet() {
@@ -16405,6 +16226,8 @@ function restoreLoan(loanId) {
       }
     }
   }
+  // PLS #535: a paid-by payment whose expense was undone while the loan was archived stays out; count the loan again
+  if ((db.archivedTransactions || []).some(t => t.inKindExpId && (t.batchLoanIds || []).includes(loanId))) _loanRecount(loan);
 
   saveDBWithSync();
   renderLoans();
@@ -16540,37 +16363,7 @@ function toggleNlMore() {
   if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
-// Typing disbursed amount derives the rate
-function onNlDisburseInput() {
-  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
-  const disburse = parseFloat(document.getElementById('nl-disburse-amt')?.value) || 0;
-  const rateEl = document.getElementById('nl-custom-rate');
-  if (!rateEl || amount <= 0 || disburse <= 0) {
-    if (rateEl) rateEl.value = '';
-    updateAddLoanFx();
-    return;
-  }
-  // Rate semantics: "1 loanCurr = X acctCurr"
-  // disburse [acctCurr] = amount [loanCurr] × rate → rate = disburse / amount
-  const rate = disburse / amount;
-  rateEl.value = fmtRate(rate); // PLS #108: full precision for rate fields
-  updateAddLoanFx();
-}
 
-// Typing rate derives the disbursed amount
-function onNlRateInput() {
-  const amount = parseFloat(document.getElementById('nl-amount')?.value) || 0;
-  const rate = parseFloat(document.getElementById('nl-custom-rate')?.value) || 0;
-  const disburseEl = document.getElementById('nl-disburse-amt');
-  if (!disburseEl || amount <= 0 || rate <= 0) {
-    if (disburseEl) disburseEl.value = '';
-    updateAddLoanFx();
-    return;
-  }
-  const disburse = amount * rate;
-  disburseEl.value = (Math.round(disburse * 100) / 100).toString();
-  updateAddLoanFx();
-}
 
 function loanFxRow(loan, direction) {
   const home = _homeBase();
@@ -16597,16 +16390,27 @@ function loanFxRow(loan, direction) {
     const rShow = Math.round(snapRate * 1e4) / 1e4;
     rows += `${rowOpen}<div class="detail-label">Market rate at loan</div><div class="detail-value" style="font-family:var(--mono)">1 ${loan.currency} = ${rShow} ${lc}</div></div>`;
   }
-  if (loan.loanedAmount != null && snapRate > 0) {
-    const fxCommit = loan.amount - (loan.loanedAmount / snapRate);          // expected − loaned÷snapshot (Kina)
-    const fxHome = toPhp(loan.amount, loan.currency, snap) - toPhp(loan.loanedAmount, lc, snap);
-    const isGain = direction === 'lent' ? fxCommit > 0 : fxCommit < 0;
-    if (Math.abs(fxCommit) > 0.005) {
-      const label = (loan.settled ? '' : 'Projected ') + 'FX ' + (isGain ? 'Gain' : 'Loss');
-      const col = isGain ? 'var(--green)' : 'var(--red)';
-      const sign = isGain ? '+' : '−';
-      rows += `${rowOpen}<div class="detail-label">${label} <span style="font-size:11px;color:var(--text3)">vs market at loan</span></div><div class="detail-value" style="color:${col};font-weight:600">${sign}${fmt(Math.abs(fxCommit), loan.currency)} <span style="font-size:11px;font-weight:normal;color:var(--text3)">≈ ${sym(home)}${Math.abs(fxHome).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div></div>`;
+  // PLS #542/#544: Profit (what you put on top, market rate on the loan day) and Rate change (that market rate vs
+  // the rate when paid), the same split as the entries on its payments. Part still open = if paid now.
+  if (loan.loanedAmount != null) {
+    const lcur = loan.currency || home; let pK = 0, rK = 0;
+    const toL = (g, pc, ps) => pc === lcur ? g : fromPhp(toPhp(g, pc, ps), lcur, ps);
+    for (const p of getLoanPayments(loan.id)) {
+      if (!p.isLoanPayment || p.isBatchWriteOff || p.writeOffReason) continue;
+      const g = _loanGainOf(p, loan), ps = p.fxSnapshot || buildFxSnapshot(p.date, p.time), pc = p.currency || lcur;
+      pK += toL(g.p, pc, ps); rK += toL(g.r, pc, ps);
     }
+    const rem = loan.settled ? 0 : Number(loan.remaining ?? loan.amount) || 0;
+    if (rem > 0.005 && loan.amount > 0) {
+      const costRem = loan.loanedAmount * rem / loan.amount, sg = direction === 'borrowed' ? -1 : 1;
+      const atMkt = lc === lcur ? costRem : fromPhp(toPhp(costRem, lc, snap), lcur, snap), atNow = lc === lcur ? costRem : fromPhp(toPhp(costRem, lc), lcur);
+      pK += sg * (rem - atMkt); rK += sg * (atMkt - atNow);
+    }
+    const open = rem > 0.005;
+    const row = (name, v, sub) => { if (Math.abs(v) <= 0.005) return; const up = v > 0, col = up ? 'var(--green)' : 'var(--red)';
+      rows += `${rowOpen}<div class="detail-label">${name} <span style="font-size:11px;color:var(--text3)">${sub}</span></div><div class="detail-value" style="color:${col};font-weight:600">${up ? '+' : '−'}${fmt(Math.abs(v), lcur)} <span style="font-weight:400;color:var(--text3)">≈ ${fmt(Math.abs(toPhp(v, lcur)), home)}</span></div></div>`; };
+    row(pK >= 0 ? 'Profit' : 'Loss', pK, 'vs market at loan');
+    row('Rate change', rK, open ? 'if paid now' : 'by the time it was paid');
   }
   return rows;
 }
@@ -16675,9 +16479,9 @@ function updateAddLoanFx() {
   if (amountEl) amountEl.textContent = fmt(loaned, acctCurr);
   if (extraEl) {
     let extra = `Market now: 1 ${expectCur} = ${fmtRate(marketRate)} ${acctCurr} → worth ${fmt(marketValue, acctCurr)}`;
-    const verb = isGain ? '📈 Projected FX gain' : '📉 Projected FX loss';
+    const verb = isGain ? '📈 Projected profit' : '📉 Projected loss'; // PLS #546: same words as the loan page (PLS #544)
     const color = isGain ? 'var(--green)' : 'var(--red)';
-    extra += `<br><span style="color:${color};font-weight:600">${verb}: ${fmt(absDiff, acctCurr)}</span> <span style="color:var(--text3)">(${acctCurr === _homeBase() ? `only if paid back in ${acctCurr}` : 'shown when settled'})</span><!-- PLS #504/#506 -->`;
+    extra += `<br><span style="color:${color};font-weight:600">${verb}: ${fmt(absDiff, acctCurr)}</span> <span style="color:var(--text3)">(counted as each payment comes in)</span><!-- PLS #546: any currency (PLS #542), was "only if paid back in" under the retired #504/#506 -->`;
     extraEl.innerHTML = extra + _askLine; // PLS #509
   }
   previewBox.style.display = 'block';
@@ -16752,55 +16556,6 @@ function saveAddLoan(direction) {
   showToast(`${isLent?'Loan':'Debt'} added!`);
 }
 
-// ════════════════════════════════════════════════════════════
-// TARGETS PAGE
-// ════════════════════════════════════════════════════════════
-// PSS #241: hoisted to module scope so the Completed SHEET can render the very same card as
-// the active list. It was nested inside renderInstallments, which meant any other surface had
-// to reimplement the card and would drift from it.
-function installCard(inst) {
-  const totalMonths = inst.totalMonths || 12;
-  const paidMonths = inst.paidMonths || 0;
-  const monthlyAmt = inst.monthlyAmount || 0;
-  const alreadyPaid = inst.alreadyPaid || 0;
-  const totalPaidMonths = alreadyPaid + paidMonths;
-  const remainingMonths = totalMonths - totalPaidMonths;
-  const remaining = remainingMonths * monthlyAmt;
-  const pct = Math.min(totalPaidMonths / totalMonths * 100, 100);
-  const isComplete = remainingMonths <= 0;
-
-  const catName = getCategoryDisplay(inst.categoryId)?.name || inst.category || '—';
-  const startD = inst.startDate ? new Date(inst.startDate.length===7?inst.startDate+'-01T12:00':inst.startDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
-  const endD = inst.endDate ? new Date(inst.endDate.length===7?inst.endDate+'-01T12:00':inst.endDate+'T00:00:00').toLocaleString('en',{month:'short',year:'numeric'}) : '';
-
-  return `<div class="card" style="margin-bottom:12px;cursor:pointer${isComplete ? ';opacity:0.65' : ''}" onclick="openInstallmentDetail('${inst.id}')">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:3px">${inst.icon || '💳'} ${_esc(inst.name)}</div>
-        <div style="font-size:11px;color:var(--text3)">📂 ${catName} · ${fmt(monthlyAmt, _homeBase())}/month</div>
-      </div>
-      ${isComplete
-        ? `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(45,217,138,0.1);color:var(--green)">✓ Paid off!</span>`
-        : `<span style="padding:2px 10px;border-radius:var(--r-full);font-size:11px;font-weight:600;background:rgba(240,168,50,0.1);color:var(--amber)">${remainingMonths} left</span>`}
-    </div>
-    ${!isComplete ? `
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:4px">
-      <span>${fmt(remaining, _homeBase())} remaining</span>
-      <span>${totalPaidMonths} / ${totalMonths} ${aiPlural(totalMonths,'month')} paid</span>
-    </div>
-    <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:8px">
-      <div style="height:100%;border-radius:var(--r-sm);background:var(--accent);width:${pct.toFixed(1)}%"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
-      <span>${startD} – ${endD}</span>
-      <span>Total: ${fmt(totalMonths * monthlyAmt, _homeBase())}</span>
-    </div>` : `
-    <div style="height:6px;background:var(--bg5);border-radius:var(--r-sm);overflow:hidden;margin-bottom:6px">
-      <div style="height:100%;border-radius:var(--r-sm);background:var(--green);width:100%"></div>
-    </div>
-    <div style="font-size:11px;color:var(--text3);text-align:center">${startD} – ${endD}</div>`}
-  </div>`;
-}
 
 // -- PERSONAL STRUCTURE SET #288 -- Installments on the list-page pattern (PSS #287): two summary tiles
 // (what is left to pay, what it costs per month), Active / Completed chips so finished plans never
@@ -17030,21 +16785,6 @@ function _periodStrip(o) {
 function _psScroll() { requestAnimationFrame(() => document.querySelectorAll('.ps-strip').forEach(st => {
   const on = st.querySelector('.ps-tab.on'); if (on) { st.style.scrollBehavior = 'auto'; st.scrollLeft = on.offsetLeft - (st.clientWidth - on.offsetWidth) / 2; st.style.scrollBehavior = ''; } })); }
 function _firstDataMk() { return db.transactions.filter(t => !t.archived && t.date).map(t => t.date.slice(0,7)).sort()[0] || currMonthKey(); }
-// -- PSS #357 -- month bar used by Analytics and Insights: it fills the row. "<" and ">" sit at the two
-// ends of one full-width bar with the month centred; an optional control (Month|Year, or "This month")
-// sits to its left. The old row pushed a small "< Month >" to the right and left the rest empty.
-function _monthBar(label, prevClick, nextClick, left, ariaPrev, ariaNext) {
-  const arrow = (click, aria, d) => `<button class="icon-btn" aria-label="${aria}" ${click ? `onclick="${click}"` : 'disabled'} style="width:32px;height:32px;min-width:32px;border-radius:9px;background:transparent;color:var(--accent);${click ? '' : 'opacity:.3;pointer-events:none'}">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg></button>`;
-  return `<div style="display:flex;align-items:center;gap:8px;padding:0 16px;margin:8px auto 0;max-width:1200px;box-sizing:border-box">
-    ${left || ''}
-    <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:3px">
-      ${arrow(prevClick, ariaPrev, 'M15 18l-6-6 6-6')}
-      <div style="flex:1;min-width:0;text-align:center;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
-      ${arrow(nextClick, ariaNext, 'M9 18l6-6-6-6')}
-    </div>
-  </div>`;
-}
 function _analyticsMonthNav() {
   const PERIOD_TABS = ['overview','spending','income'];
   if (!PERIOD_TABS.includes(_analyticsTab)) return '';
@@ -17301,16 +17041,7 @@ function _analyticsHeader() {
 // Tap header → opens bottom sheet → categorized list of all 17 tabs.
 // Tap any item → closes sheet, swaps content.
 
-function pickAnalyticsTab(k) {
-  closeSheet('gen');
-  setAnalyticsTab(k);
-}
 
-// ── PERSONAL STRUCTURE SET #91 ── Accordion toggle for Overview mini-card sections (Option B inline expand).
-function toggleOvAcc(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.toggle('open');
-}
 
 // ─── INLINE ANALYTICS INSIGHTS HELPER ───
 // Renders compact insight cards for embedding in analytics tabs.
@@ -17562,16 +17293,6 @@ function renderAnalyticsCalendar() {
 }
 
 function _calPick(mk) { _calMonth = mk; renderAnalytics(); } // PSS #358
-function navCalMonth(delta) {
-  if (!_calMonth) {
-    const now = new Date();
-    _calMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  }
-  const [y, m] = _calMonth.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  _calMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  renderAnalytics();
-}
 
 function openCalDay(dateStr) {
   const dc = _displayCurrency();
@@ -17635,7 +17356,7 @@ function openCalDay(dateStr) {
         if (t.inKindExpId) return ''; // PLS #533
         if (t.isAutoReimb && !t.isBatchReimbSettlement) return '';
         if (t.isFeeReimbursable) return '';
-        if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason) return '';
+        if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return ''; // PSS #545
         // Category name via the canonical resolver (handles subcategories + 3-tier fallback).
         // Previously looked up the wrong tx field (catId instead of categoryId), so it was always blank.
         const catName = t.type === 'transfer' ? 'Transfer' : txCategoryDisplay(t).name;
@@ -19576,11 +19297,6 @@ function _gzCoarse(){
   try { return window.matchMedia('(pointer: coarse)').matches; }
   catch(e) { return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0); }
 }
-function _gzNative(el){
-  if (!el) return false;
-  try { el.showPicker ? el.showPicker() : el.focus(); } catch(e) { try { el.focus(); } catch(e2) {} }
-  return true;
-}
 // ─── Date/Time pickers ───
 function _gzOpenDate(cfg){
   const valEl = document.getElementById(cfg.valId);
@@ -19893,43 +19609,25 @@ function buildCashflowRunway(metricMk, dispCurr) {
 
 function buildNetWorthTrend(metricMk, dispCurr) {
   const [y, m] = metricMk.split('-').map(Number);
-  const assetTypes = ['Savings','Checking','Cash','E-Wallet','Prepaid','Investment','Crypto Wallet','Other']; // PLS #495: 'Other' counts too
   // PLS #123: earliest transaction date — months before this have no meaningful net worth to plot.
   const txDates = (db.transactions || []).filter(t=>!t.archived && t.date).map(t=>t.date);
   const earliestTx = txDates.length ? txDates.reduce((a,b)=>a<b?a:b) : null;
-  const points = [];
+  const points = []; const nwAt = _nwAsOfFn(); const todayStr = today(); // PLS #538
   for (let i = 5; i >= 0; i--) {
     const d = new Date(y, m-1-i, 1);
     const eom = new Date(d.getFullYear(), d.getMonth()+1, 0);
     const eomStr = `${eom.getFullYear()}-${String(eom.getMonth()+1).padStart(2,'0')}-${String(eom.getDate()).padStart(2,'0')}`;
     // Skip months entirely before the first transaction (no history yet).
     const hasHistory = earliestTx && eomStr >= earliestTx;
-    let netPhp = 0;
-    if (hasHistory) {
-      // Mirror getNetWorth() classification exactly so the trend's last point == hero card.
-      for (const acct of db.accounts) {
-        if (acct.archived) continue;
-        const phpBal = toPhp(getAcctBalanceAsOf(acct.id, eomStr), acct.currency);
-        if (assetTypes.includes(acct.type)) {
-          if (phpBal > 0) netPhp += phpBal;
-          else if (phpBal < 0) netPhp -= Math.abs(phpBal); // overdrawn = liability
-        } else if (acct.type === 'Credit Card') {
-          if (phpBal < 0) netPhp -= Math.abs(phpBal); // debt
-          else if (phpBal > 0) netPhp += phpBal;       // overpaid = receivable
-        }
-      }
-    }
+    // PLS #538: each month end counts the accounts, loans and split bills of that day; this month (or a later
+    // day) is exactly the hero card (getNetWorth).
+    const netPhp = !hasHistory ? 0 : eomStr >= todayStr ? getNetWorth().net : nwAt(eomStr);
     points.push({ label: d.toLocaleString('en',{month:'short'}), php: netPhp, hasHistory });
   }
   // Only the months with real history are plotted.
   const plotted = points.filter(p => p.hasHistory);
   if (plotted.length < 2) return '';
-  // Net worth includes non-account holdings (investments, loans, receivables) that have no
-  // historical snapshot. Anchor the latest point to getNetWorth() (the hero-card value) so
-  // "Current" matches the dashboard exactly; earlier points shift by the same offset (treats
-  // non-account holdings as ~constant over the short window).
-  const nwOffset = getNetWorth().net - plotted[plotted.length-1].php;
-  const dispVals = plotted.map(p => fromPhp(p.php + nwOffset, dispCurr));
+  const dispVals = plotted.map(p => fromPhp(p.php, dispCurr));
   const cur = dispVals[dispVals.length-1];
   const prev = dispVals[dispVals.length-2];
   const change = cur - prev;
@@ -21821,156 +21519,13 @@ function _doMarkPurchased(itemId, logExpense) {
 }
 
 
-function renderPaydayTab() {
-  let html = '<div class="page-pad">';
-  if (db.paydaySchedules.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">💰</div><div class="empty-text">No payday schedules</div><div class="empty-sub" style="margin-bottom:16px">Track multiple income sources with different pay schedules</div></div>`;
-  } else {
-    for (const ps of db.paydaySchedules) {
-      const nextPay = calcNextPayday(ps);
-      const daysToPayday = nextPay ? daysUntil(nextPay) : null;
-      html += `<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="editPaydaySchedule('${ps.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div><div style="font-size:13px;font-weight:600">${_esc(ps.name)}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">${ps.frequency} · ${fmt(ps.amount,ps.currency)}</div></div>
-          <div style="text-align:right">
-            ${daysToPayday!==null?`<div style="font-size:13px;font-weight:500;color:${daysToPayday<=3?'var(--green)':'var(--text2)'}">${daysToPayday===0?'Today!':daysToPayday+' days'}</div>`:''}
-            ${nextPay?`<div style="font-size:11px;color:var(--text3)">${fmtDFull(nextPay)}</div>`:''}
-          </div>
-        </div>
-      </div>`;
-    }
-  }
-  html += `<button class="pool-add-btn" onclick="openAddPayday()">+ Add Income Schedule</button></div>`;
-  return html;
-}
 
-function calcNextPayday(ps) {
-  if (!ps.nextDate) return null;
-  return ps.nextDate;
-}
 
-function openAddPayday() {
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  window._efNext = true; // PSS #361
-  openSheet('gen','Add income schedule',`
-    <div class="form-group"><label class="form-label" for="np-name">Source name *</label><input class="form-input" id="np-name" placeholder="e.g. Salary, Freelance"></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="np-amount">Expected amount</label><input class="form-input numpad-input" type="number" id="np-amount" placeholder="0.00" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="np-currency">Currency</label><select class="form-input" id="np-currency">${currOpts}</select></div>
-    </div>
-    <div class="form-group"><label class="form-label" for="np-freq">Frequency</label>
-      <select class="form-input" id="np-freq">
-        <option>Monthly</option><option>Bi-monthly</option><option>Weekly</option><option>Bi-weekly</option><option>Irregular</option>
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label" for="np-next">Next payday</label>${dtField('np-next','date','Next Payday','')}</div>
-    <div class="form-group"><label class="form-label" for="np-acct">Linked account</label>
-      <select class="form-input" id="np-acct">
-        ${db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${_esc(a.name)}</option>`).join('')}
-      </select>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="saveAddPayday()">Add schedule</button>
-  `);
-}
 
-function saveAddPayday() {
-  const name = document.getElementById('np-name')?.value?.trim();
-  if (!name) { showToast('Enter source name'); return; }
-  db.paydaySchedules.push({
-    id:genId(), name,
-    amount:parseFloat(document.getElementById('np-amount')?.value)||0,
-    currency:document.getElementById('np-currency')?.value||_homeBase(),
-    frequency:document.getElementById('np-freq')?.value||'Monthly',
-    nextDate:document.getElementById('np-next')?.value||null,
-    accountId:document.getElementById('np-acct')?.value||null,
-  });
-  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Schedule added!');
-}
 
-function editPaydaySchedule(id) {
-  const ps = db.paydaySchedules.find(s=>s.id===id);
-  if (!ps) return;
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}" ${c===ps.currency?'selected':''}>${c}</option>`).join('');
-  window._efNext = true; // PSS #361
-  openSheet('gen','Edit schedule',`
-    <div class="form-group"><label class="form-label" for="ep-name">Source name</label><input class="form-input" id="ep-name" value="${escapeAttr(ps.name)}"></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="ep-amount">Amount</label><input class="form-input numpad-input" type="number" id="ep-amount" value="${ps.amount||''}" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="ep-currency">Currency</label><select class="form-input" id="ep-currency">${currOpts}</select></div>
-    </div>
-    <div class="form-group"><label class="form-label" for="ep-freq">Frequency</label>
-      <select class="form-input" id="ep-freq">
-        ${['Monthly','Bi-monthly','Weekly','Bi-weekly','Irregular'].map(f=>`<option ${f===ps.frequency?'selected':''}>${f}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label" for="ep-next">Next payday</label>${dtField('ep-next','date','Next Payday',ps.nextDate||'')}</div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-full" onclick="saveEditPayday('${id}')">Save</button>
-      <button class="btn btn-danger" onclick="deletePayday('${id}')">Delete</button>
-    </div>
-  `);
-}
 
-function saveEditPayday(id) {
-  const ps = db.paydaySchedules.find(s=>s.id===id);
-  if (!ps) return;
-  const epAmt = parseFloat(document.getElementById('ep-amount')?.value);
-  if (!(epAmt > 0)) { showToast('Enter a valid amount'); return; }
-  ps.name = document.getElementById('ep-name')?.value?.trim()||ps.name;
-  ps.amount = epAmt;
-  ps.currency = document.getElementById('ep-currency')?.value||ps.currency;
-  ps.frequency = document.getElementById('ep-freq')?.value||ps.frequency;
-  ps.nextDate = document.getElementById('ep-next')?.value||null;
-  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Updated!');
-}
 
-function deletePayday(id) {
-  const ps = (db.paydaySchedules||[]).find(s=>s.id===id);
-  openDlg('Delete this payday schedule?',
-    `<p style="font-size:13px;color:var(--text2);margin:0;line-height:1.6">Permanently delete <strong>${_esc(ps?.name || 'this schedule')}</strong>? This cannot be undone.</p>`,
-    `<button class="btn btn-ghost" onclick="editPaydaySchedule('${id}')">Cancel</button>
-     <button class="btn btn-danger" onclick="confirmDeletePayday('${id}')">Delete</button>`);
-}
-function confirmDeletePayday(id) {
-  db.paydaySchedules = db.paydaySchedules.filter(s=>s.id!==id);
-  saveDBWithSync(); closeDlg(); closeSheet('gen'); renderPlanning(); showToast('Payday schedule deleted', 2200, 'trash');
-}
 
-function renderRecurringTab() {
-  let html = '<div class="page-pad">';
-  const active = db.recurringTxs.filter(r=>r.active);
-  const inactive = db.recurringTxs.filter(r=>!r.active);
-  if (db.recurringTxs.length === 0) {
-    html += `<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">No recurring transactions</div></div>`;
-  }
-  const todayStr = today();
-  for (const r of [...active, ...inactive]) {
-    const isDue = r.active && r.nextDate && r.nextDate <= todayStr;
-    const isOverdue = r.active && r.nextDate && r.nextDate < todayStr;
-    html += `<div class="card" style="margin-bottom:8px;opacity:${r.active?1:0.6};${isDue?'border-color:var(--amber);background:linear-gradient(180deg,var(--amber-bg) 0%,transparent 100%)':''}">
-      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="editRecurring('${r.id}')">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0">
-          <span style="font-size:20px">${getCategoryDisplay(r.categoryId).icon}</span>
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:600">${_esc(r.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${r.frequency} · ${fmt(r.amount,r.currency)}</div>
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          ${r.nextDate?`<div style="font-size:12px;color:${isOverdue?'var(--amber)':isDue?'var(--accent)':'var(--text3)'};font-weight:${isDue?'600':'400'}">${isOverdue?'Overdue':'Next'}: ${fmtD(r.nextDate)}</div>`:''}
-          <span class="pill ${r.active?'pill-green':'pill-gray'}">${r.active?'Active':'Paused'}</span>
-        </div>
-      </div>
-      ${isDue?`<div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();logRecurringNow('${r.id}')" style="flex:1;font-size:12px">⚡ Log now</button>
-        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();skipRecurring('${r.id}')" style="font-size:12px">Skip</button>
-      </div>`:''}
-    </div>`;
-  }
-  html += `<button class="pool-add-btn" onclick="openAddRecurring()">+ Add Recurring</button></div>`;
-  return html;
-}
 
 function advanceRecurringNextDate(r) {
   if (!r.nextDate) return;
@@ -22068,103 +21623,12 @@ function finalizeRecurringLog(r, acctId, date) {
   showToast(`✅ Logged ${_esc(r.name)} · Next: ${fmtD(r.nextDate)}`);
 }
 
-function skipRecurring(id) {
-  const r = db.recurringTxs.find(x => x.id === id);
-  if (!r) return;
-  openDlg(`Skip ${_esc(r.name)}?`,
-    `<div style="font-size:13px;color:var(--text2)">Move next due date forward without logging a transaction. Next: ${fmtD(r.nextDate)}</div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-warning btn-sm" onclick="confirmSkipRecurring('${id}')">Skip</button>`
-  );
-}
-function confirmSkipRecurring(id) {
-  const r = db.recurringTxs.find(x => x.id === id);
-  if (!r) return;
-  advanceRecurringNextDate(r);
-  saveDBWithSync();
-  closeDlg();
-  renderPlanning();
-  showToast(`Skipped — next: ${fmtD(r.nextDate)}`);
-}
 
-function openAddRecurring() {
-  const allCats = [...db.categories.expense, ...db.categories.income].filter(c=>!c.archived);
-  const catOpts = allCats.flatMap(c=>[`<option value="${c.id}">${c.icon} ${_esc(c.name)}</option>`,
-    ...(c.subcats||[]).filter(sc=>!sc.archived).map(sc=>`<option value="${sc.id}">&nbsp;&nbsp;${sc.icon} ${_esc(sc.name)}</option>`)]).join('');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
-  window._efNext = true; // PSS #361
-  openSheet('gen','Add recurring',`
-    <div class="form-group"><label class="form-label" for="nr-name">Name *</label><input class="form-input" id="nr-name" placeholder="e.g. Streaming, Rent"></div>
-    <div class="form-group"><label class="form-label" for="nr-cat">Category</label><select class="form-input" id="nr-cat">${catOpts}</select></div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="nr-amount">Amount</label><input class="form-input numpad-input" type="number" id="nr-amount" placeholder="0.00" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="nr-currency">Currency</label><select class="form-input" id="nr-currency">${currOpts}</select></div>
-    </div>
-    <div class="form-group"><label class="form-label" for="nr-freq">Frequency</label>
-      <select class="form-input" id="nr-freq">
-        <option>Monthly</option><option>Weekly</option><option>Daily</option><option>Bi-weekly</option><option>Quarterly</option><option>Yearly</option>
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label" for="nr-next">Next date</label>${dtField('nr-next','date','Next Date','')}</div>
-    <button class="btn btn-primary btn-full" onclick="saveAddRecurring()">Add</button>
-  `);
-}
 
-function saveAddRecurring() {
-  const name = document.getElementById('nr-name')?.value?.trim();
-  if (!name) { showToast('Enter name'); return; }
-  db.recurringTxs.push({
-    id:genId(), name,
-    categoryId:document.getElementById('nr-cat')?.value||null,
-    amount:parseFloat(document.getElementById('nr-amount')?.value)||0,
-    currency:document.getElementById('nr-currency')?.value||_homeBase(),
-    frequency:document.getElementById('nr-freq')?.value||'Monthly',
-    nextDate:document.getElementById('nr-next')?.value||null,
-    active:true,
-  });
-  saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Recurring added!');
-}
 
-function editRecurring(id) {
-  const r = db.recurringTxs.find(x=>x.id===id);
-  if (!r) return;
-  window._efNext = true; // PSS #361
-  openDlg('Edit recurring', /* PSS #432: the entry's name made the title wrap to 2 lines (80px top); the name is already the first field */
-    `<div class="form-group"><label class="form-label" for="er-next">Next date</label>${dtField('er-next','date','Next Date',r.nextDate||'')}</div>
-     <div class="form-group"><label class="form-label" for="er-amt">Amount</label><input class="form-input numpad-input" type="number" id="er-amt" value="${r.amount}" inputmode="none"></div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-warning btn-sm" onclick="toggleRecurring('${id}')">${r.active?'Pause':'Resume'}</button>
-     <button class="btn btn-primary btn-sm" onclick="saveEditRecurring('${id}')">Save</button>
-     <button class="btn btn-danger btn-sm" onclick="deleteRecurring('${id}')">Delete</button>`
-  );
-}
 
-function saveEditRecurring(id) {
-  const r = db.recurringTxs.find(x=>x.id===id);
-  if (!r) return;
-  const erAmt = parseFloat(document.getElementById('er-amt')?.value);
-  if (!(erAmt > 0)) { showToast('Enter a valid amount'); return; }
-  r.nextDate = document.getElementById('er-next')?.value||r.nextDate;
-  r.amount = erAmt;
-  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Updated!');
-}
 
-function toggleRecurring(id) {
-  const r = db.recurringTxs.find(x=>x.id===id);
-  if (r) { r.active=!r.active; saveDBWithSync(); closeDlg(); renderPlanning(); }
-}
 
-function deleteRecurring(id) {
-  const r = (db.recurringTxs||[]).find(x=>x.id===id);
-  openDlg('Delete this recurring entry?',
-    `<p style="font-size:13px;color:var(--text2);margin:0;line-height:1.6">Permanently delete <strong>${_esc(r?.name || 'this entry')}</strong>? This cannot be undone.</p>`,
-    `<button class="btn btn-ghost" onclick="editRecurring('${id}')">Cancel</button>
-     <button class="btn btn-danger" onclick="confirmDeleteRecurring('${id}')">Delete</button>`);
-}
-function confirmDeleteRecurring(id) {
-  db.recurringTxs = db.recurringTxs.filter(r=>r.id!==id);
-  saveDBWithSync(); closeDlg(); renderPlanning(); showToast('Recurring entry deleted', 2200, 'trash');
-}
 
 // PSS #342: bucket sheet opened from a Contract bucket row (panel built during renderContractTab)
 function openBucketDetail(cid, bid) {
@@ -23068,23 +22532,7 @@ function resortBucketsAZ(contractId) {
   showToast('Sorted A→Z');
 }
 
-function saveContractMonthly(contractId, val) {
-  const c = (db.contracts||[]).find(x=>x.id===contractId);
-  if (!c) return;
-  c.monthlyGoal=parseInt(val)||c.monthlyGoal;
-  saveDBWithSync(); renderPlanning();
-}
 
-// Slider handler — sets the contract's TOTAL savings target (whole contract). Bucket allocations
-// (% of target) auto-recompute against this; the overall monthly pace is derived from it.
-function saveContractTarget(contractId, val) {
-  const c = (db.contracts||[]).find(x=>x.id===contractId);
-  if (!c) return;
-  const v = parseFloat(val);
-  if (!isNaN(v)) c.targetAmount = Math.max(0, Math.round(v));
-  _rebalancePctToPool(c); // fixed buckets' % shifts with the target — keep % buckets filling 100%
-  saveDBWithSync(); renderPlanning();
-}
 
 // Set the contract's slider min/max. Blank max falls back to the dynamic range. Keeps the target
 // clamped inside the range and rebalances % buckets.
@@ -23532,28 +22980,6 @@ function _confirmAskRate(code) {
 function _hasRate(code) { return code === _homeBase() || (db.fxRates && db.fxRates[code] > 0); }
 
 
-// Legacy: kept for back-compat but auto-sync now handles drift in ensureDBIntegrity
-// DEBUG_SCANNER_NOTE: resetHomeToNationality() is orphaned — its "Reset to nationality"
-// button was removed once home base became auto-derived from nationality (PLS #111).
-// Retained as harmless dead code; do not flag.
-function resetHomeToNationality() {
-  const nat = db.profile?.nationality;
-  if (!nat || !COUNTRY_CURRENCIES[nat]) {
-    showToast('Set nationality in Profile first');
-    return;
-  }
-  const target = COUNTRY_CURRENCIES[nat];
-  const current = db.displayCurrency || _homeBase();
-  if (target === current) {
-    showToast('Already on ' + target);
-    return;
-  }
-  setDisplayCurrency(target);
-  saveDBWithSync();
-  renderSettings();
-  showToast(`🏠 Home reset to ${target}. Rates auto-recomputed.`);
-  haptic('success');
-}
 
 function openFxHistoryPage(currency) {
   const info = CURRENCIES.find(x=>x.code===currency)||{flag:'💵',name:currency};
@@ -23804,7 +23230,7 @@ function applyFxHistoryEdit(currency, idx, newDate, newRate, recompute, newTime)
       // If this tx is a remittance, also update its rate + toAmount
       if (tx.type === 'remittance' && tx.currency === currency) {
         tx.rate = newRate;
-        // ── PERSONAL LOGIC SET #68 ── stored amounts are RAW (unrounded) for FX accuracy.
+        // ── PERSONAL LOGIC SET #68 ── (retired for amounts by PLS #543: amounts round to centavos at save; rates stay full)
         // PLS #107: remittance now stores toAmount (in destination currency), not phpAmount.
         // Legacy phpAmount field kept for back-compat with older saved data.
         tx.toAmount = tx.amount * newRate;
@@ -24434,7 +23860,8 @@ function _wtsAddNote() {
     const acctId = document.getElementById('add-account')?.value;
     const acct = acctId ? db.accounts.find(a => a.id === acctId) : null;
     const mk = currMonthKey(); let best = null;
-    for (const b of (db.budgets || []).filter(x => x.active && (!acct || x.currency === acct.currency))) {
+    const _cur535 = s.type === 'expense' && s.paidBy ? (s.pbCur || _homeBase()) : acct?.currency; // PLS #535: a bill paid by someone uses its own currency
+    for (const b of (db.budgets || []).filter(x => x.active && (!_cur535 || x.currency === _cur535))) {
       const plan = _bgtPlan(b, mk), keys = new Set(Object.keys(plan.alloc));
       const k = [...keys].find(x => _txMatchesAlloc({ categoryId: key }, x, keys)); if (!k) continue;
       const p = parseFloat(plan.alloc[k]) || 0; if (!(p > 0)) continue;
@@ -24964,18 +24391,6 @@ function _allocToggleLock(btn) {
   _allocPaintLock(btn, on);
   const b = db.budgets.find(x => x.id === window._allocLockBgt);
   if (b) { b.allocLocks = [...set]; saveDBWithSync(); }
-}
-function flushAllocSave(bgtId) {
-  clearTimeout(window._allocSaveT);
-  if (typeof window._allocIsOver === 'function' && window._allocIsOver()) return; // PLS #418
-  const b = db.budgets.find(x => x.id === bgtId);
-  const inputs = document.querySelectorAll('.alloc-input');
-  if (!b || !inputs.length) return;
-  const next = {};
-  inputs.forEach(i => { const v = parseFloat(i.value); if (Number.isFinite(v) && v > 0) next[i.dataset.cat] = v; });
-  b.allocations = next;
-  b.allocZero = _allocZeros(); // PLS #446
-  saveDBWithSync();
 }
 
 function confirmAiAllocate(bgtId) {
@@ -27345,8 +26760,6 @@ async function getOrCreateSubfolder(subfolderName) {
   return _gdriveSubfolderCache[subfolderName];
 }
 
-// PLS #441: "Save to Drive" is now one Sync now (look first, then save, load or combine)
-async function saveToDrive() { return syncNow(); }
 
 // -- PERSONAL LOGIC SET #449 -- (his report, Oct 2026) iPad and PC both logged offline; back online, the PC's save found
 // a newer file from the iPad, STOPPED and showed a purple dot, so its entries stayed on the PC alone until he tapped the
@@ -27656,81 +27069,8 @@ async function checkDriveForBackup() {
 // user wants subtle status indicators, not floating banners/modals popping up unasked).
 // Throttled so it never hits the Drive API more than once every 2 minutes.
 var _lastAutoBackupCheck = 0;
-// PLS #157/#158: on app open (Drive verified), check whether the last local edit happened
-// AFTER the last successful push. If so, a previous close/switch interrupted the sync — this
-// can only ever be detected on the device where the edit actually lives (no server, pull-based
-// only). Instead of a toast that's easy to miss right before switching devices, this puts up a
-// hard block: the app won't let you proceed until the retry confirms synced, or you explicitly
-// choose the escape hatch (needed for genuinely offline use — the app must stay usable then).
-function checkUnsyncedEditWarning() {
-  if (!db.settings.googleDriveConnected || !_gdriveAccessToken) return;
-  const editAt = db.settings.lastLocalEditAt;
-  if (!editAt) return;
-  const syncAt = db.settings.lastDriveSync;
-  if (syncAt && new Date(editAt).getTime() <= new Date(syncAt).getTime()) return; // already synced
-  showSyncBlockModal();
-  retrySyncBlock();
-}
-
-function showSyncBlockModal() {
-  _setSyncBlockState('syncing');
-  document.getElementById('sync-block-overlay').classList.add('open');
-}
-function hideSyncBlockModal() {
-  document.getElementById('sync-block-overlay').classList.remove('open');
-}
-
-function _setSyncBlockState(state, opts={}) {
-  const icon = document.getElementById('syncblock-icon');
-  const title = document.getElementById('syncblock-title');
-  const sub = document.getElementById('syncblock-sub');
-  const actions = document.getElementById('syncblock-actions');
-  if (!icon || !title || !sub || !actions) return;
-  const svgSpin = `<svg class="spin" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>`;
-  const svgCheck = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
-  const svgWarn = `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>`;
-  if (state === 'syncing') {
-    icon.style.color = 'var(--accent)'; icon.innerHTML = svgSpin;
-    title.textContent = 'Syncing your last edit...';
-    sub.textContent = 'Please wait before switching devices.';
-    actions.style.display = 'none'; actions.innerHTML = '';
-  } else if (state === 'saved') {
-    icon.style.color = 'var(--green)'; icon.innerHTML = svgCheck;
-    title.textContent = 'Synced!';
-    sub.textContent = 'Safe to switch devices now.';
-    actions.style.display = 'none'; actions.innerHTML = '';
-  } else if (state === 'failed') {
-    icon.style.color = 'var(--amber)'; icon.innerHTML = svgWarn;
-    title.textContent = "Couldn't sync";
-    sub.textContent = opts.reason || 'Check your connection and try again.';
-    actions.style.display = 'flex';
-    actions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="retrySyncBlock()">Retry</button>
-      <button class="btn btn-ghost btn-sm" onclick="hideSyncBlockModal()">Continue anyway</button>`;
-  }
-}
-
-async function retrySyncBlock() {
-  _setSyncBlockState('syncing');
-  if (!navigator.onLine) {
-    _setSyncBlockState('failed', { reason: "You're offline. Connect to the internet and retry." });
-    return;
-  }
-  clearTimeout(_autoSaveTimer);
-  try {
-    // PLS #158: hard timeout so a hung request can't trap the user behind the modal forever —
-    // 15s is generous for a small JSON upload; past that, surface the escape hatch instead.
-    await Promise.race([
-      saveToDriveSilent(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
-    ]);
-  } catch(e) { /* fall through to state check below */ }
-  if (_syncStatus === 'saved' && !_hasUnsavedChanges) {
-    _setSyncBlockState('saved');
-    setTimeout(hideSyncBlockModal, 1100);
-  } else {
-    _setSyncBlockState('failed', { reason: 'The last edit could not be pushed to Drive.' });
-  }
-}
+// PLS #158 retired by PLS #540: the blocking popup never ran after PLS #441 (one sync check that saves, loads or
+// combines). PLS #157 (edit time stamped into the data) stays; #441 uses it.
 
 async function autoCheckNewerBackup() {
   if (!db.settings.googleDriveConnected || !_gdriveAccessToken || _isSavingToDrive) return;
@@ -28568,22 +27908,6 @@ function relativeTime(iso) {
 }
 
 const SVG_DISKETTE = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>`;
-function renderDeviceIndicator() {
-  // PSS #156: last device ACTIVE/used — icon-only pill (device/time moved to tooltip,
-  // keeps the header from getting crowded/overlapping on narrow screens). Tap opens the
-  // manual save/load sheet.
-  const last = db.settings?.lastActiveDevice;
-  const device = last?.device || getDeviceName();
-  const browser = last?.browser || getBrowserName();
-  const when = last?.at ? relativeTime(last.at) : 'now';
-  const connected = db.settings?.googleDriveConnected;
-  const tooltip = connected
-    ? `Last active: ${device} · ${browser} · ${when} · tap for backups`
-    : `Last active: ${device} · ${browser} · ${when} · Drive not connected`;
-  return `<button class="icon-btn" onclick="openSyncShortcuts()" title="${tooltip}" aria-label="${tooltip}">
-    <span style="opacity:${connected?'1':'0.5'};display:flex">${SVG_DISKETTE}</span>
-  </button>`;
-}
 
 // Drive backups sheet — launched when user taps the sync time pill in the header.
 // Combines: Save / Load (active backups) + access to Snapshots + device history fallback.
@@ -29043,10 +28367,12 @@ function ensureDBIntegrity() {
       if (Math.abs(diff - old) < 0.005) return;                         // already right, stamp only
       child.type = diff >= 0 ? 'income' : 'expense';
       child.categoryId = diff >= 0 ? 'sc-forexgain' : 'sc-forexloss';
-      child.amount = Math.abs(diff);                                    // PLS #68: store raw
+      child.amount = Math.abs(diff);                                    // PLS #68 retired for amounts: rounded to centavos at save (PLS #543)
       fixedFx++;
     });
     if (fixedFx > 0) issues.push(`re-measured forex on ${fixedFx} transfer${fixedFx===1?'':'s'} at their own rate`);
+    try { if (_loanGainSync()) issues.push('loan payment gains (PLS #542)'); } catch (e) { console.warn('[Integrity] loan gains', e); }
+    try { if (_centsSync()) issues.push('amounts to centavos (PLS #543)'); } catch (e) { console.warn('[Integrity] cents', e); }
 
     if (issues.length > 0) {
       console.log('[Integrity] Patched:', issues.join(' · '));
@@ -29313,11 +28639,6 @@ function aiPick(pool, seedId) {
   return pool[seed % pool.length];
 }
 
-// User's nickname for personalization — falls back to "you"
-function aiName() {
-  const nick = (db.profile?.nickname || '').trim();
-  return nick || '';
-}
 
 
 // Severity intensifier — based on ratio (how much over/under threshold)
@@ -30228,34 +29549,6 @@ function aiSmartSuggestion() {
 
 
 
-function aiNavigate(insId) {
-  const ins = _aiInsights.find(i=>i.id===insId);
-  if (!ins || !ins.action) return;
-  // 📖 USER STORY: Same usage as actionNav above — pero ito yung mga action sa Onboarding
-  // checklist (e.g. "Set up first account") at AI Insights na hindi ma-cover ng inline map.
-  // ── PERSONAL STRUCTURE SET #78 ── second actionNav map (do not remove — complements inline map above)
-  // All action strings here are verified wired to defined functions (confirmed in debug scans)
-  const actionNav = {
-    'Review contract tab': ()=>{ nav('planning'); setTimeout(()=>{ if(typeof setPlanTab==='function') setPlanTab('contract'); },150); },
-    'Consider reallocating': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
-    'Log remittance': ()=>{ closeSheet && closeSheet('add'); setTimeout(()=>{ openAddSheet(); setTimeout(()=>setAddType('remittance'),200); },100); },
-    'Go to Reimbursements': ()=>{ nav('reimbursements'); },
-    'Review spending': ()=>{ _openReportFrom('spending'); }, // PSS #416
-    'Review budget limit': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
-    'Review allocation': ()=>{ nav('planning'); setTimeout(()=>setPlanTab('budgets'),150); },
-    'View Accounts': ()=>{ nav('accounts'); },
-    'View Installments': ()=>{ nav('installments'); },
-    'View Analytics': ()=>{ nav('analytics'); },
-    'View Loans': ()=>{
-      nav('loans');
-      if (ins._loanId && ins._direction) {
-        setTimeout(()=>{ _loanTab = ins._direction; renderLoans(); openLoanDetail(ins._loanId, ins._direction); }, 150);
-      }
-    },
-  };
-  const fn = actionNav[ins.action];
-  if (fn) fn();
-}
 
 function aiScheduleCheck() {
   const today = new Date();
@@ -30785,97 +30078,6 @@ function renderAnalyticsPeople() {
 // ───────────────────────────────────────────────────────────
 
 
-// ───────────────────────────────────────────────────────────
-// TAB: Subscriptions Audit — recurring monthly spend
-// ───────────────────────────────────────────────────────────
-function renderAnalyticsSubs() {
-  const dc = _displayCurrency();
-  const subs = _recurringList().filter(r => r.active !== false && !r.archived && r.type === 'expense');
-  if (subs.length === 0) {
-    return `<div class="page-pad"><div class="empty-state"><div class="empty-icon">🔁</div><div class="empty-text">No active subscriptions</div><div class="empty-sub">Set recurring expenses in Planning tab</div></div></div>`;
-  }
-
-  // Normalize to monthly equivalent
-  const normMonthly = (s) => {
-    const amt = toPhp(s.amount || 0, s.currency || dc);
-    const f = s.frequency || 'monthly';
-    if (f === 'weekly') return amt * 4.33;
-    if (f === 'daily') return amt * 30.42;
-    if (f === 'yearly' || f === 'annual') return amt / 12;
-    if (f === 'quarterly') return amt / 3;
-    return amt;
-  };
-  const enriched = subs.map(s => ({
-    ...s,
-    monthly: normMonthly(s),
-    yearly: normMonthly(s) * 12,
-    nextDate: s.nextDate || s.startDate
-  })).sort((a,b)=>b.monthly-a.monthly);
-
-  const totalMonthly = enriched.reduce((s,r)=>s+r.monthly,0);
-  const totalYearly = totalMonthly * 12;
-
-  let html = `<div class="page-pad">
-    <div style="background:linear-gradient(135deg,var(--accent-bg),var(--bg2));border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">Monthly subscription cost</div>
-      <div style="font-size:22px;font-weight:600;letter-spacing:-0.6px;line-height:1.1;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--red)">${fmt(_inDisplay(totalMonthly), dc)}</div><!-- PSS #405 -->
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">≈ ${fmt(_inDisplay(totalYearly), dc)}/year · ${subs.length} active</div>
-    </div>
-
-    ${(() => {
-      // PSS #203: this tab was only 1.5x deeper than its Overview widget — barely worth the tap.
-      // These three lines answer what the widget can't: what share of income it eats, what it
-      // has already cost you, and which single one is the biggest lever.
-      const inc = getMonthTotals(currMonthKey()).income || 0;
-      const share = inc > 0 ? (_inDisplay(totalMonthly) / inc) * 100 : 0;
-      const biggest = enriched.slice().sort((a,b) => b.monthly - a.monthly)[0];
-      // how long these have actually been running, from the oldest matching expense
-      const names = enriched.map(s => (s.name||'').toLowerCase()).filter(Boolean);
-      const hits = (db.transactions||[]).filter(t => !t.archived && t.date &&
-        names.some(n => n && (t.notes||'').toLowerCase().includes(n))).map(t => t.date).sort();
-      let paidLine = '';
-      if (hits.length) {
-        const fd = new Date(hits[0] + 'T12:00');
-        const mo = Math.max(1, (new Date().getFullYear()-fd.getFullYear())*12 + (new Date().getMonth()-fd.getMonth()));
-        paidLine = `<div class="stat-row"><span>Running since</span><b>${fd.toLocaleDateString('en-PH',{month:'short',year:'numeric'})} · about ${mo} month${mo===1?'':'s'}</b></div>`;
-      }
-      return `<div class="card" style="margin-bottom:16px">
-        <div class="section-title">What this actually costs you</div>
-        <style>.stat-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text2)}.stat-row:first-of-type{border-top:0}.stat-row b{font-family:var(--mono);color:var(--text);font-weight:600}</style>
-        ${inc > 0 ? `<div class="stat-row"><span>Share of this month's income</span><b>${share.toFixed(1)}%</b></div>` : ''}
-        <div class="stat-row"><span>Over 5 years, if nothing changes</span><b>${fmt(_inDisplay(totalYearly*5), dc)}</b></div>
-        ${biggest ? `<div class="stat-row"><span>Biggest single one</span><b>${_esc(biggest.name||'—')} · ${fmt(_inDisplay(biggest.monthly), dc)}/mo</b></div>` : ''}
-        ${biggest && totalMonthly>0 ? `<div class="stat-row"><span>Cancelling just that one saves</span><b>${fmt(_inDisplay(biggest.monthly*12), dc)}/yr</b></div>` : ''}
-        ${paidLine}
-      </div>`;
-    })()}
-
-    <div style="font-size:12px;font-weight:600;letter-spacing:0.05em;color:var(--text3);margin-bottom:10px">Active subscriptions</div>`;
-
-  enriched.forEach(s => {
-    const pctOfTotal = totalMonthly > 0 ? (s.monthly / totalMonthly) * 100 : 0;
-    const next = s.nextDate ? fmtD(s.nextDate) : '—';
-    html += `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div style="font-size:18px">${s.icon || '🔁'}</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${escapeAttr(s.name || 'Subscription')}</div>
-          <div style="font-size:11px;color:var(--text3)">${s.frequency || 'monthly'} · next: ${next}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">${fmt(s.amount, s.currency || dc)}</div>
-          <div style="font-size:11px;color:var(--text3)">${fmt(_inDisplay(s.monthly), dc)}/mo equiv</div>
-        </div>
-      </div>
-      <div style="height:4px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden">
-        <div style="width:${pctOfTotal}%;height:100%;background:var(--accent);border-radius:var(--r-sm)"></div>
-      </div>
-    </div>`;
-  });
-
-  html += `</div>`;
-  return html;
-}
 
 
 // ═══════════════════════════════════════════════════════════
@@ -32065,17 +31267,6 @@ function confirmDeleteInstallment(instId) {
   else closeSheet('gen');
 }
 
-// PSS #241: Completed installments live in a sheet, matching openSettledReimbSheet and
-// openSettledLoansSheet. Same card renderer as the active list, so a finished plan looks like
-// itself — only the surface it sits on changes.
-function openCompletedInstSheet() {
-  window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
-  const done = (db.installments || []).filter(i => !i.archived && _instDone(i)); // PSS #288: one definition of done
-  const body = done.length
-    ? `<div style="padding:4px 4px 12px">${done.map(installCard).join('')}</div>`
-    : `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing completed yet</div><div class="empty-sub">Plans you finish paying off collect here</div></div>`;
-  openSheet('gen', 'Completed', body);
-}
 
 function openInstArchiveSheet() {
   window._nextSheetCls = 'fs-list'; // PSS #341: list sheets match the fintech detail sheets
