@@ -803,6 +803,15 @@ option{background:var(--bg3);color:var(--text)}
 .f6 .f6-hero .f6-sub input.form-input{width:4.5em!important;pointer-events:none}.f6 .f6-hero .f6-sub select.form-input,.f6 .f6-hero .f6-sub input.form-input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0 14px 0 0!important;margin:0;width:auto;height:auto;font-size:11px!important;font-weight:500;color:var(--text3);text-align:left}
 .f6 .f6-hero .ef-hint,.f6 .f6-hero .form-hint{display:block;font-size:11px;color:var(--text3);margin-top:2px;text-align:left}
 .f6 .f6-badge{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--accent-bg);color:var(--accent)}
+/* PLS #566 part editor: one amount, one line under it (his ask Nov 7: fintech look, nothing busy). His pick: A, minimal */
+.sync-row.off .fs-t,.sync-row.off .fs-a{text-decoration:line-through;opacity:.45}.sync-k{font-size:11px;color:var(--accent);font-weight:500}.sync-row.off .sync-k{color:var(--text3)}
+.pp{text-align:center}.pp-s{font-size:12px;color:var(--text3)}
+.pp-amt{position:relative;display:flex;align-items:baseline;justify-content:center;gap:4px;margin:10px 0 6px}.pp-sym{font-size:22px;font-weight:600;color:var(--text3)}
+.pp input.pp-in{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0;height:auto;font-size:30px!important;font-weight:600;letter-spacing:-1px;color:var(--text);text-align:center;min-width:2ch;font-variant-numeric:tabular-nums;outline:none;-moz-appearance:textfield;appearance:textfield;box-sizing:content-box}
+.pp input.pp-in::-webkit-inner-spin-button,.pp input.pp-in::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pp-mir{position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;font-size:30px;font-weight:600;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.pp-line{font-size:12px;color:var(--text2);min-height:16px}.pp-line[data-s=bad]{color:var(--red)}.pp-line[data-s=ok]{color:var(--green)}
+.pp-sub{font-size:11px;color:var(--text3);margin-top:18px;line-height:1.6}.pp-lnk{color:var(--accent);font-weight:500;cursor:pointer;white-space:nowrap}
 .f6 .f6-badge.out{background:rgba(244,63,94,.12);color:var(--red)}.f6 .f6-badge.in{background:rgba(34,197,94,.12);color:var(--green)}
 .f6 .ef .ef-card.f6-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;background:transparent;padding:0;margin:0 0 8px;border-radius:0}
 .f6 .ef .f6-grid > .form-group{display:block!important;background:var(--bg3);border-radius:16px;padding:11px 12px 12px!important;border-top:0!important;min-height:0;min-width:0;margin:0}
@@ -5974,6 +5983,10 @@ const APP_CHANGELOG = [
     '📅 By day follows the month or year you pick and adds up to the Calendar; bills in the Calendar keep their own currency', // PLS #558 / #559
     '💱 The rate reminder names the rate to update, and Exchange rates no longer show months before your first rate', // PLS #560 / #561
     '💵 Cross-currency shows the same cash as Liquidity and the safety net, with crypto and cards on their own lines; crypto guides (≈) show 2 decimals', // PLS #564 / PSS #565
+    '✏️ Tap a payment under a bill or loan to edit just the part that went there; the payment total follows', // PLS #566
+    '🔄 Sync keeps running totals right when both devices changed the same thing: a payment, a loan amount, installment months, or an investment', // PLS #566
+    '🔍 When two devices cannot be synced the usual way, Compare before syncing lists what is on each one, and Combine both keeps everything you do not leave out', // PLS #567
+    '🧩 Combine both no longer brings back what you deleted. Leaving an entry out also leaves out its loan or fee, entries added twice are marked, and accounts, loans or installments on one device only can be left out too', // PLS #568
     '🧳 Planning > Budgets > Vacation days: trip days stay in your totals but not in usual spending, auto budget or Unusual alerts; Income on Summary compares with all of last month', // PLS #563 / #562
     '✏️ Edit can change who paid for an expense: an account to a person who owes you, or back', // PLS #537
     '📈 The net worth trend now counts what people owed you at each month end', // PLS #538
@@ -10138,7 +10151,7 @@ function _openSharedFs(tx, footer, fxBadge) {
         title:`Paid back by ${_esc(p.reimbPerson || p.batchPerson || 'someone')}`,
         sub:`${fmtDFull(p.date)} · ${_esc(pa.name)}`, amt:'+' + (p._part != null ? fmt(p._part, p._partCur) : fmt(p.amount, p.currency)), amtCol:'var(--green)',
         amt2: p._many ? `of ${fmt(p.amount, p.currency)} payment` : g ? `${g.isReimbSettlementGain ? 'FX gain +' : 'FX loss -'}${fmt(g.amount, g.currency)}` : '',
-        onclick:`closeDlg();setTimeout(()=>openTxDetail('${p.id}'),100)` })}
+        onclick:`closeDlg();setTimeout(()=>openPayPart('bill','${p.id}','${tx.id}'),100)` })}
         ${p._many || p.parentId !== tx.id ? '' : `<button class="fs-del" aria-label="Delete payment" title="Archive payment" onclick="event.stopPropagation();deleteChildReimb('${p.id}','${tx.id}')">${_ico('trash',16)}</button>`}</div>`; }).join('') // PSS #515: a payment shared by several bills is undone from the payment itself
     + _fsRow({ ico:_ico('outCircle',17), icoBg:'var(--red-bg)', icoCol:'var(--red)', title:'You paid the bill',
         sub:`${fmtDFull(tx.date)}${acct?.name ? ' · ' + _esc(acct.name) : ''}`, amt:fmt(total, tx.currency), amtCol:'var(--text)',
@@ -15095,6 +15108,146 @@ function confirmBatchReimbSettleEdit(txId) {
   done(excess > 0.01 ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
 }
 
+// -- PERSONAL LOGIC SET #566 -- (Nov 7, his ask "ang gulo ng loop") tapping a payment under ONE bill or ONE loan
+// edits only the part that landed there. Before, a bill opened the whole payment (K220.00 for 3 bills), then
+// "Edit or undo" before any form; a one-bill payment's "View parent" led back to the same bill; a loan opened
+// the whole lump. His pick: the payment follows the part (K44.94 made K50.00 turns K220.00 into K225.06);
+// the other bills or loans keep their parts. A part can never be more than is still owed there.
+function _ppCtx(kind, payId, targetId, dir) {
+  const tx = db.transactions.find(t => t.id === payId && !t.archived); if (!tx) return null;
+  const home = _homeBase(), cur = tx.currency || home, snap = tx.fxSnapshot;
+  const conv = (a, f, to) => f === to ? a : fromPhp(toPhp(a, f, snap), to, snap);
+  if (kind === 'bill') {
+    const b = db.transactions.find(t => t.id === targetId && !t.archived); if (!b) return null;
+    const person = tx.batchPerson || tx.reimbPerson || '';
+    const rows = _reimbAllocAll().byPayment[payId] || [];
+    const tc = b.currency || home, part = rows.find(x => x.billId === targetId)?.amount || 0;
+    const paidAll = Number(b.paidSoFar?.[person]) || 0;
+    const share = _reimbShare(b, person);
+    return { tx, kind, t: b, person, tc, cur, conv, part, paidAll, n: Math.max(rows.length, 1), batch: !!tx.isBatchReimbSettlement, share,
+      max: Math.max(0, share - Math.max(0, paidAll - part)), noun: 'bill' };
+  }
+  const l = (db.loans[dir] || []).find(x => x.id === targetId); if (!l) return null;
+  const tc = l.currency || home, part = loanPaymentContribution(tx, l);
+  const other = getLoanPayments(l.id).filter(p => p.id !== payId).reduce((s, p) => s + loanPaymentContribution(p, l), 0);
+  return { tx, kind, t: l, person: tx.batchPerson || l.personName || '', tc, cur, conv, part, n: (tx.batchLoanIds || []).length, batch: true,
+    share: Number(l.amount) || 0, max: Math.max(0, (Number(l.amount) || 0) - other), noun: 'loan', dir };
+}
+function _ppArgs(c) { return `'${c.kind}','${c.tx.id}','${c.t.id}','${c.dir || ''}'`; }
+function openPayPart(kind, payId, targetId, dir) {
+  const c = _ppCtx(kind, payId, targetId, dir);
+  if (!c) { showToast('Payment not found'); return; }
+  if (kind === 'loan' && c.t.settledAs === 'writeoff') { showToast('This loan was written off. Undo the write-off first.'); return; }
+  if (kind === 'loan' && (c.tx.batchLoanIds || []).some(id => ![...(db.loans[dir] || []), ...(db.archivedLoans || [])].some(l => l.id === id))) {
+    showToast('A loan in this payment is not on this device yet. Sync, then try again.'); return; }
+  const { tx, cur, tc } = c, a = _ppArgs(c);
+  const partIn = roundMoney(c.conv(c.part, tc, cur), cur);
+  const acct = db.accounts.find(x => x.id === tx.accountId);
+  const many = c.n > 1, nouns = c.noun + 's';
+  const whole = kind === 'loan' ? `openBatchSettleEdit('${tx.id}','${c.dir}')` : c.batch ? `openBatchReimbSettleEdit('${tx.id}')` : '';
+  window._ppNow = c;
+  window._efNext = true;
+  const who = c.person || 'They';
+  const inp = () => `<input class="form-input numpad-input pp-in" type="number" step="any" id="pp-amt" value="${partIn}" inputmode="none" aria-label="Amount paid on this ${c.noun} (${cur})" oninput="_ppHint()">`;
+  const link = whole && many ? ` · <span class="pp-lnk" onclick="closeDlg();setTimeout(()=>${whole},60)" role="link" tabindex="0">Edit whole payment</span>` : '';
+  const body = `<div class="pp">
+         <div class="pp-s">${_esc(who)} · ${fmtDFull(tx.date)}${acct ? ' · ' + _esc(acct.name) : ''}</div>
+         <div class="pp-amt"><span class="pp-sym">${_esc(sym(cur).trim())}</span>${inp()}<span id="pp-mir" class="pp-mir" aria-hidden="true"></span></div>
+         <div class="pp-line" id="pp-hint"></div>
+         ${many ? `<div class="pp-sub">Part of <span id="pp-tot">${fmt(tx.amount, cur)}</span> for ${c.n} ${nouns}${link}</div>` : ''}
+       </div>`;
+  openDlg(`Paid on this ${c.noun}`, body,
+    `<button class="btn btn-ghost btn-sm" onclick="_ppBack(${a})">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="_ppRemove(${a})">${many ? 'Remove from payment' : 'Undo payment'}</button>
+     <button class="btn btn-primary btn-sm" onclick="savePayPart(${a})">Save</button>`);
+  _ppHint();
+}
+function _ppBack(kind, payId, targetId, dir) {
+  closeDlg();
+  if (kind === 'bill') setTimeout(() => openTxDetail(targetId), 60);
+}
+function _ppHint() {
+  const c = window._ppNow, el = document.getElementById('pp-hint'), inp = document.getElementById('pp-amt'); if (!c || !el || !inp) return;
+  { const m = document.getElementById('pp-mir'); if (m) { const cs = getComputedStyle(inp); m.style.fontFamily = cs.fontFamily; m.textContent = inp.value || '0'; inp.style.width = Math.ceil(m.getBoundingClientRect().width + 6) + 'px'; } }
+  const v = parseFloat(inp.value);
+  const newIn = isFinite(v) && v > 0 ? roundMoney(v, c.cur) : 0;
+  const oldIn = roundMoney(c.conv(c.part, c.tc, c.cur), c.cur);
+  const maxIn = roundMoney(c.conv(c.max, c.tc, c.cur), c.cur);
+  const newT = Math.abs(newIn - maxIn) < 0.005 ? c.max : c.cur === c.tc ? newIn : roundMoney(c.conv(newIn, c.cur, c.tc), c.tc);
+  const tot = roundMoney(c.tx.amount + (newIn - oldIn), c.cur), te = document.getElementById('pp-tot');
+  if (newT > c.max + 0.005) { el.dataset.s = 'bad'; el.textContent = `${c.person || 'They'} owes ${fmt(c.max, c.tc)} here at most`; if (te) te.textContent = fmt(c.tx.amount, c.cur); return; }
+  const left = roundMoney(Math.max(0, c.max - newT), c.tc);
+  el.dataset.s = left > 0.005 ? '' : 'ok';
+  el.textContent = `${left > 0.005 ? fmt(left, c.tc) + ' still owed here' : 'Paid in full here'}${c.cur !== c.tc ? ` · counts as ${fmt(newT, c.tc)}` : ''}`;
+  if (te) te.textContent = Math.abs(tot - c.tx.amount) > 0.004 ? `${fmt(c.tx.amount, c.cur)} → ${fmt(tot, c.cur)}` : fmt(c.tx.amount, c.cur);
+}
+function _ppApply(c, newT, newIn) {
+  const { tx, cur, tc } = c, home = _homeBase();
+  const oldIn = roundMoney(c.conv(c.part, tc, cur), cur);
+  const total = roundMoney(tx.amount + (newIn - oldIn), cur);
+  if (c.kind === 'bill') {
+    _reimbFreezeAll();
+    let rows = (tx.reimbBreakdown || []).slice();
+    if (!rows.some(r => r.billId === c.t.id)) rows.push({ billId: c.t.id, amount: 0, currency: tc });
+    rows = newT > 0.004 ? rows.map(r => r.billId === c.t.id ? { ...r, amount: newT } : r) : rows.filter(r => r.billId !== c.t.id);
+    const b = c.t; if (!b.paidSoFar || typeof b.paidSoFar !== 'object') b.paidSoFar = {};
+    const v = roundMoney(Math.max(0, c.paidAll - c.part + newT), tc);
+    if (v <= 0.001) delete b.paidSoFar[c.person]; else b.paidSoFar[c.person] = v;
+    _reimbBillSettle(b, tx.date);
+    _reimbFeeSync(b, c.person, tx.accountId, tx.date, tx.time, tx.fxSnapshot, newT);
+    tx.reimbBreakdown = rows; tx.amount = total;
+    if (tx.isBatchReimbSettlement) { // ids of bills not open on this device (archived, or not synced yet) stay as they were
+      const live = id => db.transactions.some(t => t.id === id && t.type === 'shared' && !t.archived);
+      tx.batchTxIds = [...rows.map(r => r.billId), ...(tx.batchTxIds || []).filter(id => !live(id) && !rows.some(r => r.billId === id))];
+      if (rows[0]) tx.parentId = rows[0].billId; }
+  } else {
+    const all = [...(db.loans[c.dir] || []), ...(db.archivedLoans || [])];
+    let bd = Array.isArray(tx.batchBreakdown) ? tx.batchBreakdown.slice()
+      : (tx.batchLoanIds || []).map(id => { const x = all.find(y => y.id === id); return x ? { loanId: id, amount: loanPaymentContribution(tx, x), currency: x.currency || home } : null; }).filter(Boolean);
+    if (!bd.some(r => r.loanId === c.t.id)) bd.push({ loanId: c.t.id, amount: 0, currency: tc });
+    bd = newT > 0.004 ? bd.map(r => r.loanId === c.t.id ? { ...r, amount: newT, currency: tc } : r) : bd.filter(r => r.loanId !== c.t.id);
+    tx.batchBreakdown = bd; tx.batchLoanIds = bd.map(r => r.loanId); if (bd[0]) tx.parentId = bd[0].loanId;
+    tx.amount = total;
+    _loanRecount(c.t);
+  }
+  saveDBWithSync(); closeDlg();
+  if (c.kind === 'bill') {
+    if (currentPage === 'reimbursements') renderReimbursementsPage(); else if (currentPage === 'transactions') renderTransactions();
+    setTimeout(() => openTxDetail(c.t.id), 60);
+  } else { renderLoans(); openLoanDetail(c.t.id, c.dir); }
+  showToast(c.n > 1 ? `Saved. Payment is now ${fmt(total, cur)}` : 'Saved');
+}
+function savePayPart(kind, payId, targetId, dir) {
+  const c = _ppCtx(kind, payId, targetId, dir); if (!c) { closeDlg(); return; }
+  const v = parseFloat(document.getElementById('pp-amt')?.value);
+  if (!isFinite(v) || v < 0) { showToast('Type the amount paid on this ' + c.noun); return; }
+  const newIn = roundMoney(v, c.cur);
+  if (newIn <= 0.004) return _ppRemove(kind, payId, targetId, dir);
+  const oldIn = roundMoney(c.conv(c.part, c.tc, c.cur), c.cur);
+  if (Math.abs(newIn - oldIn) < 0.005) { _ppBack(kind, payId, targetId, dir); return; }
+  const maxIn = roundMoney(c.conv(c.max, c.tc, c.cur), c.cur);
+  // typed the full amount left: it fills the bill or loan exactly. Another currency keeps full precision, so changing it and back lands on the same total
+  const newT = Math.abs(newIn - maxIn) < 0.005 ? c.max : c.cur === c.tc ? newIn : c.conv(newIn, c.cur, c.tc);
+  if (newT > c.max + 0.005) { showToast(`${c.person || 'They'} owes ${fmt(c.max, c.tc)} on this ${c.noun} at most`); return; }
+  _ppApply(c, newT, newIn);
+}
+function _ppRemove(kind, payId, targetId, dir) {
+  const c = _ppCtx(kind, payId, targetId, dir); if (!c) { closeDlg(); return; }
+  if (c.n <= 1) { // nothing would be left of the payment: the normal undo
+    if (kind === 'loan') return undoBatchSettlement(payId, dir);
+    return c.batch ? undoBatchReimbSettle(payId) : deleteChildReimb(payId, targetId);
+  }
+  const oldIn = roundMoney(c.conv(c.part, c.tc, c.cur), c.cur), a = _ppArgs(c);
+  openDlg('Remove from payment?',
+    `<p style="font-size:13px;color:var(--text2);margin:0;line-height:1.6">${fmt(oldIn, c.cur)} comes off the ${fmt(c.tx.amount, c.cur)} payment, which becomes ${fmt(roundMoney(c.tx.amount - oldIn, c.cur), c.cur)}. This ${c.noun} is owed again by that much. The other ${c.n - 1 === 1 ? c.noun : c.noun + 's'} keep their parts.</p>`,
+    `<button class="btn btn-ghost btn-sm" onclick="openPayPart(${a})">Cancel</button>
+     <button class="btn btn-danger btn-sm" onclick="_ppRemoveGo(${a})">Remove</button>`);
+}
+function _ppRemoveGo(kind, payId, targetId, dir) {
+  const c = _ppCtx(kind, payId, targetId, dir); if (!c) { closeDlg(); return; }
+  _ppApply(c, 0, 0);
+}
+
 // -- PERSONAL STRUCTURE SET #444 -- (his call, Oct 2026) On DEBTS the numbers were already right (the unpaid part is income, paying
 // extra is a loss) but the words came from the lent-out side: "Write off", "Uncollectible", "Loan Settlement Loss". A debt he does
 // not pay in full is a GAIN for him (a discount, or just the exchange rate when he pays in another currency), and paying more
@@ -15928,7 +16081,10 @@ function editLoanPayment(paymentId, loanId, direction) {
   // only this loan. Batches now open their own editor (it re-splits and keeps every loan in step);
   // a write-off opens a read-out with "Undo write-off", since nothing was paid to edit.
   const _isWO = !!(payment.isBatchWriteOff || (payment.writeOffReason && (payment.isLoanSettlementLoss || payment.isSettlement)));
-  if (payment.isBatchSettlement && !payment.isBatchWriteOff) { openBatchSettleEdit(payment.id, direction); return; }
+  if (payment.isBatchSettlement && !payment.isBatchWriteOff) {
+    if (loanId && (payment.batchLoanIds || []).length > 1 && !payment.inKindExpId) return openPayPart('loan', payment.id, loanId, direction); // PLS #566
+    openBatchSettleEdit(payment.id, direction); return;
+  }
   if (_isWO) { _loanWriteOffDlg(payment, loanId, direction); return; }
   // -- PERSONAL LOGIC SET #286 -- the payment's currency is its ACCOUNT's currency, never picked
   // separately. A K100 payment filed under GCash (PHP) had no stated rate, so balances converted it
@@ -27469,6 +27625,23 @@ const _syncEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const _syncIsObj = v => v && typeof v === 'object' && !Array.isArray(v);
 const _syncIsIdArr = v => Array.isArray(v) && v.length > 0 && v.every(x => _syncIsObj(x) && 'id' in x);
 const _syncR2 = n => Math.round(n * 100) / 100;
+// -- PERSONAL LOGIC SET #566 -- (future-proof, Nov 7) a payment and the split it keeps (which bill or loan got how much)
+// must stay together. When the SAME payment's money was changed on both devices, merging field by field joined the two
+// splits (one bill listed twice: K2.95 and K3.95 on a K4.95 share) under one amount. Now the whole payment is ASKED
+// (one question, both amounts shown); notes or account changed on one side still merge as before.
+const _SYNC_PAY_MONEY = ['amount', 'currency', 'date', 'time', 'fxSnapshot', 'parentId', 'reimbBreakdown', 'batchBreakdown', 'batchTxIds', 'batchLoanIds'];
+function _syncCapExplained(ctx, id, b, m, t) {
+  if (!ctx) return true;
+  const B = new Set((ctx.base.transactions || []).map(x => x.id));
+  const cap = d => (d.transactions || []).filter(x => !B.has(x.id) && !x.archived && x.isInvestmentFund && x.investmentId === id).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  return Math.abs((m - b) - cap(ctx.mine)) < 0.01 && Math.abs((t - b) - cap(ctx.theirs)) < 0.01;
+}
+function _syncPaySplitBoth(b, m, t) {
+  const isPay = x => x && (x.isAutoReimb || x.isBatchReimbSettlement || x.isLoanPayment || x.isBatchSettlement);
+  if (!isPay(m) || !isPay(t) || _syncEq(m, t)) return false;
+  const moved = x => _SYNC_PAY_MONEY.some(k => !_syncEq(x[k], b[k]));
+  return moved(m) && moved(t) && _SYNC_PAY_MONEY.some(k => !_syncEq(m[k], t[k]));
+}
 function _syncMerge3(base, mine, theirs, path, out) {
   const p = path.join('.');
   if (_SYNC_LOCAL.has(p)) return mine;
@@ -27478,13 +27651,17 @@ function _syncMerge3(base, mine, theirs, path, out) {
   if (p === 'settings.aiInsights') { const lr = v => (v && v.lastRun) || ''; return lr(theirs) >= lr(mine) ? theirs : mine; }
   if (_syncEq(mine, base)) return theirs;                    // only the other device changed it
   if (_syncEq(theirs, base)) return mine;                    // only this device changed it
-  if (typeof mine === 'number' && typeof theirs === 'number' && (_SYNC_DELTA.some(r => r.test(p)) || out.deltaPaths.has(p))) {   // before "same on both": 50 paid on each device is two payments, not one
+  if (typeof mine === 'number' && typeof theirs === 'number' && !(out.noDelta && out.noDelta.has(p)) && (_SYNC_DELTA.some(r => r.test(p)) || out.deltaPaths.has(p))) {   // before "same on both": 50 paid on each device is two payments, not one
     const b = typeof base === 'number' ? base : 0; const r = _syncR2(b + (mine - b) + (theirs - b)); out.rules.push({ path: p, rule: 'added together', result: r }); return r; }
   if (_syncEq(mine, theirs) && !(_syncIsObj(mine) || _syncIsIdArr(mine))) return mine;   // the same edit made twice; records are still opened up, a running total may sit inside
   if (_SYNC_MAX.some(r => r.test(p))) { const r = [mine, theirs].sort().pop(); out.rules.push({ path: p, rule: 'latest date', result: r }); return r; }
   if (_syncIsObj(mine) && _syncIsObj(theirs)) {
     const res = {}; const b = _syncIsObj(base) ? base : {};
-    if (/^investments\.#[^.]+$/.test(p) && (mine.amount !== b.amount || theirs.amount !== b.amount)) out.deltaPaths.add(p + '.currentValue');   // value moves with capital added on either device
+    if (/^investments\.#[^.]+$/.test(p) && (mine.amount !== b.amount || theirs.amount !== b.amount)) {
+      // PLS #566: capital added on each device is added together only when each change is that device's own "Added capital"
+      // entries. The same Edit investment typed on both phones (7,800 to 8,000 twice) became 8,200; now it is asked.
+      if (mine.amount !== b.amount && theirs.amount !== b.amount && !_syncCapExplained(out.ctx, mine.id, b.amount, mine.amount, theirs.amount)) { out.noDelta.add(p + '.amount'); out.noDelta.add(p + '.currentValue'); }
+      else out.deltaPaths.add(p + '.currentValue'); }   // value moves with capital added on either device
     for (const k of new Set([...Object.keys(theirs), ...Object.keys(mine)])) {
       const inM = k in mine, inT = k in theirs, inB = k in b;
       if (inM && inT) { res[k] = _syncMerge3(b[k], mine[k], theirs[k], [...path, k], out); continue; }
@@ -27500,6 +27677,7 @@ function _syncMerge3(base, mine, theirs, path, out) {
     const order = [...theirs.map(x => x.id), ...mine.filter(x => !T.has(x.id)).map(x => x.id)]; const res = [];
     for (const id of order) {
       const m = M.get(id), t = T.get(id), b = B.get(id); const pp = [...path, '#' + id];
+      if (m && t && b && p === 'transactions' && _syncPaySplitBoth(b, m, t)) { out.conflicts.push({ pathArr: pp, kind: 'record', mine: m, theirs: t }); res.push(t); continue; } // PLS #566
       if (m && t) { res.push(_syncMerge3(b, m, t, pp, out)); continue; }
       const present = m || t;
       if (!b) { res.push(present); continue; }                  // new on one device
@@ -27513,12 +27691,15 @@ function _syncMerge3(base, mine, theirs, path, out) {
   out.conflicts.push({ pathArr: path.slice(), kind: 'changed', base, mine, theirs }); return theirs;    // provisional: Drive's value until the user answers
 }
 function _syncMergeDB(base, mine, theirs) {
-  const out = { conflicts: [], rules: [], flags: [], deltaPaths: new Set() };
-  const res = _syncMerge3(base, mine, theirs, [], out);
+  const out = { conflicts: [], rules: [], flags: [], deltaPaths: new Set(), noDelta: new Set(), ctx: { base, mine, theirs } };
+  const res = _syncMerge3(base, mine, theirs, [], out); delete out.ctx;
   for (const dir of ['lent', 'borrowed']) for (const l of ((res.loans || {})[dir] || [])) if (typeof l.remaining === 'number' && l.remaining <= 0 && !l.settled && out.rules.some(r => r.path.includes('#' + l.id))) l.settled = true;
   for (const t of (res.transactions || [])) if (t.type === 'shared' && t.paidSoFar && out.rules.some(r => r.path.startsWith('transactions.#' + t.id + '.paidSoFar'))) {   // 'settled' follows the combined paid-back total
     const owed = (t.persons || []).reduce((s, x) => s + (x.share || 0), 0) || ((t.totalBill || t.amount) - (t.myShare || 0)); const paid = Object.values(t.paidSoFar).reduce((s, v) => s + (parseFloat(v) || 0), 0);
     if (paid >= owed - 0.01 && !t.settled) t.settled = true; }
+  // PLS #566: an installment's paid months IS its linked payments (link adds, unlink all clears). Adding both devices'
+  // changes counted one payment linked on both phones twice (6 paid + 1 + 1 = 8 with 7 links): it follows the links.
+  for (const i of (res.installments || [])) if (Array.isArray(i.linkedTxIds) && out.rules.some(r => r.path === 'installments.#' + i.id + '.paidMonths')) i.paidMonths = i.linkedTxIds.length;
   // things worth a look after combining (nothing is changed for these, the user is told)
   const accts = new Map((res.accounts || []).map(a => [a.id, a])); const baseIds = new Set((base.transactions || []).map(t => t.id)), mineIds = new Set((mine.transactions || []).map(t => t.id));
   const newTx = (res.transactions || []).filter(t => !baseIds.has(t.id)).map(t => ({ rec: t, side: mineIds.has(t.id) ? 'mine' : 'theirs' }));
@@ -27588,15 +27769,92 @@ function _syncUnion(mine, theirs, path, out) {
       if (!_syncEq(m, t)) out.conflicts.push({ pathArr: [...path, '#' + m.id], kind: 'record', mine: m, theirs: t }); }
     return res; }
   if (Array.isArray(mine) && Array.isArray(theirs)) { const J = x => JSON.stringify(x); const res = theirs.slice(); mine.forEach(x => { if (!res.some(y => J(y) === J(x))) res.push(x); }); return res; }
-  return theirs;
+  return out.prefer === 'mine' ? mine : theirs; // PLS #568: single values (rates, settings) follow the newer save in Combine both
 }
-function _syncUnionDB(mine, theirs) {
-  const out = { conflicts: [], rules: [], flags: [], deltaPaths: new Set(), union: true };
+// -- PERSONAL LOGIC SET #568 -- (his ask Nov 7, "hanap ka pa ng loopholes") what a device deleted is in its archive. Combining
+// put an entry back in the list while its deleted copy stayed in the archive, the same entry twice. A delete now holds unless he
+// taps to keep it, and after combining nothing is both in a list and in its archive.
+function _syncArchiveDeleted(mine, theirs) {
+  const ids = d => new Set((d.transactions || []).map(t => t.id)), M = ids(mine), T = ids(theirs);
+  return new Set([...(mine.archivedTransactions || []).filter(t => T.has(t.id) && !M.has(t.id)), ...(theirs.archivedTransactions || []).filter(t => M.has(t.id) && !T.has(t.id))].map(t => t.id));
+}
+// -- PERSONAL LOGIC SET #568 -- (future-proof, his ask Nov 7) what goes with an entry he leaves out of Combine both: the
+// entries made from it (fee, gain, forex, the other half of a paid-in-kind pair, a bill made from a reimbursable fee), and
+// for a "Lent to" or "Borrowed from" entry the loan itself with its payments. Only entries that are on one side only go with
+// it; an entry both devices have is never dropped because of a link.
+function _syncLinkedOut(txs, seed, only) {
+  const drop = new Set(seed), loans = new Set(); let grew = true;
+  while (grew) { grew = false;
+    for (const t of txs) { if (!t) continue;
+      if (drop.has(t.id)) { if (t.loanId && !loans.has(t.loanId)) { loans.add(t.loanId); grew = true; } continue; }
+      if (!only.has(t.id)) continue;
+      const bl = t.isBatchSettlement && Array.isArray(t.batchLoanIds) && t.batchLoanIds.length ? t.batchLoanIds : null;
+      if (drop.has(t.parentId) || drop.has(t.cascadedFrom) || drop.has(t.feeTxId) || drop.has(t.inKindPayId) || drop.has(t.inKindExpId)
+        || (t.isSettlement && loans.has(t.parentId) && !bl) || (bl && bl.every(id => loans.has(id)))) { drop.add(t.id); grew = true; } } }
+  return { drop, loans };
+}
+function _syncUnionDB(mine, theirs, prefer, skip) {
+  const out = { conflicts: [], rules: [], flags: [], deltaPaths: new Set(), union: true, recountAll: true, instSurplus: {} }; // PLS #567: paid totals are counted again from both sides' payments
+  out.prefer = prefer;
+  if (!skip) skip = { tx: _syncArchiveDeleted(mine, theirs) }; // a sync with no screen still keeps deletes
   const res = _syncUnion(mine, theirs, [], out);
+  const at = P => { let node = res; for (let k = 0; k < P.length - 1 && node != null; k++) { const s = P[k]; node = (typeof s === 'string' && s[0] === '#' && Array.isArray(node)) ? node.find(x => x && x.id === s.slice(1)) : node[s]; }
+    return Array.isArray(node) ? { arr: node, ix: node.findIndex(x => x && x.id === String(P[P.length - 1]).slice(1)) } : null; };
+  const setRec = (P, v) => { const h = at(P); if (h && h.ix >= 0) h.arr[h.ix] = JSON.parse(JSON.stringify(v)); };
   const tIds = new Set((theirs.transactions || []).map(t => t.id)), mIds = new Set((mine.transactions || []).map(t => t.id));
-  const key = t => [t.type, t.date, t.amount, t.currency, t.accountId || t.fromAccountId, t.categoryId || ''].join('|');
   const onlyM = (mine.transactions || []).filter(t => !tIds.has(t.id)), onlyT = (theirs.transactions || []).filter(t => !mIds.has(t.id));
-  for (const a of onlyM) if (onlyT.some(b => key(a) === key(b))) out.flags.push({ kind: 'duplicate', tx: a });
+  const only = new Set([...onlyM, ...onlyT].map(t => t.id));
+  // PLS #568: his leave-outs and what goes with them
+  out.dropped = { tx: [], loans: [], accounts: [], investments: [] };
+  const seed = new Set([...((skip && skip.tx) || [])].filter(id => only.has(id)));
+  if (seed.size) { const L = _syncLinkedOut(res.transactions, seed, only);
+    out.dropped.tx = res.transactions.filter(t => L.drop.has(t.id)).map(t => ({ id: t.id })); res.transactions = res.transactions.filter(t => !L.drop.has(t.id));
+    for (const dir of ['lent', 'borrowed']) if (res.loans && Array.isArray(res.loans[dir])) { res.loans[dir] = res.loans[dir].filter(l => { if (!L.loans.has(l.id)) return true; out.dropped.loans.push(l.id); return false; }); }
+    // an investment only one side has goes when every money entry for it was left out
+    const iM = new Set((mine.investments || []).map(x => x.id)), iT = new Set((theirs.investments || []).map(x => x.id));
+    if (Array.isArray(res.investments)) res.investments = res.investments.filter(v => { if (iM.has(v.id) && iT.has(v.id)) return true;
+      const any = x => x.isInvestmentFund && x.investmentId === v.id; const was = [...onlyM, ...onlyT].some(any);
+      if (was && !res.transactions.some(any)) { out.dropped.investments.push(v.id); return false; } return true; });
+    out.conflicts = out.conflicts.filter(c => !(c.pathArr[0] === 'transactions' && L.drop.has(String(c.pathArr[1]).slice(1))) && !(c.pathArr[0] === 'loans' && L.loans.has(String(c.pathArr[2]).slice(1)))); }
+  // PLS #568: accounts, loans, installments... he left out, unless something kept still uses one (then it stays and he is told)
+  const rSkip = new Set([...((skip && skip.rec) || [])]);
+  const txJ = rSkip.size ? JSON.stringify(res.transactions) : '';
+  for (const [col] of _SYNC_RECS) { const arr = _syncCol(res, col); if (!arr.length) continue;
+    const keep = arr.filter(r => { if (!rSkip.has(col + '|' + r.id)) return true;
+      if (txJ.includes('"' + r.id + '"') || _syncRefsOutside(res, col, r.id)) { out.flags.push({ kind: 'keptaccount', name: r.name || r.personName || r.location || 'An item' }); return true; }
+      (col === 'accounts' ? out.dropped.accounts : col.startsWith('loans.') ? out.dropped.loans : col === 'investments' ? out.dropped.investments : (out.dropped.other = out.dropped.other || [])).push(r.id); return false; });
+    if (col.startsWith('loans.')) res.loans[col.slice(6)] = keep; else res[col] = keep; }
+  // PLS #568: nothing is both kept and in its archive
+  { const A = new Set(res.transactions.map(t => t.id)), Lo = new Set([...((res.loans || {}).lent || []), ...((res.loans || {}).borrowed || [])].map(l => l.id)), I = new Set((res.investments || []).map(x => x.id));
+    if (Array.isArray(res.archivedTransactions)) res.archivedTransactions = res.archivedTransactions.filter(t => !A.has(t.id));
+    if (Array.isArray(res.archivedLoans)) res.archivedLoans = res.archivedLoans.filter(l => !Lo.has(l.id));
+    if (Array.isArray(res.archivedInvestments)) res.archivedInvestments = res.archivedInvestments.filter(x => !I.has(x.id)); }
+  const live = new Set(res.transactions.filter(t => !t.archived).map(t => t.id));
+  // PLS #568: an installment keeps the payments linked on either device (one device linking a month is not a question); months
+  // are counted from the links whose payment is kept, plus any months it had before payments were linked
+  const instOf = (d, id) => (d.installments || []).find(x => x.id === id);
+  for (const i of (res.installments || [])) { const sides = [instOf(mine, i.id), instOf(theirs, i.id)].filter(Boolean);
+    out.instSurplus[i.id] = Math.min(...sides.map(x => Math.max(0, (Number(x.paidMonths) || 0) - ((x.linkedTxIds || []).length)))); }
+  out.conflicts.forEach(c => { if (c.kind !== 'record' || c.pathArr[0] !== 'installments' || !c.mine || !c.theirs) return;
+    const L = [...new Set([...(c.theirs.linkedTxIds || []), ...(c.mine.linkedTxIds || [])])]; c.mine = { ...c.mine, linkedTxIds: L }; c.theirs = { ...c.theirs, linkedTxIds: L }; setRec(c.pathArr, c.theirs); });
+  // PLS #568: capital added on each device is all kept (the amount is where both started plus every kept capital entry),
+  // so it is not asked; a capital entry he left out is not counted
+  out.conflicts.forEach(c => { if (c.kind !== 'record' || c.pathArr[0] !== 'investments' || !c.mine || !c.theirs) return;
+    const id = c.mine.id, cap = A => A.filter(x => !x.archived && x.isInvestmentFund && x.investmentId === id).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const cM = cap(onlyM), cT = cap(onlyT), kept = cap([...onlyM, ...onlyT].filter(x => live.has(x.id))), cur = c.mine.currency || c.theirs.currency || _homeBase();
+    const start = c.mine.amount - cM; if (!(cM || cT) || Math.abs(start - (c.theirs.amount - cT)) >= 0.01) return;
+    const vM = c.mine.currentValue, vT = c.theirs.currentValue, hasV = typeof vM === 'number' && typeof vT === 'number';
+    if (hasV && Math.abs((vM - cM) - (vT - cT)) >= 0.01) return;
+    const rest = _syncRealDiff({ ...c.mine, amount: 0, currentValue: 0 }, { ...c.theirs, amount: 0, currentValue: 0 }); if (rest.length) return;
+    const pick = { ...(prefer === 'mine' ? c.mine : c.theirs), amount: roundMoney(start + kept, cur) }; if (hasV) pick.currentValue = roundMoney(vM - cM + kept, cur);
+    c.mine = c.theirs = pick; c.auto = true; setRec(c.pathArr, pick); });
+  // PLS #567: two versions that differ only in what the app works out itself are not asked; the newer save's copy is kept
+  out.conflicts = out.conflicts.filter(c => {
+    if (c.auto) return false;
+    if (c.kind !== 'record' || _syncRealDiff(c.mine, c.theirs).length) return true;
+    setRec(c.pathArr, prefer === 'mine' ? c.mine : c.theirs); return false; });
+  const key = t => [t.type, t.date, t.amount, t.currency, t.accountId || t.fromAccountId, t.categoryId || ''].join('|');
+  for (const a of onlyM) if (live.has(a.id) && onlyT.some(b => live.has(b.id) && key(a) === key(b))) out.flags.push({ kind: 'duplicate', tx: a });
   return { db: res, out };
 }
 async function _syncLatest() {
@@ -27644,6 +27902,7 @@ async function syncNow(opts) {
   opts = opts || {};
   if (!db.settings.googleDriveConnected) { if (!opts.silent) openDriveSheet(); return; }
   if (_syncBusy || _isSavingToDrive) return;
+  if (opts.silent && window._syncPending && document.querySelector('#dlg-overlay.open')) return; // PLS #568: never redo a sync while he is choosing
   if (!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) {
     if (opts.silent) setTimeout(() => { if ((!_gdriveAccessToken || Date.now() >= _gdriveTokenExpiry) && _syncStatus !== 'saving') { _syncNeedsTap = true; setSyncStatus(_syncIsUnsynced() ? 'unsaved' : 'signin'); } }, 2500); // PLS #442: wait for Google's answer before showing the reminder
     ensureDriveToken(() => syncNow(opts), !!opts.silent); return; }
@@ -27677,7 +27936,7 @@ async function syncNow(opts) {
     if (baseDb) delete baseDb._backupMeta;
     const mineC = JSON.parse(JSON.stringify(db));
     const { db: merged, out } = (baseDb && _syncValid(baseDb)) ? _syncMergeDB(baseDb, mineC, tClean) : _syncUnionDB(mineC, tClean); // PLS #451: no common save left, keep both
-    if (!_syncValid(merged) || !_syncKeptAll(merged, mineC, tClean, baseDb || { transactions: [], accounts: [] })) throw new Error('the combined result did not pass its check, nothing was changed');
+    if (!_syncValid(merged) || !_syncKeptAll(merged, mineC, tClean, baseDb || { transactions: (out.dropped && out.dropped.tx) || [], accounts: [] })) throw new Error('the combined result did not pass its check, nothing was changed');
     window._syncPending = { merged, out, latest, meta, choices: out.conflicts.map(() => 'theirs'), mineHash: _syncHash() };
     if (out.conflicts.length) { hideLoading(); setSyncStatus('behind'); _syncAskConflicts(); return; }
     await _syncFinishMerge();
@@ -27698,7 +27957,7 @@ async function _syncFinishMerge() {
   if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Data changed while syncing. Trying again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
   _premergeSave(p.meta.deviceName); // PLS #479: the copy is taken right here; the IndexedDB write finishes on its own
   const mineTx = db.transactions.length;
-  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); saveDB();
+  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); try { _syncRecountPaid(p.out); } catch (e) { console.warn('[Sync] recount', e); } saveDB();
   showLoading('Syncing...');
   try { await _syncUpload(); } catch(e) { hideLoading(); db.settings.lastLocalEditAt = new Date().toISOString(); saveDB(); setSyncStatus('unsaved'); showToast('Synced here. Will upload to Drive when it can'); setTimeout(() => location.reload(), 1200); return; }
   hideLoading(); window._syncPending = null;
@@ -27706,11 +27965,42 @@ async function _syncFinishMerge() {
   const done = () => location.reload();
   if (!flags.length) { showToast(p.out.union ? `Synced with ${p.meta.deviceName}. Items you deleted may be back` : `Synced with ${p.meta.deviceName}`, p.out.union ? 3500 : undefined); setTimeout(done, p.out.union ? 2600 : 1100); return; } // PLS #451
   const line = f => f.kind === 'duplicate' ? `Maybe added twice: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which you archived on the other device`
-    : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} uses an account you deleted on the other device` : `Account ${f.name} was added on both devices`;
+    : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} uses an account you deleted on the other device`
+    : f.kind === 'keptaccount' ? `${f.name} was kept, something still uses it` : `Account ${f.name} was added on both devices`;
   window._syncReload = done;
   openDlg('Synced, please check', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">Both devices are synced and nothing was lost. Please check ${flags.length === 1 ? 'this one' : 'these ' + flags.length}.</div>
     <div class="fs-card fs-feed">${flags.map(f => `<div class="fs-row"><div class="fs-t" style="font-weight:400;white-space:normal">${_esc(line(f))}</div></div>`).join('')}</div>`,
     `<button class="btn btn-primary btn-sm" onclick="closeDlg();_syncReload()">OK</button>`);
+}
+// -- PERSONAL LOGIC SET #566 -- (future-proof, Nov 7) what a bill or loan has been paid is a running total, so sync ADDS both
+// devices' changes to it. That is right when each device added its own payment, and wrong when the SAME payment was edited on
+// both: K4.95 lowered to K3.95 on one phone and K2.95 on the other ended at K1.95, while the payment kept one of the two. When a
+// payment was asked about, its bills and loans are counted again from the payments they have once the choice is made.
+function _syncRecountPaid(out) {
+  const paths = (out && out.conflicts || []).map(c => c.pathArr || []);
+  const ids = new Set(paths.filter(P => P[0] === 'transactions' && typeof P[1] === 'string' && P[1][0] === '#').map(P => P[1].slice(1)));
+  const bills = new Set(), loans = [];
+  // a loan asked about (its amount changed on both devices): what is left is counted again from its payments
+  for (const P of paths) if (P[0] === 'loans' && (P[1] === 'lent' || P[1] === 'borrowed') && typeof P[2] === 'string' && P[2][0] === '#') {
+    const l = (db.loans[P[1]] || []).find(x => x.id === P[2].slice(1)); if (l && l.settledAs !== 'writeoff' && !loans.includes(l)) loans.push(l); }
+  if (out && out.recountAll) { // PLS #567: after Combine both every bill, loan and installment is counted from the payments it has
+    db.transactions.forEach(t => { if (t.type === 'shared' && !t.archived) bills.add(t.id); });
+    for (const dir of ['lent', 'borrowed']) (db.loans[dir] || []).forEach(l => { if (l.settledAs !== 'writeoff' && !loans.includes(l)) loans.push(l); });
+    const live = new Set(db.transactions.filter(t => !t.archived).map(t => t.id)), sur = out.instSurplus || {}; // PLS #568: only links whose payment is kept count
+    (db.installments || []).forEach(i => { if (!Array.isArray(i.linkedTxIds)) return; i.linkedTxIds = [...new Set(i.linkedTxIds)].filter(id => live.has(id)); i.paidMonths = i.linkedTxIds.length + (sur[i.id] || 0); });
+  }
+  if (!ids.size && !loans.length && !bills.size) return;
+  for (const t of db.transactions.filter(x => ids.has(x.id) && !x.archived)) {
+    if (t.isAutoReimb || t.isBatchReimbSettlement) [...(t.batchTxIds || []), t.parentId, ...(Array.isArray(t.reimbBreakdown) ? t.reimbBreakdown.map(r => r.billId) : [])].forEach(id => id && bills.add(id));
+    if (t.isLoanPayment || t.isBatchSettlement) for (const dir of ['lent', 'borrowed']) for (const id of [...(t.batchLoanIds || []), t.parentId]) {
+      const l = (db.loans[dir] || []).find(x => x.id === id); if (l && l.settledAs !== 'writeoff' && !loans.includes(l)) loans.push(l); }
+  }
+  if (bills.size) { const got = _reimbAllocAll().got;
+    for (const b of db.transactions.filter(t => bills.has(t.id) && t.type === 'shared' && !t.archived && (t.persons || []).length)) {
+      if (!b.paidSoFar || typeof b.paidSoFar !== 'object') b.paidSoFar = {};
+      for (const p of b.persons) { const g = roundMoney(got[b.id + '|' + p.name] || 0, b.currency || _homeBase()); if (g <= 0.001) delete b.paidSoFar[p.name]; else b.paidSoFar[p.name] = g; }
+      _reimbBillSettle(b, b.settledAt || null); } }
+  loans.forEach(l => _loanRecount(l));
 }
 function _syncTxName(t) { const c = (typeof getCategoryDisplay === 'function' && t.categoryId) ? (getCategoryDisplay(t.categoryId) || {}).name : ''; return `${t.notes || c || t.type}, ${fmt(t.amount, t.currency)}, ${fmtDFull(t.date)}`; }
 // Plain words for one conflict: what it is, and what each device says
@@ -27739,8 +28029,9 @@ function _syncDescribe(c, d) {
     : (key === 'amount' && rec && typeof v === 'number') ? fmt(v, rec.currency) : ((key === 'date' || (col === 'settings' && P[1] === 'vacations' && (key === 'from' || key === 'to'))) && typeof v === 'string') ? fmtDFull(v)
     : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? (v ? 'yes' : 'no') : typeof v === 'string' ? (v.length > 28 ? v.slice(0, 27) + '…' : v) : 'changed';
   if (c.kind === 'deleted') return { title, sub: 'Deleted on one device, edited on the other', mine: c.mineGone ? 'delete it' : 'keep the edit', theirs: c.theirsGone ? 'delete it' : 'keep the edit' };
-  if (c.kind === 'record') { const amt = r => (col === 'transactions' && r && typeof r.amount === 'number') ? fmt(r.amount, r.currency) : 'this version'; // PLS #451
-    return { title, sub: 'Different on the two devices', mine: amt(c.mine), theirs: amt(c.theirs) }; }
+  if (c.kind === 'record') { // PLS #451; PLS #567: the part that differs (amount, date, account, note), not "this version" twice
+    if (col === 'transactions' && c.mine && c.theirs) { const w = _syncDiffWhat(c.mine, c.theirs); return { title, sub: 'Different on the two devices', mine: w[0], theirs: w[1] }; }
+    const w = _syncRecWhat(c.mine || {}, c.theirs || {}); return { title, sub: 'Different on the two devices', mine: w[0], theirs: w[1] }; }
   const mine = show(c.mine, c.mineGone), theirs = show(c.theirs, c.theirsGone), F = field ? field[0].toUpperCase() + field.slice(1) : 'This';
   return { title, sub: mine === theirs ? `Same ${field || 'value'} on both, either one is fine` : `${F} is different on the two`, mine, theirs };
 }
@@ -27778,13 +28069,171 @@ function _syncApplyChoices() {
   if (!_syncValid(p.merged)) { showToast('Could not save that. Nothing changed'); return; }
   closeDlg(); _syncBusy = true; _syncFinishMerge().finally(() => { _syncBusy = false; });
 }
-// No common save point (first sync after this update, or the old file is gone): the user picks a side, and the other side is kept
-function _syncAskSides() {
-  const p = window._syncPending; if (!p) return; const S = _syncSides(p); const row = (t, s, a) => `<div class="fs-row"><div style="flex:1;min-width:0"><div class="fs-t">${t}</div><div class="fs-s">${s}</div></div><div class="fs-a" style="font-weight:400;color:var(--text2)">${a}</div></div>`;
-  openDlg('Pick which data to use', `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">${S.mine} and Google Drive have different data and cannot be combined. Nothing was changed yet.</div>
-    <div class="fs-card fs-feed" style="margin-bottom:12px">${row('On Google Drive', `${_esc(_syncWhen(p.meta.at))}, from ${_esc(p.meta.deviceName)}`, `${p.meta.txCount} transactions`)}${row(S.mine, 'Has changes not yet on Drive', `${db.transactions.length} transactions`)}</div>
-    <div style="font-size:12px;color:var(--text3);line-height:1.5">The one you do not pick is not lost. Get this device's data back from Undo last sync, or the Drive data from Backups.</div>`,
-    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Later</button><button class="btn btn-ghost btn-sm" onclick="_syncSide('mine')">Use ${S.mineIn}</button><button class="btn btn-primary btn-sm" onclick="_syncSide('theirs')">Use Drive</button>`);
+// -- PERSONAL LOGIC SET #567 -- (his report Nov 7: "device basis padn, kung may discrepancy sa list d mo makukumpara") With no
+// common save point the popup only said "1,036 transactions" against "1,031" and asked for one whole side. It now lists what
+// is only on each side and what differs, and offers Combine both (his pick): every entry from both is kept and only the
+// ones that differ are asked, side by side. Use one side stays available.
+const _SYNC_VOL = new Set(['updatedAt', 'editedAt', 'lastEdited', 'modifiedAt', '_rev', 'lastModified']);
+// what the app works out by itself (counted again from the payments after combining) and centavo rounding are not differences
+// he has to judge: on his Nov 5 and Nov 7 saves 84 of 86 "different" entries were only these
+const _SYNC_BOOK = new Set(['reimbBreakdown', 'batchBreakdown', 'paidSoFar', 'settled', 'settledAt', 'settledDate', 'remaining', 'paidMonths', 'lastUpdated', 'lastTxDate']);
+function _syncRealDiff(a, b) {
+  if (!a || !b) return a === b ? [] : ['all'];
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => !_SYNC_VOL.has(k) && !_SYNC_BOOK.has(k)).filter(k => {
+    const x = a[k], y = b[k]; if (typeof x === 'number' && typeof y === 'number') return Math.abs(x - y) >= 0.005;
+    return JSON.stringify(x) !== JSON.stringify(y); });
+}
+function _syncSameRec(a, b) { return !_syncRealDiff(a, b).length; }
+function _syncDiffList(mine, theirs) {
+  const M = new Map((mine.transactions || []).map(t => [t.id, t])), T = new Map((theirs.transactions || []).map(t => [t.id, t]));
+  const onlyM = [], onlyT = [], diff = [];
+  for (const [id, t] of M) { const o = T.get(id); if (!o) onlyM.push(t); else if (!_syncSameRec(t, o)) diff.push({ mine: t, theirs: o }); }
+  for (const [id, t] of T) if (!M.has(id)) onlyT.push(t);
+  const newest = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
+  onlyM.sort(newest); onlyT.sort(newest); diff.sort((x, y) => newest(x.mine, y.mine));
+  const other = []; const cnt = (A, B, both) => { const X = new Map((A || []).map(x => [x.id, x])), Y = new Map((B || []).map(x => [x.id, x])); let n = 0;
+    for (const id of new Set([...X.keys(), ...Y.keys()])) if ((!X.has(id) || !Y.has(id)) ? !both : !_syncSameRec(X.get(id), Y.get(id))) n++; return n; };
+  const nA = cnt(mine.accounts, theirs.accounts, true); if (nA) other.push(`${nA} ${nA === 1 ? 'account' : 'accounts'}`); // PLS #568: one side only is listed above
+  for (const [k, one, many] of [['installments', 'installment', 'installments'], ['investments', 'investment', 'investments'], ['budgets', 'budget', 'budgets'], ['goals', 'goal', 'goals']]) {
+    const n = cnt(mine[k], theirs[k], true); if (n) other.push(`${n} ${n === 1 ? one : many}`); }
+  const nl = cnt([...((mine.loans || {}).lent || []), ...((mine.loans || {}).borrowed || [])], [...((theirs.loans || {}).lent || []), ...((theirs.loans || {}).borrowed || [])], true);
+  if (nl) other.push(`${nl} ${nl === 1 ? 'loan' : 'loans'}`);
+  // PLS #568: accounts, loans, installments... that only one device has are listed so they can be left out
+  const recM = [], recT = [];
+  for (const [col] of _SYNC_RECS) { const X = new Set(_syncCol(mine, col).map(x => x.id)), Y = new Set(_syncCol(theirs, col).map(x => x.id));
+    _syncCol(mine, col).forEach(r => { if (!Y.has(r.id)) recM.push({ col, rec: r }); }); _syncCol(theirs, col).forEach(r => { if (!X.has(r.id)) recT.push({ col, rec: r }); }); }
+  return { onlyM, onlyT, diff, other, recM, recT };
+}
+function _syncTxRow(t, right, sub2, skippable) {
+  const c = txCategoryDisplay(t), a = txAmountDisplay(t);
+  const col = a.cls === 'tx-neg' ? 'var(--red)' : a.cls === 'tx-pos' ? 'var(--green)' : 'var(--text)';
+  const row = _fsRow({ ico: c.icon, title: _esc(t.notes ? _noteShow(t.notes) : _stripIcon(c.name)), sub: sub2 || fmtDFull(t.date), amt: right != null ? right : a.str, amtCol: col,
+    amt2: skippable ? '<span class="sync-k">Keep</span>' : '', onclick: skippable ? `_syncSkip('${escapeAttr(t.id)}')` : '' });
+  return skippable ? `<div class="sync-row" data-id="${escapeAttr(t.id)}">${row}</div>` : row;
+}
+// PLS #567: an entry that is only on one side can be left out of Combine both (one deleted on this device would come back)
+function _syncSkip(id) {
+  const p = window._syncPending; if (!p) return; p.skip = p.skip || new Set();
+  const before = _syncLinkedOut(p.viewTx || [], p.skip, p.only || new Set()).drop;
+  if (!p.skip.has(id) && before.has(id)) { showToast('This one goes with an entry you left out'); return; }
+  p.skip.has(id) ? p.skip.delete(id) : p.skip.add(id);
+  _syncSkipShow();
+}
+// PLS #568: what he left out, with what goes with it, shown before he combines
+function _syncSkipShow() {
+  const p = window._syncPending; if (!p) return;
+  const L = _syncLinkedOut(p.viewTx || [], p.skip || new Set(), p.only || new Set()), R = p.skipR || new Set();
+  document.querySelectorAll('.sync-row[data-id]').forEach(el => { const id = el.dataset.id, on = L.drop.has(id); el.classList.toggle('off', on);
+    const k = el.querySelector('.sync-k'); if (k) k.textContent = (p.skip || new Set()).has(id) ? 'Left out' : on ? 'Goes with it' : 'Keep'; });
+  document.querySelectorAll('.sync-row[data-rec]').forEach(el => { const on = R.has(el.dataset.rec); el.classList.toggle('off', on);
+    const k = el.querySelector('.sync-k'); if (k) k.textContent = on ? 'Left out' : 'Keep'; });
+  const n = L.drop.size, nl = [...L.loans].filter(id => (p.viewLoans || new Set()).has(id)).length + [...R].filter(k => k.startsWith('loans.')).length;
+  const na = [...R].filter(k => k.startsWith('accounts|')).length, no = R.size - na - [...R].filter(k => k.startsWith('loans.')).length;
+  const parts = [n ? `${n} ${n === 1 ? 'entry' : 'entries'}` : '', nl ? `${nl} ${nl === 1 ? 'loan' : 'loans'}` : '', na ? `${na} ${na === 1 ? 'account' : 'accounts'}` : '', no ? `${no} other ${no === 1 ? 'item' : 'items'}` : ''].filter(Boolean);
+  const el = document.getElementById('sync-skipn'); if (el) el.textContent = parts.length ? 'Leaving out ' + parts.join(', ') : '';
+}
+// PLS #568: an account, loan, installment, investment, budget... that only one device has can be left out, unless something kept uses it
+function _syncSkipRec(key) {
+  const p = window._syncPending; if (!p) return; p.skipR = p.skipR || new Set();
+  if (p.skipR.has(key)) { p.skipR.delete(key); return _syncSkipShow(); }
+  const [col, id] = key.split('|'), L = _syncLinkedOut(p.viewTx || [], p.skip || new Set(), p.only || new Set()), q = '"' + id + '"';
+  const n = (p.viewTx || []).filter(t => !L.drop.has(t.id) && JSON.stringify(t).includes(q)).length;
+  if (n) { showToast(`${n} ${n === 1 ? 'entry still uses' : 'entries still use'} this. Leave ${n === 1 ? 'it' : 'them'} out first`); return; }
+  if ([db, p.theirs].some(d => _syncRefsOutside(d, col, id))) { showToast('Something you keep still uses this'); return; }
+  p.skipR.add(key); _syncSkipShow();
+}
+// does anything outside its own list (and outside the entries) name this id? archived entries count, so a restore never breaks
+function _syncRefsOutside(d, col, id) {
+  const c = { ...d, transactions: [] }; if (col.startsWith('loans.')) c.loans = {}; else c[col] = [];
+  return JSON.stringify(c).includes('"' + id + '"');
+}
+const _SYNC_RECS = [['accounts', '🏦'], ['loans.lent', '🤝'], ['loans.borrowed', '🤝'], ['installments', '💳'], ['investments', '📈'], ['budgets', '🗂️'], ['contracts', '📄'], ['targets', '🎯'], ['wishlist', '⭐'], ['recurringTxs', '🔁']];
+const _syncCol = (d, col) => col.startsWith('loans.') ? (((d || {}).loans || {})[col.slice(6)] || []) : ((d || {})[col] || []);
+function _syncDiffWhat(m, t) { // the first thing that differs, in plain words
+  const acct = id => (db.accounts.find(a => a.id === id) || {}).name || 'another account';
+  const d = new Set(_syncRealDiff(m, t));
+  if (d.has('amount') || d.has('currency')) return [fmt(m.amount, m.currency), fmt(t.amount, t.currency)];
+  if (d.has('toAmount')) return [`${fmt(m.toAmount, m.toCurrency)} received`, `${fmt(t.toAmount, t.toCurrency)} received`];
+  if (d.has('date')) return [fmtDFull(m.date), fmtDFull(t.date)];
+  if (d.has('paidByPerson') || d.has('inKindPayId')) return [m.paidByPerson ? `paid by ${m.paidByPerson}` : `paid from ${acct(m.accountId)}`, t.paidByPerson ? `paid by ${t.paidByPerson}` : `paid from ${acct(t.accountId)}`];
+  if (d.has('accountId')) return [acct(m.accountId), acct(t.accountId)];
+  if (d.has('notes')) return [`"${(m.notes || 'no note').slice(0, 18)}"`, `"${(t.notes || 'no note').slice(0, 18)}"`];
+  if (d.has('categoryId')) return [(getCategoryDisplay(m.categoryId) || {}).name || 'other category', (getCategoryDisplay(t.categoryId) || {}).name || 'other category'];
+  return _syncRecWhat(m, t);
+}
+// any record (account, budget, category, loan...): the first field that really differs, named in plain words
+function _syncRecWhat(m, t) {
+  const d = _syncRealDiff(m, t); if (!d.length || d[0] === 'all') return ['this version', 'that version'];
+  const order = ['amount', 'limit', 'name', 'personName', 'initialBalance', 'currency', 'date', 'dueDate', 'notes', 'subcats'];
+  const k = order.find(x => d.includes(x)) || d[0];
+  const label = ({ initialBalance: 'starting balance', personName: 'person', dueDate: 'due date', subcats: 'subcategories', allocations: 'planned amounts', allocLocks: 'locked amounts' })[k]
+    || String(k).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  const L = label[0].toUpperCase() + label.slice(1);
+  const one = (r, o) => { const v = r[k];
+    if (typeof v === 'number') return `${L} ${r.currency || o.currency ? fmt(v, r.currency || o.currency) : v}`;
+    if (typeof v === 'string') return `${L} ${/date/i.test(k) ? fmtDFull(v) : v.length > 22 ? v.slice(0, 21) + '…' : v}`;
+    if (Array.isArray(v)) { const names = x => (x || []).map(y => y && y.name).filter(Boolean); const extra = names(v).filter(n => !names(o[k]).includes(n));
+      const miss = names(o[k]).filter(n => !names(v).includes(n));
+      return extra.length ? `Has ${extra.slice(0, 2).join(', ')}` : miss.length ? `No ${miss.slice(0, 2).join(', ')}` : `${L}: ${v.length}`; }
+    return v == null ? `No ${label}` : `${L} changed`; };
+  return [one(m, t), one(t, m)];
+}
+function _syncAskSides(all) {
+  const p = window._syncPending; if (!p) return; const S = _syncSides(p);
+  const mineC = JSON.parse(JSON.stringify(db)); delete mineC._backupMeta;
+  const D = _syncDiffList(mineC, p.theirs), CAP = all ? Infinity : 150;
+  const more = n => n > CAP ? `<div class="fs-row" onclick="_syncAskSides(true)"><div class="fs-s" style="color:var(--accent)">Show ${n - CAP} more</div></div>` : '';
+  const dev = _esc(S.theirs);
+  p.viewTx = [...(mineC.transactions || []), ...D.onlyT]; p.only = new Set([...D.onlyM, ...D.onlyT].map(t => t.id)); // PLS #568
+  p.viewLoans = new Set([mineC, p.theirs].flatMap(d => [...((d.loans || {}).lent || []), ...((d.loans || {}).borrowed || [])]).map(l => l.id));
+  // PLS #568: an entry one device moved to its archive (deleted) starts as Left out, so the delete holds; tap to keep it
+  const delM = new Set((mineC.archivedTransactions || []).map(t => t.id)), delT = new Set((p.theirs.archivedTransactions || []).map(t => t.id));
+  const viaTx = new Set(p.viewTx.map(t => t.loanId).filter(Boolean)); // a loan made with an entry follows that entry
+  if (!all || !p.skip) { p.skip = new Set([...D.onlyT.filter(t => delM.has(t.id)), ...D.onlyM.filter(t => delT.has(t.id))].map(t => t.id)); p.skipR = new Set();
+    const aL = new Set((mineC.archivedLoans || []).map(l => l.id)), aI = new Set((mineC.archivedInvestments || []).map(x => x.id)), tL = new Set((p.theirs.archivedLoans || []).map(l => l.id)), tI = new Set((p.theirs.archivedInvestments || []).map(x => x.id));
+    for (const { col, rec } of D.recT) if ((col.startsWith('loans.') && aL.has(rec.id) && !viaTx.has(rec.id)) || (col === 'investments' && aI.has(rec.id))) p.skipR.add(col + '|' + rec.id);
+    for (const { col, rec } of D.recM) if ((col.startsWith('loans.') && tL.has(rec.id) && !viaTx.has(rec.id)) || (col === 'investments' && tI.has(rec.id))) p.skipR.add(col + '|' + rec.id); }
+  // PLS #568: the same entry added on both devices (different ids, same type, date, amount, account, category) is marked, so one can be left out
+  const key = t => [t.type, t.date, t.amount, t.currency, t.accountId || t.fromAccountId, t.categoryId || ''].join('|');
+  const kM = new Set(D.onlyM.map(key)), kT = new Set(D.onlyT.map(key));
+  const sub = (t, K, del, where) => del.has(t.id) ? `${fmtDFull(t.date)} · <span style="color:var(--text3)">Deleted on ${_esc(where)}</span>`
+    : K.has(key(t)) ? `${fmtDFull(t.date)} · <span style="color:var(--amber,#d97706)">Maybe added twice</span>` : null;
+  // records: a loan made with an entry follows that entry, so only loans without one are listed
+  const rName = (col, r) => col.startsWith('loans.') ? `${col === 'loans.lent' ? 'Lent to' : 'Borrowed from'} ${r.personName || ''}` : (r.name || r.location || r.label || r.title || 'Item');
+  const rSub = (col, r, other) => { const nm = String(rName(col, r)).trim().toLowerCase();
+    const twin = other.some(o => o.col === col && String(rName(o.col, o.rec)).trim().toLowerCase() === nm && (o.rec.currency || '') === (r.currency || ''));
+    const base = col.startsWith('loans.') && typeof r.amount === 'number' ? fmt(r.amount, r.currency) : (r.currency || '');
+    return _esc(base) + (r.archived ? ' · archived' : '') + (twin ? ' · <span style="color:var(--amber,#d97706)">Maybe added twice</span>' : ''); };
+  const recRow = (x, other) => { const ico = (_SYNC_RECS.find(c => c[0] === x.col) || [])[1] || '•', k = x.col + '|' + x.rec.id;
+    return `<div class="sync-row" data-rec="${escapeAttr(k)}">${_fsRow({ ico, title: _esc(rName(x.col, x.rec)), sub: rSub(x.col, x.rec, other), amt: '', amt2: '<span class="sync-k">Keep</span>', onclick: `_syncSkipRec('${escapeAttr(k)}')` })}</div>`; };
+  const rM = D.recM.filter(x => !(x.col.startsWith('loans.') && viaTx.has(x.rec.id))), rT = D.recT.filter(x => !(x.col.startsWith('loans.') && viaTx.has(x.rec.id)));
+  const secs = (D.onlyM.length ? _fsSec(`Only on ${_esc(S.mineIn)} · ${D.onlyM.length}`) + _fsFeed(D.onlyM.slice(0, CAP).map(t => _syncTxRow(t, null, sub(t, kT, delT, S.theirs), true)).join('') + more(D.onlyM.length)) : '')
+    + (D.onlyT.length ? _fsSec(`Only on ${dev} · ${D.onlyT.length}`) + _fsFeed(D.onlyT.slice(0, CAP).map(t => _syncTxRow(t, null, sub(t, kM, delM, S.mineIn), true)).join('') + more(D.onlyT.length)) : '')
+    + (rM.length ? _fsSec(`Other things only on ${_esc(S.mineIn)} · ${rM.length}`) + _fsFeed(rM.map(x => recRow(x, rT)).join('')) : '')
+    + (rT.length ? _fsSec(`Other things only on ${dev} · ${rT.length}`) + _fsFeed(rT.map(x => recRow(x, rM)).join('')) : '')
+    + (D.diff.length ? _fsSec(`On both, but different · ${D.diff.length}`) + _fsFeed(D.diff.slice(0, CAP).map(x => { const w = _syncDiffWhat(x.mine, x.theirs);
+        return _syncTxRow(x.mine, '', `${_esc(S.mine)}: ${_esc(w[0])} · ${dev}: ${_esc(w[1])}`); }).join('') + more(D.diff.length)) : '');
+  const none = !D.onlyM.length && !D.onlyT.length && !D.diff.length;
+  openDlg('Compare before syncing', `<div style="font-size:13px;color:var(--text2);line-height:1.5">${_esc(S.mine)} and ${dev} (on Google Drive, ${_esc(_syncWhen(p.meta.at))}) have different data. Nothing changes until you pick.</div>
+    ${none ? `<div style="font-size:13px;color:var(--text2);margin-top:12px">Transactions are the same on both.</div>` : ''}${secs}
+    ${D.other.length ? `<div style="font-size:12px;color:var(--text3);margin-top:12px">Also different: ${_esc(D.other.join(', '))}.</div>` : ''}
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-top:12px">Combine both keeps every entry from both. Tap an entry above to leave it out. The ones that differ are asked next, side by side.</div>
+    <div id="sync-skipn" style="font-size:12px;color:var(--accent);margin-top:6px"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"><button type="button" class="chip" onclick="_syncSide('mine')">Use ${_esc(S.mineIn)} only</button><button type="button" class="chip" onclick="_syncSide('theirs')">Use ${dev} only</button></div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="_syncCancel()">Later</button><button class="btn btn-primary btn-sm" onclick="_syncCombineBoth()">Combine both</button>`);
+  _syncSkipShow();
+}
+async function _syncCombineBoth() {
+  const p = window._syncPending; if (!p || !p.theirs) return;
+  const mineC = JSON.parse(JSON.stringify(db)); delete mineC._backupMeta;
+  const newer = (db.settings.lastLocalEditAt || '') > (p.meta.at || '') ? 'mine' : 'theirs';
+  const { db: merged, out } = _syncUnionDB(mineC, p.theirs, newer, { tx: p.skip || new Set(), rec: p.skipR || new Set() });
+  // nothing may be missing except what he left out (PLS #568: the check knows exactly which ones)
+  if (!_syncValid(merged) || !_syncKeptAll(merged, mineC, p.theirs, { transactions: out.dropped.tx, accounts: out.dropped.accounts.map(id => ({ id })) })) { showToast('Could not combine these. Nothing changed'); return; }
+  Object.assign(p, { merged, out, choices: out.conflicts.map(() => newer), mineHash: _syncHash() }); // PLS #568: questions start on the newer save, like everything else
+  closeDlg();
+  if (out.conflicts.length) return _syncAskConflicts();
+  _syncBusy = true; try { await _syncFinishMerge(); } finally { _syncBusy = false; }
 }
 async function _syncSide(side) {
   const p = window._syncPending; if (!p) return; closeDlg(); window._syncPending = null;
