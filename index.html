@@ -2408,6 +2408,13 @@ function escapeAttr(s) {
 // msgs, transfer detail lines, AI insight titles/bodies). HTML-bearing composites (e.g. the
 // acct-pill detail variants) escape the names INSIDE, never the whole composite.
 const _esc = escapeAttr;
+// PLS #573 (rule check Nov 8, his pick): a name passed as a quoted argument inside onclick="f('...')" needs
+// TWO layers: JS escaping (backslash, quotes, line breaks) so the code stays code, then HTML escaping so
+// the attribute is not cut short. _esc alone is decoded by the browser before the code runs, so an
+// apostrophe ("Mom's") still broke the button; replace(/'/g,"\\'") alone let a double quote or < through.
+// Same pass: the date and time boxes of Receive payment (loans and bills) carried a cut-off string as their
+// onchange, so the preview never followed a date change. They now pass the person through _escJs.
+const _escJs = s => _esc(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\r?\n/g, '\\n').replace(/</g, '\\x3c'));
 // ── PERSONAL LOGIC SET #122 ── Per-currency decimal precision (real-world accounting).
 // Fiat money is discrete to 2 decimals (₱1.20, never ₱1.1999...). Crypto/stablecoins use
 // up to 8 decimals (Bitcoin standard). Rates ALWAYS keep full precision (see PLS #108) —
@@ -4669,7 +4676,7 @@ const _WIDGET_INFO = {
   'timeofday': {title:'Time-of-day pattern', body:'Splits expenses into <b>Morning / Afternoon / Evening / Night buckets</b>. Late-night spending is often impulse-driven. This widget helps you spot if that\'s happening.'},
   'distribution': {title:'Transaction sizes', body:'Histogram showing what <b>size of transactions you make most often</b>, e.g. "30% of your transactions are 100–500 in your display currency." Reveals your spending "zones" and shopping habits.'},
   'yoy': {title:'Year-on-Year', body:'Compares this month to the <b>same month last year</b>, side by side. Shows whether you\'re spending more, less, or the same vs your past self. Only appears if you have data from that period.'},
-  'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk, e.g. "100% from salary" means you have no fallback. Includes FX arbitrage gains as a separate source.'},
+  'income-div': {title:'Income diversification', body:'Breaks down your <b>income sources over the last 6 months</b>. Shows concentration risk, e.g. "100% from salary" means you have no fallback. Every currency is counted, at its own rate, in your display currency, so it can differ from one currency tab of Income.'},
   'goal': {title:'Savings goal', body:'Tracks progress toward a <b>savings target you\'ve set</b>. Shows current savings vs target with a time-elapsed marker, so you can see if you\'re on track, ahead, or behind.'},
   'concentration': {title:'Account concentration', body:'Shows how your <b>liquid cash is distributed across accounts</b>. Risk indicator flags when too much is in one place, e.g. "78% in one account" means liquidity risk if that account is frozen or unreachable.'},
   'accthealth': {title:'Account health', body:'Tracks <b>activity, flow, and dormancy</b> of your accounts. Look for: <b>↓ Inflow vs ↑ Outflow</b> (where money is coming/going), <b>Avg transaction</b> (daily-use vs big-purchase pattern), <b>Tx count</b> (busy vs barely-used), and <b>Dormant 60+ days</b> (archive candidates). Use this to declutter, spot leaks, or prioritize reconciliation.'},
@@ -5034,7 +5041,7 @@ function searchNat(q) {
   if (!list) return;
   const qq = (q||'').toLowerCase();
   const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
-  list.innerHTML = matches.map(c=>`<div onmousedown="selectNat('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectNat('${_escJs(c)}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
   list.style.display = matches.length ? 'block' : 'none';
 }
 
@@ -5056,7 +5063,7 @@ function searchLoc(q) {
   if (!list) return;
   const qq = (q||'').toLowerCase();
   const matches = COUNTRIES.filter(c=>c.toLowerCase().includes(qq)).slice(0,10);
-  list.innerHTML = matches.map(c=>`<div onmousedown="selectLoc('${c.replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
+  list.innerHTML = matches.map(c=>`<div onmousedown="selectLoc('${_escJs(c)}')" style="padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)" onmouseover="this.style.background='rgba(124,109,240,0.15)'" onmouseout="this.style.background=''">${getFlag(c)} ${c}</div>`).join('');
   list.style.display = matches.length ? 'block' : 'none';
 }
 
@@ -5986,6 +5993,10 @@ const APP_CHANGELOG = [
     '✏️ Tap a payment under a bill or loan to edit just the part that went there; the payment total follows', // PLS #566
     '🔄 Sync keeps running totals right when both devices changed the same thing: a payment, a loan amount, installment months, or an investment', // PLS #566
     '🔍 When two devices cannot be synced the usual way, Compare before syncing lists what is on each one, and Combine both keeps everything you do not leave out', // PLS #567
+    '📊 Income diversification names its sources as Income does and says it counts every currency, so the two can be compared', // PLS #569
+    '🗓️ The spending heatmap counts each day the same way as your monthly spending, losses on a sale included', // PLS #570
+    '🍩 The income donut on Overview now equals your monthly income: a debt that was forgiven counts, named as in Income', // PLS #572
+    '🔤 Names with symbols such as an apostrophe or quote show exactly as typed, and their buttons work; Receive payment updates when you change the date', // PLS #573
     '🧩 Combine both no longer brings back what you deleted. Leaving an entry out also leaves out its loan or fee, entries added twice are marked, and accounts, loans or installments on one device only can be left out too', // PLS #568
     '🧳 Planning > Budgets > Vacation days: trip days stay in your totals but not in usual spending, auto budget or Unusual alerts; Income on Summary compares with all of last month', // PLS #563 / #562
     '✏️ Edit can change who paid for an expense: an account to a person who owes you, or back', // PLS #537
@@ -6528,7 +6539,7 @@ function buildLinkedChildrenHTML(tx) {
         else if (c.isInvestmentReturn) badge = `<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">Return</span>`;
         return `<div onclick="event.stopPropagation();openTxDetail('${c.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-            <div style="font-size:12px;color:var(--text2);min-width:0">${/^\p{L}/u.test(cCat.name) ? cCat.name : _stripIcon(cCat.name)}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${_esc(/^\p{L}/u.test(cCat.name) ? cCat.name : _stripIcon(cCat.name))}</div>
             ${badge}
           </div>
           <span class="${cAmtD.cls}" style="font-family:var(--mono);font-size:12px;font-weight:600;flex-shrink:0">${cAmtD.str}</span>
@@ -6640,8 +6651,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   if (tx.isLoanPayment) {
     const parentLoan = [...db.loans.lent, ...db.loans.borrowed].find(l => l.id === tx.parentId);
     const label = parentLoan
-      ? `${tx.loanDirection==='lent'?'Repayment from':'Payment to'} ${parentLoan.personName}`
-      : (tx.notes || 'Loan Payment');
+      ? `${tx.loanDirection==='lent'?'Repayment from':'Payment to'} ${_esc(parentLoan.personName)}`
+      : _esc(tx.notes || 'Loan Payment'); // PLS #573
     const cat = getCategoryDisplay(tx.categoryId);
     // -- PERSONAL STRUCTURE SET #258 -- A batch settlement is an isLoanPayment, and this branch RETURNS
     // before the batch-breakdown block further down ever runs — that block has been unreachable for
@@ -6759,8 +6770,8 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     personRows += `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:26px;height:26px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">${profile.slice(0,2).toUpperCase()}</div>
-          <span style="font-size:12px;font-weight:500;color:var(--text)">${profile} <span style="font-size:11px;font-weight:400;color:var(--text3)">(you)</span></span>
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--accent);flex-shrink:0">${_esc(profile.slice(0,2).toUpperCase())}</div>
+          <span style="font-size:12px;font-weight:500;color:var(--text)">${_esc(profile)} <span style="font-size:11px;font-weight:400;color:var(--text3)">(you)</span></span>
         </div>
         <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--red)">-${fmt(myShare, tx.currency)}</span>
       </div>`;
@@ -6919,7 +6930,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
         return `<div onclick="event.stopPropagation();openTxDetail('${lx.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
             <span style="font-size:14px">${cat.icon}</span>
-            <div style="font-size:12px;color:var(--text2);min-width:0">${(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))} · ${fmtD(lx.date)}</div>
+            <div style="font-size:12px;color:var(--text2);min-width:0">${_esc(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))} · ${fmtD(lx.date)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
             <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${fmt(lx.totalBill||lx.amount, lx.currency)}</span>
@@ -6949,7 +6960,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
-      <div class="tx-name">${(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))}</div>
+      <div class="tx-name">${_esc(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))}</div>
       <div class="tx-detail">${detail}</div>
     </div>
     <div class="tx-right">
@@ -10161,7 +10172,7 @@ function _openSharedFs(tx, footer, fxBadge) {
   const kidIds = kids.map(k => k.id);
   const others = [...kids, ...db.transactions.filter(t => !t.archived && (kidIds.includes(t.parentId) || payIds.includes(t.parentId)))];
   const linked = others.map(c => { const d = txAmountDisplay(c), cc = txCategoryDisplay(c);
-      return _fsRow({ ico:cc.icon, title:_stripIcon(cc.name), sub:fmtDFull(c.date), amt:d.str,
+      return _fsRow({ ico:cc.icon, title:_esc(_stripIcon(cc.name)), sub:fmtDFull(c.date), amt:d.str,
         amtCol:d.cls === 'tx-neg' ? 'var(--red)' : d.cls === 'tx-pos' ? 'var(--green)' : 'var(--text)', onclick:`closeDlg();setTimeout(()=>openTxDetail('${c.id}'),100)`, chev:true }); }).join('');
   openDlg('', `<div class="fs">
     ${_fsHead({ badge:cat.icon, badgeBg:'var(--amber-bg)', badgeCol:'var(--amber)', ring:[pct(realPaid), pct(totalWO)],
@@ -10340,7 +10351,7 @@ function openTxDetail(txId) {
   } else {
     rows += tx.type==='remittance'
       ? `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(getAccountDisplay(tx.fromAccountId).name)} → ${_esc(getAccountDisplay(tx.toAccountId).name)}</div></div>`
-      : `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${acct?.name||'—'}</div></div>`;
+      : `<div class="detail-row"><div class="detail-label">Account</div><div class="detail-value">${_esc(acct?.name||'—')}</div></div>`;
   }
   if (tx.personName) rows += `<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(tx.personName)}</div></div>`;
   rows += `<div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>`;
@@ -10552,10 +10563,10 @@ function openTxDetail(txId) {
   } else {
     detailHeader = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
       <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">${dispCat.icon}</div>
-      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':_stripIcon(dispCat.name)}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
+      <div><div style="font-size:16px;font-weight:600">${tx.type==='transfer'?'Transfer':_esc(_stripIcon(dispCat.name))}</div><div class="tx-amount ${amtD.cls}" style="font-family:var(--mono);font-size:18px;margin-top:2px">${amtD.str}</div></div>
     </div>`;
     const _tint = amtD.cls === 'tx-neg' ? ['var(--red-bg)','var(--red)'] : amtD.cls === 'tx-pos' ? ['var(--green-bg)','var(--green)'] : ['var(--accent-bg)','var(--accent)'];
-    fsHeadHTML = _fsHead({ badge:dispCat.icon, badgeBg:_tint[0], badgeCol:_tint[1], ring:null, title:_stripIcon(dispCat.name),
+    fsHeadHTML = _fsHead({ badge:dispCat.icon, badgeBg:_tint[0], badgeCol:_tint[1], ring:null, title:_esc(_stripIcon(dispCat.name)),
       sub:`${fmtDFull(tx.date)}${txTimeStr(tx) ? ' ' + txTimeStr(tx) : ''}`,
       hero:`<span class="tx-amount ${amtD.cls}">${amtD.str}</span>`, heroCol:'var(--text)', heroLbl:'' });
   }
@@ -10602,7 +10613,7 @@ function openTxDetail(txId) {
     // PSS #515: what THIS payment put on each bill ("K2.10 of K31.40"), not each bill's whole share
     const _parts = (_reimbAllocAll().byPayment[tx.id] || []).map(r => ({ ...r, st: db.transactions.find(t => t.id === r.billId) })).filter(r => r.st);
     const _rows = _parts.length ? _parts.map(r => { const st = r.st, sc = getCategoryDisplay(st.subCatId || st.categoryId);
-      return _fsRow({ ico:sc.icon, title:_stripIcon(sc.name) + (st.notes ? ` · ${_esc(st.notes)}` : ''), sub:`${fmtDFull(st.date)} · ${r.done ? 'paid' : 'partly paid'}`,
+      return _fsRow({ ico:sc.icon, title:_esc(_stripIcon(sc.name)) + (st.notes ? ` · ${_esc(st.notes)}` : ''), sub:`${fmtDFull(st.date)} · ${r.done ? 'paid' : 'partly paid'}`,
         amt: fmt(r.amount, r.currency), amt2: `of ${fmt(r.share, r.currency)}`,
         onclick:`closeDlg();setTimeout(()=>openTxDetail('${st.id}'),50)`, chev:true }); }).join('')
     : tx.batchTxIds.map(id => db.transactions.find(t => t.id === id)).filter(Boolean).map(st => {
@@ -10610,7 +10621,7 @@ function openTxDetail(txId) {
       const share = Number(st.persons?.find(p => p.name === _who)?.share) || 0;       // this person's share
       const paid  = Number(st.paidSoFar?.[_who]) || 0;                                  // paid so far, all payments
       const done  = share > 0 ? paid >= share - 0.01 : !!st.settled;
-      return _fsRow({ ico:sc.icon, title:_stripIcon(sc.name), sub:`${fmtDFull(st.date)} · ${done ? 'paid' : 'partly paid'}`,
+      return _fsRow({ ico:sc.icon, title:_esc(_stripIcon(sc.name)), sub:`${fmtDFull(st.date)} · ${done ? 'paid' : 'partly paid'}`,
         amt: share > 0 ? fmt(share, st.currency) : fmt(st.totalBill||st.amount, st.currency),
         amt2: share > 0 ? `${_esc(_who)}'s share` : '',
         onclick:`closeDlg();setTimeout(()=>openTxDetail('${st.id}'),50)`, chev:true });
@@ -10657,13 +10668,13 @@ function openTxReceipt(txId) {
     // was live when it happened. Using a live rate here lets a rate update rewrite the past.
     const toAmt = tx.toAmount != null ? tx.toAmount : txAmtIn(tx.amount, tx, toCurr);
     heroAmount = `${fmt(tx.amount, tx.currency)}`;
-    heroLabel = `${fromAcct.name} → ${toAcct.name}${tx.currency !== toCurr ? ` · ${fmt(toAmt, toCurr)}` : ''}`;
+    heroLabel = `${_esc(fromAcct.name)} → ${_esc(toAcct.name)}${tx.currency !== toCurr ? ` · ${fmt(toAmt, toCurr)}` : ''}`;
   } else if (isShared) {
     heroAmount = fmt(tx.myShare ?? tx.amount, tx.currency);
-    heroLabel = _stripIcon(cat.name) + ' · my share';
+    heroLabel = _esc(_stripIcon(cat.name)) + ' · my share';
   } else {
     heroAmount = fmt(tx.amount, tx.currency);
-    heroLabel = _stripIcon(cat.name);
+    heroLabel = _esc(_stripIcon(cat.name));
   }
 
   // Build detail rows
@@ -10708,7 +10719,7 @@ function openTxReceipt(txId) {
     rowsHTML += tx.paidByPerson && !tx.accountId // PLS #533
       ? `<div class="rcpt-row"><div class="rcpt-row-label">Paid by</div><div class="rcpt-row-value">${_esc(tx.paidByPerson)}</div></div>`
       : `<div class="rcpt-row"><div class="rcpt-row-label">Account</div><div class="rcpt-row-value">${_esc(acct.name)}</div></div>`;
-    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Category</div><div class="rcpt-row-value">${cat.icon} ${_stripIcon(cat.name)}</div></div>`;
+    rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Category</div><div class="rcpt-row-value">${cat.icon} ${_esc(_stripIcon(cat.name))}</div></div>`;
     if (tx.personName) {
       rowsHTML += `<div class="rcpt-row"><div class="rcpt-row-label">Person</div><div class="rcpt-row-value">${_esc(tx.personName)}</div></div>`;
     }
@@ -10760,7 +10771,7 @@ function openTxReceipt(txId) {
         ? `Reimb. from ${c.reimbPerson || '—'}`
         : c.isAutoFee ? 'Remittance Fee'
         : (c.notes || 'Child');
-      return `<div class="rcpt-line-item"><span>${cLabel}</span><span style="font-family:var(--mono)">${cAmt.str}</span></div>`;
+      return `<div class="rcpt-line-item"><span>${_esc(cLabel)}</span><span style="font-family:var(--mono)">${cAmt.str}</span></div>`;
     }).join('');
     childrenSection = `<div class="rcpt-section-title">Linked entries</div>${childLines}`;
   }
@@ -10772,7 +10783,7 @@ function openTxReceipt(txId) {
       <div class="rcpt-brand">
         <div>
           <div class="rcpt-brand-name">TrackBudget</div>
-          <div class="rcpt-brand-sub">${profile}'s Ledger</div>
+          <div class="rcpt-brand-sub">${_esc(profile)}'s Ledger</div>
         </div>
         <div>
           <div class="rcpt-no-label">Receipt #</div>
@@ -11626,7 +11637,7 @@ function updateEditRemittancePreview() {
   if (fromId === toId) { prev.innerHTML = `<span style="color:var(--red)">From and To must differ.</span>`; return; }
   if (amount > 0 && rate > 0) {
     const received = roundMoney(amount * rate, toAcct.currency);
-    prev.innerHTML = `${toAcct.name} receives: <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toAcct.currency)}</strong>`;
+    prev.innerHTML = `${_esc(toAcct.name)} receives: <strong style="color:var(--green);font-family:var(--mono)">${fmt(received, toAcct.currency)}</strong>`;
   } else {
     prev.textContent = 'Enter amount and rate.';
   }
@@ -12358,7 +12369,7 @@ function openTxArchiveSheet() {
       const {cls:cCls, str:cStr} = txAmountDisplay(c);
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 44px;border-bottom:1px solid var(--border);opacity:0.7">
         <span style="font-size:13px">${cCat?.icon||'↳'}</span>
-        <div style="flex:1;font-size:12px;color:var(--text3)">${cCat?.name||c.type} <span style="color:var(--text3)">· linked</span></div>
+        <div style="flex:1;font-size:12px;color:var(--text3)">${_esc(cCat?.name||c.type)} <span style="color:var(--text3)">· linked</span></div>
         <div class="tx-amount ${cCls}" style="font-size:12px">${cStr}</div>
       </div>`;
     }).join('');
@@ -12367,13 +12378,13 @@ function openTxArchiveSheet() {
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer" onclick="toggleArchivedExpand('${tx.id}')">
         <div class="tx-icon" style="flex-shrink:0">${cat?.icon||'📋'}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500">${cat?.name||tx.type}</div>
+          <div style="font-size:13px;font-weight:500">${_esc(cat?.name||tx.type)}</div>
           <div style="font-size:11px;color:var(--text3)">${fmtDFull(tx.date)}${children.length>0?` · ${children.length} linked`:''}${tx.archivedAt?' · archived '+fmtDFull(tx.archivedAt):''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <div class="tx-amount ${cls}" style="font-size:13px">${str}</div>
           <button aria-label="Restore" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();restoreTx('${tx.id}')">↩</button>
-          <button aria-label="Delete" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();promptArchiveDelete('${tx.id}','${(cat?.name||tx.type).replace(/'/g,'')}',${children.length})">🗑</button>
+          <button aria-label="Delete" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;color:var(--red)" onclick="event.stopPropagation();promptArchiveDelete('${tx.id}','${_escJs(cat?.name||tx.type)}',${children.length})">🗑</button>
         </div>
       </div>
       ${children.length > 0 ? `<div id="arch-children-${tx.id}" style="display:none">${childRows}</div>` : ''}
@@ -12455,7 +12466,7 @@ function renderReimbTab() {
     const totalLabel = Object.entries(byCurr).map(([c,v]) => fmt(v, c)).join(' + ');
     const showHome = Object.keys(byCurr).some(c => c !== _displayCurrency()); // PLS #310
     const pHome = entries.reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0);
-    const rid = 'rp-' + person.replace(/\s/g,'_');
+    const rid = 'rp-' + person.replace(/[^\w-]/g, c => '_' + c.charCodeAt(0).toString(16)); // PLS #573: id-safe, still one per person
     const rowsHTML = entries.map(e => {
       const tx = e.tx;
       const catDisp = getCategoryDisplay(tx.categoryId);
@@ -12463,7 +12474,7 @@ function renderReimbTab() {
       return `<div class="tx-item" style="cursor:pointer" onclick="openTxDetail('${tx.id}')">
         <div class="tx-icon tx-icon-shared">${catDisp.icon}</div>
         <div class="tx-meta">
-          <div class="tx-name">${_stripIcon(catDisp.name)}${tx.isFeeReimbursable?` <span class="lp-pill due" title="Fee already counted as an expense">fee</span>`:''}</div>
+          <div class="tx-name">${_esc(_stripIcon(catDisp.name))}${tx.isFeeReimbursable?` <span class="lp-pill due" title="Fee already counted as an expense">fee</span>`:''}</div>
           <div class="tx-detail">${fmtDFull(tx.date)} · Total ${fmt(tx.totalBill||tx.amount, tx.currency)}${paidLabel}</div>
         </div>
         <div class="tx-right">
@@ -12483,7 +12494,7 @@ function renderReimbTab() {
       <div id="${rid}" style="display:none;border-top:1px solid var(--border)">
         ${rowsHTML}
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
-          <button class="btn btn-success btn-sm" onclick="settleReim('${person.replace(/'/g,"\\'")}')">Receive payment</button>
+          <button class="btn btn-success btn-sm" onclick="settleReim('${_escJs(person)}')">Receive payment</button>
         </div>
       </div>
     </div>`;
@@ -12579,9 +12590,9 @@ function _reimbSettledView(settled) {
           <div class="lp-meta">${nItems} ${nItems>1?'bills':'bill'} · paid ${fmtDFull(bp.date)}</div></div>
           <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev" id="${rid}-chev">›</span></div>
           <div id="${rid}" style="display:none;border-top:1px solid var(--border)">` + (parts.length ? parts.map(r => { const tx = r.tx, cat = getCategoryDisplay(tx.categoryId); return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
-              <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_stripIcon(cat.name)}${tx.notes ? ` <span style="color:var(--text3);font-weight:400">· ${_esc(tx.notes)}</span>` : ''}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
+              <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_esc(_stripIcon(cat.name))}${tx.notes ? ` <span style="color:var(--text3);font-weight:400">· ${_esc(tx.notes)}</span>` : ''}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
               <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text)">${fmt(r.amount, r.currency)}</div><div style="font-size:11px;color:${r.done ? 'var(--text3)' : 'var(--amber)'}">of ${fmt(r.share, r.currency)}${r.done ? '' : ' · part'}</div></div></div>`; }).join('') : c.txs.map(tx => { const cat = getCategoryDisplay(tx.categoryId); return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
-              <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_stripIcon(cat.name)}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
+              <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_esc(_stripIcon(cat.name))}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
               <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(tx.totalBill||tx.amount, tx.currency)}</div></div></div>`; }).join(''))
           + `<div style="padding:10px 16px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button></div></div></div>`;
       } else {
@@ -12589,7 +12600,7 @@ function _reimbSettledView(settled) {
         const ns = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
         const who = ns.length === 1 ? ns[0] : ns.length === 2 ? ns.join(' & ') : `${ns[0]} +${ns.length-1}`;
         html += `<div class="lp-row" onclick="openTxDetail('${tx.id}')">${ic(cat.icon)}
-          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_stripIcon(cat.name)}</span></div>
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(_stripIcon(cat.name))}</span></div>
           <div class="lp-meta">${_esc(who)} · ${fmtDFull(tx.date)}</div></div>
           <div class="lp-amt">${fmt(tx.totalBill || tx.amount, tx.currency)}</div><span class="lp-chev">›</span></div>`;
       }
@@ -12664,7 +12675,7 @@ function openReimbDialog(person) {
     const cat = getCategoryDisplay(tx.categoryId);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="flex:1;min-width:0">
-        <div style="color:var(--text2)">${cat.icon} ${_stripIcon(cat.name)} · ${fmtDFull(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:11px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense. Collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
+        <div style="color:var(--text2)">${cat.icon} ${_esc(_stripIcon(cat.name))} · ${fmtDFull(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:11px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense. Collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
         ${e.paid>0?`<div style="color:var(--text3);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
       </div>
       <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
@@ -12675,7 +12686,7 @@ function openReimbDialog(person) {
   const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
   const currSelectorHtml = currList.length > 1
     ? `<div class="form-group"><label class="form-label" for="rsl-curr">Settlement currency</label>
-         <select class="form-input" id="rsl-curr" onchange="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
+         <select class="form-input" id="rsl-curr" onchange="updateReimbBatchPreview('${_escJs(person)}')">${currOptsHtml}</select>
          <div style="font-size:11px;color:var(--text3);margin-top:4px">Other currency entries will be converted using snapshot FX rate</div>
        </div>`
     : `<input type="hidden" id="rsl-curr" value="${defaultCurr}">`;
@@ -12688,27 +12699,27 @@ function openReimbDialog(person) {
      <div style="background:var(--bg3);border-radius:var(--r-md);max-height:180px;overflow-y:auto;margin-bottom:14px">${rowsHTML}</div>
      ${currSelectorHtml}
      <div class="form-group"><label class="form-label" for="rsl-amount">Total received</label>
-       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="rsl-amount" value="" placeholder="0.00" oninput="updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">
+       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="rsl-amount" value="" placeholder="0.00" oninput="updateReimbBatchPreview('${_escJs(person)}')">
        <div id="rsl-amount-fmt" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
      </div>
      <div id="rsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
      <div class="form-group"><label class="form-label" for="rsl-acct">Receive into</label>
-       <select class="form-input" id="rsl-acct" onchange="syncCurrToAcct('rsl-acct','rsl-curr');updateReimbBatchPreview('${person.replace(/'/g,"\\'")}')">${acctOpts}</select>
+       <select class="form-input" id="rsl-acct" onchange="syncCurrToAcct('rsl-acct','rsl-curr');updateReimbBatchPreview('${_escJs(person)}')">${acctOpts}</select>
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="rsl-date">Date</label>
-         ${dtField('rsl-date','date','Date',today(),{onchange:'updateReimbBatchPreview(\'${person.replace(/\'/g,'})}
+         ${dtField('rsl-date','date','Date',today(),{onchange:`updateReimbBatchPreview('${_escJs(person)}')`})}
        </div>
        <div class="form-group"><label class="form-label" for="rsl-time">Time</label>
-         ${dtField('rsl-time','time','Time',nowTime(),{onchange:'updateReimbBatchPreview(\'${person.replace(/\'/g,'})}
+         ${dtField('rsl-time','time','Time',nowTime(),{onchange:`updateReimbBatchPreview('${_escJs(person)}')`})}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="rsl-notes">Notes</label>
        <input class="form-input" id="rsl-notes" placeholder="e.g. paid in full">
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="openWriteOffReimb('${person.replace(/'/g,"\\'")}')" title="Absorb remaining as your loss">✗ Write off</button>
-     <button class="btn btn-success btn-sm" onclick="confirmReimbSettlement('${person.replace(/'/g,"\\'")}')">Settle</button>`
+     <button class="btn btn-danger btn-sm" onclick="openWriteOffReimb('${_escJs(person)}')" title="Absorb remaining as your loss">✗ Write off</button>
+     <button class="btn btn-success btn-sm" onclick="confirmReimbSettlement('${_escJs(person)}')">Settle</button>`
   );
   // Auto-fill total
   setTimeout(()=>{
@@ -12831,7 +12842,7 @@ function openWriteOffReimb(person) {
       ${dtField('wor-date','date','Date',today())}
     </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm" onclick="confirmWriteOffReimb('${person.replace(/'/g,"\\'")}')">Write off</button>`
+     <button class="btn btn-danger btn-sm" onclick="confirmWriteOffReimb('${_escJs(person)}')">Write off</button>`
   );
 }
 
@@ -13292,7 +13303,7 @@ function openBalanceCorrection(acctId) {
   closeSheet('gen');
   setTimeout(() => {
     window._efNext = true; // PSS #361
-    openSheet('gen', `Reconcile ${_esc(a.name)}`, `
+    openSheet('gen', `Reconcile ${a.name}`, `
       <div style="background:var(--bg2);padding:14px;border-radius:var(--r-md);margin-bottom:14px;border:1px solid var(--border);text-align:center">
         <div style="font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:4px">Current app balance</div>
         <div style="font-size:24px;font-family:var(--mono);font-weight:600;letter-spacing:-0.5px;color:${appBal<0?'var(--red)':'var(--text)'}">${fmt(appBal, a.currency, appBal<0)}</div>
@@ -13495,7 +13506,7 @@ function openEditAccount(acctId) {
       <div class="form-group"><label class="form-label" for="ea-currency">Currency</label><select class="form-input" id="ea-currency" data-mode="${a.type==='Crypto Wallet'?'crypto':'fiat'}">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label" for="ea-balance">Initial balance</label><input class="form-input numpad-input" type="number" id="ea-balance"  value="${a.initialBalance||0}" inputmode="none"></div>
-    <div class="form-group"><label class="form-label" for="ea-note">Note / reference</label><input class="form-input" id="ea-note" value="${a.note||''}"></div>
+    <div class="form-group"><label class="form-label" for="ea-note">Note / reference</label><input class="form-input" id="ea-note" value="${escapeAttr(a.note||'')}"></div>
     <div class="form-group"><label class="form-label" for="ea-threshold">Low balance alert threshold</label><input class="form-input numpad-input" type="number" id="ea-threshold" value="${a.alertThreshold||''}" inputmode="none"></div>
     <button class="btn btn-primary btn-full" onclick="saveEditAccount('${acctId}')">Save changes</button>
   `);
@@ -14459,7 +14470,7 @@ function _loanPersonCard(direction, person, personLoans) {
     // PSS #287: row header in the grouped-list style. Due state is a pill (not an amber border
     // + amber amounts); amounts are plain text colour, colour is kept for meaning only; the
     // chevron turns down when the row is open. Tap still expands in place (payments + action).
-    const _pEsc = person.replace(/'/g,"\\'");
+    const _pEsc = _escJs(person); // PLS #573
     const _duePill = (dueDays === null || dueDays > 7) ? ''
       : dueDays < 0 ? `<span class="lp-pill over">Overdue</span>`
       : dueDays === 0 ? `<span class="lp-pill due">Due today</span>`
@@ -14528,7 +14539,7 @@ function _loanPersonCard(direction, person, personLoans) {
           return html;
         }).join('')}
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)">
-          <button class="btn btn-success btn-sm" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">${direction==='lent'?'Receive payment':'Make payment'}</button>
+          <button class="btn btn-success btn-sm" onclick="event.stopPropagation();openBatchSettleLoans('${direction}','${_escJs(person)}')">${direction==='lent'?'Receive payment':'Make payment'}</button>
         </div>
       </div>` : ''}
     </div>`;
@@ -15294,7 +15305,7 @@ function openBatchSettleLoans(direction, person) {
   const currOptsHtml = currList.map(c => `<option value="${c}" ${c===defaultCurr?'selected':''}>${c}</option>`).join('');
   const currSelectorHtml = currList.length > 1
     ? `<div class="form-group"><label class="form-label" for="bsl-curr">Settlement currency</label>
-         <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${currOptsHtml}</select>
+         <select class="form-input" id="bsl-curr" onchange="updateBatchSettlePreview('${direction}','${_escJs(person)}')">${currOptsHtml}</select>
          <div style="font-size:11px;color:var(--text3);margin-top:4px">Other currency loans will be converted using snapshot FX rate</div>
        </div>`
     : `<input type="hidden" id="bsl-curr" value="${defaultCurr}">`;
@@ -15309,20 +15320,20 @@ function openBatchSettleLoans(direction, person) {
      <div style="background:var(--bg3);border-radius:var(--r-md);max-height:180px;overflow-y:auto;margin-bottom:14px">${loanRowsHTML}</div>
      ${currSelectorHtml}
      <div class="form-group"><label class="form-label" for="bsl-amount">${totalLabel}</label>
-       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="bsl-amount" value="" placeholder="0.00" oninput="updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">
+       <input class="form-input numpad-input" type="number" step="any" inputmode="none" id="bsl-amount" value="" placeholder="0.00" oninput="updateBatchSettlePreview('${direction}','${_escJs(person)}')">
        <div id="bsl-amount-fmt" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px;text-align:right;min-height:14px"></div>
      </div>
      <div id="bsl-preview" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;min-height:42px"></div>
      <div id="bsl-wo-hint" style="display:none;font-size:11px;color:var(--text3);margin:-6px 0 12px 2px">${direction === 'borrowed' ? 'Lower the amount above to record the unpaid part as a gain.' : 'Clear the amount above to write off all of it instead.'}</div>
      <div class="form-group"><label class="form-label" for="bsl-acct">${direction==='lent'?'Receive into':'Pay from'}</label>
-       <select class="form-input" id="bsl-acct" onchange="syncCurrToAcct('bsl-acct','bsl-curr');updateBatchSettlePreview('${direction}','${person.replace(/'/g,"\\'")}')">${acctOpts}</select>
+       <select class="form-input" id="bsl-acct" onchange="syncCurrToAcct('bsl-acct','bsl-curr');updateBatchSettlePreview('${direction}','${_escJs(person)}')">${acctOpts}</select>
      </div>
      <div class="form-row fr2">
        <div class="form-group"><label class="form-label" for="bsl-date">Date</label>
-         ${dtField('bsl-date','date','Date',today(),{onchange:'updateBatchSettlePreview(\'${direction}\',\'${person.replace(/\'/g,'})}
+         ${dtField('bsl-date','date','Date',today(),{onchange:`updateBatchSettlePreview('${direction}','${_escJs(person)}')`})}
        </div>
        <div class="form-group"><label class="form-label" for="bsl-time">Time</label>
-         ${dtField('bsl-time','time','Time',nowTime(),{onchange:'updateBatchSettlePreview(\'${direction}\',\'${person.replace(/\'/g,'})}
+         ${dtField('bsl-time','time','Time',nowTime(),{onchange:`updateBatchSettlePreview('${direction}','${_escJs(person)}')`})}
        </div>
      </div>
      <div class="form-group"><label class="form-label" for="bsl-notes">Notes</label>
@@ -15346,8 +15357,8 @@ function openBatchSettleLoans(direction, person) {
        </select>
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-danger btn-sm${direction === 'borrowed' ? ' rv-gain' : ''}" id="bsl-wo-btn" onclick="confirmBatchWriteOffLoans('${direction}','${person.replace(/'/g,"\\'")}')">${direction === 'borrowed' ? 'Record as gain' : 'Write off'}</button>
-     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${person.replace(/'/g,"\\'")}')">Settle</button>`
+     <button class="btn btn-danger btn-sm${direction === 'borrowed' ? ' rv-gain' : ''}" id="bsl-wo-btn" onclick="confirmBatchWriteOffLoans('${direction}','${_escJs(person)}')">${direction === 'borrowed' ? 'Record as gain' : 'Write off'}</button>
+     <button class="btn btn-primary btn-sm" onclick="confirmBatchSettleLoans('${direction}','${_escJs(person)}')">Settle</button>`
   );
   // Auto-fill with grand total in settlement currency
   setTimeout(()=>{
@@ -15897,7 +15908,7 @@ function openLoanDetail(loanId, direction) {
   const linkedFeed = linkedTxs.map(t => { const cat = txCategoryDisplay(t), amtD = txAmountDisplay(t), n = (t.batchLoanIds || []).length;
       const share = t.isBatchSettlement && n > 1 ? loanPaymentContribution(t, loan) : null; // PSS #339
       const col = amtD.cls === 'tx-neg' ? 'var(--red)' : amtD.cls === 'tx-pos' ? 'var(--green)' : 'var(--text)';
-      return _fsRow({ ico:cat.icon, title:_stripIcon(cat.name), sub:`${fmtDFull(t.date)}${n > 1 ? ` · batch of ${n}` : ''}`,
+      return _fsRow({ ico:cat.icon, title:_esc(_stripIcon(cat.name)), sub:`${fmtDFull(t.date)}${n > 1 ? ` · batch of ${n}` : ''}`,
         amt:share !== null ? (amtD.cls === 'tx-neg' ? '-' : amtD.cls === 'tx-pos' ? '+' : '') + fmt(share, loan.currency) : amtD.str, amtCol:col,
         amt2:share !== null ? `of ${fmt(t.amount, t.currency)}` : '', onclick:`closeSheet('gen');setTimeout(()=>openTxDetail('${t.id}'),200)`, chev:true }); }).join('');
   openSheet('gen', '', `<div class="fs">
@@ -16443,12 +16454,12 @@ function openLoanArchiveSheet() {
       const batchParents = archivedTx.filter(t => batchSettleTxIds.includes(t.id));
       const linkedCount = payments.length + forexChildren.length + settlementChildren.length + batchParents.length;
       const isLast = i === period.loans.length - 1;
-      const safeName = (loan.personName||'Unknown').replace(/'/g,"\\'");
+      const safeName = _escJs(loan.personName||'Unknown'); // PLS #573
 
       body += `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${isLast?'':'border-bottom:0.5px solid var(--border)'}">
-        <div class="pool-avatar" style="flex-shrink:0;opacity:0.7">${(loan.personName||'?').slice(0,2).toUpperCase()}</div>
+        <div class="pool-avatar" style="flex-shrink:0;opacity:0.7">${_esc((loan.personName||'?').slice(0,2).toUpperCase())}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500">${loan.personName||'Unknown'}</div>
+          <div style="font-size:13px;font-weight:500">${_esc(loan.personName||'Unknown')}</div>
           <div style="font-size:11px;color:var(--text3)">${dir==='lent'?'Lent':'Borrowed'} · ${fmtDFull(loan.date)}${linkedCount>0?` · ${linkedCount} linked`:''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -17791,6 +17802,7 @@ function renderAnalyticsOverview() {
   const expCats = {}, incCats = {};
   let expTotal = 0, incTotal = 0;
   const dispCurr = _displayCurrency();
+  const _incGL = t => t.isLoanSettlementGain || t.isReimbSettlementGain || (t.type === 'income' && (t.isLoanSettlementLoss || t.isReimbSettlementLoss)); // PLS #572
   for (const tx of allTxs) {
     const _glFlag = tx.isLoanSettlementGain || tx.isLoanSettlementLoss || tx.isReimbSettlementGain || tx.isReimbSettlementLoss;
     // -- PERSONAL LOGIC SET #261 -- A sale closed at a LOSS fell through BOTH branches. PLS #226
@@ -17825,7 +17837,9 @@ function renderAnalyticsOverview() {
       expCats[name].total += amt;
       expCats[name].txs.push(tx);
       expTotal += amt;
-    } else if (tx.type === 'income' && (!tx.isSettlement || tx.isLoanSettlementGain || tx.isReimbSettlementGain) && (!tx.isAutoReimb || tx.isLoanSettlementGain || tx.isReimbSettlementGain)
+    // PLS #572 (rule check Nov 8): a written-off debt YOU owed is income (debt relief), as in getMonthTotals and
+    // the Income tab (PLS #495). The donut left it out, so it read less than the monthly income by that amount.
+    } else if (tx.type === 'income' && (!tx.isSettlement || _incGL(tx)) && (!tx.isAutoReimb || _incGL(tx))
                // PLS #226: the Overview income pie is an income-SOURCE breakdown. A sale closed at a
                // loss is no source at all; one closed at a gain contributes only that gain.
                && !(tx.isInvestmentReturn && !(Number(tx.realizedGL) > 0))) {
@@ -18446,7 +18460,7 @@ function buildAnomalyHighlights(metricMk, dispCurr) {
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
           <div style="font-size:16px">${o.cat.icon || '💸'}</div>
           <div style="min-width:0">
-            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${catName}</div>
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(catName)}</div>
             <div style="font-size:11px;color:var(--text3)">${fmtD(o.tx.date)} · usually ${fmt(o.avg, dispCurr)}</div>
           </div>
         </div>
@@ -18920,7 +18934,7 @@ function buildParetoAnalysis(metricMk, dispCurr) {
       const isInTop = i <= eightyIdx;
       return `<div style="cursor:pointer" onclick="openTxnsForCategory(this.dataset.cat, this.dataset.catId, this.dataset.mk)" data-cat="${_esc(name)}" data-cat-id="${v.id||''}" data-mk="${metricMk}" title="View transactions">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
-          <span><span style="opacity:0.7">${v.icon || '•'}</span> ${name}</span>
+          <span><span style="opacity:0.7">${v.icon || '•'}</span> ${_esc(name)}</span>
           <span style="font-family:var(--mono);color:${isInTop ? 'var(--text)' : 'var(--text4)'}">${pct.toFixed(0)}%</span>
         </div>
         <div style="height:5px;background:var(--bg3);border-radius:var(--r-sm);overflow:hidden">
@@ -19037,7 +19051,7 @@ function buildMostFrequent(metricMk, dispCurr) {
           <div style="display:flex;align-items:center;gap:9px;min-width:0">
             <div style="font-size:16px">${v.icon || '•'}</div>
             <div style="min-width:0">
-              <div style="font-size:13px;font-weight:600">${name}</div>
+              <div style="font-size:13px;font-weight:600">${_esc(name)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:1px">${v.count}× · avg ${fmt(avg, dispCurr)}</div>
             </div>
           </div>
@@ -19226,8 +19240,9 @@ function buildIncomeDiversification(metricMk, dispCurr) {
     // gain is genuine income; a loss is no source at all.
     const baseTxs = _ovTxsForMonth(k).filter(t => t.type === 'income'
       && !(t.isInvestmentReturn && !(Number(t.realizedGL) > 0)));
-    const gainTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
-      (t.isLoanSettlementGain || t.isReimbSettlementGain) && t.type === 'income');
+    // PLS #569: the same gains the Income tab counts (a debt you owed that was written off is income too), with its names
+    const gainTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) && t.type === 'income' &&
+      (t.isLoanSettlementGain || t.isReimbSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementLoss) && !baseTxs.includes(t));
     const lossTxs = db.transactions.filter(t => !t.archived && t.date && t.date.startsWith(k) &&
       (t.isLoanSettlementLoss || t.isReimbSettlementLoss));
     // Process regular income
@@ -19243,14 +19258,11 @@ function buildIncomeDiversification(metricMk, dispCurr) {
       const amt = tx.currency === dispCurr ? _raw : txAmtIn(_raw, tx, dispCurr);
       incomes[name].total += amt;
     }
-    // Add FX arbitrage gains as a dedicated source (PLS #47)
-    let fxGains = 0;
+    // PLS #47 gains, named as on the Income tab's By source (PLS #569: one "FX Arbitrage" here did not match any row there)
     for (const tx of gainTxs) {
-      fxGains += tx.currency === dispCurr ? tx.amount : txAmtIn(tx.amount, tx, dispCurr);
-    }
-    if (fxGains > 0) {
-      if (!incomes['FX Arbitrage']) incomes['FX Arbitrage'] = {total: 0, icon: '📈'};
-      incomes['FX Arbitrage'].total += fxGains;
+      const c = txCategoryDisplay(tx), name = _stripIcon(c.name);
+      if (!incomes[name]) incomes[name] = {total: 0, icon: c.icon};
+      incomes[name].total += tx.currency === dispCurr ? tx.amount : txAmtIn(tx.amount, tx, dispCurr);
     }
   }
   const entries = Object.entries(incomes).sort((a,b) => b[1].total - a[1].total);
@@ -19272,7 +19284,7 @@ function buildIncomeDiversification(metricMk, dispCurr) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text2);letter-spacing:0.03em;white-space:nowrap">Income diversification${_infoBtn('income-div')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · ${entries.length} ${entries.length===1?'source':'sources'} · ${riskLabel}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Last 6 months · all currencies in ${_esc(dispCurr)} · ${entries.length} ${entries.length===1?'source':'sources'} · ${riskLabel}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;padding-left:8px"> <!-- PSS #427: verdict only; the note sits under the title -->
         <div style="font-size:11px;font-weight:600;color:${riskColor}">${risk} risk</div>
@@ -19289,7 +19301,7 @@ function buildIncomeDiversification(metricMk, dispCurr) {
       const pct = (v.total / total * 100);
       const color = colors[i % colors.length];
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px">
-        <div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:var(--r-sm);background:${color}"></div>${v.icon||'•'} ${name}</div>
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:var(--r-sm);background:${color}"></div>${v.icon||'•'} ${_esc(name)}</div>
         <div style="font-family:var(--mono);color:var(--text3)">${pct.toFixed(0)}% · ${fmt(v.total, dispCurr)}</div>
       </div>`;
     }).join('')}
@@ -20255,7 +20267,7 @@ function buildPieChart(cats, total, prefix, period) {
       .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
       .map(tx => {
         const acct = db.accounts.find(a => a.id === tx.accountId);
-        const acctName = acct?.name || '—';
+        const acctName = _esc(acct?.name || '—'); // PLS #573
         // PLS #226: the pie's drill-down list must agree with the slice it sits under. The slice
         // counts only an investment sale's realized gain, so the row shows the gain too -- not the
         // proceeds, which would print a bigger number than the whole slice it belongs to.
@@ -20440,7 +20452,7 @@ function renderAnalyticsSpending() {
     const subRows = hasSubs ? subEntries.map(([sName, sv]) => {
       const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text3);padding:8px 16px 8px 32px;border-top:1px solid var(--border)">
-        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${sName}</span></span>
+        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${_esc(sName)}</span></span>
         <span style="display:flex;align-items:center;gap:8px">
           <span style="font-family:var(--mono);color:var(--text2)">${fmt(sv.total,view)}</span>
           <span style="color:var(--text3);font-size:11px;min-width:28px;text-align:right">${sPct.toFixed(0)}%</span>
@@ -20453,7 +20465,7 @@ function renderAnalyticsSpending() {
       .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
       .map(tx => {
         const acct = db.accounts.find(a => a.id === tx.accountId);
-        const acctName = acct?.name || '—';
+        const acctName = _esc(acct?.name || '—'); // PLS #573
         const txAmt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
         const dateLabel = fmtD(tx.date);
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -20474,7 +20486,7 @@ function renderAnalyticsSpending() {
             <span style="filter:saturate(1.2)">${v.icon}</span>
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(name)}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} transaction${v.txs.length===1?'':'s'}</div>
           </div>
           <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:var(--text);letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div><!-- PSS #492: amounts in one color; the bar keeps the category color -->
@@ -20630,7 +20642,7 @@ function renderAnalyticsIncome() {
     const subRows = hasSubs ? subEntries.map(([sName, sv]) => {
       const sPct = v.total > 0 ? (sv.total/v.total*100) : 0;
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text3);padding:8px 16px 8px 32px;border-top:1px solid var(--border)">
-        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${sName}</span></span>
+        <span style="display:flex;align-items:center;gap:8px"><span>${sv.icon}</span><span>${_esc(sName)}</span></span>
         <span style="display:flex;align-items:center;gap:8px">
           <span style="font-family:var(--mono);color:var(--text2)">${fmt(sv.total,view)}</span>
           <span style="color:var(--text3);font-size:11px;min-width:28px;text-align:right">${sPct.toFixed(0)}%</span>
@@ -20642,7 +20654,7 @@ function renderAnalyticsIncome() {
       .sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||''))
       .map(tx => {
         const acct = db.accounts.find(a => a.id === tx.accountId);
-        const acctName = acct?.name || '—';
+        const acctName = _esc(acct?.name || '—'); // PLS #573
         const txAmt = tx.amount;
         const dateLabel = fmtD(tx.date);
         return `<div onclick="event.stopPropagation();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 16px 9px 32px;border-top:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
@@ -20663,7 +20675,7 @@ function renderAnalyticsIncome() {
             <span style="filter:saturate(1.2)">${v.icon}</span>
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(name)}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:1px;letter-spacing:-0.05px;line-height:1.2">${pct.toFixed(0)}% · ${v.txs.length} transaction${v.txs.length===1?'':'s'}</div>
           </div>
           <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:var(--text);letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${fmt(v.total,view)}</div><!-- PSS #492: amounts in one color; the bar keeps the category color -->
@@ -20716,7 +20728,7 @@ function renderAnalyticsIncome() {
         ${multi ? row('Monthly average', fmt(avg, view), `over ${n} months`) : ''}
         ${multi ? row('Best / worst month', `${_fmtK(hi, view)} / ${_fmtK(lo, view)}`, `spread ${_fmtK(hi-lo, view)}`) : ''}
         ${multi ? row('Stability', `<span style="color:${steadyColor}">${cv.toFixed(0)}% swing</span>`, steady) : ''}
-        ${row('Top source share', `${topShare.toFixed(0)}%`, `${_stripIcon(sorted[0][0])} · ${sorted.length} source${sorted.length===1?'':'s'} total`)}
+        ${row('Top source share', `${topShare.toFixed(0)}%`, `${_esc(_stripIcon(sorted[0][0]))} · ${sorted.length} source${sorted.length===1?'':'s'} total`)}
         ${row('Per deposit', fmt(perTx, view), `${txs.length} deposit${txs.length===1?'':'s'}`)}
         ${sorted.length > 1 ? row('Sources beyond the top', `${(100-topShare).toFixed(0)}%`, `${sorted.length-1} other source${sorted.length===2?'':'s'}`) : ''}
       </div>`;
@@ -20786,6 +20798,12 @@ function renderAnalyticsTrends() {
 
 // ── SPENDING CALENDAR HEATMAP ──
 // GitHub contribution-style grid showing last 365 days of expense activity
+// PLS #570: the spending entries of a month, each with its date and its value in the display currency, exactly as the
+// monthly totals count them (expense items + one-time losses). Heatmap and its day list read this.
+function _spendItemsByDay(mk) {
+  const g = getMonthTotals(mk), byId = new Map(db.transactions.map(t => [t.id, t]));
+  return (g.expenseItems || []).concat(g.oneTimeItems || []).map(it => { const t = byId.get(it.id); return t && t.date ? { id: it.id, date: t.date, amt: it.amt, tx: t } : null; }).filter(Boolean);
+}
 function renderSpendingHeatmap(disp) {
   // Helper: format Date as local YYYY-MM-DD (NOT UTC)
   const localDateKey = (d) => {
@@ -20813,25 +20831,13 @@ function renderSpendingHeatmap(disp) {
   const NUM_WEEKS = totalDays / 7;
 
   // Aggregate expenses per day (in display currency)
+  // ── PERSONAL LOGIC SET #53 ── heatmap aggregator aligned with getMonthTotals. PLS #570 (his pick Nov 8, rule check):
+  // it kept its own copy of the rule and left out automatic FX loss and one-time losses (Aug: 44,989.98 against 59,915.25
+  // in the totals). It now reads the same entries as the totals and By day (#559), so its days add up to the Calendar.
   const dayMap = {};
-  for (const tx of db.transactions) {
-    if (tx.archived) continue;
-    // ── PERSONAL LOGIC SET #53 ── heatmap aggregator aligned with getMonthTotals exclusions
-    if (tx.isSettlement && !tx.isLoanSettlementGain && !tx.isLoanSettlementLoss && !tx.isReimbSettlementGain && !tx.isReimbSettlementLoss) continue;
-    if (tx.isLoanTx || tx.isLoanPayment) continue;
-    if (tx.isAutoForex || tx.isAutoReimb) continue;
-    if (tx.isFeeReimbursable) continue; // PSS #46
-    if (tx.isInvestmentFund) continue;
-    if (tx.type !== 'expense' && tx.type !== 'shared') continue;
-    if (!tx.date) continue;
-    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
-    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
-    const inDisp = tx.currency === disp ? amt : txAmtIn(amt, tx, disp);
-    if (!dayMap[tx.date]) dayMap[tx.date] = { total: 0, count: 0 };
-    dayMap[tx.date].total += inDisp;
-    dayMap[tx.date].count += 1;
-  }
+  for (let i = 11; i >= 0; i--) { const d = new Date(todayDate.getFullYear(), todayDate.getMonth() - i, 1);
+    for (const it of _spendItemsByDay(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`))
+      { if (!dayMap[it.date]) dayMap[it.date] = { total: 0, count: 0 }; dayMap[it.date].total += it.amt; dayMap[it.date].count += 1; } }
 
   // Find max for color scaling (use 90th percentile to avoid outliers dominating)
   const allTotals = Object.values(dayMap).map(d=>d.total).sort((a,b)=>a-b);
@@ -21016,19 +21022,10 @@ function hideHeatmapTooltip() {
 function showHeatmapDay(dateKey) {
   hideHeatmapTooltip();
   // ── PERSONAL LOGIC SET #53 ── heatmap day tooltip aligned with heatmap aggregator
-  // Heatmap tracks SPENDING only (expense + shared). Day modal must mirror that.
-  const dayTxs = db.transactions.filter(t => {
-    if (t.archived || t.date !== dateKey) return false;
-    if (t.isSettlement && !t.isLoanSettlementGain && !t.isLoanSettlementLoss && !t.isReimbSettlementGain && !t.isReimbSettlementLoss) return false;
-    if (t.isLoanTx || t.isLoanPayment) return false;
-    if (t.isAutoForex || t.isAutoReimb) return false;
-    if (t.isFeeReimbursable) return false; // PSS #46
-    if (t.isInvestmentFund) return false;
-    // Spending only: expense + shared (mirrors heatmap aggregator at line 13233)
-    if (t.type !== 'expense' && t.type !== 'shared') return false;
-    return true;
-  })
-    .sort((a,b) => (b.time||'').localeCompare(a.time||''));
+  // PLS #570: the same entries the heatmap counted for that day (the monthly totals' entries)
+  const _its = _spendItemsByDay(dateKey.slice(0, 7)).filter(it => it.date === dateKey);
+  const _itAmt = new Map(_its.map(it => [it.id, it.amt]));
+  const dayTxs = _its.map(it => it.tx).sort((a,b) => (b.time||'').localeCompare(a.time||''));
   if (dayTxs.length === 0) {
     showToast('No transactions on ' + fmtDFull(dateKey));
     return;
@@ -21036,31 +21033,25 @@ function showHeatmapDay(dateKey) {
   const disp = _displayCurrency();
   const rows = dayTxs.map(tx => {
     const acct = db.accounts.find(a=>a.id===tx.accountId);
-    const acctName = acct?.name || '—';
-    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    const isExp = tx.type === 'expense' || tx.type === 'shared';
-    const isInc = tx.type === 'income';
+    const acctName = _esc(acct?.name || '—'); // PLS #573
+    const _sale = !!tx.isInvestmentReturn; // PLS #570: a sale below cost shows the loss counted, not the proceeds
+    const amt = _sale ? _itAmt.get(tx.id) : tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
+    const isExp = _sale || tx.type === 'expense' || tx.type === 'shared';
+    const isInc = !_sale && tx.type === 'income';
     const sign = isExp ? '−' : isInc ? '+' : '';
     const color = isExp ? 'var(--red)' : isInc ? 'var(--green)' : 'var(--text2)';
     const subCat = getCategoryDisplay(tx.categoryId);
     return `<div onclick="closeDlg();openTxDetail('${tx.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
       <div style="min-width:0;flex:1">
-        <div style="font-size:13px;color:var(--text);font-weight:500">${subCat.icon} ${subCat.subName||subCat.name}</div>
+        <div style="font-size:13px;color:var(--text);font-weight:500">${subCat.icon} ${_esc(subCat.subName||subCat.name)}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${acctName}${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}${tx.time?' · '+tx.time:''}</div>
       </div>
-      <span style="font-family:var(--mono);font-size:13px;color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${sign}${fmt(amt,tx.currency)}</span>
+      <span style="font-family:var(--mono);font-size:13px;color:${color};font-weight:600;flex-shrink:0;margin-left:8px">${sign}${fmt(amt,_sale ? disp : tx.currency)}</span>
     </div>`;
   }).join('');
   // Compute day total
-  let dayExp = 0, dayInc = 0;
-  for (const tx of dayTxs) {
-    const amt = tx.type === 'shared' ? (tx.myShare ?? tx.amount) : tx.amount;
-    // PLS #245: txAmtIn, not convert/toPhp — this is SPENDING, so it is valued at the rate that
-    // was live when it happened. Using a live rate here lets a rate update rewrite the past.
-    const inDisp = tx.currency === disp ? amt : txAmtIn(amt, tx, disp);
-    if (tx.type === 'expense' || tx.type === 'shared') dayExp += inDisp;
-    else if (tx.type === 'income') dayInc += inDisp;
-  }
+  let dayExp = 0, dayInc = 0; // PLS #570: every row here is spending, at the value the monthly totals counted
+  for (const tx of dayTxs) dayExp += _itAmt.get(tx.id) || 0;
   const summary = `<div style="display:flex;gap:8px;margin-bottom:10px">
     ${dayExp>0?`<div style="flex:1;background:rgba(240,86,90,0.08);border-radius:var(--r-sm);padding:8px 10px;font-size:11px"><span style="color:var(--text3)">Out</span> <span style="color:var(--red);font-family:var(--mono);font-weight:600;float:right">${fmt(dayExp,disp)}</span></div>`:''}
     ${dayInc>0?`<div style="flex:1;background:rgba(45,217,138,0.08);border-radius:var(--r-sm);padding:8px 10px;font-size:11px"><span style="color:var(--text3)">In</span> <span style="color:var(--green);font-family:var(--mono);font-weight:600;float:right">${fmt(dayInc,disp)}</span></div>`:''}
@@ -21810,8 +21801,8 @@ function logRecurringNow(id) {
   } else {
     const acctOpts = matchingAccts.map(a=>`<option value="${a.id}">${_esc(a.name)} (${fmt(getAcctBalance(a.id),a.currency,getAcctBalance(a.id)<-0.004)})</option>`).join('');
     window._efNext = true; // PSS #361
-    openDlg(`Log: ${_esc(r.name)}`,
-      `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">${fmt(r.amount,r.currency)} · ${getCategoryDisplay(r.categoryId).icon} ${getCategoryDisplay(r.categoryId).name}</div>
+    openDlg(`Log: ${r.name}`, // PLS #573: dialog and sheet titles are set as plain text, so they are never escaped
+      `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">${fmt(r.amount,r.currency)} · ${getCategoryDisplay(r.categoryId).icon} ${_esc(getCategoryDisplay(r.categoryId).name)}</div>
       <div class="form-group"><label class="form-label" for="rec-acct">From account</label><select class="form-input" id="rec-acct">${acctOpts}</select></div>
       <div class="form-group"><label class="form-label" for="rec-date">Date</label>${dtField('rec-date','date','Date',today())}</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
@@ -23957,7 +23948,7 @@ function _wtsBudget(b, now) {
   const big = pool6.filter(t => anchor && _wtsAmt(t) >= anchor.usual * 0.25 && !/family|medic|health|hospital|doctor|school|tuition/i.test(_wtsCatName(t.categoryId))).sort((x, y) => _wtsAmt(y) - _wtsAmt(x))[0];
   if (big) {
     const bm = big.date.slice(0,7), bt = _wtsTxs(b.currency, bm + '-01', _wtsMonthEnd(bm)).reduce((s, t) => s + _wtsAmt(t), 0);
-    const what = _esc(String(big.notes || '').split('\n')[0].trim() || _wtsCatName(big.categoryId));
+    const what = String(big.notes || '').split('\n')[0].trim() || _wtsCatName(big.categoryId); // PLS #573: the card escapes eq
     out.tips.push({ kind: 'big', save: 0, ico: getCategoryDisplay(big.categoryId)?.icon || '💸', title: 'Big one-offs',
       eq: `${what} (${money(_wtsAmt(big))}, ${fmtDFull(big.date)}) = ${_wtsEq(_wtsAmt(big), anchor)}.`,
       sub: `One-off spends like this pushed ${_wtsMonthName(bm, true)} to ${money(bt)}. Plan them ahead as their own line.` });
@@ -24059,7 +24050,7 @@ function _wtsHTML(inSheet) {
   const stats = w.early ? '' : w.per.map(x => {
     const money = v => fmt(v, x.b.currency), over = x.spent - x.lim, red = 'var(--red)';
     const top = x.tips.filter(t => t.kind === 'skip').sort((a, b) => b.save - a.save)[0];
-    const better = top && x.daysLeft > 0 ? `<div class="wts-line">Skip ${_wtsCatName(top.key)} ${x.daysLeft >= 4 ? 2 : 1} ${x.daysLeft >= 4 ? 'times' : 'time'} this week and you finish near <b>${money(x.pace - top.save)}</b> instead of ${money(x.pace)}.</div>` : '';
+    const better = top && x.daysLeft > 0 ? `<div class="wts-line">Skip ${_esc(_wtsCatName(top.key))} ${x.daysLeft >= 4 ? 2 : 1} ${x.daysLeft >= 4 ? 'times' : 'time'} this week and you finish near <b>${money(x.pace - top.save)}</b> instead of ${money(x.pace)}.</div>` : '';
     return `<div class="wts-bh">${_esc(x.b.location)} budget</div>
       <div class="wts-tiles">${tile(money(x.perDay), 'spent a day so far')}${tile('~' + money(x.pace), `by ${_wtsMonthName(x.mk)} ${x.dim} at this pace`, x.pace > x.lim ? red : '')}${tile(money(Math.abs(over)), over > 0 ? 'over the plan' : 'left in the plan', over > 0 ? red : 'var(--green)')}</div>${better}`;
   }).join('');
@@ -24073,7 +24064,7 @@ function _wtsHTML(inSheet) {
   const _act = t => {
     if ((t.kind === 'skip' || t.kind === 'over' || t.kind === 'daily' || t.kind === 'subs') && t.key) return [`openTxnsForCategory('', '${t.key}', '${t.kind === 'subs' ? '' : _mkNow}')`, 'See entries'];
     // fees: no button. Most fee entries sit inside their transfer, so a list of them came up empty
-    if (t.kind === 'freq' && t.q) return [`clearAllTxFilters();window._txSearchQuery=${JSON.stringify(t.q).replace(/"/g, '&quot;')};nav('transactions')`, 'See entries'];
+    if (t.kind === 'freq' && t.q) return [`clearAllTxFilters();window._txSearchQuery=${_esc(JSON.stringify(t.q))};nav('transactions')`, 'See entries'];
     if (t.kind === 'collect') return [`nav('loans')`, 'Open Loans'];
     return null;
   };
@@ -24082,8 +24073,8 @@ function _wtsHTML(inSheet) {
     return `<div class="wts-card${i >= 3 ? ' wts-x' : ''}" onclick="this.classList.toggle('op')"><span class="wts-ico">${t.ico}</span><div class="wts-cb">
       ${(() => { const ix = t.title.indexOf(' · '), head = ix > 0 ? t.title.slice(0, ix) : t.title, tail = ix > 0 ? (t.loc && !_grp ? getFlag(t.loc) + ' ' : '') + t.title.slice(ix + 3) : ''; // PSS #492: grouped lists carry the flag in the group header
         // the row reads "Clothing / 6 times this month"; the longer sentence waits inside
-        return tail ? `<div class="wts-ct">${_esc(head)}</div><div class="wts-eq">${_esc(tail)}</div><div class="wts-more">${t.eq ? `<div class="wts-full">${t.eq}</div>` : ''}${t.sub ? `<div class="wts-cs">${t.sub}</div>` : ''}`
-                    : `<div class="wts-ct">${_esc(head)}</div>${(t.eq || t.sub) ? `<div class="wts-eq">${t.eq || t.sub}</div>` : ''}<div class="wts-more">${(t.eq && t.sub) ? `<div class="wts-cs">${t.sub}</div>` : ''}`; })()}${a ? `<button type="button" class="wts-act" onclick="event.stopPropagation();${_cs}${a[0]}">${a[1]} ›</button>` : ''}</div></div>${_amtPill(t)}<span class="wts-chev">›</span></div>`; };
+        return tail ? `<div class="wts-ct">${_esc(head)}</div><div class="wts-eq">${_esc(tail)}</div><div class="wts-more">${t.eq ? `<div class="wts-full">${_esc(t.eq)}</div>` : ''}${t.sub ? `<div class="wts-cs">${_esc(t.sub)}</div>` : ''}`
+                    : `<div class="wts-ct">${_esc(head)}</div>${(t.eq || t.sub) ? `<div class="wts-eq">${_esc(t.eq || t.sub)}</div>` : ''}<div class="wts-more">${(t.eq && t.sub) ? `<div class="wts-cs">${_esc(t.sub)}</div>` : ''}`; })()}${a ? `<button type="button" class="wts-act" onclick="event.stopPropagation();${_cs}${a[0]}">${a[1]} ›</button>` : ''}</div></div>${_amtPill(t)}<span class="wts-chev">›</span></div>`; };
   const { save: _saveHome, nSave: _nSave } = _wtsSaveSum(w);
   const nT = w.tips.length;
   // PSS #492 (his note: Dining Out and Gifts showed twice): with two budgets, tips sit under a header per budget, home budget first
@@ -24097,7 +24088,7 @@ function _wtsHTML(inSheet) {
     <div class="wts-sec">Ways to save · ${nT}</div>`
     : `<div class="wts-h"><span>${_ico('sparkle', 16)} ${nT ? `${nT} ${nT === 1 ? 'way' : 'ways'} to save` : 'Ways to save'}</span><span class="wts-hr">${w.early ? 'Over plan so far' : `${dl} ${dl === 1 ? 'day' : 'days'} left`}</span></div>`}
     ${nT ? `<div class="wts-list">${_listHTML()}</div>${nT > 3 && !inSheet ? `<button type="button" class="wts-all" onclick="const s=document.getElementById('wts');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'Show fewer':'See all ${nT}'">See all ${nT}</button>` : ''}` : ''}
-    ${w.soon.length ? `<div class="wts-soon">Coming up: ${w.soon.join(', ')}, usually around this date.</div>` : ''}
+    ${w.soon.length ? `<div class="wts-soon">Coming up: ${_esc(w.soon.join(', '))}, usually around this date.</div>` : ''}
   </div>`;
 }
 // "How [last month] went": plan vs what happened, per budget
@@ -25212,7 +25203,7 @@ function showArchivedCatsPage() {
   const rows = all.map(c => {
     const n = linkedCount(c);
     const restore = c.isParent ? `toggleArchiveCat('${c.id}','${c.forType}')` : `toggleArchiveSubCat('${c.parentId}','${c.id}','${c.forType}')`;
-    const _subBase = c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${c.parentName}`;
+    const _subBase = c.isParent ? (c.forType==='expense'?'Expense':'Income')+' category' : `Under ${c.parentIcon||''} ${_esc(c.parentName)}`;
     const subtitle = _subBase + (n>0 ? ` · <span style="color:var(--accent);text-decoration:underline;cursor:pointer" onclick="showCatLinkedTxs('${c.id}',${c.isParent?'true':'false'},'${c.parentId||''}','${c.forType}')">${n} txn${n===1?'':'s'} →</span>` : '');
     const delBtn = n === 0
       ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red)" onclick="confirmDeleteArchivedCat('${c.id}','${c.forType}',${c.isParent ? 'true' : 'false'},'${c.parentId||''}')">🗑 Delete</button>`
@@ -25276,11 +25267,11 @@ function confirmDeleteArchivedCat(catId, forType, isParent, parentId) {
   let label = 'this category';
   if (isParent) {
     const cat = db.categories[forType].find(c=>c.id===catId);
-    if (cat) label = `${cat.icon||''} ${cat.name}`;
+    if (cat) label = `${cat.icon||''} ${_esc(cat.name)}`;
   } else {
     const cat = db.categories[forType].find(c=>c.id===parentId);
     const sc = cat?.subcats?.find(s=>s.id===catId);
-    if (sc) label = `${sc.icon||''} ${sc.name}`;
+    if (sc) label = `${sc.icon||''} ${_esc(sc.name)}`;
   }
   openDlg('Delete permanently?',
     `<div style="font-size:13px;color:var(--text2);line-height:1.6">Permanently delete <strong>${label}</strong>? This cannot be undone.<br><br>No transactions use this category, so nothing else is affected.</div>`,
@@ -25888,7 +25879,7 @@ function importJSON(event) {
     try {
       const imported = JSON.parse(e.target.result);
       openDlg('Import backup',
-        `<p style="font-size:13px;color:var(--text2);line-height:1.6">Found backup from <strong>${imported.profile?.nickname||'unknown'}</strong>.<br>How would you like to import?</p>`,
+        `<p style="font-size:13px;color:var(--text2);line-height:1.6">Found backup from <strong>${_esc(imported.profile?.nickname||'unknown')}</strong>.<br>How would you like to import?</p>`,
         `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
          <button class="btn btn-warning btn-sm" onclick="mergeImport()">Merge</button>
          <button class="btn btn-danger btn-sm" onclick="replaceImport()">Replace all</button>`
@@ -29187,7 +29178,9 @@ function runAIAnalysis() {
 
 function aiGetMonthsTxs(n) {
   // ── PERSONAL LOGIC SET #75 ── aiGetMonthsTxs filters auto-children + capital-movement txs
-  // Aligned with getMonthTotals exclusions for accurate budget/spending insights
+  // Same entries as getMonthTotals EXCEPT automatic FX gain and loss (isAutoForex): this list feeds the unusual
+  // spending alerts, which judge habits by category, and a rate swing is not a habit. PLS #571 (his pick Nov 8,
+  // rule check) states this; the old text said "aligned with getMonthTotals" while the code left them out.
   const now = new Date();
   return Array.from({length:n},(_,i)=>{
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
@@ -29525,7 +29518,7 @@ function renderAnalyticsExternal() {
       <div style="width:24px;height:24px;border-radius:var(--r-sm);background:${isIn?'var(--green)':'var(--red)'}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:${isIn?'var(--green)':'var(--red)'}">${_ico(isIn?'inCircle':'outCircle',14)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500;color:var(--text);letter-spacing:-0.2px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${partyName}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px;line-height:1.2">${fmtD(t.date)}${t.notes ? ' · ' + t.notes : ''}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px;line-height:1.2">${fmtD(t.date)}${t.notes ? ' · ' + _esc(_noteShow(t.notes)) : ''}</div>
       </div>
       <div style="font-size:13px;font-family:var(--mono);font-weight:500;color:${isIn?'var(--green)':'var(--red)'};letter-spacing:-0.2px;font-variant-numeric:tabular-nums;flex-shrink:0">${isIn?'+':'−'}${fmt(t.amount, t.currency)}</div>
     </div>`;
@@ -30346,7 +30339,7 @@ function _insCatSheet(catName, mk) {
     const d = getCategoryDisplay(t.subCatId || t.categoryId); return ((d.name === 'Category' || d.orphan) ? 'Uncategorized' : _stripIcon(d.name)) === catName; })
     .sort((a,b) => b.amt - a.amt);
   const lbl = /^Y:/.test(mk) ? mk.slice(2) : new Date(Number(mk.slice(0,4)), Number(mk.slice(5,7))-1, 1).toLocaleDateString('en-PH',{month:'long',year:'numeric'});
-  _insListSheet(`${_esc(catName)} · ${lbl}`, items, true);
+  _insListSheet(`${catName} · ${lbl}`, items, true); // PLS #573: title is plain text
 }
 function _insOneTimeSheet(mk) { _insListSheet('One-time losses', (_insTotals(mk).oneTimeItems || []).slice().sort((a,b) => b.amt - a.amt)); }
 // -- PSS #355 -- Needs attention, restyled: one row per issue, icon in a tinted circle (red = over a
@@ -30980,7 +30973,7 @@ function openInstallmentSuggest(instId) {
       style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r-md);background:var(--bg3);margin-bottom:6px;cursor:pointer;border:1.5px solid transparent">
       <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border3);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0" id="src-${tx.id}"></div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:500">${tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment'}</div>
+        <div style="font-size:13px;font-weight:500">${_esc(tx.description || getCategoryDisplay(tx.categoryId)?.name || 'Payment')}</div>
         <div style="font-size:11px;color:var(--text3)">${fmtDFull(tx.date)}${!isExact ? ` · <span style="color:var(--amber)">⚠ diff: ${fmt(diff, _homeBase())}</span>` : ''}</div>
       </div>
       <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">-${fmt(tx.amount,tx.currency)}</div>
@@ -30988,7 +30981,7 @@ function openInstallmentSuggest(instId) {
   }).join('');
 
   openDlg('🔍 Find matching transactions',
-    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Showing ${inst.categoryId ? getCategoryDisplay(inst.categoryId)?.name : 'matching'} transactions near ${fmt(monthly, _homeBase())}</div>
+    `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Showing ${inst.categoryId ? _esc(getCategoryDisplay(inst.categoryId)?.name) : 'matching'} transactions near ${fmt(monthly, _homeBase())}</div>
      <div id="suggest-rows">${rowsHtml}</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="confirmLinkTransactions('${instId}')">Link selected</button>`
