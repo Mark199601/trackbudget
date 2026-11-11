@@ -3267,6 +3267,7 @@ function saveDB() {
   // PLS #215: every write can change the earliest transaction, so drop the cached
   // first-complete-month here rather than at each of the many call sites.
   _invalidateFirstComplete();
+  _tmClear(); // PLS #584
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch(e) { _saveFailed(e); }
 }
@@ -3410,7 +3411,8 @@ function haptic(pattern = 'tap') {
 // check added (the two had already drifted once, PLS #278). Now both use this one: asOfDate leaves out entries
 // dated after that day. _ix (from _balIndex) only makes it faster: it lists, in the same order, just the entries
 // that name this account, so the sum is added in exactly the same order and the result is the same to the centavo.
-function getAcctBalance(acctId, asOfDate, _ix) {
+function getAcctBalance(acctId, asOfDate, _ix) { return _tmGet('bal|' + acctId + '|' + (asOfDate || ''), () => _getAcctBalance(acctId, asOfDate, _ix || _tmGet('balix', _balIndex))); } // PLS #584: always the grouped list (PLS #575), built once per redraw
+function _getAcctBalance(acctId, asOfDate, _ix) {
   const acct = db.accounts.find(a=>a.id===acctId);
   if (!acct) return 0;
   let bal = acct.initialBalance || 0;
@@ -3753,6 +3755,17 @@ function isLiquidAccount(a) { return !!a && !a.archived && LIQUID_TYPES.includes
 // month stays in the ledger for listing; it is simply not used as an analysis baseline.
 // A month counts as complete only when the first transaction falls on day 1, otherwise the
 // NEXT month is the first complete one. Returns null when no complete month exists yet.
+// -- PERSONAL LOGIC SET #584 -- a screen asked the same sum many times in one redraw (Dashboard: 363 account balances
+// for 30 accounts, the same month's spending list 220 times). Answers are kept for ONE tap or redraw only: cleared
+// right after it, at every save, and when the entry count or the data itself changes, so no screen shows an old figure.
+var _tm = null, _tmDb = null, _tmLen = -1;
+function _tmGet(key, fn) {
+  const len = (db && db.transactions) ? db.transactions.length : 0;
+  if (!_tm || _tmDb !== db || _tmLen !== len) { _tm = new Map(); _tmDb = db; _tmLen = len; setTimeout(_tmClear, 0); }
+  if (_tm.has(key)) return _tm.get(key);
+  const v = fn(); _tm.set(key, v); return v;
+}
+function _tmClear() { _tm = null; }
 let _firstCompleteMK = undefined; // undefined = not computed, null = none yet
 function firstCompleteMonthKey() {
   if (_firstCompleteMK !== undefined) return _firstCompleteMK;
@@ -6055,6 +6068,12 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🤝 Expected receivable now counts in the same currency too: lend P73.90 and expect P74.00, and the loan says P74.00 with the P0.10 as profit when paid. Works in Edit loan too', // PLS #585
+    '⚡ Faster Dashboard, Accounts, Insights and Analytics: the app no longer works out the same balance or spending list again and again on one screen', // PLS #584
+    '🗓️ An installment that starts on the 29th to 31st now ends in the right month (iPad from Mar 31, 24 months: until Feb 2028)', // PLS #580
+    '👋 New users see the setup screen again (the sample accounts were counted as data)', // PLS #581
+    '🌎 Overview compares with the month before in every time zone', // PLS #582
+    '🔒 The app asks the browser to keep its data and not clear it to free space', // PLS #583
     '💵 Every loan payment now shows what you earned on it, in the currency it was paid: Loan profit for what you put on top, and Rate change when your rate moved before it was paid', // PLS #542 / #544
     '📊 Loan profit and Rate change show in Transactions, Dashboard, Calendar and Analytics (Income or Spending). They never change your balances, so nothing is counted twice', // PLS #544 / #545
     '🏷️ A loan payment shows a green or red pill with what it earned or lost, in Transactions and in Loans > Settled', // PSS #548
@@ -14522,12 +14541,12 @@ function _loanGainSync() {
 function getLoanPayments(loanId) {
   // ── PERSONAL LOGIC SET #52 ── batch settlements may have parentId pointing to a different loan
   // (the "primary" in the batch). Include them if this loan is in their batchLoanIds array.
-  return db.transactions.filter(t =>
-    t.isSettlement && !t.archived && (
-      t.parentId === loanId ||
-      (t.isBatchSettlement && (t.batchLoanIds || []).includes(loanId))
-    )
-  );
+  // PLS #584: one pass over the entries per tap or redraw builds the list for every loan (net worth trend asked
+  // each loan's payments once per month point, every time over all entries).
+  const ix = _tmGet('loanpays', () => { const m = new Map(), add = (id, t) => { if (!m.has(id)) m.set(id, []); const a = m.get(id); if (a[a.length - 1] !== t) a.push(t); };
+    for (const t of db.transactions) { if (!t.isSettlement || t.archived) continue; if (t.parentId) add(t.parentId, t); if (t.isBatchSettlement) for (const id of (t.batchLoanIds || [])) add(id, t); }
+    return m; });
+  return (ix.get(loanId) || []).slice();
 }
 
 // PSS #287: one person's card (row + in-place expansion). Split out of renderLoanList so the
@@ -15998,7 +16017,8 @@ function openLoanDetail(loanId, direction) {
         onclick:`editLoanPayment('${p.id}','${loanId}','${direction}')` }); }).join('')
     + _fsRow({ ico:_ico(isLent ? 'outCircle' : 'inCircle', 17), icoBg:isLent ? 'var(--amber-bg)' : 'var(--red-bg)', icoCol:accentColor,
         title:loan.fromOverpayTxId ? 'Extra they paid on a split bill' : loan.fromInKindTxId ? 'The rest of a bill they paid for you' : isLent ? 'You lent' : 'You borrowed', sub:`${fmtDFull(loan.date)}${loan.fromOverpayTxId || loan.fromInKindTxId ? ' · no new money moved' : sourceAcct ? ' · ' + _esc(sourceAcct.name) : ''}`, // PLS #511, #533
-        amt:fmt(loan.amount, loan.currency), amtCol:accentColor });
+        amt:fmt(loan.amount, loan.currency), amtCol:accentColor,
+        amt2:loan.loanedAmount != null ? `${fmt(loan.loanedAmount, loan.loanedCurrency || _homeBase())} ${isLent ? 'left your account' : 'came in'}` : '' }); // PLS #585: what really moved, when it differs from what is owed
   const linkedFeed = linkedTxs.map(t => { const cat = txCategoryDisplay(t), amtD = txAmountDisplay(t), n = (t.batchLoanIds || []).length;
       const share = t.isBatchSettlement && n > 1 ? loanPaymentContribution(t, loan) : null; // PSS #339
       const col = amtD.cls === 'tx-neg' ? 'var(--red)' : amtD.cls === 'tx-pos' ? 'var(--green)' : 'var(--text)';
@@ -16045,7 +16065,7 @@ function editLoanFull(loanId, direction) {
   const isCross = loan.currency !== acctCurr;
   const loanedDefault = loan.loanedAmount != null ? loan.loanedAmount
     : (isCross && loan.agreedRate ? Math.round(loan.amount * loan.agreedRate * 100) / 100 : loan.amount);
-  const expectDefault = isCross ? loan.amount : '';
+  const expectDefault = (isCross || loan.loanedAmount != null) ? loan.amount : ''; // PLS #585: a same-currency expected amount shows too
   const loanDate = loan.date || today();
   const loanTime = loan.time || nowTime();
   window._efNext = true; // PSS #360
@@ -16061,7 +16081,7 @@ function editLoanFull(loanId, direction) {
       <div class="form-group"><label class="form-label" for="lf-amount">Expected receivable</label><input class="form-input numpad-input" type="number" id="lf-amount" value="${expectDefault}" placeholder="0.00" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label" for="lf-currency">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">Leave Expected Receivable blank if same currency. If a different currency, the agreed rate is worked out from these two amounts.</div>
+    <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">What they pay back. Leave it blank if it is the same as the loaned amount. A bigger amount is your profit when paid.</div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="lf-date">Date</label>${dtField('lf-date','date','Date',loanDate)}</div>
       <div class="form-group"><label class="form-label" for="lf-time">Time</label>${dtField('lf-time','time','Time',loanTime)}</div>
@@ -16096,13 +16116,14 @@ function saveLoanFull(loanId, direction) {
   const acct = db.accounts.find(a=>a.id===newAcct);
   const acctCurr = acct?.currency || _homeBase();
   const isCross = expectAmt > 0 && expectCur !== acctCurr;
+  const hasExp = isCross || (expectAmt > 0 && Math.abs(expectAmt - loaned) >= 0.005); // PLS #585
   // -- PERSONAL LOGIC SET #513 -- (Nov 4 audit) Save on an open loan set remaining = the full amount, wiping
   // the payments already made: JC's K201 loan with K64 paid back went from K137 left to K201 on a Save with
   // nothing changed. Left = new amount minus what was paid (same count as the payment editor, PLS #130).
   // A new amount below what was already paid is refused before anything is written.
   let _paid513 = 0;
   if (!loan.settled) {
-    const _n = isCross ? { ...loan, amount: expectAmt, currency: expectCur } : { ...loan, amount: loaned, currency: acctCurr };
+    const _n = hasExp ? { ...loan, amount: expectAmt, currency: isCross ? expectCur : acctCurr } : { ...loan, amount: loaned, currency: acctCurr }; // PLS #585
     _paid513 = getLoanPayments(loanId).reduce((s, p) => s + loanPaymentContribution(p, _n), 0);
     if (_n.amount < _paid513 - 0.005) {
       showToast(`Already paid back ${fmt(_paid513, _n.currency)}. The amount can't be lower than that.`, 4000);
@@ -16122,10 +16143,11 @@ function saveLoanFull(loanId, direction) {
   // settled loan may only touch account/person/dates/notes; the money side stays frozen.
   if (!loan.settled) {
     // PLS #97 + #139: store loan in Expected-Receivable (commitment) currency; account moves the Loaned Amount.
-    if (isCross) {
+    if (hasExp) { // PLS #585: same currency with a different expected amount too
+      const _ec = isCross ? expectCur : acctCurr;
       loan.amount = expectAmt;
-      loan.currency = expectCur;
-      loan.remaining = roundMoney(Math.max(0, expectAmt - _paid513), expectCur); // PLS #513
+      loan.currency = _ec;
+      loan.remaining = roundMoney(Math.max(0, expectAmt - _paid513), _ec); // PLS #513
       loan.agreedRate = loaned / expectAmt;
       loan.loanedAmount = loaned;
       loan.loanedCurrency = acctCurr;
@@ -16157,7 +16179,7 @@ function saveLoanFull(loanId, direction) {
         parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${expectAmt} ${expectCur} @ ${fmtRate(loan.agreedRate)} ${acctCurr}/${expectCur}`;
       } else {
         delete parentTx.toAmountIsActual;
-        parentTx.notes = `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+        parentTx.notes = hasExp ? _loanSameNote(isLent, loan.personName, loan.amount, loan.currency) : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`; // PLS #585
       }
     } else {
       // -- PERSONAL LOGIC SET #459 -- a settled loan's money side is frozen (#194), but this branch rewrote its
@@ -16166,7 +16188,7 @@ function saveLoanFull(loanId, direction) {
       const _x = loan.agreedRate > 0 && loan.loanedCurrency && loan.currency !== loan.loanedCurrency;
       parentTx.notes = _x
         ? `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${loan.amount} ${loan.currency} @ ${fmtRate(loan.agreedRate)} ${loan.loanedCurrency}/${loan.currency}`
-        : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`;
+        : (loan.loanedAmount != null ? _loanSameNote(isLent, loan.personName, loan.amount, loan.currency) : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`); // PLS #585
     }
   }
 
@@ -16671,7 +16693,7 @@ function openAddLoan(direction='lent') {
   const loanedLabel = isLent ? 'Loaned amount' : 'Borrowed amount';
   const acctLabelText = isLent ? 'From account' : 'Into account'; // PSS #368: was 'Source Account (deducted from)'
   const loanedHelp = isLent ? 'What leaves your account' : 'What lands in your account';
-  const expectHelp = isLent ? 'What they\'ll pay back. Leave blank if it\'s the same currency' : 'What you\'ll pay back. Leave blank if it\'s the same currency'; // PLS #392: no dash
+  const expectHelp = isLent ? 'What they\'ll pay back. Leave blank if it\'s the same amount' : 'What you\'ll pay back. Leave blank if it\'s the same amount'; // PLS #392: no dash. PLS #585: any currency
   window._efNext = true; // PSS #360
   openSheet('gen', isLent?'Add loan out':'Add debt', `
     <div class="form-group"><label class="form-label" for="nl-person">${personLabel} *</label><input class="form-input" id="nl-person" placeholder="Person's name"></div>
@@ -16765,7 +16787,7 @@ function loanFxRow(loan, direction) {
   const cHome = toPhp(1, loan.currency, snap); // 1 commitmentCurr in home @ snapshot
   const lHome = toPhp(1, lc, snap);            // 1 loanedCurr in home @ snapshot
   const snapRate = lHome ? cHome / lHome : 0;  // 1 commitmentCurr = snapRate loanedCurr
-  if (snapRate > 0) {
+  if (snapRate > 0 && loan.currency !== lc) { // PLS #585: not for a same-currency loan
     const rShow = Math.round(snapRate * 1e4) / 1e4;
     rows += `${rowOpen}<div class="detail-label">Market rate at loan</div><div class="detail-value" style="font-family:var(--mono)">1 ${loan.currency} = ${rShow} ${lc}</div></div>`;
   }
@@ -16811,6 +16833,15 @@ function updateAddLoanFx() {
 
   // No FX consideration: same currency, or not enough entered yet
   if (expectCur === acctCurr || loaned <= 0) {
+    // PLS #585: same currency, a different expected amount: say what it means
+    const _d = Math.round((expect - loaned) * 100) / 100;
+    if (expectCur === acctCurr && loaned > 0 && expect > 0 && Math.abs(_d) >= 0.01) {
+      [...previewBox.children].slice(0, 2).forEach(c => { c.style.display = 'none'; });
+      const el = document.getElementById('nl-fx-extra'), gain = isLent ? _d > 0 : _d < 0;
+      if (el) el.innerHTML = `<span style="color:${gain ? 'var(--green)' : 'var(--red)'};font-weight:600">${gain ? '📈 Profit' : '📉 Loss'}: ${fmt(Math.abs(_d), acctCurr)}</span> <span style="color:var(--text3)">(counted as each payment comes in)</span>`;
+      previewBox.style.display = 'block';
+      return;
+    }
     previewBox.style.display = 'none';
     return;
   }
@@ -16866,6 +16897,8 @@ function updateAddLoanFx() {
   previewBox.style.display = 'block';
 }
 
+// PLS #585: same-currency loan with an expected amount: "Lent to Beng, P74.00 to be paid back"
+function _loanSameNote(isLent, person, amt, cur) { return `${isLent ? 'Lent to' : 'Borrowed from'} ${person}, ${fmt(amt, cur)} to be paid back`; }
 function saveAddLoan(direction) {
   const person = document.getElementById('nl-person')?.value?.trim();
   const loaned = parseFloat(document.getElementById('nl-loaned')?.value);
@@ -16888,8 +16921,13 @@ function saveAddLoan(direction) {
   // ("1 commitmentCurr = X acctCurr"). Cross-currency only when Expected Receivable is a different currency.
   // FX gain is realized/displayed at settlement (PLS #139) so net worth is not double counted.
   const isCross = expectAmt > 0 && expectCur !== acctCurr;
+  // -- PERSONAL LOGIC SET #585 -- (his report Nov 11: Beng borrowed P73.90, he expects P74.00, the loan still said
+  // P73.90 so the P0.10 tubo was lost) Expected receivable is what is owed, in any currency. Same currency and a
+  // different amount: owed = expected, the account still moves the loaned amount, and the extra is Profit when
+  // paid (PLS #542/#544), same as a cross-currency loan. Blank or equal = owed is the loaned amount, as before.
+  const hasExp = isCross || (expectAmt > 0 && Math.abs(expectAmt - loaned) >= 0.005);
   let loanAmount, loanCurr, agreedRate = 0;
-  if (isCross) {
+  if (hasExp) {
     loanAmount = expectAmt;
     loanCurr = expectCur;
     agreedRate = loaned / expectAmt;
@@ -16901,7 +16939,7 @@ function saveAddLoan(direction) {
 
   const list = isLent ? db.loans.lent : db.loans.borrowed;
   const loanRecord = { id:loanId, personName:person, amount:loanAmount, currency:loanCurr, accountId, remaining:loanAmount, date, time, dueDate, notes, settled:false };
-  if (isCross) {
+  if (hasExp) { // PLS #585
     loanRecord.agreedRate = agreedRate;
     loanRecord.loanedAmount = loaned;
     loanRecord.loanedCurrency = acctCurr;
@@ -16918,7 +16956,7 @@ function saveAddLoan(direction) {
     date, time,
     notes: isCross
       ? `${isLent?'Lent to':'Borrowed from'} ${person} — ${expectAmt} ${loanCurr} @ ${fmtRate(agreedRate)} ${acctCurr}/${loanCurr}`
-      : `${isLent?'Lent to':'Borrowed from'} ${person}`,
+      : hasExp ? _loanSameNote(isLent, person, loanAmount, loanCurr) : `${isLent?'Lent to':'Borrowed from'} ${person}`, // PLS #585
     fxSnapshot: buildFxSnapshot(date, time),
     parentId: null,
     isLoanTx: true,
@@ -17416,6 +17454,16 @@ function renderInlineInsights(types, opts = {}) {
 // a due day 31 in a 30-day month (iPad vanished from November); Looking ahead read fields that do not
 // exist (months, totalAmount) so no plan ever showed; the alert's "months left" ignored months paid before
 // tracking (iPad said 18, really 16). A month that already has a linked payment is not due again.
+// -- PERSONAL LOGIC SET #580 -- the last payment month of a plan = start month + (months - 1), on the start day or
+// that month's last day if it is shorter. Before, day 31 spilled into the next month: iPad 16 (Mar 31, 24 months)
+// said "until Mar 2028", the last payment is Feb 2028. Built from numbers only, so no time zone can move it.
+function _instEndDate(start, months) {
+  const [y, m, d] = String(start || '').split('-').map(Number); const n = Number(months) || 0;
+  if (!y || !m || !d || n < 1) return null;
+  const t = (m - 1) + n - 1, ey = y + Math.floor(t / 12), em = t % 12; // em 0-based
+  const last = new Date(Date.UTC(ey, em + 1, 0)).getUTCDate();
+  return `${ey}-${String(em + 1).padStart(2,'0')}-${String(Math.min(d, last)).padStart(2,'0')}`;
+}
 function _instLeft(i) { return Math.max(0, (Number(i.totalMonths) || 0) - ((Number(i.alreadyPaid) || 0) + (Number(i.paidMonths) || 0))); }
 function _instRunning(i) { return !!i && !i.archived && !i.completed && !!i.dueDay && _instLeft(i) > 0; }
 function _instDueIn(i, y, m) { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(Number(i.dueDay) || 1, last)); }
@@ -17831,9 +17879,7 @@ function renderAnalyticsOverview() {
     metricLabel = _ovYear === currentYear ? `${_ovYear} to date` : String(_ovYear);
   } else {
     curr = getMonthTotals(metricMk);
-    const prevDate = new Date(metricMk + '-01');
-    prevDate.setMonth(prevDate.getMonth()-1);
-    const prevMk = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+    const prevMk = _mkAdd(metricMk, -1); // PLS #582: was new Date('YYYY-MM-01'), read as UTC, so west of UTC it compared 2 months back
     prev = metricMk === currentMk ? getMonthTotals(prevMk, new Date().getDate()) : getMonthTotals(prevMk); // PLS #494: same days of last month
   }
   const incomeChg = prev.income > 0 ? ((curr.income-prev.income)/prev.income*100) : null;
@@ -23932,8 +23978,8 @@ function _bgtMonthRoll() {
 const WTS_MIN_DAY = 7;
 function _wtsAmt(t) { return t.type === 'shared' ? (t.myShare ?? t.amount) : t.amount; }
 function _wtsTxs(cur, from, to) { // same filter as _bgtSpent
-  return db.transactions.filter(t => _isSpendEntry(t) &&
-    t.date && t.date >= from && t.date <= to && (t.type === 'expense' || t.type === 'shared') && t.currency === cur);
+  return _tmGet('wts|' + cur + '|' + from + '|' + to, () => db.transactions.filter(t => _isSpendEntry(t) && // PLS #584: a copy, so a caller can't change the kept list
+    t.date && t.date >= from && t.date <= to && (t.type === 'expense' || t.type === 'shared') && t.currency === cur)).slice();
 }
 function _wtsMonthEnd(mk) { const y = +mk.slice(0,4), m = +mk.slice(5,7); return `${mk}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`; }
 function _wtsMonthName(mk, long) { return new Date(mk + '-01T12:00').toLocaleString('en', { month: long ? 'long' : 'short' }); }
@@ -24134,7 +24180,7 @@ function _wtsHTML(inSheet) {
   let w; try { w = _wtsCompute(); } catch (e) { console.warn('Ways to save failed:', e); return ''; }
   window._wtsLast = w;
   if (!w.tips.length && (w.early || !w.per.length)) return '';
-  try { db.settings.wtsSeen = [...new Set(w.offKeys)].sort(); saveDB(); } catch (e) {} // seen: the Dashboard line waits for something new
+  try { const _ws = [...new Set(w.offKeys)].sort(); if (JSON.stringify(db.settings.wtsSeen || []) !== JSON.stringify(_ws)) { db.settings.wtsSeen = _ws; saveDB(); } } catch (e) {} // PLS #584: save only when it changed // seen: the Dashboard line waits for something new
   const tile = (v, l, c) => `<div class="wts-tile"><div class="wts-tv"${c ? ` style="color:${c}"` : ''}>${v}</div><div class="wts-tl">${l}</div></div>`;
   const stats = w.early ? '' : w.per.map(x => {
     const money = v => fmt(v, x.b.currency), over = x.spent - x.lim, red = 'var(--red)';
@@ -28989,6 +29035,8 @@ function ensureDBIntegrity() {
     });
     if (fixedFx > 0) issues.push(`re-measured forex on ${fixedFx} transfer${fixedFx===1?'':'s'} at their own rate`);
     try { if (_loanGainSync()) issues.push('loan payment gains (PLS #542)'); } catch (e) { console.warn('[Integrity] loan gains', e); }
+    try { let _ie = 0; (db.installments || []).forEach(i => { if (!/^\d{4}-\d{2}-\d{2}$/.test(i.startDate || '')) return; const e = _instEndDate(i.startDate, i.totalMonths); if (e && e !== i.endDate) { i.endDate = e; _ie++; } });
+      if (_ie) issues.push(`installment end dates (PLS #580): ${_ie}`); } catch (e) { console.warn('[Integrity] inst end', e); } // PLS #580: old ones were a day early (before #141) or spilled a month
     try { if (_centsSync()) issues.push('amounts to centavos (PLS #543)'); } catch (e) { console.warn('[Integrity] cents', e); }
 
     if (issues.length > 0) {
@@ -28999,17 +29047,26 @@ function ensureDBIntegrity() {
   }
 }
 
+// PLS #581: anything a person made: an entry, a name, an account that is not an untouched sample
+function _hasRealData() {
+  const sample = a => /^acct-sample-/.test(a.id || '') && !a.currency && !(Number(a.initialBalance) || 0);
+  return (db.transactions?.length > 0) || !!db.profile?.nickname || (db.accounts || []).some(a => !sample(a));
+}
 function initApp() {
   try {
   ensureDBIntegrity();
   wireEvents();
   autoPurgeArchived();
+  // PLS #581: someone the old check sent past setup, who has made nothing since, gets the setup screen now
+  if (db.onboarded && !_hasRealData() && !(db.trackedCurrencies || []).length) db.onboarded = false;
 
   if (!db.onboarded) {
     // PLS #70 belt-and-suspenders: if data exists at runtime, force-set onboarded
     // and skip the onboarding screen entirely. Covers any edge case where the
     // flag was never persisted (e.g., partial migrations, snapshot restores).
-    if ((db.transactions?.length > 0 || db.accounts?.length > 0 || db.profile?.nickname)) {
+    // -- PERSONAL LOGIC SET #581 -- the 6 sample accounts every new start comes with are not data. Counting them sent
+    // every new user past setup since 1.2.13 (no home currency, sample accounts showing "null 0.00").
+    if (_hasRealData()) {
       console.warn('[TB] initApp self-heal: data exists but onboarded:false → forcing true');
       db.onboarded = true;
       saveDB();
@@ -29123,6 +29180,11 @@ window.addEventListener('pagehide', () => {
 // 2. Offline badge — small indicator at top of screen when offline.
 // 3. Auto-sync on reconnect — fires Drive sync when internet returns.
 // 4. Manual "Sync Now" button in Settings → Backup section.
+// -- PERSONAL LOGIC SET #583 -- ask the browser to keep this app's data and not clear it to free space (iPhone Safari
+// can clear a site's data when it is not used for a while). Silent in Chrome, Edge and Safari; skipped in Firefox,
+// which would show a question. Cloud storage backup stays the safety net.
+try { if (navigator.storage && navigator.storage.persist && !/Firefox/i.test(navigator.userAgent))
+  navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(() => {}); }).catch(() => {}); } catch (e) {}
 if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {
@@ -29185,9 +29247,13 @@ function runAIAnalysis() {
   _aiInsights.push(...aiSpendingVelocity());
   _aiInsights.push(...aiAtmFeeWaste());
   if (!db.settings.aiInsights) db.settings.aiInsights = {};
-  db.settings.aiInsights.lastRun = _aiLastRun;
-  db.settings.aiInsights.insights = _aiInsights;
-  saveDB();
+  // PLS #584: written to browser storage only when the cards changed. Before, every Analytics and Insights open
+  // wrote the whole data again (2 MB after a few years), a big part of the wait on those screens.
+  if (JSON.stringify(db.settings.aiInsights.insights || null) !== JSON.stringify(_aiInsights)) {
+    db.settings.aiInsights.lastRun = _aiLastRun;
+    db.settings.aiInsights.insights = _aiInsights;
+    saveDB();
+  }
   const urgent = _aiInsights.filter(i=>i.priority==='high' && !INLINE_AI_TYPES.has(i.type)).length;
   return _aiInsights;
 }
@@ -30104,7 +30170,7 @@ function renderAnalyticsYoY() {
   const curYear = now.getFullYear();
   const lastYear = curYear - 1;
   // Empty state: no transactions from last year
-  const hasLastYearTx = (db.transactions || []).some(t => new Date(t.date).getFullYear() === lastYear);
+  const hasLastYearTx = (db.transactions || []).some(t => Number(String(t.date || '').slice(0,4)) === lastYear); // PLS #582
   if (!hasLastYearTx) {
     // PSS #203: a bare "not enough history" tells you nothing actionable. Work out how much
     // history actually exists and name the month this tab starts working, so the wait is known.
@@ -30882,8 +30948,7 @@ function saveNewInstallment() {
   // ── PERSONAL LOGIC SET #141 ── Build the end date at UTC noon so toISOString() can't roll
   // back a day in GMT+10 (PNG). Day-of-month comes from the string, never a local Date.
   const [_sy, _sm, _sd] = startDate.split('-').map(Number);
-  const endD = new Date(Date.UTC(_sy, (_sm - 1) + totalMonths - 1, _sd, 12, 0, 0));
-  const endDate = endD.toISOString().slice(0, 10);
+  const endDate = _instEndDate(startDate, totalMonths); // PLS #580: a 31st start ends on the last day of a short month
   const dueDay = _sd; // Day of month (1-31) for monthly due notifications
 
   if (!db.installments) db.installments = [];
@@ -31170,8 +31235,7 @@ function saveEditInstallment(instId) {
   if (newStartDate && /^\d{4}-\d{2}-\d{2}$/.test(newStartDate) && (newStartDate !== inst.startDate || _totalMoved)) {
     inst.startDate = newStartDate;
     const [_sy, _sm, _sd] = newStartDate.split('-').map(Number); // PLS #141: UTC-safe end date
-    const endD = new Date(Date.UTC(_sy, (_sm - 1) + inst.totalMonths - 1, _sd, 12, 0, 0));
-    inst.endDate = endD.toISOString().slice(0, 10);
+    inst.endDate = _instEndDate(newStartDate, inst.totalMonths); // PLS #580
     inst.dueDay = _sd;
   }
   const totalPaid = inst.alreadyPaid + (inst.paidMonths || 0);
