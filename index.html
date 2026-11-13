@@ -703,6 +703,8 @@ body.numpad-open.np-pc .sheet-body,body.numpad-open.np-pc .dlg-body{padding-bott
 #tb-numpad.np-float.np-side.open{transform:none;opacity:1;pointer-events:auto}
 .big-amt-input::-webkit-inner-spin-button,.big-amt-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} /* PLS #379: no up/down arrows on the big amount (PC) */
 .big-amt-input{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} /* PSS #597: no up/down arrows on any amount box (PC); the app has its own number pad */
+input[type=number]{-moz-appearance:textfield}
 /* PLS #392: the grouped amount is drawn over the field */
 .big-amt-row{position:relative}
 .big-amt-fmt{position:absolute;pointer-events:none;text-align:left;color:var(--text);white-space:pre;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-start}
@@ -802,8 +804,26 @@ option{background:var(--bg3);color:var(--text)}
 .f6 .f6-hero input.form-input,.f6 .f6-hero .ef-field input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0;width:100%;height:auto;font-size:30px!important;font-weight:600!important;letter-spacing:-1px;color:var(--text);text-align:left!important;text-align-last:auto!important}
 .f6 .f6-amt{display:flex;align-items:baseline;gap:2px}.f6 .f6-hero .form-group{min-height:0!important;padding:0!important;margin:0!important;border:0!important}.f6 .f6-hero .f6-sub{min-height:0}.f6 .f6-sym{font-size:20px;font-weight:600;color:var(--text3)}
 .f6 .f6-hero .f6-sub{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-top:2px}
+/* PSS #599: the big amount in an edit form reads like the rest of the app (P1,091.25, not P1091.25). The box itself
+   stays underneath for typing; the written amount shows while the box is not being typed in */
+.f6 .f6-num{position:relative;flex:1;min-width:0}
+.f6 .f6-num .f6-fmt{display:block;font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--text);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.f6 .f6-num .f6-fmt.ph{color:var(--text3)}
+.f6 .f6-hero .f6-num input.form-input{position:absolute;inset:0;height:100%;color:transparent!important;caret-color:var(--text)}
+.f6 .f6-hero .f6-num input.form-input:focus{color:var(--text)!important}
+.f6 .f6-num:focus-within .f6-fmt{visibility:hidden}
 .f6 .f6-hero .f6-sub input.form-input{width:4.5em!important;pointer-events:none}.f6 .f6-hero .f6-sub select.form-input,.f6 .f6-hero .f6-sub input.form-input{background:transparent!important;border:0!important;box-shadow:none!important;padding:0 14px 0 0!important;margin:0;width:auto;height:auto;font-size:11px!important;font-weight:500;color:var(--text3);text-align:left}
 .f6 .f6-hero .ef-hint,.f6 .f6-hero .form-hint{display:block;font-size:11px;color:var(--text3);margin-top:2px;text-align:left}
+.f6-list .f6-hero{flex-direction:column;align-items:center;justify-content:center;text-align:center;background:transparent!important;border:0!important;padding:6px 0 14px!important;margin:0!important}
+.f6-list .f6-hero .f6-hl,.f6-list .f6-hero .f6-hero-g{display:flex;flex-direction:column;align-items:center;padding:0;border:0}
+.f6-list .f6-hero .form-label,.f6-list .f6-badge{display:none!important}
+.f6-list .f6-amt{justify-content:center}
+.f6-list .f6-sub{text-align:center}.f6-list .f6-sub select.form-input{text-align:center;text-align-last:center;color:var(--text3);font-size:13px;width:auto;background:transparent!important;border:0!important}
+.f6-list .ef-card{background:var(--bg3)}
+.f6-list .ef-card:has(+ .ef-card){margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0}
+.f6-list .ef-card + .ef-card{border-top-left-radius:0;border-top-right-radius:0;border-top:1px solid var(--border)}
+.f6-list .ec-pick{justify-content:flex-end;gap:6px;text-align:right}
+.f6-list .f6-fxline{text-align:center;margin:-4px 0 14px!important}
 .f6 .f6-badge{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--accent-bg);color:var(--accent)}
 /* PLS #566 part editor: one amount, one line under it (his ask Nov 7: fintech look, nothing busy). His pick: A, minimal */
 .sync-row.off .fs-t,.sync-row.off .fs-a{text-decoration:line-through;opacity:.45}.sync-k{font-size:11px;color:var(--accent);font-weight:500}.sync-row.off .sync-k{color:var(--text3)}
@@ -825,6 +845,8 @@ option{background:var(--bg3);color:var(--text)}
 .ec-pick{display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}.ec-pick #edit-cat-val{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ec-pick .ec-chev{color:var(--text3);display:inline-flex;flex:none}
 .f6 .ef .f6-grid textarea.form-input{text-align:left;min-height:20px;font-weight:500}
 .f6 .ef .f6-grid .dt-row,.f6 .ef .f6-grid .dt-field{justify-content:flex-start}
+.f6 .ef .f6-grid textarea.form-input,.f6 .ef .f6-grid input.form-input:not([type=number]){padding-left:3px!important;margin-left:-3px!important;width:calc(100% + 3px)!important} /* PSS #600: with no inner space the box cut the left edge of the first letter (B in Bibi) */
+.f6 .f6-hero .f6-sub input.form-input{padding-left:2px!important;margin-left:-2px!important} /* PSS #600 */
 .f6 .ef .f6-grid .dt-display{justify-content:flex-start;padding:0!important;padding-left:0!important;margin-left:0!important;text-indent:0;font-size:13px;font-weight:600;min-height:0}
 .f6 .ef .f6-grid .dt-field > .dt-display{margin-left:0}
 .f6 .ef .f6-grid .dt-display .dt-icon{display:none}
@@ -3560,7 +3582,7 @@ function _nwOwedAsOf(dateStr) {
       const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object') ? (Number(tx.paidSoFar[p.name]) || 0) : 0;
       const open = tx.settled ? 0 : Math.max(0, (p.share || 0) - paid); // a settled bill is owed nothing now, same as getNetWorth
       const rem = Math.min(p.share || 0, open + (later[tx.id + '|' + p.name] || 0));
-      if (rem > 0.01) net += txAmtIn(rem, tx, _homeBase()); // PLS #505
+      if (rem >= 0.005) net += txAmtIn(rem, tx, _homeBase()); // PLS #505. PLS #590: P0.01 counts
     }
   }
   return net;
@@ -3631,9 +3653,9 @@ function getNetWorth() {
   }
   for (const inv of db.investments) {
     if (!inv.archived && inv.status !== 'sold') {
-      const phpVal = toPhp(inv.currentValue || inv.amount, inv.currency);
+      const phpVal = toPhp((inv.currentValue ?? inv.amount), inv.currency);
       assets += phpVal;
-      assetRows.push({ name: inv.name, type: inv.type || 'Investment', bal: inv.currentValue || inv.amount, currency: inv.currency, phpBal: phpVal });
+      assetRows.push({ name: inv.name, type: inv.type || 'Investment', bal: (inv.currentValue ?? inv.amount), currency: inv.currency, phpBal: phpVal });
     }
   }
   for (const l of db.loans.lent) {
@@ -3664,7 +3686,7 @@ function getNetWorth() {
       const paid = (tx.paidSoFar && typeof tx.paidSoFar === 'object')
         ? (tx.paidSoFar[p.name] || 0) : 0;
       const remaining = Math.max(0, (p.share || 0) - paid);
-      if (remaining > 0.01) {
+      if (remaining >= 0.005) { // PLS #590: a P0.01 still owed counts (was dropped from net worth)
         const phpVal = txAmtIn(remaining, tx, _homeBase()); // PLS #505: at the bill's own rate, same as the Reimbursements page (PLS #245, #504)
         assets += phpVal;
         assetRows.push({ name: p.name + ' (Reimb.)', type: 'Receivable', bal: remaining, currency: tx.currency, phpBal: phpVal });
@@ -3758,14 +3780,22 @@ function isLiquidAccount(a) { return !!a && !a.archived && LIQUID_TYPES.includes
 // -- PERSONAL LOGIC SET #584 -- a screen asked the same sum many times in one redraw (Dashboard: 363 account balances
 // for 30 accounts, the same month's spending list 220 times). Answers are kept for ONE tap or redraw only: cleared
 // right after it, at every save, and when the entry count or the data itself changes, so no screen shows an old figure.
-var _tm = null, _tmDb = null, _tmLen = -1;
+// -- PERSONAL LOGIC SET #592 -- answers are kept ONLY while a screen is being drawn (_tmDraw below), never while a tap is
+// changing data. Before, a save step that read, changed a link and read again in the same tap got the old answer: raising
+// Mike's K300 payment to K301 so it also covered his P9.80 loan left that loan "still owed" although the payment said paid.
+var _tm = null, _tmDb = null, _tmLen = -1, _tmOn = 0;
+function _tmDraw(fn) { const w = function () { if (!_tmOn) _tm = null; _tmOn++; try { return fn.apply(this, arguments); } finally { if (!--_tmOn) _tm = null; } }; w.toString = () => fn.toString(); return w; }
 function _tmGet(key, fn) {
+  if (!_tmOn) return fn(); // PLS #592
   const len = (db && db.transactions) ? db.transactions.length : 0;
   if (!_tm || _tmDb !== db || _tmLen !== len) { _tm = new Map(); _tmDb = db; _tmLen = len; setTimeout(_tmClear, 0); }
   if (_tm.has(key)) return _tm.get(key);
   const v = fn(); _tm.set(key, v); return v;
 }
 function _tmClear() { _tm = null; }
+// PLS #592: the screens that only draw. Each one starts with nothing kept and keeps nothing after it.
+for (const _n of ['renderDashboard', 'renderInsights', 'renderAnalytics', 'renderInstallments', 'renderTransactions', 'renderReimbursementsPage', 'renderAccounts', 'renderInvestmentsPage', 'renderLoans', 'renderPlanning', 'renderSettings', 'setAnalyticsTab', 'openAcctDetail', 'openLoanDetail', 'openAddSheet'])
+  if (typeof window[_n] === 'function') window[_n] = _tmDraw(window[_n]);
 let _firstCompleteMK = undefined; // undefined = not computed, null = none yet
 function firstCompleteMonthKey() {
   if (_firstCompleteMK !== undefined) return _firstCompleteMK;
@@ -4057,6 +4087,8 @@ function txCategoryDisplay(tx) {
   // PSS #350: an automatic entry whose category no longer exists (old versions stamped ids such as
   // 'sc-reimbreceived' that were later removed) is named by what it is, not "Deleted Category". A
   // real, existing category always wins; this only replaces the missing-category fallback.
+  if (tx.type === 'remittance') return {icon:'📤', name:'Remittance'}; // PSS #598
+  if (tx.type === 'correction') return {icon:'⚖️', name:'Balance Correction'}; // PSS #598
   const _c = getCategoryDisplay(tx.categoryId);
   const _missing = !tx.categoryId || !!_c.orphan || /^(Deleted Category|Uncategorized)$/.test(_c.name || ''); // #352: orphan flag
   if (_missing) {
@@ -4069,6 +4101,12 @@ function txCategoryDisplay(tx) {
   return _c;
 }
 
+// PSS #598: money put into an investment has no "to" account, so its detail said "Maribank → Unknown".
+// It now names the investment.
+function _txToDisplay(tx) {
+  if (tx && !tx.toAccountId && tx.isInvestmentFund) { const inv = tx.investmentId && (db.investments || []).find(i => i.id === tx.investmentId); return { name: (inv && inv.name) || 'Investment', currency: tx.currency || _homeBase() }; }
+  return getAccountDisplay(tx.toAccountId);
+}
 function getAccountDisplay(acctId) {
   const a = db.accounts.find(x=>x.id===acctId);
   return a ? a : {name:'Unknown',currency:_homeBase()};
@@ -4363,8 +4401,11 @@ function renderPageHeader(page) {
     pageHTML = _more('reimbursements') + _plus("openAddSheet({type:'shared'})", 'Add shared expense'); // PSS #289
   } else if (page==='planning') {
     // PSS #306: "+" adds to whichever Planning tab is open
-    pageHTML = ((db.contracts||[]).some(c => c.id === db.activeContractId) ? _more('planning') : '')
-      + _plus("(_planTab==='wishlist'?openAddWishlist():_planTab==='contract'?openContractWizard():openAddBudget())", 'Add');
+    // PSS #602: the Contract tab already has Add bucket and Edit contract on the page, so the top "+" (it made a NEW
+    // contract) and "..." (only Edit contract) read as a second, different Add. Budgets and Wishlist keep "+".
+    const _hasC602 = (db.contracts||[]).some(c => c.id === db.activeContractId);
+    pageHTML = (_planTab === 'contract' && _hasC602) ? ''
+      : _plus("(_planTab==='wishlist'?openAddWishlist():_planTab==='contract'?openContractWizard():openAddBudget())", _planTab === 'wishlist' ? 'Add to wishlist' : _planTab === 'contract' ? 'New contract' : 'Add budget');
   } else if (page==='analytics') {
     pageHTML = (!_anHome && _analyticsTab === 'overview') ? _more('analytics') : ''; // PSS #452: Edit layout
   } else if (page==='installments') {
@@ -4389,7 +4430,6 @@ function openPageMenu(ev, page) {
     items.push([db.settings.acctView === 'grid' ? 'View as list' : 'View as grid', '', 'toggleAcctView()']); // PSS #302
     items.push(['Archived accounts', db.accounts.filter(a=>a.archived).length, 'openArchivedAccountsSheet()']);
   }
-  if (page === 'planning' && db.activeContractId) items.push(['Edit contract', '', `setPlanTab('contract');openEditContract('${db.activeContractId}')`]); // PLS #308
   if (page === 'reimbursements') items.push(['Archive', (db.archivedTransactions||[]).filter(t => t.type === 'shared').length, 'openTxArchiveSheet()']);
   if (page === 'installments') items.push(['Archive', (db.installments||[]).filter(i=>i.archived).length, 'openInstArchiveSheet()']);
   if (page === 'investments') items.push(['Archive', (db.investments||[]).filter(i=>i.archived).length, 'openInvArchiveSheet()']);
@@ -4625,7 +4665,7 @@ const _F6_TITLES = new Set(['Edit transaction', 'Edit transfer', 'Edit remittanc
 function _f6Is(title) { return _F6_TITLES.has(_plainTitle(title)); }
 function _f6IcoFor(lbl) {
   const t = String(lbl).toLowerCase();
-  const m = [[/categor/, 'tag'], [/person|name of|borrower|lender|nickname|^name$/, 'user'], [/account|from|to |^to$|paid|source|wallet/, 'wallet'], [/due/, 'flag'],
+  const m = [[/categor/, 'tag'], [/person|name of|borrower|lender|nickname|split with/, 'user'], [/^name$/, 'tag'] /* PSS #601: a thing's name is not a person */, [/account|from|to |^to$|paid|source|wallet/, 'wallet'], [/due/, 'flag'],
     [/date|start|end|month/, 'calendar'], [/time/, 'clock'], [/rate/, 'exchange'], [/currenc/, 'coins'], [/note|reference/, 'fileText'],
     [/type|kind/, 'layers'], [/location|country|nationality/, 'pin'], [/value|amount|balance|invested|receiv|paid|goal|target|limit/, 'coins'], [/icon|emoji/, 'sparkle'], [/alert|threshold/, 'alert']];
   for (const [re, ic] of m) if (re.test(t)) return ic;
@@ -4659,8 +4699,17 @@ function _f6Apply(root) {
     const inp = money.querySelector('input[type=number], input.numpad-input');
     if (inp) {
       const w = document.createElement('div'); w.className = 'f6-amt'; const sy = document.createElement('span'); sy.className = 'f6-sym';
-      inp.parentNode.insertBefore(w, inp); w.appendChild(sy); w.appendChild(inp);
-      const upd = () => { sy.textContent = sym((curSel && curSel.value) || (lblOf(money).match(/\(([A-Z]{2,5})\)/) || [])[1] || meta.currency || _homeBase()).trim(); }; // PSS #551: Edit remittance showed P for a PGK amount
+      inp.parentNode.insertBefore(w, inp); w.appendChild(sy);
+      // PSS #599: written amount over the box (commas and the currency's decimals)
+      const nb = document.createElement('div'); nb.className = 'f6-num'; const fm = document.createElement('span'); fm.className = 'f6-fmt';
+      nb.appendChild(fm); nb.appendChild(inp); w.appendChild(nb);
+      const fmtUpd = () => { const raw = String(inp.value || '').trim(); const v = Number(raw); const c = (curSel && curSel.value) || (lblOf(money).match(/\(([A-Z]{2,5})\)/) || [])[1] || meta.currency || _homeBase();
+        if (raw === '' || !Number.isFinite(v)) { fm.textContent = inp.placeholder || '0.00'; fm.classList.add('ph'); }
+        else { fm.textContent = (v < 0 ? '-' : '') + fmt(Math.abs(v), c).slice(sym(c).length); fm.classList.remove('ph'); } };
+      try { const P = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        Object.defineProperty(inp, 'value', { configurable: true, get() { return P.get.call(this); }, set(x) { P.set.call(this, x); fmtUpd(); } }); } catch (e) {}
+      inp.addEventListener('blur', fmtUpd);
+      const upd = () => { fmtUpd(); sy.textContent = sym((curSel && curSel.value) || (lblOf(money).match(/\(([A-Z]{2,5})\)/) || [])[1] || meta.currency || _homeBase()).trim(); }; // PSS #551: Edit remittance showed P for a PGK amount
       upd(); root.addEventListener('change', upd); root.addEventListener('input', upd);
     }
     if (meta.badge) { const b = document.createElement('div'); b.className = 'f6-badge' + (meta.tone ? ' ' + meta.tone : ''); b.textContent = meta.badge; hero.appendChild(b); }
@@ -4675,7 +4724,7 @@ function _f6Apply(root) {
     gs.forEach(g => {
       const l = g.querySelector(':scope > .form-label');
       if (l && !l.querySelector('.f6-ico')) { const i = document.createElement('span'); i.className = 'f6-ico'; i.innerHTML = _ico(_f6IcoFor(l.textContent), 14); l.insertBefore(i, l.firstChild); }
-      const wide = g.classList.contains('ef-stack') || !!g.querySelector('textarea') || !l;
+      const wide = g.classList.contains('ef-stack') || g.classList.contains('f6-wide') || /^\s*(notes?|category)\b/i.test(l ? l.textContent : '') /* PSS #599: long text gets the full row */ || !!g.querySelector('textarea') || !l; // PSS #599: a tile can ask for the full row
       if (wide) g.classList.add('f6-wide'); else narrow.push(g);
     });
     // an odd run of tiles between two wide ones would leave a hole: its last tile takes the row
@@ -4683,6 +4732,14 @@ function _f6Apply(root) {
     const flush = () => { if (run.length % 2) run[run.length - 1].classList.add('f6-wide'); run = []; };
     gs.forEach(g => { if (g.classList.contains('f6-wide')) flush(); else run.push(g); }); flush();
   });
+  // -- PSS #614 -- his pick Nov 13 ("pag isahin nalang"): Edit forms read like Add forms, one row each, label left, value
+  // right. The tiles are undone here; the amount stays big in the middle on top, like Add.
+  root.classList.add('f6-list');
+  root.querySelectorAll('.ef-card.f6-grid').forEach(c => c.classList.remove('f6-grid'));
+  root.querySelectorAll('.f6-ico').forEach(i => i.remove());
+  root.querySelectorAll('.ef-card > .form-group.ef-stack').forEach(g => { const kids = [...g.children].filter(k => !(k.classList.contains('ef-hint') && !k.textContent.trim()) && k.style.display !== 'none'); if (kids.length === 2 && kids[0].classList.contains('form-label') && kids[1].classList.contains('ec-pick')) g.classList.remove('ef-stack'); });
+  const _fx = root.querySelector('.fx-snapshot-badge'); const _cards = root.querySelectorAll('.ef-card');
+  if (_fx && _cards.length) { const w = _fx.parentElement; if (w && w !== root && !w.querySelector('.form-input')) { w.classList.add('f6-fxline'); _cards[_cards.length - 1].after(w); } }
 }
 function _f6Foot(shell) {
   const foot = shell && shell.querySelector(':scope > .rv-foot'); if (!foot) return;
@@ -4748,8 +4805,8 @@ function showInfo(title, htmlText) {
 function showBucketInfo(key) {
   const m = {
     rate: ['Annual rate %', 'The expected yearly return. It sets the displayed label and the auto-balance weight. A higher rate earns a bigger share, before the risk adjustment.'],
-    risk: ['Risk level', 'Conservative auto-balance gives a smaller share to riskier buckets, even at a higher rate.<br><br>🛡️ <b>Insured</b>: banks, time deposit, MP2, treasury bonds<br>🟢 <b>Low</b>: government bonds<br>🟡 <b>Medium</b>: REITs, mutual funds, real estate<br>🔴 <b>High</b>: crypto, stocks, VUL'],
-    alloc: ['Allocation type', '🔒 <b>Fixed</b>: a locked amount. Counted as its % of the target and excluded from auto-distribute.<br><br>🌊 <b>Dynamic</b>: fluid. Shares the remaining pool and rebalances to 100% with other Dynamic buckets.']
+    risk: ['Risk level', 'Reset to suggestion in Plan gives a smaller share to riskier buckets, even at a higher rate.<br><br>🛡️ <b>Insured</b>: banks, time deposit, MP2, treasury bonds<br>🟢 <b>Low</b>: government bonds<br>🟡 <b>Medium</b>: REITs, mutual funds, real estate<br>🔴 <b>High</b>: crypto, stocks, VUL'],
+    alloc: ['Planned amount', 'A locked bucket stays at its amount. The unlocked buckets share what is left of the goal. Plan shows all buckets at once, like a budget.'] /* PLS #603 */
   };
   const e = m[key]; if (e) showInfo(e[0], e[1]);
 }
@@ -4923,6 +4980,21 @@ function npRender() {
 // ("12+34" shows 46 right away). Same rounding as Done (PLS #110: rates full precision, amounts to cents).
 // An unfinished sum ("12+") keeps the last good number; a result below zero is not written.
 // -- PERSONAL LOGIC SET #383 -- amounts from the keypad show full centavos: 45.5 -> "45.50", 46 stays "46"
+// -- PSS #601 -- the same PLS #383 look for an amount the app puts in a box: 182.4 shows "182.40" (a whole 46 stays 46).
+// Only the look changes: the number in the box is the same. Rate boxes keep every digit.
+function _boxCents(el) { if (!el || /rate/i.test(el.id || '') || el.closest('[data-rate]')) return; const v = el.value; if (/^-?\d+\.\d$/.test(v)) el.value = v + '0'; }
+(function () { const tidy = n => { if (n.nodeType !== 1) return; if (n.matches && n.matches('input.numpad-input')) _boxCents(n); if (n.querySelectorAll) n.querySelectorAll('input.numpad-input').forEach(_boxCents); };
+  const start = () => { new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(tidy); }).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('change', e => { if (e.target && e.target.matches && e.target.matches('input.numpad-input')) _boxCents(e.target); }, true); };
+  document.body ? start() : document.addEventListener('DOMContentLoaded', start); })();
+// -- PSS #609 -- a very big total never loses digits: the Dashboard balance ran off the screen and the page tiles cut the
+// amount with "..." (11 digits and up, normal money in currencies like IDR or VND). The number gets smaller until it fits.
+function _fitMoney(el) { if (!el || !el.isConnected) return; el.style.fontSize = ''; let fs = parseFloat(getComputedStyle(el).fontSize) || 16, n = 0;
+  while (el.scrollWidth > el.clientWidth + 1 && fs > 11 && n++ < 40) { fs -= 1; el.style.fontSize = fs + 'px'; } }
+(function () { const SEL = '.lp-tile-amt, .fz-bal, .ac-amt'; /* PSS #613: account card amount fits */ let q = null; const run = root => { if (q) return; q = requestAnimationFrame(() => { q = null; document.querySelectorAll(SEL).forEach(_fitMoney); }); };
+  const start = () => { new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) { const e = n.nodeType === 1 ? n : n.parentElement; if (e && ((e.matches && e.matches(SEL)) || (e.closest && e.closest(SEL)) || (e.querySelector && e.querySelector(SEL)))) { run(); return; } } }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', run); run(); };
+  document.body ? start() : document.addEventListener('DOMContentLoaded', start); })();
 function _npCents(v) { const r = Math.round(v * 100) / 100; return Number.isInteger(r) ? String(r) : r.toFixed(2); }
 function _npLive() {
   if (!_npTarget) return;
@@ -5452,7 +5524,7 @@ function checkAlerts() {
   if (nw > 0) {
     const cryptoAccts = db.accounts.filter(a=>a.type==='Crypto Wallet'&&!a.archived);
     const cryptoVal = cryptoAccts.reduce((s,a)=>s+toPhp(getAcctBalance(a.id),a.currency), 0);
-    const cryptoInvest = db.investments.filter(i=>i.type==='Crypto'&&!i.archived&&i.status!=='sold').reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
+    const cryptoInvest = db.investments.filter(i=>i.type==='Crypto'&&!i.archived&&i.status!=='sold').reduce((s,i)=>s+toPhp((i.currentValue ?? i.amount),i.currency),0);
     const total = cryptoVal + cryptoInvest;
     if (total / nw > 0.05) _alertCache.push({type:'crypto', msg:`Crypto allocation is ${((total/nw)*100).toFixed(1)}% of net worth (>5%)`});
   }
@@ -6068,6 +6140,39 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🧹 The small up and down arrows inside amount boxes are gone on a computer', // PSS #597
+    '🏷️ Small wording fixes: a debt says Borrowed amount and Expected payable, Write off no longer says "? days overdue" on a loan with no due date, and dates read Apr 29, 2026 in every list', // PSS #598
+    '🧱 Add loan, Add investment, Add budget and Installments refuse an amount under half a centavo or below 0', // PLS #611
+    '📉 Investments: a value of 0 shows as 0 (it showed the invested amount), changing the invested amount moves the value with it. Archiving an account that still has money asks first. A very big total gets smaller to fit instead of being cut', // PLS/PSS #610
+    '🛡️ Edit forms refuse an amount under half a centavo (it was saved as 0), a refused Save changes no longer alters the entry, selling an investment refuses negative proceeds, currency pickers start at your home currency', // PLS #609
+    '📝 Edit forms and Bank reconciliation now look like Add forms: one row each, label left, value right', // PSS #614
+    '🏦 Accounts: a balance in the billions shrinks to fit its card', // PSS #613
+    '💱 Analytics, Forex: a currency with no saved rate shows a short note, not "Infinity"', // PSS #612
+    '🔗 Contract: a deleted account no longer leaves a bucket stuck on Linked · 1, archived or sold links show in the list so you can untick them, Reset order says what it does', // PLS/PSS #608
+    '🧷 Contract: an account counts in one bucket only (it was counted twice when linked to two), Edit contract checks the end date is after the start, New contract works out the monthly from the goal, a contract not started yet says when it starts, past contracts say Ended only when they have ended', // PLS/PSS #607
+    '📅 Contract: milestones follow the dates you set, the day count starts at Day 1, one-line buttons and bucket rows on a phone', // PLS/PSS #606
+    '🔗 Bucket sheet: linked accounts sit on top of the list (the extra Linked box is gone), and no lone "—" when a bucket has no rate', // PSS #605
+    '🧮 Contract, Dashboard and Analytics now say the same: Time left counts months left (was months gone), Planned per month is the plan, and Needed per month from now equals Pace needed', // PLS #604
+    '🏠 Contract amounts are all in your home currency: a goal set in another currency is turned into it, so saved and goal are compared in the same money', // PLS #603
+    '🪣 Contract buckets are planned like a budget: each bucket has a peso amount and a lock. Locked ones stay, the rest share what is left of the goal. Plan shows them all with a planned bar; Fixed / Dynamic and % are gone', // PLS #603
+    '🧭 Planning > Contract: the top + and ⋯ are gone, since Add bucket and Edit are right on the page. Start another contract sits at the bottom. Budgets and Wishlist keep their +', // PSS #602
+    '🧹 Every amount box on a computer checked by hovering: no up/down arrows left (16 boxes had them before, Edit contract included)', // PSS #597
+    '🔢 Amounts the app fills in show full centavos (182.40, not 182.4), as amounts you type already do. The contract form no longer shows 45000 as a sample', // PSS #601
+    '🏷️ Edit forms: a name of a thing has a tag icon, not a person; Split with has a person icon; the transfer fee box asks "Who pays the fee back (optional)"', // PSS #601
+    '✂️ Notes and names in edit forms no longer cut the first letter', // PSS #600
+    '💅 Edit forms show the amount like the rest of the app (P1,091.25), and Category and Notes get the full row so they are not cut', // PSS #599
+    '💅 Dates stay on one line in Vacation days and Edit batch reimbursement, a loan payment row is shorter on a phone, Edit profile cards line up, and Planning uses the same width as other pages on a computer', // PSS #599
+    '🔎 An old remittance or balance correction is named by what it is (not Food & Dining), and money put into an investment names the investment (not Unknown)', // PSS #598
+    '🛠️ Fixed: raising a payment so it also covers another loan of the same person now closes that loan (it stayed "still owed" since the faster screens update)', // PLS #592
+    '🎯 A split bill with P0.01 still owed no longer reads Paid in full, and Write off the rest works for P0.01', // PLS #593
+    '✏️ Tapping an old payment (before June) under a loan can now be changed like the newer ones', // PLS #594
+    '📝 Saving an old settled loan keeps the rate written in its note', // PLS #595
+    '🔄 Sync never asks about Loan profit or Rate change entries. The app makes them again from the payments', // PLS #596
+    '🧮 A loan paid back in parts books its profit by the running total, so the parts always add up to the whole (P73.90 lent for P74.00 in 3 parts: P0.10, was P0.09)', // PLS #586
+    '✍️ Writing off a loan books what really left your account for the unpaid part (P73.90 lent for P74.00: P73.90 loss, was P74.00). A forgiven debt the same way', // PLS #587
+    '🎯 A loan or split bill closes only when paid to the centavo (P73.99 on P74.00 leaves P0.01 owed), and an extra P0.01 is booked as gain', // PLS #588, #589
+    '🪙 What is left on a loan or split bill after a part payment is kept in centavos, and a P0.01 still owed counts in your net worth', // PLS #590
+    '🔄 Sync with Combine both no longer asks about an installment end date from an older save', // PLS #591
     '🤝 Expected receivable now counts in the same currency too: lend P73.90 and expect P74.00, and the loan says P74.00 with the P0.10 as profit when paid. Works in Edit loan too', // PLS #585
     '⚡ Faster Dashboard, Accounts, Insights and Analytics: the app no longer works out the same balance or spending list again and again on one screen', // PLS #584
     '🗓️ An installment that starts on the 29th to 31st now ends in the right month (iPad from Mar 31, 24 months: until Feb 2028)', // PLS #580
@@ -6900,7 +7005,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
       const writtenOff = parseFloat(writtenOffMap[p.name]) || 0;
       const realPaid = totalReimbursed - writtenOff;
       const remaining = Math.max(0, (p.share || 0) - totalReimbursed);
-      const fullyPaid = remaining <= 0.01;
+      const fullyPaid = remaining < 0.005; // PLS #593
       // PLS #120: distinguish write-off from real payment
       const fullyWrittenOff = fullyPaid && writtenOff >= (p.share || 0) - 0.01;
       const partialWrittenOff = !fullyWrittenOff && writtenOff > 0;
@@ -6937,7 +7042,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const totalReimb = Object.values(paidSoFarMap).reduce((s,v)=>s+(parseFloat(v)||0),0);
     const totalOwed = persons.reduce((s,p)=>s+(p.share||0),0);
     const totalRemaining = Math.max(0, totalOwed - totalReimb);
-    const summaryBadge = totalRemaining <= 0.01 && totalOwed > 0
+    const summaryBadge = totalRemaining < 0.005 /* PLS #593 */ && totalOwed > 0
       ? `<span style="font-size:11px;padding:2px 7px;border-radius:var(--r-full);background:var(--green-bg);color:var(--green);font-weight:600">All paid ✓</span>`
       : totalReimb > 0
         ? `<span style="font-size:11px;padding:2px 7px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600">Partial</span>`
@@ -7578,11 +7683,11 @@ function _pbLink(exp, person, mode) {
   for (const loan of loans) {
     if (left <= 0.001) break;
     const lc = loan.currency || home, remain = loan.remaining ?? loan.amount, remainIn = conv(remain, lc, currency);
-    if (left >= remainIn - 0.01) {
+    if (_fullyPaid(left, remainIn, currency)) { // PLS #588
       left -= remainIn; loan.remaining = 0; loan.settled = true; loan.settledDate = date;
       done.push({ loan, inBill: remainIn, inLoan: remain });
     } else {
-      const inLoan = conv(left, currency, lc);
+      const inLoan = roundMoney(conv(left, currency, lc), lc); // PLS #590
       loan.remaining = roundMoney(Math.max(0, remain - inLoan), lc);
       done.push({ loan, inBill: left, inLoan }); left = 0; break;
     }
@@ -8689,7 +8794,7 @@ function submitRemittance() {
     });
 
     // Create remittance fee expense if specified — child of remittance (parentId = id)
-    const feeAmt = parseFloat(document.getElementById('rem-fee-amount')?.value) || 0;
+    const feeAmt = roundMoney(parseFloat(document.getElementById('rem-fee-amount')?.value) || 0); // PLS #609
     const feeAcctId = document.getElementById('rem-fee-acct')?.value || '';
     const feeAcct = db.accounts.find(a=>a.id===feeAcctId);
     if (feeAmt > 0 && feeAcct) {
@@ -8726,7 +8831,7 @@ function renderExternalForm(type) {
   // ── PERSONAL LOGIC SET #86 ── no pre-selected account (External In/Out)
   const placeholderOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #609: home currency first pick
   return `<div class="big-amt-wrap">
     <div class="ax-info">${isIn ? 'Money that comes in but is not income, like a gift or a company advance. It adds to the account, not to your income.' : 'Money that goes out but is not spending, like a gift you give. It comes off the account, not out of your expenses.'}</div><!-- PLS #389: soft note, plain words, no dash -->
 
@@ -8819,7 +8924,7 @@ function renderTransferForm() {
   // User must explicitly pick both accounts. Prevents accidental wrong-direction transfers.
   const placeholderOpt = `<option value="" disabled selected>Choose an account</option>`;
   const acctOpts = ()=>placeholderOpt + accts.map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #609: home currency first pick
   return `<div class="big-amt-wrap">
 
     <!-- Big amount hero -->
@@ -9444,7 +9549,7 @@ function submitTransfer() {
   // sa Reimbursements page — kung saan si Person ay 100% owes the fee. Pag fully reimbursed
   // na, yung fee ay marked as offsetByReimb (excluded from monthly totals para neutral).
   // ── PERSONAL LOGIC SET #34 ── transfer fee: isAutoFee + parentId=transfer; if reimbursable, auto-create linked shared tx (type=shared) with picked person; cascade-archives with parent transfer
-  const feeAmount = parseFloat(document.getElementById('tf-fee-amount')?.value) || 0;
+  const feeAmount = roundMoney(parseFloat(document.getElementById('tf-fee-amount')?.value) || 0); // PLS #609
   const feeAcctId = document.getElementById('tf-fee-acct')?.value || fromId;
   const feeReimbPerson = (document.getElementById('tf-fee-reimb-person')?.value || '').trim();
   if (feeAmount > 0) {
@@ -10235,16 +10340,16 @@ function _openSharedFs(tx, footer, fxBadge) {
   const totalWO = Object.values(woMap).reduce((s,v) => s + (parseFloat(v) || 0), 0);   // PLS #120: a write-off is not a payment
   const realPaid = Math.max(0, totalPaid - totalWO);
   const left = Math.max(0, owed - totalPaid);
-  const done = left <= 0.01 && totalPaid > 0;
+  const done = left < 0.005 /* PLS #593 */ && totalPaid > 0;
   const pct = v => owed > 0 ? Math.min(100, v / owed * 100) : 0;
   const pill = !done ? ['Pending','var(--amber-bg)','var(--amber)']
-    : totalWO >= owed - 0.01 ? ['Written off','var(--red-bg)','var(--red)']
+    : totalWO >= owed - 0.005 ? ['Written off','var(--red-bg)','var(--red)']
     : totalWO > 0.005 ? ['Partly written off','var(--amber-bg)','var(--amber)']
     : ['Reimbursed','var(--green-bg)','var(--green)'];
-  const hero = !done ? fmt(left, tx.currency) : totalWO >= owed - 0.01 ? fmt(totalWO, tx.currency) : fmt(realPaid, tx.currency);
-  const heroCol = !done ? 'var(--amber)' : totalWO >= owed - 0.01 ? 'var(--red)' : 'var(--green)';
+  const hero = !done ? fmt(left, tx.currency) : totalWO >= owed - 0.005 ? fmt(totalWO, tx.currency) : fmt(realPaid, tx.currency);
+  const heroCol = !done ? 'var(--amber)' : totalWO >= owed - 0.005 ? 'var(--red)' : 'var(--green)';
   const heroLbl = !done ? `still owed of ${fmt(owed, tx.currency)} · ${fmt(realPaid, tx.currency)} back so far`
-    : totalWO > 0.005 ? `${totalWO >= owed - 0.01 ? 'written off' : fmt(totalWO, tx.currency) + ' written off'} · ${fmt(realPaid, tx.currency)} paid back`
+    : totalWO > 0.005 ? `${totalWO >= owed - 0.005 ? 'written off' : fmt(totalWO, tx.currency) + ' written off'} · ${fmt(realPaid, tx.currency)} paid back`
     : 'paid back in full';
   const persons = tx.persons || [];
   const peopleRows = persons.map(p => {
@@ -10252,10 +10357,10 @@ function _openSharedFs(tx, footer, fxBadge) {
     const rem = Math.max(0, (p.share || 0) - paid);
     const ini = (p.name || '?').trim().split(/\s+/).map(w => w[0] || '').join('').slice(0,2).toUpperCase();
     return _fsRow({ ico:escapeAttr(ini), icoBg:'var(--accent-bg)', icoCol:'var(--accent)', title:_esc(p.name),
-      sub: rem <= 0.01 ? (wo > 0.005 ? `<span style="color:var(--red)">Written off</span> · share ${fmt(p.share || 0, tx.currency)}` : `Paid in full · share ${fmt(p.share || 0, tx.currency)}`)
+      sub: rem < 0.005 ? (wo > 0.005 ? `<span style="color:var(--red)">Written off</span> · share ${fmt(p.share || 0, tx.currency)}` : `Paid in full · share ${fmt(p.share || 0, tx.currency)}`)
                        : `${fmt(paid - wo, tx.currency)} of ${fmt(p.share || 0, tx.currency)} paid`,
-      amt: rem <= 0.01 ? (wo > 0.005 ? fmt(wo, tx.currency) : '✓') : fmt(rem, tx.currency),
-      amtCol: rem <= 0.01 ? (wo > 0.005 ? 'var(--red)' : 'var(--green)') : 'var(--amber)', amt2: rem > 0.01 ? 'left' : '' });
+      amt: rem < 0.005 ? (wo > 0.005 ? fmt(wo, tx.currency) : '✓') : fmt(rem, tx.currency),
+      amtCol: rem < 0.005 ? (wo > 0.005 ? 'var(--red)' : 'var(--green)') : 'var(--amber)', amt2: rem >= 0.005 ? 'left' : '' }); // PLS #593
   }).join('');
   // -- PERSONAL STRUCTURE SET #515 -- (Nov 4) a bulk payment is filed under the OLDEST bill only, so that
   // bill listed the whole K50 (and the earlier K29.30: K79.30 against a K31.40 share) while the other bills
@@ -10368,7 +10473,9 @@ function openTxDetail(txId) {
   // gain/loss rows used it, so a batch reimbursement, loan settlement, write-off, investment fund or
   // dividend -- none of which carries a category -- read "Deleted Category" here while the list
   // already showed "Reimbursement Received".
-  const dispCat = txCategoryDisplay(tx);
+  // PSS #598: a remittance or a balance correction is named by what it is. Old entries kept a spending
+  // category from the form they were made in, so the heading said "Food & Dining" on a remittance.
+  const dispCat = txCategoryDisplay(tx); // PSS #598 lives in txCategoryDisplay
 
   let rows = '';
   // -- PERSONAL LOGIC SET #260 -- A write-off is not an ordinary transaction: its amount, its date
@@ -10416,7 +10523,7 @@ function openTxDetail(txId) {
       totalPaid = parseFloat(tx.paidSoFar) || 0;
     }
     const remaining = Math.max(0, owed - totalPaid);
-    const isFullyPaid = remaining <= 0.01 && totalPaid > 0;
+    const isFullyPaid = remaining < 0.005 /* PLS #593 */ && totalPaid > 0;
     // PLS #120: distinguish write-off from real payment
     const totalWrittenOff = (tx.writtenOff && typeof tx.writtenOff === 'object')
       ? Object.values(tx.writtenOff).reduce((s,v) => s + (parseFloat(v) || 0), 0)
@@ -10448,7 +10555,7 @@ function openTxDetail(txId) {
   { const home=_homeBase(); if(tx.currency!==home){ const homeAmt=txToPhp(tx); const baseAmt=tx.type==='shared'?(tx.myShare ?? tx.amount):tx.amount; const isSnap=tx.fxSnapshot&&tx.fxSnapshot[tx.currency]; const rate=isSnap?Number(tx.fxSnapshot[tx.currency]):(baseAmt>0?homeAmt/baseAmt:0); /* PLS #303: the stored rate, not a division that prints float noise */ const label=isSnap?'saved':'today\'s'; rows+=`<div class="detail-row"><div class="detail-label">In ${home}</div><div class="detail-value" style="font-family:var(--mono)">${fmt(homeAmt,home)} ${isSnap ? '' : `<span style="font-size:11px;color:var(--text3)">(${label} rate: ${fmtRate(rate)})</span>`}</div></div>`; } }
   if (tx.type==='transfer') {
     const from = getAccountDisplay(tx.fromAccountId);
-    const to = getAccountDisplay(tx.toAccountId);
+    const to = _txToDisplay(tx);
     rows += `<div class="detail-row"><div class="detail-label">From</div><div class="detail-value">${_esc(from.name)}</div></div>`;
     rows += `<div class="detail-row"><div class="detail-label">To</div><div class="detail-value">${_esc(to.name)} ${tx.toAmount?`(${fmt(tx.toAmount,to.currency)})`:''}</div></div>`;
   } else if (tx.paidByPerson && !tx.accountId) { // PLS #533
@@ -10638,7 +10745,7 @@ function openTxDetail(txId) {
   let fsHeadHTML = ''; // PSS #340: fintech header (the classic detailHeader is kept only for reference/diff)
   if (tx.type === 'transfer') {
     const fromAcctD = getAccountDisplay(tx.fromAccountId);
-    const toAcctD = getAccountDisplay(tx.toAccountId);
+    const toAcctD = _txToDisplay(tx);
     const fromCurr = tx.currency;
     const toCurr = toAcctD.currency || fromCurr;
     const toAmt = tx.toAmount != null ? tx.toAmount : _txConv(tx.amount, tx, toCurr); // PLS #495: its own rate, not today's
@@ -11132,7 +11239,7 @@ function openEditTx(txId) {
     ${_pbOk537 ? _pbEditRow(tx) : ''}
     <div class="form-group"${tx.inKindPayId && _pbOk537 ? ' style="display:none !important"' : ''}><label class="form-label" for="edit-account">Account</label>${acctField}</div>
     ${tx.personName?`<div class="form-group"><label class="form-label" for="edit-person">Person</label><input class="form-input" id="edit-person" value="${escapeAttr(tx.personName||'')}"></div>`:''}
-    ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label" for="edit-duedate">Due date</label>${dtField('edit-duedate','date','Due Date',tx.dueDate||'')}</div>`:''}
+    ${tx.dueDate!==undefined?`<div class="form-group"><label class="form-label" for="edit-duedate">Due date</label>${dtField('edit-duedate','date','Due date',tx.dueDate||'')}</div>`:''}
   `;
 
   window._efNext = true; // PSS #360
@@ -11260,7 +11367,7 @@ function saveEditTx(txId, overpayChoice) {
       const c = document.getElementById('edit-currency')?.value || tx.currency, a = roundMoney(parseFloat(document.getElementById('edit-amount')?.value) || 0, c);
       const owedNow = _pbOwedIn(_pe.person, c, buildFxSnapshot(document.getElementById('edit-date')?.value || tx.date, document.getElementById('edit-time')?.value || tx.time));
       if (!(owedNow > 0)) { showToast(`${_pe.person} does not owe you anything now`); return; }
-      if (a - owedNow >= 0.01 && !_pe.extra) { showToast(`Choose what the other ${fmt(roundMoney(a - owedNow, c), c)} is`); return; }
+      if (roundMoney(a - owedNow, c) >= 0.01 /* PLS #593 */ && !_pe.extra) { showToast(`Choose what the other ${fmt(roundMoney(a - owedNow, c), c)} is`); return; }
     }
   }
   const _pbSame537 = !!tx.inKindPayId && !_pbChg;
@@ -11277,6 +11384,7 @@ function saveEditTx(txId, overpayChoice) {
     showToast(`This bill already has payments in ${tx.currency}. Undo them first to change its currency`, 3500); return;
   }
   const newDate = document.getElementById('edit-date')?.value;
+  const _undo609 = JSON.stringify(tx), _back609 = () => { const o = JSON.parse(_undo609); Object.keys(tx).forEach(k => delete tx[k]); Object.assign(tx, o); }; // PLS #609: a refused save changes nothing
 
   tx.categoryId = document.getElementById('edit-cat')?.value || tx.categoryId;
   tx.currency = ((tx.isReimbSettlementLoss && tx.writeOffReason) || _pbSame537) ? _origEditCurrency : (document.getElementById('edit-currency')?.value || tx.currency); // PLS #530, #533
@@ -11294,7 +11402,7 @@ function saveEditTx(txId, overpayChoice) {
 
   if (isShared) {
     const totalBill = roundMoney(parseFloat(document.getElementById('edit-total-bill')?.value), tx.currency); // PLS #122
-    if (!totalBill || totalBill <= 0) { showToast('Enter receipt total'); return; }
+    if (!totalBill || totalBill <= 0) { _back609(); showToast('Enter receipt total'); return; }
     // Read persons from DOM
     const persons = [];
     document.querySelectorAll('#edit-persons-list .edit-person-row').forEach(row => {
@@ -11302,7 +11410,7 @@ function saveEditTx(txId, overpayChoice) {
       const share = parseFloat(row.querySelector('[data-field="share"]')?.value) || 0;
       if (name) persons.push({ name, share });
     });
-    if (persons.length === 0) { showToast('Add at least one person'); return; }
+    if (persons.length === 0) { _back609(); showToast('Add at least one person'); return; }
     const theirTotal = persons.reduce((s,p)=>s+p.share, 0);
     tx.totalBill = totalBill;
     tx.amount = totalBill;
@@ -11371,7 +11479,7 @@ function saveEditTx(txId, overpayChoice) {
     tx.settled = reconciledPaid >= newTotalOwed - 0.01 && reconciledPaid > 0;
   } else {
     const amount = parseFloat(document.getElementById('edit-amount')?.value);
-    if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
+    if (!amount || !(roundMoney(amount, tx.currency) > 0)) { _back609(); showToast('Enter valid amount'); return; }
     tx.amount = ((tx.isReimbSettlementLoss && tx.writeOffReason) || _pbSame537) ? _origEditAmt530 : roundMoney(amount, tx.currency); // PLS #122 (#530: a write-off keeps its amount; #533 too)
     if (document.getElementById('edit-person')) tx.personName = document.getElementById('edit-person').value.trim();
     if (document.getElementById('edit-duedate')) tx.dueDate = document.getElementById('edit-duedate').value;
@@ -11618,7 +11726,7 @@ function _feeEditHTML(tx, kind) {
         <input class="form-input numpad-input" type="number" id="${P}-fee-amount" value="${fee ? fee.amount : ''}" placeholder="0.00" step="any" inputmode="none" ${lock}>
         <select class="form-input" id="${P}-fee-account" onchange="${kind === 'rem' ? `_ermCur('${tx.id}','fee')` : `_feeLbl('etf','Transfer')`}" ${lock}>${opts}</select>
       </div>
-      ${kind === 'tf' && !shared ? `<input class="form-input" type="text" id="etf-fee-person" placeholder="Reimbursable from (optional): person's name" style="margin-top:8px">` : ''}<!-- PLS #552: as in Add (PLS #34) -->
+      ${kind === 'tf' && !shared ? `<input class="form-input" type="text" id="etf-fee-person" placeholder="Who pays the fee back (optional)" style="margin-top:8px"><!-- PSS #601: read like a typed value -->` : ''}<!-- PLS #552: as in Add (PLS #34) -->
       <div style="font-size:11px;color:var(--text3);margin-top:4px">${paid ? `Reimbursable from ${_esc(fee.feeReimbPerson || 'someone')} and already paid back in part. Undo that payment in Reimbursements to change the fee.`
         : shared ? `Reimbursable from ${_esc(fee.feeReimbPerson || 'someone')}. The amount they owe follows the fee.` : 'Optional. Leave blank if there was no fee.'}</div>
     </div>`;
@@ -11631,7 +11739,7 @@ function _feeLbl(P, word) {
 function _feeEditRead(P, tx) {
   const aEl = document.getElementById(P + '-fee-amount'), cEl = document.getElementById(P + '-fee-account');
   if (!aEl || !cEl || aEl.disabled) return { ok: true, skip: true };
-  const amt = parseFloat(aEl.value) || 0, acct = db.accounts.find(a => a.id === cEl.value) || null;
+  const acct = db.accounts.find(a => a.id === cEl.value) || null, amt = roundMoney(parseFloat(aEl.value) || 0, acct ? acct.currency : undefined); // PLS #609: a fee under half a centavo is no fee
   if (amt < 0) { showToast('Enter a valid fee'); return { ok: false }; }
   if (amt > 0 && !acct) { showToast('Choose the fee account'); return { ok: false }; }
   return { ok: true, amt: acct ? amt : 0, acct, oldDate: tx.date, oldTime: tx.time, person: (document.getElementById(P + '-fee-person')?.value || '').trim() };
@@ -11769,7 +11877,7 @@ function saveEditRemittance(txId) {
   if (!fromId) { showToast('Select source account'); return; }
   if (!toId) { showToast('Select destination account'); return; }
   if (fromId === toId) { showToast('From and To must differ'); return; }
-  if (!amount || amount <= 0) { showToast('Enter valid amount'); return; }
+  if (!amount || !(roundMoney(amount) > 0)) { showToast('Enter valid amount'); return; } // PLS #609
   if (!rate || rate <= 0) { showToast('Enter valid rate'); return; }
   const _fee550 = _feeEditRead('erm', tx); if (!_fee550.ok) return; // PLS #550: checked before anything changes
 
@@ -11892,7 +12000,7 @@ function saveEditTransfer(txId) {
   const etfTo = document.getElementById('etf-to').value || tx.toAccountId || null;
   const etfAmtRaw = document.getElementById('etf-amount').value;
   const etfAmt = parseFloat(etfAmtRaw);
-  if (etfAmtRaw !== '' && !(etfAmt > 0)) { showToast('Enter a valid amount'); return; }
+  if (etfAmtRaw !== '' && !(roundMoney(etfAmt, tx.currency) > 0)) { showToast('Enter a valid amount'); return; } // PLS #609
   if (etfFrom === etfTo) { showToast('Select different accounts'); return; }
   // PLS #276: same rule on edit, checked BEFORE anything is written to tx. Currency and accounts
   // are read from the form, since either may have just been changed to make it cross-currency.
@@ -12162,7 +12270,7 @@ function archiveTx(txId, skipConfirm) {
         const persons = parent.persons || [];
         const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
         const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+(parseFloat(v)||0), 0);
-        if (totalPaid < totalOwed - 0.01) {
+        if (totalPaid < totalOwed - 0.005) { // PLS #588
           parent.settled = false;
           delete parent.settledAs;
           delete parent.writeOffReason;
@@ -12426,7 +12534,7 @@ function confirmDeleteTx(txId) {
         const persons = parent.persons || [];
         const totalOwed = persons.reduce((s, p) => s + (p.share || 0), 0);
         const totalPaid = Object.values(parent.paidSoFar || {}).reduce((s,v)=>s+(parseFloat(v)||0), 0);
-        if (totalPaid < totalOwed - 0.01) {
+        if (totalPaid < totalOwed - 0.005) { // PLS #588
           parent.settled = false;
           delete parent.settledAs;
           delete parent.writeOffReason;
@@ -12884,7 +12992,7 @@ function updateReimbBatchPreview(person) {
   }
 
   const diff = received - grandTotal;
-  if (Math.abs(diff) < 0.01) {
+  if (Math.abs(diff) < 0.005) { // PLS #593
     preview.innerHTML = `<div style="color:var(--green)">✓ Exact: settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>`;
   } else if (diff > 0) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${entries.length} ${entries.length>1?'entries':'entry'} in full</div>
@@ -12903,7 +13011,7 @@ function updateReimbBatchPreview(person) {
         const inHome = toPhp(e.remaining, c, snap);
         rInTarget = fromPhp(inHome, targetCurr, snap);
       }
-      if (remainAmt >= rInTarget - 0.01) { remainAmt -= rInTarget; fullyPaid++; }
+      if (_fullyPaid(remainAmt, rInTarget, targetCurr)) /* PLS #588 */ { remainAmt -= rInTarget; fullyPaid++; }
       else if (remainAmt > 0) { partialAmt = remainAmt; remainAmt = 0; break; }
       else break;
     }
@@ -13069,12 +13177,12 @@ function confirmReimbSettlement(person) {
     if (remainingReceived <= 0.001) break;
     const txCurr = e.tx.currency || _homeBase();
     const remainInTarget = conv(e.remaining, txCurr, targetCurr);
-    if (remainingReceived >= remainInTarget - 0.01) {
+    if (_fullyPaid(remainingReceived, remainInTarget, targetCurr)) { // PLS #588
       remainingReceived -= remainInTarget;
       settledNow.push({ entry: e, paidInTarget: remainInTarget, paidInTxCurr: e.remaining, full: true });
     } else {
       const partialInTarget = remainingReceived;
-      const partialInTxCurr = conv(partialInTarget, targetCurr, txCurr);
+      const partialInTxCurr = roundMoney(conv(partialInTarget, targetCurr, txCurr), txCurr); // PLS #590
       settledNow.push({ entry: e, paidInTarget: partialInTarget, paidInTxCurr: partialInTxCurr, full: false });
       remainingReceived = 0;
       break;
@@ -13089,12 +13197,12 @@ function confirmReimbSettlement(person) {
     const parent = db.transactions.find(t => t.id === s.entry.tx.id);
     if (!parent) continue;
     if (!parent.paidSoFar || typeof parent.paidSoFar !== 'object') parent.paidSoFar = {};
-    parent.paidSoFar[person] = (parent.paidSoFar[person] || 0) + s.paidInTxCurr;
+    parent.paidSoFar[person] = roundMoney((parent.paidSoFar[person] || 0) + s.paidInTxCurr, parent.currency || _homeBase()); // PLS #590
     // Check if parent is now fully settled (all persons)
     const totalOwed = parent.persons?.reduce((sum, p) => sum + (p.share || 0), 0)
       || ((parent.totalBill || parent.amount) - (parent.myShare || 0));
     const totalPaid = Object.values(parent.paidSoFar).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-    if (totalPaid >= totalOwed - 0.01) {
+    if (totalPaid >= totalOwed - 0.005) { // PLS #588
       parent.settled = true;
       parent.settledAt = date;
       // ── PERSONAL LOGIC SET #49 ── isFeeReimbursable shared tx settlement creates income tx "Bank transfer fee reimb from [person]"
@@ -13157,7 +13265,7 @@ function confirmReimbSettlement(person) {
   });
 
   // Sobra → gain child
-  if (excess > 0.01) {
+  if (excess >= 0.01 /* PLS #589 */) {
     db.transactions.push({
       id: 'tx-'+genId(),
       type: 'income',
@@ -13185,7 +13293,7 @@ function confirmReimbSettlement(person) {
   else if (currentPage === 'transactions') renderTransactions();
   if (currentPage === 'dashboard') renderDashboard();
 
-  const summary = excess > 0.01
+  const summary = excess >= 0.01 /* PLS #589 */
     ? `✓ Settled ${fullyPaid} ${fullyPaid===1?'entry':'entries'} + ${fmt(excess, targetCurr)} gain`
     : partialPaid > 0
       ? `✓ Settled ${fullyPaid} fully + 1 partial`
@@ -13280,7 +13388,7 @@ function renderActiveAccounts() {
       <!-- PSS #396: the Idle / Low pill sits at the right end of the type line instead of on its own line under the
            balance, so a card with a pill is exactly as tall as one without; a long type or note shortens with "…" -->
       <div class="lp-meta" style="display:flex;align-items:center;gap:8px;min-height:22px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(a.type || 'Other')}${a.note ? ' · ' + _esc(a.note) : ''}</span>${idle ? `<span class="lp-pill due" style="flex-shrink:0;margin:0" title="${_esc(_unesc(idle.msg))}">${idle.type==='idle' && idleDays ? 'Idle ' + idleDays + 'd' : 'Low'}</span>` : ''}</div>
-      <div style="font-family:var(--mono);font-size:16px;font-weight:600;margin-top:6px;color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency, v<0)}</div>
+      <div class="ac-amt" style="white-space:nowrap;overflow:hidden;font-family:var(--mono);font-size:16px;font-weight:600;margin-top:6px;color:${v<0?'var(--red)':v===0?'var(--text4)':'var(--text)'}">${fmt(v, a.currency, v<0)}</div>
       ${a.currency!==dc && v!==0 ? `<div class="lp-amt2">≈ ${fmtApprox(inDc(toPhp(v, a.currency)), dc, v<0)}</div>` : ''}
     </div>`;
   };
@@ -13476,7 +13584,7 @@ function previewBalanceCorrection(acctId, appBal) {
   }
 
   const diff = actual - appBal;
-  if (Math.abs(diff) < 0.01) {
+  if (Math.abs(diff) < 0.005) { // PLS #593
     preview.style.display = 'block';
     preview.style.background = 'var(--green-bg)';
     preview.style.color = 'var(--green)';
@@ -13505,7 +13613,7 @@ function submitBalanceCorrection(acctId, appBal) {
   if (isNaN(actual)) { showToast('Enter the actual balance'); return; }
 
   const diff = actual - appBal;
-  if (Math.abs(diff) < 0.01) { showToast('Already in sync'); return; }
+  if (Math.abs(diff) < 0.005) { showToast('Already in sync'); return; } // PLS #593
 
   const date = document.getElementById('bc-date')?.value || today();
   const time = nowTime();
@@ -13562,7 +13670,7 @@ function openAddAccount() {
       <div class="form-group"><label class="form-label" for="na-currency">Currency</label><select class="form-input" id="na-currency">${currOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label" for="na-balance">Initial balance</label><input class="form-input numpad-input" type="number" id="na-balance"  placeholder="0.00" value="0" inputmode="none"></div>
-    <div class="form-group"><label class="form-label" for="na-note">Note / reference</label><input class="form-input" id="na-note" placeholder="e.g. last 4 digits, account number"></div>
+    <div class="form-group"><label class="form-label" for="na-note">Note / reference</label><input class="form-input" id="na-note" placeholder="e.g. last 4 digits"></div>
     <div class="form-group"><label class="form-label" for="na-threshold">Low balance alert threshold</label><input class="form-input numpad-input" type="number" id="na-threshold" placeholder="Leave blank to disable" inputmode="none"></div>
     <button class="btn btn-primary btn-full" onclick="saveAddAccount()">Add account</button>
   `);
@@ -13638,7 +13746,7 @@ function saveEditAccount(acctId) {
   if (!db.trackedCurrencies.includes(a.currency)) db.trackedCurrencies.push(a.currency); // PLS #447
   a.initialBalance = parseFloat(document.getElementById('ea-balance')?.value) || 0;
   a.note = document.getElementById('ea-note')?.value?.trim() || '';
-  a.alertThreshold = parseFloat(document.getElementById('ea-threshold')?.value) || null;
+  a.alertThreshold = Math.max(0, parseFloat(document.getElementById('ea-threshold')?.value) || 0) || null; // PLS #609: no negative alert level
   // Re-sort accounts alphabetically so dropdowns stay ordered
   db.accounts.sort((x, y) => x.name.localeCompare(y.name));
   saveDBWithSync();
@@ -13647,9 +13755,13 @@ function saveEditAccount(acctId) {
   showToast('Account updated!');
 }
 
-function archiveAccount(acctId) {
+function archiveAccount(acctId, sure) {
   const a = db.accounts.find(x=>x.id===acctId);
   if (!a) return;
+  // PLS #610: an archived account leaves your totals. With money still in it, one tap dropped net worth with no question asked.
+  { const _b = getAcctBalance(acctId); if (!sure && Math.abs(_b) >= 0.005) { window._rvPending = 'dlg';
+      openDlg('Archive this account?', `<div class="dlg-ask">${_esc(a.name)} still has ${fmt(_b, a.currency, _b < 0)}. Archiving takes it out of your totals. You can restore it any time.</div>`,
+        `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button><button class="btn btn-warning" onclick="closeDlg();archiveAccount('${acctId}',true)">Archive</button>`); return; } }
   // Snapshot current balance before archiving
   a.lastKnownBalance = getAcctBalance(acctId);
   a.archivedAt = new Date().toISOString();
@@ -13714,13 +13826,13 @@ function renderInvestments() {
   const invs = db.investments.filter(i=>!i.archived && i.status !== 'sold');
   const sold = db.investments.filter(i=>!i.archived && i.status === 'sold');
   const totalInvested = invs.reduce((s,i)=>s+toPhp(i.amount,i.currency),0);
-  const totalCurrent  = invs.reduce((s,i)=>s+toPhp(i.currentValue||i.amount,i.currency),0);
+  const totalCurrent  = invs.reduce((s,i)=>s+toPhp((i.currentValue ?? i.amount),i.currency),0);
   const totalGL = totalCurrent - totalInvested;
   const totalGLPct = totalInvested > 0 ? (totalGL/totalInvested)*100 : 0;
   const dc = _displayCurrency();
   const typeColors = { Stocks:'#6c63ff', Crypto:'#f7931a', Bonds:'#34d399', 'Treasury Bond':'#38bdf8', 'MP2 (Pag-IBIG)':'#2dd4bf', REITs:'#22d3ee', 'Mutual Fund':'#60a5fa', 'Time Deposit':'#f472b6', 'Real Estate':'#a78bfa', Cooperative:'#fb923c', Corporation:'#e879f9', 'Land Ownership':'#4ade80', 'Insurance/VUL':'#c084fc', Other:'#94a3b8' };
   const typeMap = {};
-  invs.forEach(i=>{ const k=i.type||'Other'; typeMap[k]=(typeMap[k]||0)+toPhp(i.currentValue||i.amount,i.currency); });
+  invs.forEach(i=>{ const k=i.type||'Other'; typeMap[k]=(typeMap[k]||0)+toPhp((i.currentValue ?? i.amount),i.currency); });
   const typeEntries = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]);
   const glCol = v => v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--text)';
   let html = `<div class="page-pad"><div class="lp-tiles">
@@ -13759,13 +13871,13 @@ function renderInvestments() {
   for (const [type, items] of Object.entries(grouped)) {
     html += `<div class="lp-sec">${_esc(type)}</div><div class="lp-grp">`;
     items.forEach(inv => {
-      const gl = (inv.currentValue||inv.amount) - inv.amount;
+      const gl = ((inv.currentValue ?? inv.amount)) - inv.amount;
       const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
       const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
       html += `<div class="lp-row" onclick="openInvDetail('${inv.id}')">${ic(type)}
         <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(inv.name)}</span></div>
         <div class="lp-meta">${srcAcct ? 'from ' + _esc(srcAcct.name) : _esc(type)}</div></div>
-        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+        <div style="text-align:right;flex-shrink:0"><div class="lp-amt">${fmt((inv.currentValue ?? inv.amount),inv.currency)}</div>
         <div class="lp-amt2" style="color:${gl?glCol(gl):'var(--text3)'}">${gl ? `${fmt(gl,inv.currency,true)} (${gl>0?'+':''}${glPct.toFixed(1)}%)` : 'No change'}</div></div><span class="lp-chev">›</span></div>`;
     });
     html += `</div>`;
@@ -13815,11 +13927,11 @@ function _invAcctOk(inv, acctId) {
 function openAddInv() {
   const acctOpts = db.accounts.filter(a=>!a.archived).map(a=>`<option value="${a.id}">${acctLabel(a)}</option>`).join('');
   const invTypes = ['Stocks','Crypto','Bonds','Treasury Bond','MP2 (Pag-IBIG)','REITs','Mutual Fund','Time Deposit','Real Estate','Cooperative','Corporation','Land Ownership','Insurance/VUL','Other'];
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #609: home currency first pick
   window._efNext = true; // PSS #361
   openSheet('gen','Add investment',`
     <div class="form-group"><label class="form-label" for="ai-name">Investment name *</label>
-      <input class="form-input" id="ai-name" placeholder="e.g. BTC Holdings, VUL Policy, Coop Shares"></div>
+      <input class="form-input" id="ai-name" placeholder="e.g. Coop shares"></div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="ai-type">Type</label>
         <select class="form-input" id="ai-type">${invTypes.map(t=>`<option>${t}</option>`).join('')}</select></div>
@@ -13847,7 +13959,7 @@ function openAddInv() {
 function saveAddInv() {
   const name = document.getElementById('ai-name')?.value?.trim();
   const amount = parseFloat(document.getElementById('ai-amount')?.value);
-  if (!name || !(amount > 0)) { showToast('Enter name and a valid amount'); return; }
+  if (!name || !(roundMoney(amount) > 0)) { showToast('Enter name and a valid amount'); return; } // PLS #611
   const currency = document.getElementById('ai-currency')?.value||_homeBase();
   const srcId = document.getElementById('ai-src')?.value||'';
   { const _s = db.accounts.find(a => a.id === srcId); // PLS #532: the money leaves the source in the investment's own currency
@@ -13865,7 +13977,7 @@ function saveAddInv() {
 function openInvDetail(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const gl = (inv.currentValue||inv.amount) - inv.amount;
+  const gl = ((inv.currentValue ?? inv.amount)) - inv.amount;
   const glPct = inv.amount > 0 ? (gl/inv.amount)*100 : 0;
   const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId) : null;
   const isSold = inv.status === 'sold';
@@ -13880,7 +13992,7 @@ function openInvDetail(invId) {
   const pill = inv.archived ? ['Archived','var(--bg4)','var(--text3)'] : isSold ? ['Closed','var(--bg4)','var(--text2)'] : ['Active','var(--accent-bg)','var(--accent)'];
   const acts = !isSold
     ? _fsAct('cash', 'Add capital', `openAddCapital('${invId}')`, ['var(--accent)','#fff'])
-      + _fsAct('trend', 'Update value', `openUpdateInvValue('${invId}')`)
+      + _fsAct('trend', 'New value', `openUpdateInvValue('${invId}')`)
       + _fsAct('coins', 'Dividend', `openRecordDividend('${invId}')`, ['var(--green-bg)','var(--green)'])
       + _fsAct('checkCircle', 'Sell', `openSellInv('${invId}')`, ['var(--amber-bg)','var(--amber)'])
       + _fsAct('cog', 'Edit', `openEditInv('${invId}')`)
@@ -13895,7 +14007,7 @@ function openInvDetail(invId) {
   openSheet('gen', '', `<div class="fs">
     ${_fsHead({ badge:invTypeIcon(inv.type), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:null,
       title:_esc(inv.name), sub:`${_esc(inv.type || 'Investment')} · since ${fmtDFull(inv.date)}`,
-      hero:fmt(inv.currentValue||inv.amount, inv.currency), heroLbl, pill })}
+      hero:fmt((inv.currentValue ?? inv.amount), inv.currency), heroLbl, pill })}
     ${_fsActs(acts)}
     ${_fsCard(
       _fsInfo('Invested', fmt(inv.amount, inv.currency))
@@ -13915,10 +14027,10 @@ function openUpdateInvValue(invId) {
   openSheet('gen2','Update value',`<div style="padding:8px 4px">
     <div style="text-align:center;margin-bottom:16px">
       <div style="font-size:13px;color:var(--text3)">Current recorded value</div>
-      <div style="font-size:24px;font-weight:600;font-family:var(--mono)">${fmt(inv.currentValue||inv.amount,inv.currency)}</div>
+      <div style="font-size:24px;font-weight:600;font-family:var(--mono)">${fmt((inv.currentValue ?? inv.amount),inv.currency)}</div>
     </div>
     <div class="form-group"><label class="form-label" for="uiv-val">New current value (${inv.currency})</label>
-      <input class="form-input numpad-input" type="number" id="uiv-val" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+      <input class="form-input numpad-input" type="number" id="uiv-val" placeholder="${(inv.currentValue ?? inv.amount)}" inputmode="none"></div>
     <button class="btn btn-primary btn-full" onclick="saveUpdateInvValue('${invId}')">Update</button>
   </div>`);
 }
@@ -13926,8 +14038,8 @@ function openUpdateInvValue(invId) {
 function saveUpdateInvValue(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const val = parseFloat(document.getElementById('uiv-val')?.value);
-  if (!val||val<=0) { showToast('Enter valid amount'); return; }
+  const val = roundMoney(parseFloat(document.getElementById('uiv-val')?.value), inv.currency); // PLS #609
+  if (!Number.isFinite(val) || val < 0) { showToast('Enter valid amount'); return; } // PLS #610: 0 is a real value (it went to zero)
   inv.currentValue = roundMoney(val, inv.currency); inv.lastUpdated = today();
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange(); showToast('Value updated!');
 }
@@ -13935,7 +14047,7 @@ function saveUpdateInvValue(invId) {
 function openSellInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
-  const gl = (inv.currentValue||inv.amount) - inv.amount;
+  const gl = ((inv.currentValue ?? inv.amount)) - inv.amount;
   const acctOpts = _invAcctOpts(inv); // PLS #525 + #532
   window._efNext = true; // PSS #361
   openSheet('gen2','Sell / close investment',`<div style="padding:8px 4px">
@@ -13945,7 +14057,7 @@ function openSellInv(invId) {
       ${gl!==0?`<div style="font-size:12px;color:${gl>0?'var(--green)':'var(--red)'};margin-top:4px">Paper ${gl>0?'gain':'loss'}: ${fmt(gl,inv.currency)}</div>`:''}
     </div>
     <div class="form-group"><label class="form-label" for="si-proceeds">Actual proceeds (${inv.currency})</label>
-      <input class="form-input numpad-input" type="number" id="si-proceeds" placeholder="${inv.currentValue||inv.amount}" inputmode="none"></div>
+      <input class="form-input numpad-input" type="number" id="si-proceeds" placeholder="${(inv.currentValue ?? inv.amount)}" inputmode="none"></div>
     <div class="form-group"><label class="form-label" for="si-acct">Receive to account</label>
       <select class="form-input" id="si-acct">${acctOpts}</select></div>
     ${/* -- PERSONAL STRUCTURE SET #243 -- The signature is dtField(inputId, TYPE, placeholder,
@@ -13954,7 +14066,7 @@ function openSellInv(invId) {
          the field DISPLAYED the date. Untouched, the form then fell through to `|| today()` and
          saved a different date from the one on screen. Verified: getElementById('si-date').value
          was "". The type must be the literal 'date' or 'time'. */''}
-    ${dtField('si-date','date','Sale Date',today())}
+    ${dtField('si-date','date','Sale date',today())}
     <div class="form-group"><label class="form-label" for="si-notes">Notes</label>
       <input class="form-input" id="si-notes" placeholder="Optional"></div>
     <button class="btn btn-success btn-full" onclick="confirmSellInv('${invId}')">Confirm sale</button>
@@ -13965,7 +14077,8 @@ function confirmSellInv(invId) {
   const inv = db.investments.find(i=>i.id===invId);
   if (!inv) return;
   const _sip = parseFloat(document.getElementById('si-proceeds')?.value); // PLS #141: 0 = total-loss sale
-  const proceeds = roundMoney(Number.isFinite(_sip) ? _sip : (inv.currentValue||inv.amount), inv.currency); // PLS #122
+  if (Number.isFinite(_sip) && _sip < 0) { showToast('Proceeds cannot be below 0'); return; } // PLS #609: -5 was saved as income of -5
+  const proceeds = roundMoney(Number.isFinite(_sip) ? _sip : ((inv.currentValue ?? inv.amount)), inv.currency); // PLS #122
   const acctId = document.getElementById('si-acct')?.value;
   if (!_invAcctOk(inv, acctId)) return; // PLS #532
   if (document.getElementById('si-acct') && !acctId) { showToast('Pick an account'); return; } // PLS #525
@@ -13973,12 +14086,12 @@ function confirmSellInv(invId) {
   const notes = document.getElementById('si-notes')?.value?.trim()||'';
   const realizedGL = proceeds - inv.amount;
   // PLS #222: remember the pre-sale valuation so Void Sale can put it back exactly.
-  inv.preSaleValue = inv.currentValue || inv.amount;
+  inv.preSaleValue = (inv.currentValue ?? inv.amount);
   inv.status='sold'; inv.soldDate=date; inv.soldProceeds=proceeds; inv.realizedGL=realizedGL; inv.currentValue=proceeds;
   if (acctId) {
     // Find the original fund tx to link as parent
     const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===invId);
-    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${_esc(inv.name)}${notes?' — '+notes:''}`, isInvestmentReturn:true, realizedGL, costBasis:inv.amount, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
+    db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId, date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}${notes?' — '+notes:''}`, isInvestmentReturn:true, realizedGL, costBasis:inv.amount, investmentId:invId, parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, fxSnapshot:{...db.fxRates}, createdAt:new Date().toISOString() });
   }
   saveDBWithSync(); closeSheet('gen2'); closeSheet('gen'); renderAfterInvChange();
   const glMsg = realizedGL>0?`+${fmt(realizedGL,inv.currency)} gain`:realizedGL<0?`${fmt(realizedGL,inv.currency)} loss`:'Break even';
@@ -14147,6 +14260,9 @@ function saveEditInv(id) {
   if (fundTx && !(fundAmt > 0)) { showToast('Lower than the Add capital entries. Edit those first'); return; }
   inv.name=document.getElementById('ei-name')?.value?.trim()||inv.name;
   inv.type=document.getElementById('ei-type')?.value||inv.type;
+  // PLS #610: changing the amount invested moves the value by the same amount, as Add capital does (PLS #126).
+  // It left the value behind: 1,000 -> 1,500 took 500 more from the account and showed a 500 loss.
+  if (eiAmt !== oldAmt && inv.status !== 'sold') inv.currentValue = Math.max(0, roundMoney((inv.currentValue ?? oldAmt) + (eiAmt - oldAmt), newCur));
   inv.amount=eiAmt;
   inv.currency=newCur;
   inv.sourceAccountId=document.getElementById('ei-src')?.value||null;
@@ -14329,7 +14445,7 @@ function openInvBackfill(id) {
   const inv = db.investments.find(i=>i.id===id);
   if (!inv) return;
   const gl = Number(inv.realizedGL);
-  const proceeds = (inv.soldProceeds != null) ? inv.soldProceeds : (inv.currentValue || inv.amount);
+  const proceeds = (inv.soldProceeds != null) ? inv.soldProceeds : ((inv.currentValue ?? inv.amount));
   const acctOpts = _invAcctOpts(inv); // PLS #532
   window._efNext = true; // PSS #361
   openSheet('gen2', 'Confirm ledger entry', `<div style="padding:8px 4px">
@@ -14347,7 +14463,7 @@ function openInvBackfill(id) {
       <select class="form-input" id="bf-acct">${acctOpts}</select></div>
     ${/* PSS #217: every date field routes through dtField -> dtTrigger -> the GZ picker.
          Never drop a plain native <input type="date"> in here. */''}
-    ${dtField('bf-date','date','Sale Date', inv.soldDate || inv.date || today())}   ${/* PSS #243 */''}
+    ${dtField('bf-date','date','Sale date', inv.soldDate || inv.date || today())}   ${/* PSS #243 */''}
     <button class="btn btn-primary btn-full" onclick="confirmInvBackfill('${id}')">Write ledger entry</button>
   </div>`);
 }
@@ -14368,12 +14484,12 @@ function confirmInvBackfill(id) {
   if (!acctId) { showToast('Pick an account'); return; }
   if (!_invAcctOk(inv, acctId)) return; // PLS #532
   const date = document.getElementById('bf-date')?.value || inv.soldDate || inv.date || today();
-  const proceeds = roundMoney((inv.soldProceeds != null) ? inv.soldProceeds : (inv.currentValue || inv.amount), inv.currency); // PLS #122
+  const proceeds = roundMoney((inv.soldProceeds != null) ? inv.soldProceeds : ((inv.currentValue ?? inv.amount)), inv.currency); // PLS #122
   const realizedGL = (Number.isFinite(Number(inv.realizedGL))) ? Number(inv.realizedGL) : (proceeds - inv.amount);
   inv.soldProceeds = proceeds; inv.soldDate = date; inv.realizedGL = realizedGL;
   const fundTx = db.transactions.find(t=>t.isInvestmentFund && t.investmentId===id);
   db.transactions.push({ id:'tx-'+genId(), type:'income', amount:proceeds, currency:inv.currency, accountId:acctId,
-    date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${_esc(inv.name)}`,
+    date, time:nowTime(), categoryId:'sc-investreturns', notes:`Sale of ${inv.name}`,
     isInvestmentReturn:true, realizedGL, costBasis:inv.amount, investmentId:id,
     parentId:fundTx?.id||null, cascadedFrom:fundTx?.id||null, backfilled:true,
     fxSnapshot:buildFxSnapshot(date, nowTime()), createdAt:new Date().toISOString() });
@@ -14508,12 +14624,19 @@ function _loanGainSync() {
   const home = _homeBase(); let changed = false;
   const live = new Map(); db.transactions.forEach(t => { if (!t.archived) live.set(t.id, t); });
   const want = new Map(); // child id -> fields
-  for (const t of db.transactions) {
-    if (t.archived || !t.isLoanPayment || t.isBatchWriteOff || t.writeOffReason || (t.type !== 'income' && t.type !== 'expense')) continue;
+  // -- PERSONAL LOGIC SET #586 -- (his ask Nov 11: "staggered binayaran papano") a loan paid back in parts books its
+  // profit by the running total: each payment gets (total so far, rounded) minus (what earlier payments booked), oldest
+  // first. Before, each part was rounded alone and centavos were lost: P73.90 lent for P74.00 paid in 3 parts booked
+  // P0.09, in 7 parts P0.08; P1,000 for P1,100 in 3 parts booked P99.99. Now the parts always add up to the whole.
+  const _pays = db.transactions.filter(t => !(t.archived || !t.isLoanPayment || t.isBatchWriteOff || t.writeOffReason || (t.type !== 'income' && t.type !== 'expense')))
+    .sort((a, b) => ((a.date || '') + ' ' + (a.time || '') + ' ' + (a.createdAt || '') + ' ' + a.id).localeCompare((b.date || '') + ' ' + (b.time || '') + ' ' + (b.createdAt || '') + ' ' + b.id));
+  const _run = new Map(); // loan|kind|currency -> { raw, booked }
+  const _part = (key, raw, pc) => { const r = _run.get(key) || { raw: 0, booked: 0 }; r.raw += raw; const nb = roundMoney(r.raw, pc), d = nb - r.booked; r.booked = nb; _run.set(key, r); return d; };
+  for (const t of _pays) {
     const dir = t.batchDirection || t.loanDirection || 'lent';
     const ids = (t.batchLoanIds && t.batchLoanIds.length) ? t.batchLoanIds : (t.parentId ? [t.parentId] : []);
-    let gp = 0, gr = 0;
-    for (const id of ids) { const l = (db.loans[dir] || []).find(x => x.id === id); if (l) { const g = _loanGainOf(t, l); gp += g.p; gr += g.r; } }
+    let gp = 0, gr = 0; const _pc = t.currency || home;
+    for (const id of ids) { const l = (db.loans[dir] || []).find(x => x.id === id); if (l) { const g = _loanGainOf(t, l); gp += _part(id + '|p|' + _pc, g.p, _pc); gr += _part(id + '|r|' + _pc, g.r, _pc); } } // PLS #586
     const pc = t.currency || home, who = t.batchPerson || '', to = dir === 'borrowed' ? 'debt to' : 'loan to';
     const mk = (amt, rate) => { const gain = amt > 0; return { type: gain ? 'income' : 'expense', amount: Math.abs(amt), currency: pc, accountId: t.accountId || null,
       date: t.date, time: t.time, isSettlement: true, isFxRealized: true, isLoanRateChange: rate, isLoanSettlementGain: gain, isLoanSettlementLoss: !gain,
@@ -14976,8 +15099,9 @@ function confirmBatchSettleEdit(txId, direction) {
     const open = Math.max(0, (Number(l.amount) || 0) - otherPaid(l));
     if (open <= 0.001) continue;
     const openIn = conv(open, lc, cur);
-    if (pool >= openIn - 0.01) { parts.push({ loan: l, inLoan: open, inPay: openIn }); pool -= openIn; }
-    else { parts.push({ loan: l, inLoan: conv(pool, cur, lc), inPay: pool }); pool = 0; }
+    if (_fullyPaid(pool, openIn, cur)) { // PLS #588
+      parts.push({ loan: l, inLoan: open, inPay: openIn }); pool -= openIn; }
+    else { parts.push({ loan: l, inLoan: roundMoney(conv(pool, cur, lc), lc), inPay: pool }); pool = 0; } // PLS #590
   }
   if (!parts.length) { showToast('Nothing is open on these loans'); return; }
   const excess = roundMoney(Math.max(0, pool), cur);
@@ -15016,7 +15140,7 @@ function confirmBatchSettleEdit(txId, direction) {
   const sob = db.transactions.filter(t => !t.archived && t.parentId === txId && (t.isLoanSettlementGain || t.isLoanSettlementLoss) && !t.isFxRealized);
   sob.slice(1).forEach(t => db.transactions.splice(db.transactions.indexOf(t), 1));
   const isGain = dir === 'lent';
-  if (excess > 0.01) {
+  if (excess >= 0.01 /* PLS #589 */) {
     const c = sob[0] || (db.transactions.push({ id: 'tx-' + genId(), createdAt: new Date().toISOString() }), db.transactions[db.transactions.length - 1]);
     const sameKind = sob[0] && !!sob[0].isLoanSettlementGain === isGain;
     Object.assign(c, base, { type: isGain ? 'income' : 'expense', amount: excess, currency: cur,
@@ -15031,7 +15155,7 @@ function confirmBatchSettleEdit(txId, direction) {
   closeDlg();
   renderLoans();
   const open = touched.filter(l => !l.settled).length;
-  showToast(excess > 0.01 ? `Saved. ${fmt(excess, cur)} ${isGain ? 'gain' : 'extra paid'}` : open ? `Saved. ${open} ${open === 1 ? 'loan' : 'loans'} still open` : 'Saved');
+  showToast(excess >= 0.01 /* PLS #589 */ ? `Saved. ${fmt(excess, cur)} ${isGain ? 'gain' : 'extra paid'}` : open ? `Saved. ${open} ${open === 1 ? 'loan' : 'loans'} still open` : 'Saved');
 }
 
 // -- PERSONAL LOGIC SET #526 -- (his pick A, Nov 4) editing a bulk payment (loans or split bills) and picking an
@@ -15061,7 +15185,7 @@ function openBatchReimbSettleEdit(txId) {
     const cat = getCategoryDisplay(st.subCatId || st.categoryId);
     const r = _rows519.find(x => x.billId === st.id);
     return `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
-      <div style="color:var(--text2);min-width:0">${cat.icon} ${_stripIcon(cat.name)}${st.notes ? ' · ' + _esc(st.notes) : ''} · ${fmtDFull(st.date)}</div>
+      <div style="min-width:0"><div style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cat.icon} ${_stripIcon(cat.name)}${st.notes ? ' · ' + _esc(st.notes) : ''}</div><div style="font-size:11px;color:var(--text3)">${fmtDFull(st.date)}</div></div><!-- PSS #599: date on its own line, never split -->
       <div style="text-align:right;flex-shrink:0"><span style="font-family:var(--mono);color:var(--green)">+${fmt(r ? r.amount : 0, st.currency)}</span> <span style="color:var(--text3)">of ${fmt(r ? r.share : _reimbShare(st, tx.batchPerson || tx.reimbPerson || ''), st.currency)}</span></div>
     </div>`;
   }).join('');
@@ -15119,7 +15243,7 @@ function _reimbBillSettle(b, date) {
   const owed = b.persons?.reduce((s, p) => s + (p.share || 0), 0) || ((b.totalBill || b.amount) - (b.myShare || 0));
   const paid = Object.values(b.paidSoFar || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
   const was = !!b.settled;
-  b.settled = owed > 0 && paid >= owed - 0.01;
+  b.settled = owed > 0 && paid >= owed - 0.005; // PLS #588
   if (b.settled && !was && date) b.settledAt = date;
   if (!b.settled) { delete b.settledAt; delete b.settledAs; delete b.writeOffReason; }
   return b.settled !== was;
@@ -15199,8 +15323,9 @@ function confirmBatchReimbSettleEdit(txId) {
     const bc = b.currency || home, left = Math.max(0, _reimbShare(b, person) - base[b.id]);
     if (left <= 0.004) continue;
     const leftIn = conv(left, bc, cur);
-    if (pool >= leftIn - 0.01) { parts.push({ b, inBill: left, inPay: leftIn }); pool -= leftIn; }
-    else { parts.push({ b, inBill: conv(pool, cur, bc), inPay: pool }); pool = 0; }
+    if (_fullyPaid(pool, leftIn, cur)) { // PLS #588
+      parts.push({ b, inBill: left, inPay: leftIn }); pool -= leftIn; }
+    else { parts.push({ b, inBill: roundMoney(conv(pool, cur, bc), bc), inPay: pool }); pool = 0; } // PLS #590
   }
   if (!parts.length) { showToast('Nothing is owed on these bills'); return; }
   const excess = roundMoney(Math.max(0, pool), cur);
@@ -15223,13 +15348,13 @@ function confirmBatchReimbSettleEdit(txId) {
   const pushNew = () => (db.transactions.push({ id: 'tx-' + genId(), createdAt: new Date().toISOString() }), db.transactions[db.transactions.length - 1]);
   const gains = kids().filter(t => t.isReimbSettlementGain && !t.isFxRealized);
   gains.slice(1).forEach(t => db.transactions.splice(db.transactions.indexOf(t), 1));
-  if (excess > 0.01) Object.assign(gains[0] || pushNew(), common, { type: 'income', amount: excess, currency: cur,
+  if (excess >= 0.01 /* PLS #589 */) Object.assign(gains[0] || pushNew(), common, { type: 'income', amount: excess, currency: cur,
     notes: `Reimbursement gain from ${person}`, isReimbSettlementGain: true, categoryId: gains[0]?.categoryId || 'sc-investreturns' });
   else if (gains[0]) db.transactions.splice(db.transactions.indexOf(gains[0]), 1);
   // PLS #542: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
   const open = touched.filter(b => !b.settled).length;
-  done(excess > 0.01 ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
+  done(excess >= 0.01 /* PLS #589 */ ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
 }
 
 // -- PERSONAL LOGIC SET #566 -- (Nov 7, his ask "ang gulo ng loop") tapping a payment under ONE bill or ONE loan
@@ -15237,6 +15362,20 @@ function confirmBatchReimbSettleEdit(txId) {
 // "Edit or undo" before any form; a one-bill payment's "View parent" led back to the same bill; a loan opened
 // the whole lump. His pick: the payment follows the part (K44.94 made K50.00 turns K220.00 into K225.06);
 // the other bills or loans keep their parts. A part can never be more than is still owed there.
+// PLS #594: payments saved before parts were kept (before June 2026) get their part written down, oldest first and only up
+// to what was still open, the same split Edit whole payment writes. After this every payment on the loan has its own part.
+function _loanFreezeParts(l, dir) {
+  const home = _homeBase(), all = [...(db.loans[dir] || []), ...(db.archivedLoans || [])], _k = p => `${p.date || ''} ${p.time || ''} ${p.createdAt || ''} ${p.id}`;
+  let open = Number(l.amount) || 0; const set = [];
+  for (const p of getLoanPayments(l.id).sort((a, b) => _k(a) < _k(b) ? -1 : 1)) {
+    const c = Math.min(Math.max(0, loanPaymentContribution(p, l)), Math.max(0, open)); open -= c;
+    if (Array.isArray(p.batchBreakdown) || p.isBatchWriteOff || p.writeOffReason) continue;
+    const ids = (p.batchLoanIds && p.batchLoanIds.length) ? p.batchLoanIds : [l.id];
+    set.push([p, ids.map(id => { const m = id === l.id ? l : all.find(y => y.id === id); if (!m) return null; const mc = m.currency || home;
+      return { loanId: id, amount: roundMoney(id === l.id ? c : loanPaymentContribution(p, m), mc), currency: mc }; }).filter(Boolean)]);
+  }
+  set.forEach(([p, bd]) => { p.batchBreakdown = bd; });
+}
 function _ppCtx(kind, payId, targetId, dir) {
   const tx = db.transactions.find(t => t.id === payId && !t.archived); if (!tx) return null;
   const home = _homeBase(), cur = tx.currency || home, snap = tx.fxSnapshot;
@@ -15253,9 +15392,12 @@ function _ppCtx(kind, payId, targetId, dir) {
   }
   const l = (db.loans[dir] || []).find(x => x.id === targetId); if (!l) return null;
   const tc = l.currency || home, part = loanPaymentContribution(tx, l);
-  const other = getLoanPayments(l.id).filter(p => p.id !== payId).reduce((s, p) => s + loanPaymentContribution(p, l), 0);
-  return { tx, kind, t: l, person: tx.batchPerson || l.personName || '', tc, cur, conv, part, n: (tx.batchLoanIds || []).length, batch: true,
-    share: Number(l.amount) || 0, max: Math.max(0, (Number(l.amount) || 0) - other), noun: 'loan', dir };
+  // PLS #594: an old payment that kept no parts counts in full, even the extra that was a gain. Count each payment oldest
+  // first and only up to what was still open, as Receive payment does (PLS #517), so lowering one is never refused.
+  const _amt = Number(l.amount) || 0, _k = p => `${p.date || ''} ${p.time || ''} ${p.createdAt || ''} ${p.id}`; let _open = _amt, _mine = part, other = 0;
+  for (const p of getLoanPayments(l.id).sort((a, b) => _k(a) < _k(b) ? -1 : 1)) { const c = Math.min(Math.max(0, loanPaymentContribution(p, l)), Math.max(0, _open)); _open -= c; if (p.id === payId) _mine = c; else other += c; }
+  return { tx, kind, t: l, person: tx.batchPerson || l.personName || '', tc, cur, conv, part: _mine, n: (tx.batchLoanIds || []).length, batch: true,
+    share: _amt, max: Math.max(0, _amt - other), noun: 'loan', dir };
 }
 function _ppArgs(c) { return `'${c.kind}','${c.tx.id}','${c.t.id}','${c.dir || ''}'`; }
 function openPayPart(kind, payId, targetId, dir) {
@@ -15349,6 +15491,7 @@ function savePayPart(kind, payId, targetId, dir) {
   if (newIn <= 0.004) return _ppRemove(kind, payId, targetId, dir);
   const oldIn = roundMoney(c.conv(c.part, c.tc, c.cur), c.cur);
   if (Math.abs(newIn - oldIn) < 0.005) { _ppBack(kind, payId, targetId, dir); return; }
+  if (kind === 'loan') { _loanFreezeParts(c.t, dir); } // PLS #594
   const maxIn = roundMoney(c.conv(c.max, c.tc, c.cur), c.cur);
   // typed the full amount left: it fills the bill or loan exactly. Another currency keeps full precision, so changing it and back lands on the same total
   const newT = Math.abs(newIn - maxIn) < 0.005 ? c.max : c.cur === c.tc ? newIn : c.conv(newIn, c.cur, c.tc);
@@ -15518,10 +15661,10 @@ function _batchUncoveredLoans(loans, targetCurr, date, time, received) {
     const lc = l.currency || _homeBase();
     const remain = l.remaining || l.amount;
     const inTarget = conv(remain, lc, targetCurr);
-    if (left >= inTarget - 0.01) { left -= inTarget; continue; }   // fully paid by the payment
+    if (_fullyPaid(left, inTarget, targetCurr)) { left -= inTarget; continue; } // PLS #588   // fully paid by the payment
     const paidInTarget = left;
     left = 0;
-    const stillOwedInLoanCurr = remain - conv(paidInTarget, targetCurr, lc);
+    const stillOwedInLoanCurr = roundMoney(remain - conv(paidInTarget, targetCurr, lc), lc); // PLS #590
     out.push({loan: l, remainInLoanCurr: Math.max(0, stillOwedInLoanCurr),
               remainInTarget: inTarget - paidInTarget});
   }
@@ -15552,7 +15695,7 @@ function updateBatchSettlePreview(direction, person) {
   // control that is invisible in its default state cannot be discovered at all. Disabled still
   // says the feature exists and the hint says what to do to reach it.
   const _shortfall = grandTotal - Math.max(0, received);
-  const _hasShort = _shortfall > 0.01;
+  const _hasShort = _shortfall >= 0.005; // PLS #593
   const _woBtn = document.getElementById('bsl-wo-btn');
   const _woWrap = document.getElementById('bsl-wo-wrap');
   const _woHint = document.getElementById('bsl-wo-hint');
@@ -15594,12 +15737,12 @@ function updateBatchSettlePreview(direction, person) {
   const dispCurr = targetCurr;
 
   const _D = direction === 'borrowed', _n1 = _D ? 'debt' : 'loan', _nn = _D ? 'debts' : 'loans'; // PSS #444: debts say "debt", and no dash
-  if (_D && Math.abs(diff) < 0.01) {
+  if (_D && Math.abs(diff) < 0.005) { // PLS #593
     preview.innerHTML = `<div style="color:var(--green)">✓ Exact, settles all ${loans.length} ${loans.length>1?_nn:_n1} in full</div>` + _pg('Projected gain or loss', fmt(0, dispCurr), 'text2');
   } else if (_D && diff > 0) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Settles all ${loans.length} ${loans.length>1?_nn:_n1} in full</div>`
       + _pg('Projected loss', '-' + fmt(diff, dispCurr), 'red', ', logged as Interest paid');
-  } else if (Math.abs(diff) < 0.01) {
+  } else if (Math.abs(diff) < 0.005) {
     preview.innerHTML = `<div style="color:var(--green)">✓ Exact: settles all ${loans.length} ${loans.length>1?'loans':'loan'} in full</div>`;
   } else if (diff > 0) {
     // Sobra — gain for lent, loss for borrowed
@@ -15624,7 +15767,7 @@ function updateBatchSettlePreview(direction, person) {
         const inHome = toPhp(r, loanCurr, snap);
         rInTarget = fromPhp(inHome, targetCurr, snap);
       }
-      if (remainAmt >= rInTarget - 0.01) {
+      if (_fullyPaid(remainAmt, rInTarget, targetCurr)) /* PLS #588 */ {
         remainAmt -= rInTarget;
         fullyPaid++;
       } else if (remainAmt > 0) {
@@ -15691,7 +15834,8 @@ function confirmBatchWriteOffLoans(direction, person) {
   for (const l of stillOpen) {
     const lc = l.currency || _homeBase();
     const remain = l.remaining || l.amount;
-    totalInTarget += conv(remain, lc, targetCurr);
+    const _wo = _loanWoValue(l, remain); // PLS #587: at cost
+    totalInTarget += conv(_wo.amt, _wo.cur, targetCurr);
     breakdown.push({loanId: l.id, amount: remain, currency: lc});
   }
   totalInTarget = roundMoney(totalInTarget, targetCurr);   // PLS #122
@@ -15791,7 +15935,7 @@ function confirmBatchSettleLoans(direction, person) {
     const loanRemain = loan.remaining || loan.amount;
     const loanRemainInTarget = conv(loanRemain, loanCurr, targetCurr);
 
-    if (remainingReceived >= loanRemainInTarget - 0.01) {
+    if (_fullyPaid(remainingReceived, loanRemainInTarget, targetCurr)) { // PLS #588
       // Full settle
       remainingReceived -= loanRemainInTarget;
       loan.remaining = 0;
@@ -15801,8 +15945,8 @@ function confirmBatchSettleLoans(direction, person) {
     } else {
       // Partial settle — convert received-remainder back to loan currency
       const partialInTarget = remainingReceived;
-      const partialInLoanCurr = conv(partialInTarget, targetCurr, loanCurr);
-      loan.remaining = Math.max(0, loanRemain - partialInLoanCurr);
+      const partialInLoanCurr = roundMoney(conv(partialInTarget, targetCurr, loanCurr), loanCurr); // PLS #590: centavos
+      loan.remaining = roundMoney(Math.max(0, loanRemain - partialInLoanCurr), loanCurr); // PLS #590: was a long float (24.659999)
       settledNow.push({loan, paidInTarget: partialInTarget, paidInLoanCurr: partialInLoanCurr, full: false});
       remainingReceived = 0;
       break;
@@ -15854,10 +15998,11 @@ function confirmBatchSettleLoans(direction, person) {
     createdAt: new Date().toISOString(),
   });
 
-  // Create gain/loss child if sobra
+  // Create gain/loss child if sobra. -- PERSONAL LOGIC SET #589 -- an extra of exactly P0.01 is booked too (was "more
+  // than 0.01": it came into the account with no entry saying why). Same in every payment editor.
   // 📖 LOGIC: For lent direction, sobra = gain (received more than owed). For borrowed direction,
   // sobra = loss (paid more than owed — overpayment, gift to creditor).
-  if (excess > 0.01) {
+  if (excess >= 0.01 /* PLS #589 */) {
     const isExcessGain = direction === 'lent'; // received more than expected
     db.transactions.push({
       id: 'tx-'+genId(),
@@ -15886,7 +16031,7 @@ function confirmBatchSettleLoans(direction, person) {
   renderLoans();
 
   const excessLabel = direction === 'lent' ? 'gain' : 'overpayment';
-  const summary = excess > 0.01
+  const summary = excess >= 0.01 /* PLS #589 */
     ? `✓ Settled ${fullyPaid} ${fullyPaid===1?'loan':'loans'} + ${fmt(excess, targetCurr)} ${excessLabel}`
     : partialPaid > 0
       ? `✓ Settled ${fullyPaid} fully + 1 partial`
@@ -16013,7 +16158,7 @@ function openLoanDetail(loanId, direction) {
         title:p._wo ? 'Written off' : p.inKindExpId ? _esc(p.notes || 'Paid for you') : isLent ? 'Repayment received' : 'Payment made',
         sub:`${fmtDFull(p.date)}${p._wo && p.writeOffReason ? ' · ' + _esc(p.writeOffReason) : p.inKindExpId ? ' · no money moved' : acct ? ' · ' + _esc(acct.name) : ''}`, // PLS #533
         amt:(p._wo ? '' : '+') + fmt(p._share, loan.currency), amtCol:p._wo ? 'var(--red)' : 'var(--green)',
-        amt2:`${split ? `of ${fmt(p.amount, p.currency)} · ` : ''}Bal ${fmt(p.balAfter, loan.currency, p.balAfter < -0.005)}`,
+        amt2:`${split ? `of ${fmt(p.amount, p.currency)}<br>` : ''}Bal ${fmt(p.balAfter, loan.currency, p.balAfter < -0.005)}` /* PSS #599: two short lines, so the left side is not squeezed to 3 lines on a phone */,
         onclick:`editLoanPayment('${p.id}','${loanId}','${direction}')` }); }).join('')
     + _fsRow({ ico:_ico(isLent ? 'outCircle' : 'inCircle', 17), icoBg:isLent ? 'var(--amber-bg)' : 'var(--red-bg)', icoCol:accentColor,
         title:loan.fromOverpayTxId ? 'Extra they paid on a split bill' : loan.fromInKindTxId ? 'The rest of a bill they paid for you' : isLent ? 'You lent' : 'You borrowed', sub:`${fmtDFull(loan.date)}${loan.fromOverpayTxId || loan.fromInKindTxId ? ' · no new money moved' : sourceAcct ? ' · ' + _esc(sourceAcct.name) : ''}`, // PLS #511, #533
@@ -16073,20 +16218,20 @@ function editLoanFull(loanId, direction) {
   openDlg('Edit loan',
     `<div class="form-group"><label class="form-label" for="lf-person">Person *</label><input class="form-input" id="lf-person" value="${escapeAttr(loan.personName||'')}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="lf-loaned">Loaned amount</label><input class="form-input numpad-input" type="number" id="lf-loaned" value="${loanedDefault}" step="any" inputmode="none"></div>
+      <div class="form-group"><label class="form-label" for="lf-loaned">${direction==='lent'?'Loaned amount':'Borrowed amount'}</label><input class="form-input numpad-input" type="number" id="lf-loaned" value="${loanedDefault}" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label" for="lf-loaned-curr">Currency</label><input class="form-input" id="lf-loaned-curr" value="${acctCurr}" readonly style="background:var(--bg2);color:var(--text3);text-align:center;font-family:var(--mono)"></div>
     </div>
     <div class="form-group"><label class="form-label" for="lf-account">${direction==='lent'?'From account':'To account'}</label><select class="form-input" id="lf-account" onchange="syncLfLoanedCurr()">${acctOpts}</select></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="lf-amount">Expected receivable</label><input class="form-input numpad-input" type="number" id="lf-amount" value="${expectDefault}" placeholder="0.00" step="any" inputmode="none"></div>
+      <div class="form-group"><label class="form-label" for="lf-amount">${direction==='lent'?'Expected receivable':'Expected payable' /* PSS #598 */}</label><input class="form-input numpad-input" type="number" id="lf-amount" value="${expectDefault}" placeholder="0.00" step="any" inputmode="none"></div>
       <div class="form-group"><label class="form-label" for="lf-currency">Currency</label><select class="form-input" id="lf-currency">${currOpts}</select></div>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">What they pay back. Leave it blank if it is the same as the loaned amount. A bigger amount is your profit when paid.</div>
+    <div style="font-size:11px;color:var(--text3);margin:-4px 0 10px">${direction==='lent'?'What they pay back. Leave it blank if it is the same as the loaned amount. A bigger amount is your profit when paid.':'What you pay back. Leave it blank if it is the same as the borrowed amount.'}</div>
     <div class="form-row fr2">
       <div class="form-group"><label class="form-label" for="lf-date">Date</label>${dtField('lf-date','date','Date',loanDate)}</div>
       <div class="form-group"><label class="form-label" for="lf-time">Time</label>${dtField('lf-time','time','Time',loanTime)}</div>
     </div>
-    <div class="form-group"><label class="form-label" for="lf-due">Due date</label>${dtField('lf-due','date','Due Date',loan.dueDate||'')}</div>
+    <div class="form-group"><label class="form-label" for="lf-due">Due date</label>${dtField('lf-due','date','Due date',loan.dueDate||'')}</div>
     <div class="form-group"><label class="form-label" for="lf-notes">Notes</label><textarea class="form-input" id="lf-notes" rows="2" style="resize:none">${escapeAttr(loan.notes||'')}</textarea></div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="saveLoanFull('${loanId}','${direction}')">Save</button>`
@@ -16188,7 +16333,8 @@ function saveLoanFull(loanId, direction) {
       const _x = loan.agreedRate > 0 && loan.loanedCurrency && loan.currency !== loan.loanedCurrency;
       parentTx.notes = _x
         ? `${isLent?'Lent to':'Borrowed from'} ${loan.personName} — ${loan.amount} ${loan.currency} @ ${fmtRate(loan.agreedRate)} ${loan.loanedCurrency}/${loan.currency}`
-        : (loan.loanedAmount != null ? _loanSameNote(isLent, loan.personName, loan.amount, loan.currency) : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`); // PLS #585
+        : (loan.loanedAmount != null ? _loanSameNote(isLent, loan.personName, loan.amount, loan.currency)
+          : ((parentTx.notes || '').startsWith(`${isLent?'Lent to':'Borrowed from'} ${loan.personName} — `) ? parentTx.notes : `${isLent?'Lent to':'Borrowed from'} ${loan.personName}`)); // PLS #585. PLS #595: an old loan with no saved rate keeps the rate written in its note
     }
   }
 
@@ -16292,7 +16438,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
     const kids = () => db.transactions.filter(t => !t.archived && t.parentId === paymentId && (t.isLoanSettlementGain || t.isLoanSettlementLoss));
     const sob = kids().filter(t => !t.isFxRealized);
     sob.slice(1).forEach(t => db.transactions.splice(db.transactions.indexOf(t), 1));
-    if (excess > 0.01) Object.assign(sob[0] || pushNew(), base, { type: isGain ? 'income' : 'expense', amount: excess, currency: cur,
+    if (excess >= 0.01 /* PLS #589 */) Object.assign(sob[0] || pushNew(), base, { type: isGain ? 'income' : 'expense', amount: excess, currency: cur,
       notes: isGain ? `Settlement gain from ${person}` : `Interest paid to ${person}`, isLoanSettlementGain: isGain, isLoanSettlementLoss: !isGain,
       categoryId: (sob[0] && !!sob[0].isLoanSettlementGain === isGain) ? sob[0].categoryId : (isGain ? 'sc-investreturns' : 'sc-misc') });
     else if (sob[0]) db.transactions.splice(db.transactions.indexOf(sob[0]), 1);
@@ -16310,7 +16456,7 @@ function saveLoanPayment(paymentId, loanId, direction) {
   if (loan.settled && (!_was523 || !loan.settledDate)) loan.settledDate = payment.date || today();
   if (!loan.settled) loan.settledDate = null;
   saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction);
-  showToast(excess > 0.01 && moved ? `Payment updated. ${fmt(excess, cur)} ${direction === 'lent' ? 'gain' : 'extra paid'}` : 'Payment updated!');
+  showToast(excess >= 0.01 /* PLS #589 */ && moved ? `Payment updated. ${fmt(excess, cur)} ${direction === 'lent' ? 'gain' : 'extra paid'}` : 'Payment updated!');
 }
 
 // PLS #297: a write-off, read-only, with the one action that makes sense for it.
@@ -16352,7 +16498,7 @@ function confirmDeleteLoanPayment(paymentId, loanId, direction) {
   // Recalculate remaining
   const allPayments = getLoanPayments(loanId);
   const totalPaid = allPayments.reduce((s,p) => s + loanPaymentContribution(p, loan), 0); // PLS #130: batch-aware, snapshot-accurate
-  loan.remaining = Math.max(0, loan.amount - totalPaid);
+  loan.remaining = roundMoney(Math.max(0, loan.amount - totalPaid), loan.currency || _homeBase()); // PLS #590
   loan.settled = loan.remaining <= 0.001;
   if (!loan.settled) loan.settledDate = null;
   saveDBWithSync(); closeDlg(); renderLoans(); openLoanDetail(loanId, direction); showToast('Payment deleted', 2200, 'trash');
@@ -16421,6 +16567,7 @@ function openWriteOffLoan(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
   const remaining = loan.remaining ?? loan.amount;
+  const _wo = _loanWoValue(loan, remaining); // PLS #587: what is booked
   const overdueDays = getLoanOverdueDays(loan);
   const reasons = [
     'Uncollectible',
@@ -16437,7 +16584,7 @@ function openWriteOffLoan(loanId, direction) {
         You still owe <strong>${fmt(remaining, loan.currency)}</strong>. Closing it without paying will:
         <ul style="margin:8px 0 0 20px;padding:0;font-size:12px;color:var(--text3)">
           <li>Mark the debt as settled (it leaves the active list)</li>
-          <li>Record <strong>${fmt(remaining, loan.currency)}</strong> as a gain</li>
+          <li>Record <strong>${fmt(_wo.amt, _wo.cur)}</strong> as a gain${_wo.cur !== (loan.currency || _homeBase()) || Math.abs(_wo.amt - remaining) >= 0.005 ? ' (what came in for the unpaid part)' : ''}</li>
           <li>You can restore it from the settled list</li>
         </ul>
       </div>
@@ -16459,10 +16606,10 @@ function openWriteOffLoan(loanId, direction) {
   window._efNext = true; // PSS #361
   openDlg(`Write off loan from ${loan.personName}`,
     `<div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">
-      This loan is <strong>${overdueDays||'?'} days overdue</strong>. Writing off will:
+      ${overdueDays ? `This loan is <strong>${overdueDays} days overdue</strong>. Writing off will:` : 'Writing off will:' /* PSS #598: no "? days overdue" on a loan with no due date */}
       <ul style="margin:8px 0 0 20px;padding:0;font-size:12px;color:var(--text3)">
         <li>Mark loan as settled (won't appear in active list)</li>
-        <li>Log <strong>${fmt(remaining, loan.currency)}</strong> as Loan Settlement Loss</li>
+        <li>Log <strong>${fmt(_wo.amt, _wo.cur)}</strong> as Loan Settlement Loss${_wo.cur !== (loan.currency || _homeBase()) || Math.abs(_wo.amt - remaining) >= 0.005 ? ' (what left your account for the unpaid part)' : ''}</li>
         <li>Cannot be undone (but you can restore from settled list)</li>
       </ul>
     </div>
@@ -16480,6 +16627,19 @@ function openWriteOffLoan(loanId, direction) {
   );
 }
 
+// -- PERSONAL LOGIC SET #587 -- (his ask Nov 11: "walang bug dapat") a written-off loan books what you really lose or
+// keep: the part of the loaned amount still unpaid (cost, PLS #139), not the amount owed. Beng: P73.90 lent for P74.00,
+// written off untouched = P73.90 loss (was P74.00, P0.10 more than ever left the account). A debt of P100 for P103 with
+// P50 paid: P51.46 kept (was P53). Same for a loan in another currency (in the currency that left the account).
+// Loans with no expected amount are unchanged (cost = owed).
+function _loanWoValue(l, rem) {
+  const lc = l.currency || _homeBase();
+  if (l.loanedAmount != null && Number(l.amount) > 0) { const cc = l.loanedCurrency || _homeBase(); return { amt: roundMoney(Number(l.loanedAmount) * rem / Number(l.amount), cc), cur: cc }; }
+  return { amt: roundMoney(rem, lc), cur: lc };
+}
+// -- PERSONAL LOGIC SET #588 -- paid in full only when what came in reaches what is owed, to the centavo. The old 1
+// centavo slack closed P74.00 on P73.99 (and a split bill the same way); the missing P0.01 was nowhere.
+function _fullyPaid(got, owedIn, cur) { return got >= roundMoney(owedIn, cur) - 0.005; }
 function confirmWriteOffLoan(loanId, direction) {
   const loan = (direction==='lent'?db.loans.lent:db.loans.borrowed).find(l=>l.id===loanId);
   if (!loan) return;
@@ -16488,6 +16648,7 @@ function confirmWriteOffLoan(loanId, direction) {
   const date = document.getElementById('wol-date')?.value || today();
   const time = nowTime();
   const remaining = loan.remaining ?? loan.amount;
+  const _wo = _loanWoValue(loan, remaining); // PLS #587
   const lossNotes = notes ? `${reason} — ${notes}` : reason;
 
   // Create loss child tx (expense type, but excluded from regular expense totals)
@@ -16495,8 +16656,8 @@ function confirmWriteOffLoan(loanId, direction) {
   db.transactions.push({
     id: lossTxId,
     type: direction === 'lent' ? 'expense' : 'income', // lent loss = our expense; borrowed write-off = our gain
-    amount: remaining,
-    currency: loan.currency,
+    amount: _wo.amt, // PLS #587: at cost
+    currency: _wo.cur,
     accountId: loan.accountId,
     date,
     time,
@@ -16504,6 +16665,9 @@ function confirmWriteOffLoan(loanId, direction) {
     isLoanSettlementLoss: true,
     isSettlement: true,
     parentId: loanId,
+    // PLS #587: the booked amount is at cost now, so what it closed on the loan (what was owed) is kept apart, the
+    // same way a batch write-off keeps it (PLS #130). Net worth on past days and any recount use this, not the amount.
+    batchBreakdown: [{ loanId, amount: remaining, currency: loan.currency || _homeBase() }],
     writeOffReason: reason,
     // PLS #254: its own category. 'sc-misc' buried a real loss among odds and ends, and
     // 'sc-investreturns' called a forgiven debt an investment return.
@@ -16523,7 +16687,7 @@ function confirmWriteOffLoan(loanId, direction) {
   closeDlg();
   closeSheet('gen');
   renderLoans();
-  showToast(`Wrote off ${fmt(remaining, loan.currency)} loss`);
+  showToast(`Wrote off ${fmt(_wo.amt, _wo.cur)} ${direction === 'borrowed' ? 'gain' : 'loss'}`); // PLS #587
 }
 
 
@@ -16682,7 +16846,7 @@ function confirmDeleteLoan(loanId) {
 }
 
 function openAddLoan(direction='lent') {
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #609: home currency first pick
   // PLS #193: was missing a placeholder option, so the browser silently pre-selected the first
   // account in the list — the existing "Select an account" validation in saveAddLoan() could
   // never actually fire, and loans could get saved against the wrong account unnoticed.
@@ -16711,7 +16875,7 @@ function openAddLoan(direction='lent') {
     </div>
     <div class="form-row fr2">
       <div class="form-group">
-        <label class="form-label" for="nl-amount">Expected receivable</label>
+        <label class="form-label" for="nl-amount">${isLent?'Expected receivable':'Expected payable' /* PSS #598 */}</label>
         <input class="form-input numpad-input" type="number" id="nl-amount" placeholder="0.00" step="any" oninput="updateAddLoanFx()" inputmode="none">
         <div style="font-size:11px;color:var(--text3);margin-top:3px">${expectHelp}</div>
       </div>
@@ -16740,7 +16904,7 @@ function openAddLoan(direction='lent') {
           <div class="form-group"><label class="form-label" for="nl-date">Date</label>${dtField('nl-date','date','Date',today())}</div>
           <div class="form-group"><label class="form-label" for="nl-time">Time</label>${dtField('nl-time','time','Time',nowTime())}</div>
         </div>
-        <div class="form-group"><label class="form-label" for="nl-due">Due date</label>${dtField('nl-due','date','Due Date','')}</div>
+        <div class="form-group"><label class="form-label" for="nl-due">Due date</label>${dtField('nl-due','date','Due date','')}</div>
         <div class="form-group"><label class="form-label" for="nl-notes">Notes / commitment</label><textarea class="form-input" id="nl-notes" rows="2" style="resize:none"></textarea></div>
       </div>
     </div>
@@ -16780,7 +16944,7 @@ function loanFxRow(loan, direction) {
   const rowOpen = '<div class="detail-row" style="padding:12px 14px;border-top:1px solid var(--border)">';
   let rows = '';
   if (loan.loanedAmount != null) {
-    rows += `${rowOpen}<div class="detail-label">Loaned amount</div><div class="detail-value">${fmt(loan.loanedAmount, lc)}</div></div>`;
+    rows += `${rowOpen}<div class="detail-label">${direction==='borrowed'?'Borrowed amount':'Loaned amount'}</div><div class="detail-value">${fmt(loan.loanedAmount, lc)}</div></div>`;
   }
   // ── PLS #139 ── FX gain uses the SNAPSHOT (market) rate from the loan period, NOT the
   // derived loaned/expected ratio. fxGain = expected − (loaned ÷ snapshotRate), in commitment currency.
@@ -16903,11 +17067,12 @@ function saveAddLoan(direction) {
   const person = document.getElementById('nl-person')?.value?.trim();
   const loaned = parseFloat(document.getElementById('nl-loaned')?.value);
   const accountId = document.getElementById('nl-account')?.value;
-  if (!person || !(loaned > 0)) { showToast('Enter person and loaned amount'); return; }
+  if (!person || !(roundMoney(loaned) > 0)) { showToast('Enter person and loaned amount'); return; } // PLS #611: 0.004 made a loan of 0
   if (!accountId) { showToast('Select an account'); return; }
   const acct = db.accounts.find(a=>a.id===accountId);
   const acctCurr = acct?.currency || _homeBase();
-  const expectAmt = parseFloat(document.getElementById('nl-amount')?.value) || 0;
+  const expectAmt = roundMoney(parseFloat(document.getElementById('nl-amount')?.value) || 0); // PLS #611
+  if (expectAmt < 0) { showToast('Enter a valid expected amount'); return; }
   const expectCur = document.getElementById('nl-currency')?.value || acctCurr;
   const date = parseInputDate(document.getElementById('nl-date')?.value) || today();
   const time = document.getElementById('nl-time')?.value || nowTime();
@@ -19448,7 +19613,7 @@ function buildGoalProgress(dispCurr) {
   const activeContract = (db.contracts || []).find(c => c.id === db.activeContractId);
   if (!activeContract || !activeContract.targetAmount) return '';
   const goalCurr = activeContract.goalCurrency || _homeBase();
-  const targetPhp = toPhp(activeContract.targetAmount, goalCurr);
+  const targetPhp = _cGoalHome(activeContract); // PLS #603: the same goal the Contract page uses
   // computeContractActual returns the contract's saved balance already in PHP.
   const actualPhp = computeContractActual(activeContract);
   if (actualPhp <= 0) return '';
@@ -19524,7 +19689,7 @@ function buildGoalProgress(dispCurr) {
     ${(() => {
       if (!endDate || isNaN(endDate)) return '';
       const now = new Date();
-      const monthsLeft = Math.max(0, (endDate.getFullYear()-now.getFullYear())*12 + (endDate.getMonth()-now.getMonth()));
+      const monthsLeft = _cMonthsLeft(activeContract, now) || 0; // PLS #604: same as the Contract page
       const rem = target - actual;
       if (rem <= 0) {
         return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:10px;padding-top:9px">
@@ -19532,7 +19697,7 @@ function buildGoalProgress(dispCurr) {
           <span style="font-family:var(--mono);font-weight:600;color:var(--green)">${fmt(actual - target, dispCurr)} surplus</span>
         </div>`;
       }
-      if (monthsLeft <= 0) {
+      if (monthsLeft <= 0.001) {
         return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:10px;padding-top:9px">
           <span>Deadline passed</span>
           <span style="font-family:var(--mono);font-weight:600;color:var(--red)">${fmt(rem, dispCurr)} short</span>
@@ -19549,7 +19714,7 @@ function buildGoalProgress(dispCurr) {
         <div style="background:var(--bg3);border-radius:var(--r-md);padding:9px 10px;min-width:0">
           <div style="font-size:11px;color:var(--text3);letter-spacing:normal;margin-bottom:3px">Pace needed</div>
           <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text2)">${fmt(neededPerMonth, dispCurr)}<span style="font-size:11px;color:var(--text3);font-weight:400">/mo</span></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthsLeft}mo left · ${_fmtK(rem, dispCurr)} to go</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${monthsLeft.toFixed(1)}mo left · ${_fmtK(rem, dispCurr)} to go</div>
         </div>
       </div>
       ${etaLabel ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text3);margin-top:9px">
@@ -21365,7 +21530,7 @@ function renderAnalyticsInvestments() {
   let soldCostBasis = 0; // PLS #281: capital that went into positions already sold
   active.forEach(i => {
     const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
-    const curVal = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+    const curVal = i.currency === dispCurr ? ((i.currentValue ?? i.amount)) : convert((i.currentValue ?? i.amount), i.currency, dispCurr);
     totalInvested += inv;
     totalCurrent += curVal;
   });
@@ -21390,7 +21555,7 @@ function renderAnalyticsInvestments() {
   // ── By-type allocation ──
   const byType = {};
   active.forEach(i => {
-    const curVal = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+    const curVal = i.currency === dispCurr ? ((i.currentValue ?? i.amount)) : convert((i.currentValue ?? i.amount), i.currency, dispCurr);
     const t = i.type || 'Other';
     if (!byType[t]) byType[t] = { total: 0, count: 0, invested: 0 };
     byType[t].total += curVal;
@@ -21434,7 +21599,7 @@ function renderAnalyticsInvestments() {
   const performers = active
     .map(i => {
       const inv = i.currency === dispCurr ? i.amount : convert(i.amount, i.currency, dispCurr);
-      const cur = i.currency === dispCurr ? (i.currentValue || i.amount) : convert(i.currentValue || i.amount, i.currency, dispCurr);
+      const cur = i.currency === dispCurr ? ((i.currentValue ?? i.amount)) : convert((i.currentValue ?? i.amount), i.currency, dispCurr);
       const gl = cur - inv;
       const pct = inv > 0 ? (gl / inv * 100) : 0;
       return { ...i, _inv: inv, _cur: cur, _gl: gl, _pct: pct };
@@ -21549,6 +21714,7 @@ function renderAnalyticsForex() {
     filledRates[filledRates.length - 1] = currentRate;
 
     const validRates = filledRates.filter(r => r > 0);
+    if (!validRates.length) { html += `<div class="card" style="padding:14px"><div style="font-size:13px;font-weight:600">${_esc(currInfo.name || curr)} (${_esc(curr)})</div><div style="font-size:11px;color:var(--text3);margin-top:4px">No rate saved yet. Add one in Settings, FX Rates.</div></div>`; continue; } // PSS #612: a currency with no rate showed "Infinity" and "undefined"
     const minRate = Math.min(...validRates);
     const maxRate = Math.max(...validRates);
     const range = maxRate - minRate || currentRate * 0.01 || 1;
@@ -21668,6 +21834,7 @@ function _recurringList() { return []; } // PSS #305
 _planTab = 'budgets';
 
 function renderPlanning() {
+  if (currentPage === 'planning') { try { renderPageHeader('planning'); } catch (e) {} } // PSS #602: the top buttons follow the tab and the contract
   // ── DEBUG-SCAN NOTE ── Targets are part of Contracts tab structure (planTab values: payday/recurring/budgets/contract/wishlist). Naive scans for "renderTargets" are false positives — Targets live under Contracts.
   // PSS #133: Budgets CONFIGURATION lives here in Planning (money-planning home: salary → fixed
   // bills → discretionary caps → savings goals → wants). Settings keeps only a shortcut row.
@@ -21720,7 +21887,7 @@ function renderWishlistTab() {
     return _fsRow({ ico:check, icoBg:'transparent', title:`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dot};margin-right:6px;vertical-align:middle"></span><span style="${w.purchased ? 'text-decoration:line-through;color:var(--text3)' : ''}">${_esc(w.name)}</span>`,
       sub:meta, amt:w.price > 0 ? fmt(w.price, w.currency || dc) : undefined, amtCol:w.purchased ? 'var(--text3)' : 'var(--text)', onclick:`editWishlistItem('${w.id}')`, chev:true });
   }).join('');
-  return `<div class="page-pad"><div class="fs" style="max-width:640px;margin:0 auto">
+  return `<div class="page-pad"><div class="fs" style="margin:0 auto"><!-- PSS #599: same width as the other list pages -->
     ${_fsHead({ badge:_ico('bag', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:bought.length ? [boughtPct, 0] : null,
       title:'Wishlist', sub:`${active.length} to buy · ${bought.length} bought`,
       hero:fmt(fromPhp(total, dc), dc), heroLbl:`still to buy${high.length ? ` · <span style="color:var(--red);font-weight:600">${high.length} high priority · ${fmt(fromPhp(highVal, dc), dc)}</span>` : ''}` })}
@@ -21741,7 +21908,7 @@ function openAddWishlist(itemId) {
     `<div class="page-pad">
       <div class="form-group">
         <label class="form-label" for="wl-name">Item name *</label>
-        <input class="form-input" id="wl-name" placeholder="e.g. iPhone case, vacation, new shoes" value="${item?escapeAttr(item.name):''}" maxlength="80">
+        <input class="form-input" id="wl-name" placeholder="e.g. new shoes" value="${item?escapeAttr(item.name):''}" maxlength="80">
       </div>
 
       <div class="form-row fr2">
@@ -21786,7 +21953,8 @@ function openAddWishlist(itemId) {
 function saveWishlistItem(itemId) {
   const name = document.getElementById('wl-name').value.trim();
   if (!name) { haptic('warn'); showToast('⚠ Item name required'); return; }
-  const price = parseFloat(document.getElementById('wl-price').value) || 0;
+  const price = Math.round((parseFloat(document.getElementById('wl-price').value) || 0) * 100) / 100;
+  if (price < 0) { showToast('Enter a valid price'); return; } // PLS #610: -999 was saved
   const currency = document.getElementById('wl-currency').value;
   const priority = document.getElementById('wl-priority').value;
   const url = document.getElementById('wl-url').value.trim();
@@ -22022,8 +22190,10 @@ function renderContractTab() {
   const daysLeft = Math.max(0, totalDays - daysSince);
   const monthsElapsed = daysSince / 30.44;
   const totalMonths = totalDays / 30.44;
-  const safeGoal = active.targetAmount || 0;
-  const goalCurr = active.goalCurrency || _homeBase();
+  // PLS #603: one currency on the page, the home base. Saved balances are home base, so a goal typed in another
+  // currency is turned into it (the Dashboard goal card already did this; this page compared P with K before).
+  const safeGoal = _cGoalHome(active);
+  const goalCurr = _homeBase();
   // Monthly goal: use the saved value; if somehow unset, derive from goal pace (no hardcoded number).
   // Overall monthly pace is DERIVED from the total target (the slider now sets the total target,
   // not a monthly amount). Per-bucket monthlies are likewise derived from each bucket's allocation.
@@ -22051,12 +22221,12 @@ function renderContractTab() {
     return `<div class="page-pad">
       <div class="hero-card" style="margin-bottom:16px;${goalHit?'border-color:var(--green)':'border-color:var(--amber)'}">
         <div class="hero-label">Contract ended: ${_esc(active.location)}</div>
-        <div style="font-size:28px;margin-bottom:4px">${goalHit?'🎉':'💪'}</div>
+        <div style="margin:4px 0 6px;color:${goalHit?'var(--green)':'var(--amber)'}">${_ico(goalHit ? 'checkCircle' : 'flag', 26)}</div>
         <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:${goalHit?'var(--green)':'var(--amber)'}">${goalHit?'Goal reached!':'Goal not reached'}</div>
         <div class="hero-row">
           <div class="hero-stat"><div class="hero-stat-label">Total saved</div><div class="hero-stat-value" style="color:var(--green)">${fmt(totalActual,goalCurr)}</div></div>
           <div class="hero-stat"><div class="hero-stat-label">Target</div><div class="hero-stat-value">${fmt(safeGoal,goalCurr)}</div></div>
-          <div class="hero-stat"><div class="hero-stat-label">Duration</div><div class="hero-stat-value">${Math.round(totalMonths)}mo</div></div>
+          <div class="hero-stat"><div class="hero-stat-label">Duration</div><div class="hero-stat-value">${Math.round(totalMonths)} months</div></div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -22084,8 +22254,9 @@ function renderContractTab() {
     ? [...active.bucketDefs]
     : [...active.bucketDefs].sort((a,b) => (_bucketRateNum(b) - _bucketRateNum(a)) || a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
 
+  const _once607 = _bkLinksOnce(active);
   const getBucketBalance = (b) => {
-    const links = active.bucketLinks || {};
+    const links = _once607; // PLS #607: each account counted once
     const linked = links[b.id] || [];
     if (linked.length > 0) {
       // Linked entities may be accounts OR investments — both resolved to home base.
@@ -22100,12 +22271,13 @@ function renderContractTab() {
   const _allocPct = safeGoal > 0 ? (_allocSum / safeGoal) * 100 : 0;
   const _over = _allocSum - safeGoal;   // >0 over-allocated, <0 under
 
-  const allAccounts = db.accounts.filter(a=>!a.archived);
-  const activeInvs = (db.investments||[]).filter(i=>!i.archived && i.status!=='sold');
+  const _anyLk608 = new Set(Object.values(active.bucketLinks || {}).flat());
+  const allAccounts = db.accounts.filter(a=>!a.archived || _anyLk608.has(a.id));
+  const activeInvs = (db.investments||[]).filter(i=>(!i.archived && i.status!=='sold') || _anyLk608.has(i.id));
   const editMode = window._bucketEditMode === activeId;
   const _bFeed = []; window._bucketPanels = {}; // PSS #342
   const bucketsHTML = BUCKET_DEFS.map((b, idx)=>{
-    const linked = (active.bucketLinks||{})[b.id] || [];
+    const linked = ((active.bucketLinks||{})[b.id] || []).filter(_bkIdLive); // PLS #608
     const val = getBucketBalance(b);
     const isLinked = linked.length > 0;
     const af = _bucketAllocFields(b, totalMonths);
@@ -22120,6 +22292,7 @@ function renderContractTab() {
     const statusColor = isFull ? 'var(--green)' : (diff >= 0 ? 'var(--green)' : 'var(--red)');
     const gaugeColor = isFull ? 'var(--green)' : (expectedNow > 0 ? (diff >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text4)');
     const rateLabel = b.rate || (af.rateNum ? af.rateNum + '% p.a.' : '—');
+    const _rl605 = rateLabel === '—' ? '' : rateLabel; // PSS #605: no lone "— ·" when a bucket has no rate
     // Show both the % and ₱ equivalent regardless of how it was entered (fixed ⇄ percent).
     const sharePct = safeGoal > 0 ? (target / safeGoal) * 100 : 0;
     const allocText = af.mode === 'percent'
@@ -22129,7 +22302,7 @@ function renderContractTab() {
     const riskBadge = riskLvl==='insured' ? '🛡️' : riskLvl==='low' ? '🟢' : riskLvl==='high' ? '🔴' : '🟡';
     const subLine = `${riskBadge} ${rateLabel} · ${allocText} · ${fmt(perMonth,goalCurr)}/mo`;
     // Inline % slider (edit mode, % buckets only) — dragging rebalances the other % buckets to 100%.
-    const pctSlider = (editMode && af.mode==='percent') ? `
+    const pctSlider = false ? `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <input type="range" min="0" max="100" step="0.5" value="${(+(af.value||0).toFixed(1))}" style="flex:1"
           oninput="this.nextElementSibling.textContent=(+parseFloat(this.value).toFixed(1))+'%'"
@@ -22141,38 +22314,41 @@ function renderContractTab() {
       const iv=(db.investments||[]).find(x=>x.id===id); if(iv) return _esc(iv.name);
       return _esc(id);
     }).join(', ');
-    const acctBoxes = allAccounts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
-      <input type="checkbox" ${linked.includes(a.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${a.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
-      <span style="flex:1;color:var(--text2)">${_esc(a.name)}</span>
+    // PSS #605: linked ones on top, so the list itself shows what is linked (the extra "Linked" box is gone).
+    const _inOther = id => { const o = BUCKET_DEFS.find(x => x.id !== b.id && ((active.bucketLinks || {})[x.id] || []).includes(id)); return o ? o.name : ''; }; // PLS #607
+    const _lkTop = (x,y) => (linked.includes(y.id)?1:0) - (linked.includes(x.id)?1:0);
+    const acctBoxes = [...allAccounts].sort(_lkTop).map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${linked.includes(a.id)?'checked':''}${!linked.includes(a.id) && _inOther(a.id) ? ' disabled' : ''} onchange="toggleContractBucket('${activeId}','${b.id}','${a.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <span style="flex:1;color:var(--text2)">${_esc(a.name)}${a.archived ? ` <span style="color:var(--amber);font-size:11px">· archived</span>` : ''}${!linked.includes(a.id) && _inOther(a.id) ? ` <span style="color:var(--text3);font-size:11px">· in ${_esc(_inOther(a.id))}</span>` : ''}</span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${a.currency} · ${fmt(getAcctBalance(a.id),a.currency,getAcctBalance(a.id)<-0.004)}</span>
     </label>`).join('');
-    const invBoxes = activeInvs.map(iv=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
-      <input type="checkbox" ${linked.includes(iv.id)?'checked':''} onchange="toggleContractBucket('${activeId}','${b.id}','${iv.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
-      <span style="flex:1;color:var(--text2)">${_esc(iv.name)} <span style="color:var(--text3);font-size:11px">· ${_esc(iv.type||'Investment')}</span></span>
+    const invBoxes = [...activeInvs].sort(_lkTop).map(iv=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)">
+      <input type="checkbox" ${linked.includes(iv.id)?'checked':''}${!linked.includes(iv.id) && _inOther(iv.id) ? ' disabled' : ''} onchange="toggleContractBucket('${activeId}','${b.id}','${iv.id}',this.checked)" style="width:15px;height:15px;accent-color:var(--accent);flex-shrink:0">
+      <span style="flex:1;color:var(--text2)">${_esc(iv.name)} <span style="color:var(--text3);font-size:11px">· ${_inOther(iv.id) && !linked.includes(iv.id) ? 'in ' + _esc(_inOther(iv.id)) : (iv.status === 'sold' ? '<span style="color:var(--amber)">sold, counts ₱0</span>'.replace('₱', sym(_homeBase())) : iv.archived ? '<span style="color:var(--amber)">archived, counts ' + sym(_homeBase()) + '0</span>' : _esc(iv.type||'Investment'))}</span></span>
       <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${iv.currency} · ${fmt(iv.currentValue!=null?iv.currentValue:iv.amount,iv.currency)}</span>
     </label>`).join('');
     const checkboxes = `<div style="font-size:11px;letter-spacing:0.06em;color:var(--text3);padding:4px 0 2px">Accounts</div>${acctBoxes||'<div style="font-size:11px;color:var(--text3);padding:4px 0">No accounts</div>'}${activeInvs.length?`<div style="font-size:11px;letter-spacing:0.06em;color:var(--text3);padding:8px 0 2px">Investments</div>${invBoxes}`:''}`;
     const editControls = editMode ? `
       <div style="display:flex;gap:6px;margin-left:8px;flex-shrink:0">
-        <button aria-label="Edit" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">✎</button>
-        <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">🗑</button>
+        <button aria-label="Edit" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px" onclick="openBucketSheet('${activeId}','${b.id}')" title="Edit">${_ico('cog', 14)}</button>
+        <button aria-label="Delete" class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:11px;color:var(--red)" onclick="deleteBucket('${activeId}','${b.id}')" title="Delete">${_ico('trash', 14)}</button>
       </div>` : '';
     const dragHandle = editMode ? `<div draggable="true" ondragstart="bucketDragStart(event,'${b.id}')" ondragover="event.preventDefault()" ondrop="bucketDrop(event,'${activeId}','${b.id}')" style="cursor:grab;color:var(--text3);font-size:14px;padding:0 6px 0 0;user-select:none" title="Drag to reorder">⋮⋮</div>` : '';
     // PSS #342: outside Edit list mode a bucket is one feed row; tapping it opens a sheet holding
     // the balance input, the link checkboxes and Edit / Delete (they were always open on the page).
     _bFeed.push(_fsRow({ ico:`<span style="width:12px;height:12px;border-radius:50%;background:${b.color}"></span>`, icoBg:'var(--bg4)',
-      title:_esc(b.name), sub:`${rateLabel && rateLabel !== '—' ? `<span class="kpi-mo">${_esc(rateLabel)} · </span>` : ''}${fmt(perMonth,goalCurr)}/mo · ${(+sharePct.toFixed(1))}% of goal`, // PSS #427
+      title:_esc(b.name), sub:`${rateLabel && rateLabel !== '—' ? `<span class="kpi-mo">${_esc(rateLabel)} · </span>` : ''}${fmt(perMonth,goalCurr)}/mo · ${(+sharePct.toFixed(1))}%<span class="kpi-mo"> of goal</span>`, // PSS #427, #606
       amt:(isLinked || val > 0) ? fmt(val,goalCurr) : '—', amtCol:'var(--text)',
       amt2:statusTxt ? `<span style="color:${statusColor}">${statusTxt}</span>` : `of ${fmt(target,goalCurr)}`,
       onclick:`openBucketDetail('${activeId}','${b.id}')`, chev:true }));
     window._bucketPanels[b.id] = `<div class="fs">
       ${_fsHead({ badge:`<span style="width:26px;height:26px;border-radius:50%;background:${b.color}"></span>`, badgeBg:'var(--bg4)', badgeCol:'var(--text)', ring:[bPct, 0],
-        title:_esc(b.name), sub:`${_esc(rateLabel)}${rateLabel ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal (${fmt(target,goalCurr)})`,
+        title:_esc(b.name), sub:`${_esc(_rl605)}${_rl605 ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal (${fmt(target,goalCurr)})`,
         hero:fmt(val,goalCurr), heroLbl:`of ${fmt(target,goalCurr)}${statusTxt ? ` · <span style="color:${statusColor};font-weight:600">${statusTxt}</span>` : ''}`,
         pill:[`${fmt(perMonth,goalCurr)}/mo`,'var(--accent-bg)','var(--accent)'] })}
       ${_fsActs(_fsAct('cog','Edit bucket',`closeSheet('gen');setTimeout(()=>openBucketSheet('${activeId}','${b.id}'),200)`) + _fsAct('trash','Delete',`closeSheet('gen');deleteBucket('${activeId}','${b.id}')`,['var(--red-bg)','var(--red)']))}
       ${isLinked
-        ? _fsCard(_fsInfo('Linked', linkedNames))
+        ? ''
         : `<div class="fs-card" style="padding:12px 16px"><div style="font-size:12px;color:var(--text3);margin-bottom:6px">Manual balance</div>
             <input class="form-input numpad-input" type="number" inputmode="none" step="100" min="0" placeholder="${sym(_homeBase())} manual balance" style="font-size:13px;padding:8px 10px"
               value="${(active.buckets||{})[b.id]>0?(active.buckets||{})[b.id]:''}" oninput="saveContractBucket('${activeId}','${b.id}',this.value)" onchange="saveContractBucket('${activeId}','${b.id}',this.value);renderPlanning()"></div>`}
@@ -22187,7 +22363,7 @@ function renderContractTab() {
         <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0"></span>
         <div style="flex:1;min-width:0">
           <div class="fs-t" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(b.name)}</div>
-          <div class="fs-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(rateLabel)}${rateLabel ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal · ${fmt(target,goalCurr)}</div>
+          <div class="fs-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(_rl605)}${_rl605 ? ' · ' : ''}${(+sharePct.toFixed(1))}% of goal</div>
         </div>
         ${editControls}
       </div>
@@ -22205,11 +22381,15 @@ function renderContractTab() {
   const gapColor = gap>=0?'var(--green)':'var(--red)';
   // -- PERSONAL STRUCTURE SET #233 -- Say what the gap is measured AGAINST. "behind" on its own reads
   // as "behind the goal", when it is actually the distance from today's target PACE.
-  const gapLabel = gap>=0?`+${fmt(gap,goalCurr)} ahead of pace`:`${fmt(Math.abs(gap),goalCurr)} behind pace`;
+  const gapLabel = now < startDate ? `starts ${fmtDFull(active.startDate)}` : gap>=0?`+${fmt(gap,goalCurr)} ahead of pace`:`${fmt(Math.abs(gap),goalCurr)} behind pace`; // PSS #607: not "ahead" before it starts
   const toGoal = Math.max(0, safeGoal - totalActual);
 
   // Milestones
-  const milestones = active.milestones || [];
+  const _autoMs = /^(Day 1 begins|Midpoint review|Final deployment)$/;
+  const _msN = Math.round(totalDays / 30.44), _msHalf = Math.round(_msN / 2);
+  const _msMid = (() => { const d = addMonthsClamped(new Date(active.startDate + 'T00:00:00'), _msHalf); d.setDate(d.getDate() - 1); return localDate(d); })();
+  const _msLive = { 'Day 1 begins': { label:'Contract start', date:active.startDate }, 'Midpoint review': { label:`Month ${_msHalf}`, date:_msMid }, 'Final deployment': { label:`Month ${_msN}`, date:active.endDate } };
+  const milestones = (active.milestones || []).map(ms => _autoMs.test(ms.note || '') ? Object.assign({}, ms, _msLive[ms.note]) : ms); // PLS #606
   const milestonesHTML = milestones.map(ms=>{
     const msDate = new Date(ms.date+'T00:00:00');
     const isPast = msDate < now;
@@ -22229,30 +22409,31 @@ function renderContractTab() {
     return _fsRow({ ico:_ico(isPast ? 'checkCircle' : 'calendar', 17), icoBg:isPast ? 'var(--green-bg)' : isComing ? 'var(--amber-bg)' : 'var(--bg4)', icoCol:isPast ? 'var(--green)' : isComing ? 'var(--amber)' : 'var(--text3)',
       title:_esc(_msLbl(ms.label)), sub:`${fmtDFull(ms.date)}${ms.note ? ' · ' + _esc(ms.note) : ''}` }); }).join('');
   const _acts = _fsAct('cash','Add bucket',`openBucketSheet('${activeId}',null)`,['var(--accent)','#fff'])
-    + _fsAct('list', editMode ? 'Done' : 'Edit list', `toggleBucketEditMode('${activeId}')`, editMode ? ['var(--green-bg)','var(--green)'] : null)
-    + _fsAct('cog','Edit contract',`openEditContract('${activeId}')`);
-  return `<div class="page-pad"><div class="fs" style="max-width:640px;margin:0 auto">
+    + _fsAct('list', editMode ? 'Done' : 'Arrange', `toggleBucketEditMode('${activeId}')`, editMode ? ['var(--green-bg)','var(--green)'] : null)
+    + _fsAct('cog','Edit',`openEditContract('${activeId}')`); // PSS #606: one-line labels
+  return `<div class="page-pad"><div class="fs" style="margin:0 auto"><!-- PSS #599: same width as the other list pages -->
     ${_fsHead({ badge:_ico('target',30), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[overallPct, 0],
       title:_esc(active.location), sub:`${fmtDFull(active.startDate)} – ${fmtDFull(active.endDate)}`,
       hero:fmt(totalActual,goalCurr), heroLbl:`saved · ${overallPct.toFixed(1)}% of ${fmt(safeGoal,goalCurr)} · <span style="color:${gapColor};font-weight:600">${gapLabel}</span>`,
-      pill:[`Day ${daysSince} of ${totalDays}`,'var(--accent-bg)','var(--accent)'] })}
+      pill:[now < startDate ? `Starts in ${Math.ceil((startDate - now) / 86400000)} ${Math.ceil((startDate - now) / 86400000) === 1 ? 'day' : 'days'}` : `Day ${Math.min(daysSince + 1, totalDays + 1)} of ${totalDays + 1}`,'var(--accent-bg)','var(--accent)'] })}<!-- PSS #606: start day is Day 1 -->
     ${_fsActs(_acts)}
     <div style="margin:16px 2px 0">
       <div style="position:relative;height:8px;border-radius:var(--r-full);background:var(--bg4)">
         <div style="height:100%;border-radius:var(--r-full);background:var(--accent);width:${overallPct.toFixed(1)}%;transition:width 0.4s"></div>
         <div style="position:absolute;left:${targetPct.toFixed(1)}%;top:-4px;bottom:-4px;width:2px;border-radius:2px;background:var(--text);opacity:0.6" title="Target pace today"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:8px"><span>Saved ${overallPct.toFixed(1)}%</span><span>Marker = target pace today (${targetPct.toFixed(0)}%)</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:8px"><span>Saved ${overallPct.toFixed(1)}%</span><span>Line = today's target (${targetPct.toFixed(0)}%)</span></div>
     </div>
     ${_fsCard(_fsInfo('Target today', fmt(targetToday,goalCurr)) + _fsInfo('Still needed', fmt(toGoal,goalCurr)) + _fsInfo('Goal', fmt(safeGoal,goalCurr))
-      + _fsInfo('Needed per month', `${fmt(monthly,goalCurr)} over ${Math.round(totalMonths)} months`)
-      + _fsInfo('Time left', `${daysLeft} days · ${monthsElapsed.toFixed(1)} of ${Math.round(totalMonths)} months`))}
+      + _fsInfo('Planned per month', `${fmt(monthly,goalCurr)} over ${Math.round(totalMonths)} months`)
+      + (daysLeft > 0 && toGoal > 0 ? _fsInfo('Needed per month from now', fmt(toGoal / (daysLeft / 30.44), goalCurr)) : '')
+      + _fsInfo('Time left', `${daysLeft} days · ${(daysLeft / 30.44).toFixed(1)} of ${Math.round(totalMonths)} months`))}<!-- PLS #604: was "8.5 of 24" (months gone, not left); "Needed per month" was the plan, now named so; from now = Dashboard's Pace needed -->
 
     <!-- PSS #490: the target box moved into Edit contract (it sat open on the page); the monthly figure shows above -->
     <div class="lp-sec fs-sec" style="display:flex;justify-content:space-between;align-items:center"><span>Buckets · ${BUCKET_DEFS.length}</span>
       <span style="display:flex;gap:10px">
-        ${(editMode && active.bucketManualOrder)?`<button class="set-link" onclick="resortBucketsAZ('${activeId}')">A–Z</button>`:''}
-        ${editMode?`<button class="set-link" onclick="autoBalanceBuckets('${activeId}')">Auto-balance</button>`:''}
+        ${(editMode && active.bucketManualOrder)?`<button class="set-link" onclick="resortBucketsAZ('${activeId}')">Reset order</button>`:''}
+        ${BUCKET_DEFS.length ? `<button class="set-link" onclick="openBucketPlan('${activeId}')">Plan</button>` : ''}<!-- PLS #603: was Auto-balance (edit mode only) -->
       </span></div>
     ${BUCKET_DEFS.length===0
       ? `<div class="fs-card" style="text-align:center;padding:20px 16px"><div style="font-size:13px;color:var(--text3);margin-bottom:10px">No buckets yet. Add one to track where your savings go.</div>
@@ -22264,6 +22445,7 @@ function renderContractTab() {
 
     ${_fsSec('Milestones')}
     ${_msRows ? _fsFeed(_msRows) : `<div class="fs-card" style="padding:14px 16px;font-size:13px;color:var(--text3)">No milestones set</div>`}
+    <div style="text-align:center;margin:18px 0 4px"><span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="openContractWizard()">Start another contract</span></div><!-- PSS #602: moved here from the top "+" -->
   </div>
     ${renderContractArchive()}
   </div>`;
@@ -22324,15 +22506,19 @@ function computeBucketAllocation(totalTarget, bucketDefs, totalMonths) {
   return { targets, allocSum };
 }
 
+// PLS #607: an account linked to two buckets was counted twice in Total saved (P100,023.60 extra in a test).
+// Each account now counts once, in the first bucket that has it, and the sheet will not link it to a second one.
+function _bkIdLive(id) { return (db.accounts || []).some(a => a.id === id) || (db.investments || []).some(i => i.id === id); }
+function _bkLinksOnce(c) { const seen = new Set(), out = {}; ((c && c.bucketDefs) || []).forEach(b => { out[b.id] = ((c.bucketLinks || {})[b.id] || []).filter(id => _bkIdLive(id) && !seen.has(id) && seen.add(id)); }); return out; }
 function computeContractActual(contract) {
   if (!contract) return 0;
   // Use the contract's own bucket definitions (post-migration); fall back to legacy ids if absent
   const bucketIds = Array.isArray(contract.bucketDefs) && contract.bucketDefs.length
     ? contract.bucketDefs.map(b=>b.id)
     : ['bucket-1','bucket-2','bucket-3'];
-  let total = 0;
+  let total = 0; const _once = _bkLinksOnce(contract);
   for (const bid of bucketIds) {
-    const linked = (contract.bucketLinks||{})[bid] || [];
+    const linked = _once[bid] || (contract.bucketLinks||{})[bid] || [];
     if (linked.length > 0) {
       total += linked.reduce((s,id) => s + _linkedHomeBalance(id), 0);
     } else {
@@ -22349,15 +22535,15 @@ function renderContractArchive() {
     <div style="font-size:11px;letter-spacing:0.08em;color:var(--text3);margin-bottom:8px">Past contracts</div>
     ${archived.map(c=>{
       const totalSaved = computeContractActual(c);
-      const goalHit = totalSaved >= (c.targetAmount||0);
+      const goalHit = totalSaved >= _cGoalHome(c); // PLS #603: both in the home base
       return `<div class="card" style="margin-bottom:8px;opacity:0.8">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="cursor:pointer;flex:1" onclick="switchContract('${c.id}')">
             <div style="font-size:13px;font-weight:600">${_esc(c.location)}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtDFull(c.startDate)} → ${fmtDFull(c.endDate)}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtDFull(c.startDate)} – ${fmtDFull(c.endDate)} · ${fmt(totalSaved, _homeBase())} saved</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span class="pill ${goalHit?'pill-green':'pill-gray'}" style="font-size:11px">${goalHit?'Goal Hit':'Ended'}</span>
+            <span class="pill ${goalHit?'pill-green':'pill-gray'}" style="font-size:11px">${goalHit ? 'Goal hit' : new Date(c.endDate + 'T00:00:00') < new Date() ? 'Ended' : 'Set aside'}</span><!-- PSS #607: a switched-away contract still running said Ended -->
             <button class="btn btn-danger btn-sm" style="padding:4px 8px;font-size:11px" onclick="deleteContractPerm('${c.id}')">Delete</button>
           </div>
         </div>
@@ -22381,22 +22567,19 @@ function confirmDeleteContract(contractId) {
 
 
 function openContractWizard() {
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #607: home base first pick
   window._efNext = true; // PSS #361
   openSheet('gen', 'New contract', `
-    <div class="form-group"><label class="form-label" for="cw-location">📍 Work location *</label>
-      <input class="form-input" id="cw-location" placeholder="e.g. Papua New Guinea, Japan" oninput="searchEpList(this.value,'cw-loc-list','cw-location')" autocomplete="off">
+    <div class="form-group"><label class="form-label" for="cw-location">Work location *</label>
+      <input class="form-input" id="cw-location" placeholder="e.g. Papua New Guinea" oninput="searchEpList(this.value,'cw-loc-list','cw-location')" autocomplete="off">
       <div id="cw-loc-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:160px;overflow-y:auto"></div>
     </div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="cw-start">Start date *</label>${dtField('cw-start','date','Start Date',today())}</div>
-      <div class="form-group"><label class="form-label" for="cw-end">End date *</label>${dtField('cw-end','date','End Date','')}</div>
+      <div class="form-group"><label class="form-label" for="cw-start">Start date *</label>${dtField('cw-start','date','Start date',today())}</div>
+      <div class="form-group"><label class="form-label" for="cw-end">End date *</label>${dtField('cw-end','date','End date','')}</div>
     </div>
-    <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="cw-monthly">Monthly savings goal *</label><input class="form-input numpad-input" type="number" id="cw-monthly" placeholder="45000" step="1000" inputmode="none"></div>
-      <div class="form-group"><label class="form-label" for="cw-goalcurr">Currency</label><select class="form-input" id="cw-goalcurr">${currOpts}</select></div>
-    </div>
-    <div class="form-group"><label class="form-label" for="cw-target">Target amount *</label><input class="form-input numpad-input" type="number" id="cw-target" placeholder="970000" step="10000" inputmode="none"></div>
+    <div class="form-group"><label class="form-label" for="cw-goalcurr">Currency</label><select class="form-input" id="cw-goalcurr">${currOpts}</select></div><!-- PLS #607: no Monthly box; the page works it out from Target and the dates (it showed P10,035.16 when 10,000 was typed) -->
+    <div class="form-group"><label class="form-label" for="cw-target">Target amount *</label><input class="form-input numpad-input" type="number" id="cw-target" placeholder="0.00" step="10000" inputmode="none"></div>
     <div class="form-group"><label class="form-label" for="cw-notes">Notes</label><textarea class="form-input" id="cw-notes" rows="2" style="resize:none" placeholder="e.g. 24-month overseas contract"></textarea></div>
     <button class="btn btn-primary btn-full" onclick="saveContractWizard()">Create contract</button>
   `);
@@ -22418,17 +22601,16 @@ function saveContractWizard() {
   const endRaw = document.getElementById('cw-end')?.value;
   const startDate = parseInputDate(startRaw);
   const endDate = parseInputDate(endRaw);
-  const monthly = parseFloat(document.getElementById('cw-monthly')?.value);
   const target = parseFloat(document.getElementById('cw-target')?.value);
+  const _cwM = (new Date(endDate) - new Date(startDate)) / 86400000 / 30.44; const monthly = target > 0 && _cwM > 0 ? Math.round(target / _cwM * 100) / 100 : (target > 0 ? target : 0); // PLS #607
   const goalCurr = document.getElementById('cw-goalcurr')?.value || _homeBase();
   const notes = document.getElementById('cw-notes')?.value?.trim() || '';
   if (!location||!startDate||!endDate||!monthly||!target) {
     const missing = [];
     if (!location) missing.push('Location');
-    if (!startDate) missing.push('Start Date');
-    if (!endDate) missing.push('End Date');
-    if (!monthly) missing.push('Monthly Goal');
-    if (!target) missing.push('Target Amount');
+    if (!startDate) missing.push('Start date');
+    if (!endDate) missing.push('End date');
+    if (!target) missing.push('Target amount');
     showToast('Missing: ' + missing.join(', '));
     return;
   }
@@ -22478,8 +22660,8 @@ function openEditContract(contractId) {
     <div class="form-group"><label class="form-label" for="ec2-target">Target amount</label><input class="form-input numpad-input" type="number" id="ec2-target" value="${c.targetAmount}" step="10000" inputmode="none"></div> <!-- PSS #490: the target comes first, it drives the monthly figure -->
     <div class="form-group"><label class="form-label" for="ec2-loc">Location</label><input class="form-input" id="ec2-loc" value="${_esc(c.location)}"></div>
     <div class="form-row fr2">
-      <div class="form-group"><label class="form-label" for="ec2-start">Start date</label>${dtField('ec2-start','date','Start Date',c.startDate)}</div>
-      <div class="form-group"><label class="form-label" for="ec2-end">End date</label>${dtField('ec2-end','date','End Date',c.endDate)}</div>
+      <div class="form-group"><label class="form-label" for="ec2-start">Start date</label>${dtField('ec2-start','date','Start date',c.startDate)}</div>
+      <div class="form-group"><label class="form-label" for="ec2-end">End date</label>${dtField('ec2-end','date','End date',c.endDate)}</div>
     </div>
     <!-- PLS #491: no Monthly goal box; the monthly figure is worked out from the target -->
     <div class="form-row">
@@ -22498,7 +22680,9 @@ function saveEditContract(contractId) {
   const ecMonthly = parseFloat(ecMonthlyRaw);
   const ecTarget = parseFloat(ecTargetRaw);
   if (ecMonthlyRaw != null && ecMonthlyRaw !== '' && !(ecMonthly > 0)) { showToast('Enter a valid monthly amount'); return; }
-  if (ecTargetRaw !== '' && !(ecTarget > 0)) { showToast('Enter a valid target amount'); return; }
+  if (ecTargetRaw !== '' && !(Math.round(ecTarget) > 0)) { showToast('Enter a valid target amount'); return; } // PLS #609: 0.004 became a goal of 0
+  { const _s = document.getElementById('ec2-start')?.value || c.startDate, _e = document.getElementById('ec2-end')?.value || c.endDate;
+    if (new Date(_e) <= new Date(_s)) { showToast('End date must be after start date'); return; } } // PLS #607: it saved an end before the start (Duration -14mo)
   c.location = document.getElementById('ec2-loc')?.value?.trim()||c.location;
   c.startDate = document.getElementById('ec2-start')?.value||c.startDate;
   c.endDate = document.getElementById('ec2-end')?.value||c.endDate;
@@ -22506,7 +22690,7 @@ function saveEditContract(contractId) {
   c.goalCurrency = document.getElementById('ec2-curr')?.value||c.goalCurrency;
   const _tPrev = c.targetAmount;
   c.targetAmount = (ecTarget > 0) ? ecTarget : c.targetAmount;
-  if (c.targetAmount !== _tPrev) { c.targetAmount = Math.max(0, Math.round(c.targetAmount)); _rebalancePctToPool(c); } // PLS #490: same as the old target box (PLS #343)
+  if (c.targetAmount !== _tPrev) { c.targetAmount = Math.max(0, Math.round(c.targetAmount)); const _sh = {}; (c.bucketDefs || []).filter(x => !_bkLocked(x)).forEach(x => { _sh[x.id] = _bkAmt(x, _cGoalHome(Object.assign({}, c, { targetAmount: _tPrev }))); }); _bkFill(c, Object.values(_sh).some(v => v > 0) ? _sh : null); } /* PLS #603: the unlocked buckets keep their shape and fill the new goal */ // PLS #490: same as the old target box (PLS #343)
   { const _tm = (new Date(c.endDate) - new Date(c.startDate)) / 86400000 / 30.44; if (c.targetAmount > 0 && _tm > 0) c.monthlyGoal = Math.round(c.targetAmount / _tm * 100) / 100; } // PLS #491: kept in step with the target
   c.notes = document.getElementById('ec2-notes')?.value?.trim()||c.notes;
   saveDBWithSync(); closeSheet('gen'); renderPlanning(); showToast('Contract updated!');
@@ -22530,6 +22714,8 @@ function toggleContractBucket(contractId, bucketId, acctId, checked) {
   if (!c) return;
   if (!c.bucketLinks) c.bucketLinks={};
   if (!c.bucketLinks[bucketId]) c.bucketLinks[bucketId]=[];
+  const _other = (c.bucketDefs || []).find(x => x.id !== bucketId && ((c.bucketLinks[x.id] || []).includes(acctId)));
+  if (checked && _other) { showToast(`Already in ${_other.name}. Unlink it there first`); renderPlanning(); return; } // PLS #607
   if (checked) { if (!c.bucketLinks[bucketId].includes(acctId)) c.bucketLinks[bucketId].push(acctId); }
   else { c.bucketLinks[bucketId]=c.bucketLinks[bucketId].filter(id=>id!==acctId); }
   saveDBWithSync(); renderPlanning();
@@ -22567,8 +22753,9 @@ function openBucketSheet(contractId, bucketId) {
   if (isEdit && !b) return;
   const _tm = (c.startDate && c.endDate) ? Math.max(1, (new Date(c.endDate)-new Date(c.startDate))/(1000*60*60*24*30.44)) : 24;
   const _af = b ? _bucketAllocFields(b, _tm) : { mode:'percent', value:0, rateNum:0 };
-  const initMode = (b && (b.allocMode==='percent'||b.allocMode==='fixed')) ? b.allocMode : (b ? _af.mode : 'percent');
-  const initVal = (b && typeof b.allocValue==='number') ? b.allocValue : (b ? (initMode==='percent'?'':Math.round(_af.value)) : '');
+  const _goal603 = _cGoalHome(c);
+  const initLock = b ? _bkLocked(b) : false; // PLS #603
+  const initVal = b ? Math.round(_bkAmt(b, _goal603) * 100) / 100 : '';
   const initRateNum = (b && typeof b.rateNum==='number') ? b.rateNum : (b ? (_af.rateNum||'') : '');
   const _riskSuggest = b ? _suggestRiskForBucket(c, b.id) : null;
   const initRisk = (b && (b.risk==='insured'||b.risk==='low'||b.risk==='medium'||b.risk==='high')) ? b.risk : (_riskSuggest ? _riskSuggest.tier : 'medium');
@@ -22605,13 +22792,13 @@ function openBucketSheet(contractId, bucketId) {
       ${_riskSuggest ? `<div style="font-size:11px;color:var(--accent);margin-top:6px">💡 Linked ${_riskSuggest.cats.map(_esc).join(', ')} → suggests <button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px" onclick="setBucketRisk('${_riskSuggest.tier}')">${_riskSuggest.tier==='insured'?'🛡️ Insured':_riskSuggest.tier==='low'?'🟢 Low':_riskSuggest.tier==='high'?'🔴 High':'🟡 Medium'}</button></div>` : ''}
     </div>
     <div class="form-group">
-      <label class="form-label">Allocation type <span onclick="showBucketInfo('alloc')" role="button" aria-label="More information" style="cursor:pointer;color:var(--text4);opacity:0.45;margin-left:5px;display:inline-flex;align-items:center;vertical-align:middle;text-transform:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4.5"/><circle cx="12" cy="7.8" r="0.6" fill="currentColor" stroke="currentColor" stroke-width="1.2"/></svg></span></label>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <button type="button" id="bk-mode-fix" class="btn btn-sm ${initMode==='fixed'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('fixed')">Fixed</button>
-        <button type="button" id="bk-mode-pct" class="btn btn-sm ${initMode==='percent'?'btn-primary':'btn-ghost'}" style="flex:1" onclick="setBucketAllocMode('percent')">Dynamic</button>
+      <label class="form-label" for="bk-allocval">Planned amount (${_homeBase()})</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input numpad-input" id="bk-allocval" type="number" step="any" min="0" placeholder="Leave blank to share what is left" value="${initVal}" inputmode="none" data-orig="${initVal}" style="flex:1">
+        <button type="button" class="al-lock${initLock ? ' on' : ''}" id="bk-lockbtn" aria-pressed="${initLock}" onclick="_bkSheetLock()" title="Lock">${_ico(initLock ? 'lock' : 'unlock', 16)}</button>
       </div>
-      <input type="hidden" id="bk-allocmode" value="${initMode}">
-      <input class="form-input numpad-input" id="bk-allocval" type="number" step="${initMode==='percent'?'1':'1000'}" min="0" placeholder="${initMode==='percent'?'% (auto-balanced if blank)':sym(_homeBase())+' locked amount'}" value="${initVal}" inputmode="none">
+      <input type="hidden" id="bk-lock" value="${initLock ? '1' : ''}">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px" id="bk-lockhint">${initLock ? 'Locked: stays at this amount.' : 'Unlocked: shares what is left of the goal with the other unlocked buckets.'} Plan all buckets at once with Plan.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Color</label>
@@ -22695,34 +22882,37 @@ function saveBucketDef() {
   const rateNum = rateNumRaw === '' ? 0 : (parseFloat(rateNumRaw)||0);
   const rate = rateNum > 0 ? rateNum + '% p.a.' : ''; // label is derived from the numeric rate
   const risk = (document.getElementById('bk-risk')||{}).value || 'medium';
-  const allocMode = document.getElementById('bk-allocmode').value === 'fixed' ? 'fixed' : 'percent';
-  const allocValue = parseFloat(document.getElementById('bk-allocval').value)||0;
+  // PLS #603: one peso amount and a lock (no more Fixed / Dynamic). Typing a new amount locks it.
+  const _avEl = document.getElementById('bk-allocval'), _avRaw = (_avEl.value || '').trim();
+  const allocValue = Math.max(0, Math.round((parseFloat(_avRaw) || 0) * 100) / 100);
+  const allocLock = !!document.getElementById('bk-lock').value || (_avRaw !== '' && _avRaw !== String(_avEl.dataset.orig || ''));
   const color = document.getElementById('bk-color').value || '#2dd98a';
   if (!name) { showToast('Name is required'); return; }
-  if (allocMode === 'percent' && allocValue > 100) { showToast('Percent cannot exceed 100'); return; }
-  if (allocMode === 'fixed' && allocValue <= 0) { showToast('Fixed amount must be greater than 0'); return; }
+  if (allocLock && !(allocValue > 0)) { showToast('Enter the amount to lock, or unlock it'); return; }
   let savedId = bid;
   if (bid) {
     const b = c.bucketDefs.find(x=>x.id===bid);
     if (!b) return;
-    b.name = name; b.rate = rate; b.rateNum = rateNum; b.risk = risk; b.allocMode = allocMode; b.allocValue = allocValue; b.cap = null; b.color = color;
+    b.name = name; b.rate = rate; b.rateNum = rateNum; b.risk = risk; b.allocMode = 'fixed'; b.allocValue = allocValue; b.allocLock = allocLock; b.cap = null; b.color = color;
   } else {
     savedId = 'bk_'+genId();
-    c.bucketDefs.push({ id: savedId, name, rate, rateNum, risk, allocMode, allocValue, cap: null, color, monthly: 0 });
+    c.bucketDefs.push({ id: savedId, name, rate, rateNum, risk, allocMode: 'fixed', allocValue, allocLock, cap: null, color, monthly: 0 });
   }
   closeSheet('gen');
-  // Keep the total at 100%: editing a % bucket rebalances the OTHER % buckets; editing/locking a
-  // fixed bucket changes the pool, so the % buckets rescale to fill it.
-  if (allocMode === 'percent') {
-    adjustBucketPct(cid, savedId, allocValue); // sets this bucket + rebalances others, saves & renders
-  } else {
-    _rebalancePctToPool(c);
-    saveDBWithSync();
-    renderPlanning();
-  }
-  showToast(bid?'Bucket updated':'Bucket added');
+  // PLS #603: the unlocked buckets share what is left of the goal, keeping their shape.
+  { const tg = _cGoalHome(c), shape = {}; const free = c.bucketDefs.filter(x => !_bkLocked(x));
+    free.forEach(x => { shape[x.id] = _bkAmt(x, tg); });
+    // a new bucket left blank starts at 0 (it never takes from the others on its own); Plan gives it an amount
+    _bkFill(c, Object.values(shape).some(v => v > 0) ? shape : null); }
+  saveDBWithSync();
+  renderPlanning();
+  { const nb = !bid && c.bucketDefs.find(x => x.id === savedId); showToast(bid ? 'Bucket updated' : (nb && !(nb.allocValue > 0) ? 'Bucket added. Tap Plan to give it an amount' : 'Bucket added')); }
 }
 
+function _bkSheetLock() { const h = document.getElementById('bk-lock'), btn = document.getElementById('bk-lockbtn'), on = !h.value; h.value = on ? '1' : ''; // PLS #603
+  if (btn) { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on); btn.innerHTML = _ico(on ? 'lock' : 'unlock', 16); }
+  const t = document.getElementById('bk-lockhint'); if (t) t.textContent = (on ? 'Locked: stays at this amount.' : 'Unlocked: shares what is left of the goal with the other unlocked buckets.') + ' Plan all buckets at once with Plan.';
+  if (!on) { const i = document.getElementById('bk-allocval'); if (i) i.dataset.orig = i.value; } }
 // Toggle the bucket allocation mode (% of target vs fixed amount) in the bucket sheet.
 function setBucketAllocMode(mode) {
   const hid = document.getElementById('bk-allocmode');
@@ -22789,7 +22979,7 @@ function _fixedPctOfTarget(contract, target) {
 function autoBalanceBuckets(contractId) {
   const c = (db.contracts||[]).find(x=>x.id===contractId);
   if (!c || !Array.isArray(c.bucketDefs)) return;
-  const target = parseFloat(c.targetAmount) || 0;
+  const target = _cGoalHome(c); // PLS #603: home base
   const pctBuckets = c.bucketDefs.filter(b => _bucketAllocFields(b,1).mode === 'percent');
   if (pctBuckets.length === 0) { showToast('No % buckets to balance — fixed ones are locked'); return; }
   const fixedPct = _fixedPctOfTarget(c, target);
@@ -22805,10 +22995,97 @@ function autoBalanceBuckets(contractId) {
   showToast(fixedPct>100 ? '⚠ Fixed buckets exceed target' : '⚖️ Balanced to 100% by risk & rate');
 }
 
+// -- PERSONAL LOGIC SET #603 -- buckets are planned like a budget (his pick, Nov 12: "parang sa budget allocation"):
+// every bucket holds a PESO amount; a locked one stays put, the unlocked ones share what is left of the goal.
+// Stored as allocMode 'fixed' + allocValue (so an older copy of the app reads the same amounts) plus allocLock.
+// A bucket saved as Fixed before counts as locked; one saved as a % (Dynamic) counts as unlocked.
+// PLS #603 (his rule: home base, nothing hard-coded): the plan, the buckets and what is saved are all in the home base.
+// A goal typed in another currency is turned into the home base at today's rate (the saved balances already are).
+// PLS #604: ONE "time left" for the Contract page, the Dashboard goal card and Analytics (they said 15mo, 8.5 and 470 days).
+function _cMonthsLeft(c, now) { const st = new Date(c.startDate + 'T00:00:00'), en = new Date(c.endDate + 'T00:00:00'); if (isNaN(st) || isNaN(en)) return null;
+  const total = Math.round((en - st) / 86400000), since = Math.max(0, Math.floor(((now || new Date()) - st) / 86400000)); return Math.max(0, total - since) / 30.44; }
+function _cGoalHome(c) { const t = parseFloat(c && c.targetAmount) || 0, gc = (c && c.goalCurrency) || _homeBase(); return Math.round((gc === _homeBase() ? t : toPhp(t, gc)) * 100) / 100; }
+function _bkLocked(b) { return !!b && b.allocMode === 'fixed' && b.allocLock !== false; }
+function _bkAmt(b, target) { return Math.max(0, _bucketAllocFields(b, 1).mode === 'percent' ? (parseFloat(b.allocValue) || 0) / 100 * (target || 0) : (parseFloat(b.allocValue) || 0)); }
+// Unlocked buckets fill (goal - locked), in proportion to `shape` (id -> amount) or, with no shape, to rate x risk.
+function _bkFill(c, shape) {
+  const target = _cGoalHome(c), defs = c.bucketDefs || [];
+  const free = defs.filter(b => !_bkLocked(b));
+  if (!free.length) return;
+  const pool = Math.max(0, Math.round((target - defs.filter(_bkLocked).reduce((n, b) => n + _bkAmt(b, target), 0)) * 100) / 100);
+  const w = b => shape ? Math.max(0, shape[b.id] || 0) : _bucketWeight(b);
+  let sumW = free.reduce((n, b) => n + w(b), 0);
+  const useW = sumW > 0 ? w : (b => 1); if (!(sumW > 0)) sumW = free.length;
+  let acc = 0, big = free[0];
+  free.forEach(b => { const v = Math.floor(pool * useW(b) / sumW * 100) / 100; b.allocMode = 'fixed'; b.allocLock = false; b.allocValue = v; acc += v; if (v > (big.allocValue || 0)) big = b; });
+  big.allocValue = Math.round((big.allocValue + pool - acc) * 100) / 100; // the centavos left by rounding go to the biggest
+}
+function openBucketPlan(cid) {
+  const c = (db.contracts || []).find(x => x.id === cid); if (!c || !Array.isArray(c.bucketDefs) || !c.bucketDefs.length) return;
+  const cur = _homeBase(), goal = _cGoalHome(c);
+  const rows = c.bucketDefs.map(b => ({ b, amt: Math.round(_bkAmt(b, goal) * 100) / 100, lock: _bkLocked(b) }));
+  const st = window._bkPlan = { cid, cur, goal, rows, shape: {} };
+  rows.forEach(r => { st.shape[r.b.id] = r.amt; });
+  const riskName = { insured:'Insured', low:'Low', medium:'Medium', high:'High' };
+  const sub = r => [r.b.rateNum > 0 ? `${+r.b.rateNum}%` : '', riskName[_bucketRisk(r.b)], `<span class="bkp-pct" data-id="${r.b.id}">${goal > 0 ? (+(r.amt / goal * 100).toFixed(1)) : 0}% of goal</span>`].filter(Boolean).join(' · ');
+  const row = r => `<div class="fs-row al-row" style="cursor:default">
+      <span class="fs-dot" style="background:var(--bg4)"><span style="width:12px;height:12px;border-radius:50%;background:${r.b.color || 'var(--accent)'}"></span></span>
+      <div style="flex:1;min-width:0"><div class="fs-t" style="overflow-wrap:anywhere">${_esc(r.b.name)}</div><div class="fs-s">${sub(r)}</div></div>
+      <button type="button" class="al-lock${r.lock ? ' on' : ''}" data-id="${r.b.id}" aria-pressed="${r.lock}" title="${r.lock ? 'Locked: stays as typed' : 'Unlocked: shares what is left'}" onclick="_bkpLock('${r.b.id}')">${_ico(r.lock ? 'lock' : 'unlock', 16)}</button>
+      <input type="number" class="form-input numpad-input al-in bkp-in" data-id="${r.b.id}" value="${r.amt}" inputmode="none" style="width:96px!important">
+    </div>`;
+  openDlg('', `<div class="fs"><div id="bkp-head"></div>${_fsSec('Buckets · ' + rows.length)}${_fsFeed(rows.map(row).join(''))}
+      <div class="set-foot" style="text-align:center;margin-top:12px">Type an amount and that bucket locks. The unlocked buckets share what is left of the goal. Reset to suggestion splits it by interest rate and risk.</div></div>`,
+    `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Close</button><button class="btn btn-primary btn-sm" onclick="_bkpApply()">Apply</button>`);
+  setTimeout(() => {
+    const dl = document.querySelector('#dlg-overlay .dlg'), ft = document.getElementById('dlg-footer');
+    if (dl && ft && !document.getElementById('al-bar')) { const bar = document.createElement('div'); bar.id = 'al-bar'; dl.insertBefore(bar, ft); }
+    document.querySelectorAll('.bkp-in').forEach(i => i.addEventListener('input', () => { const r = st.rows.find(x => x.b.id === i.dataset.id); if (!r) return; r.amt = Math.max(0, Math.round((parseFloat(i.value) || 0) * 100) / 100); if (!r.lock) { r.lock = true; _bkpPaint(); } clearTimeout(st.t); st.t = setTimeout(_bkpSpread, 300); _bkpDraw(); }));
+    _bkpDraw();
+  }, 50);
+}
+function _bkpPaint() { const st = window._bkPlan; if (!st) return; st.rows.forEach(r => { const btn = document.querySelector(`.al-lock[data-id="${r.b.id}"]`); if (!btn) return; btn.classList.toggle('on', r.lock); btn.setAttribute('aria-pressed', r.lock); btn.innerHTML = _ico(r.lock ? 'lock' : 'unlock', 16); }); }
+// unlocked rows share (goal - locked) in the shape they had when the popup opened (as the budget editor does, PLS #413)
+function _bkpSpread(byWeight) {
+  const st = window._bkPlan; if (!st) return;
+  const free = st.rows.filter(r => !r.lock); if (!free.length) { _bkpDraw(); return; }
+  const pool = Math.max(0, Math.round((st.goal - st.rows.filter(r => r.lock).reduce((n, r) => n + r.amt, 0)) * 100) / 100);
+  const w = r => byWeight ? _bucketWeight(r.b) : Math.max(0, st.shape[r.b.id] || 0);
+  let sumW = free.reduce((n, r) => n + w(r), 0); const useW = sumW > 0 ? w : (() => 1); if (!(sumW > 0)) sumW = free.length;
+  let acc = 0, big = free[0];
+  free.forEach(r => { r.amt = Math.floor(pool * useW(r) / sumW * 100) / 100; acc += r.amt; if (r.amt > big.amt) big = r; });
+  big.amt = Math.round((big.amt + pool - acc) * 100) / 100;
+  free.forEach(r => { const i = document.querySelector(`.bkp-in[data-id="${r.b.id}"]`); if (i) i.value = r.amt; });
+  _bkpDraw();
+}
+function _bkpDraw() {
+  const st = window._bkPlan; if (!st) return;
+  const total = Math.round(st.rows.reduce((n, r) => n + r.amt, 0) * 100) / 100, left = Math.round((st.goal - total) * 100) / 100, over = left < -0.005;
+  const pct = st.goal > 0 ? total / st.goal * 100 : 0;
+  const h = document.getElementById('bkp-head');
+  if (h) h.innerHTML = _fsHead({ badge:_ico('target', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[Math.min(pct, 100), 0, over ? 'var(--red)' : 'var(--accent)'],
+      title:'Plan buckets', sub:`Goal ${fmt(st.goal, st.cur)}`, hero:fmt(Math.abs(left), st.cur), heroCol:over ? 'var(--red)' : 'var(--green)',
+      heroLbl:`${over ? 'over the goal' : Math.abs(left) < 0.005 ? 'nothing left to plan' : 'left to plan'} · ${fmt(total, st.cur)} planned (${Math.abs(left) < 0.005 ? 100 : +(Math.floor(pct * 10) / 10).toFixed(1)}%)` })
+    + `<div class="al-acts"><button type="button" class="al-act" onclick="_bkpSpread(true)">Reset to suggestion</button>${st.rows.some(r => r.lock) ? `<button type="button" class="al-act" onclick="_bkpUnlockAll()">Unlock all</button>` : ''}</div>`;
+  st.rows.forEach(r => { const e = document.querySelector(`.bkp-pct[data-id="${r.b.id}"]`); if (e) e.textContent = `${st.goal > 0 ? (+(r.amt / st.goal * 100).toFixed(1)) : 0}% of goal`; });
+  const el = document.getElementById('al-bar'); if (!el) return;
+  el.className = 'al-bar' + (over ? ' over' : '');
+  el.innerHTML = `<div class="al-bar-top"><span>${fmt(total, st.cur)} planned</span><b class="al-bar-state">${over ? `${fmt(-left, st.cur)} over` : Math.abs(left) < 0.005 ? 'Fully planned' : `${fmt(left, st.cur)} left`}</b></div>
+    <div class="al-bar-track"><div class="al-bar-fill" style="width:${Math.min(100, pct)}%"></div></div>`;
+}
+function _bkpLock(id) { const st = window._bkPlan; const r = st && st.rows.find(x => x.b.id === id); if (!r) return; r.lock = !r.lock; if (!r.lock) st.shape[id] = r.amt; _bkpPaint(); _bkpDraw(); }
+function _bkpUnlockAll() { const st = window._bkPlan; if (!st) return; st.rows.forEach(r => { r.lock = false; st.shape[r.b.id] = r.amt; }); _bkpPaint(); _bkpDraw(); }
+function _bkpApply() {
+  const st = window._bkPlan; if (!st) return; clearTimeout(st.t);
+  const c = (db.contracts || []).find(x => x.id === st.cid); if (!c) return;
+  st.rows.forEach(r => { const b = c.bucketDefs.find(x => x.id === r.b.id); if (!b) return; b.allocMode = 'fixed'; b.allocValue = r.amt; b.allocLock = !!r.lock; });
+  saveDBWithSync(); closeDlg(true); renderPlanning(); showToast('Bucket plan saved');
+}
+
 // Rescale all % buckets proportionally (preserving their ratios) so they fill the available pool
 // (100% minus locked fixed buckets). Used when a fixed bucket / target changes.
 function _rebalancePctToPool(c) {
-  const target = parseFloat(c.targetAmount) || 0;
+  const target = _cGoalHome(c); // PLS #603: home base
   const pool = Math.max(0, 100 - _fixedPctOfTarget(c, target));
   const pct = (c.bucketDefs||[]).filter(b => _bucketAllocFields(b,1).mode === 'percent');
   if (pct.length === 0) return;
@@ -22821,7 +23098,7 @@ function _rebalancePctToPool(c) {
 function adjustBucketPct(contractId, bucketId, newPct) {
   const c = (db.contracts||[]).find(x=>x.id===contractId);
   if (!c || !Array.isArray(c.bucketDefs)) return;
-  const target = parseFloat(c.targetAmount) || 0;
+  const target = _cGoalHome(c); // PLS #603: home base
   const fixedPct = _fixedPctOfTarget(c, target);
   const pool = Math.max(0, 100 - fixedPct);
   const me = c.bucketDefs.find(b=>b.id===bucketId);
@@ -22889,7 +23166,7 @@ function resortBucketsAZ(contractId) {
   c.bucketManualOrder = false;
   saveDBWithSync();
   renderPlanning();
-  showToast('Sorted A→Z');
+  showToast('Order reset: highest rate first'); // PSS #608: it is not A to Z
 }
 
 
@@ -22989,7 +23266,7 @@ const _SET_PAGES = { currencies:'Tracked currencies', fx:'Exchange rates', cats:
 function openVacationDays(editId, offerReplan) {
   const list = _vacList().slice().sort((a, b) => b.from.localeCompare(a.from));
   const ed = editId ? list.find(v => v.id === editId) : null;
-  const rows = list.map(v => _fsRow({ ico:_ico('calendar',15), title:`${fmtDFull(v.from)} to ${fmtDFull(v.to)}`,
+  const rows = list.map(v => _fsRow({ ico:_ico('calendar',15), title:`${(v.from||'').slice(0,4) === (v.to||'').slice(0,4) ? fmtD(v.from) : fmtDFull(v.from)} to ${fmtDFull(v.to)}` /* PSS #599: one line */,
     sub:`${Math.round((new Date(v.to + 'T12:00') - new Date(v.from + 'T12:00')) / 86400000) + 1} days${v.note ? ' · ' + _esc(v.note) : ''}${v.from > today() ? ' · coming up' : (v.to >= today() ? ' · now' : '')}`,
     onclick:`openVacationDays('${v.id}')`,
     amt:`<span role="button" tabindex="0" style="color:var(--red);font-size:12px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();_vacDel('${v.id}')">Delete</span>` })).join('');
@@ -23233,7 +23510,7 @@ function openEditProfile() {
   window._efNext = true; // PSS #361
   openSheet('gen','Edit profile',`
     <div class="form-group"><label class="form-label" for="ep2-nick">Nickname</label><input class="form-input" id="ep2-nick" value="${escapeAttr(p.nickname||'')}"></div>
-    <div class="form-group">
+    <div class="form-group f6-wide">
       <label class="form-label" for="ep2-nat">Nationality (home base)</label>
       <input class="form-input" id="ep2-nat" value="${escapeAttr(p.nationality||'')}" placeholder="e.g. Philippines, Japan..." oninput="searchEpList(this.value,'ep2-nat-list','ep2-nat')" autocomplete="off">
       <div id="ep2-nat-list" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r-md);margin-top:4px;max-height:180px;overflow-y:auto"></div>
@@ -23687,7 +23964,7 @@ function deleteFxHistoryEntry(currency, idx) {
   if (entry.source === 'baseline') { showToast('Cannot delete baseline entry'); return; }
 
   openDlg('Delete this rate?',
-    `<div style="font-size:13px;color:var(--text2)">Delete rate ${sym(_homeBase())}${entry.rate} on ${entry.date}? Affected transactions will re-resolve to the previous period's rate on next recompute.</div>`,
+    `<div style="font-size:13px;color:var(--text2)">Delete rate ${sym(_homeBase())}${entry.rate} on ${fmtDFull(entry.date)}? Affected transactions will re-resolve to the previous period's rate on next recompute.</div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-danger btn-sm" onclick="confirmDeleteFxHistory('${currency}',${idx})">Delete</button>`
   );
@@ -23750,7 +24027,7 @@ function _bgtEditSave(id) {
   const b = db.budgets.find(x => x.id === id); if (!b) return;
   const loc = (document.getElementById('bgt-loc')?.value || '').trim();
   if (!loc) { showToast('Enter a location or label'); return; }
-  if (!(parseFloat(document.getElementById('bgt-lim')?.value) > 0)) { showToast('Enter a valid limit'); return; }
+  if (!(Math.round(parseFloat(document.getElementById('bgt-lim')?.value) * 100) / 100 > 0)) { showToast('Enter a valid limit'); return; } // PLS #609
   if (loc !== b.location) { b.location = loc; saveDBWithSync(); }
   updateBudgetLimit(id, document.getElementById('bgt-lim').value); closeDlg(); renderPlanning();
 }
@@ -23821,7 +24098,7 @@ function renderBudgetsTab() {
       amt:fmt(tot, b.currency), amtCol:'var(--text)', amt2:'spent' });
   })();
   const setRow = (label, sub, right, onclick) => `<div class="fs-i"${onclick ? ` onclick="${onclick}" style="cursor:pointer"` : ''}><span style="color:var(--text);min-width:0;flex:1"><span style="font-weight:600">${label}</span>${sub ? `<br><span style="font-size:11px;color:var(--text3)">${sub}</span>` : ''}</span>${right}</div>`;
-  let html = `<div class="page-pad"><div class="fs" style="max-width:640px;margin:0 auto">${chips}
+  let html = `<div class="page-pad"><div class="fs" style="margin:0 auto"><!-- PSS #599: same width as the other list pages -->${chips}
     ${_fsHead({ badge:getFlag(b.location) || _ico('wallet', 28), badgeBg:'var(--accent-bg)', badgeCol:'var(--accent)', ring:[Math.min(usedPct, 100), 0, ringCol],
       title:`${_esc(b.location)} budget`, sub:`${monthLbl} · limit ${fmt(lim, b.currency)}${isCur && b.rollover && b.rolloverAmount > 0 ? ' incl. rollover' : ''}`,
       hero:fmt(Math.abs(left), b.currency), heroCol:left < 0 ? 'var(--red)' : 'var(--text)',
@@ -24852,10 +25129,10 @@ function confirmAiAllocate(bgtId) {
 }
 
 function toggleBudget(id, val) { const b=db.budgets.find(x=>x.id===id); if(b){b.active=val;saveDBWithSync();} }
-function updateBudgetLimit(id, val, el) { const b=db.budgets.find(x=>x.id===id); if(b){ const v=parseFloat(val); if(!(v>0)){ showToast('Enter a valid limit'); if(el) el.value=b.limit; return; } b.limit=v; saveDBWithSync(); } }
+function updateBudgetLimit(id, val, el) { const b=db.budgets.find(x=>x.id===id); if(b){ const v=Math.round(parseFloat(val)*100)/100; if(!(v>0)){ showToast('Enter a valid limit'); if(el) el.value=b.limit; return; } b.limit=v; /* PLS #609: whole centavos */ saveDBWithSync(); } }
 
 function openAddBudget() {
-  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const currOpts = db.trackedCurrencies.map(c=>`<option value="${c}"${c === _homeBase() ? ' selected' : ''}>${c}</option>`).join(''); // PLS #609: home currency first pick
   window._efNext = true; // PSS #361
   window._efNext = true; // PSS #361
   window._efNext = true; // PSS #361
@@ -24872,7 +25149,7 @@ function openAddBudget() {
 
 function saveAddBudget() {
   const loc = document.getElementById('nb-loc')?.value?.trim();
-  const limit = parseFloat(document.getElementById('nb-limit')?.value);
+  const limit = Math.round(parseFloat(document.getElementById('nb-limit')?.value) * 100) / 100; // PLS #611: whole centavos
   if (!loc || !(limit > 0)) { showToast('Enter location and a valid limit'); return; }
   db.budgets.push({ id:'bgt-'+genId(), location:loc, currency:document.getElementById('nb-curr')?.value||_homeBase(), limit, active:true });
   saveDBWithSync(); closeDlg(); if (currentPage === 'analytics') renderAnalytics(); else renderPlanning(); showToast('Budget added!');
@@ -26157,11 +26434,11 @@ function exportXLSX() {
     const invRows = [['Name','Type','Status','Amount Invested','Currency','Current Value','Unrealized G/L','Realized G/L','Source Account','Date','Notes']];
     for (const inv of (db.investments||[]).filter(i=>!i.archived)) {
       const srcAcct = inv.sourceAccountId ? db.accounts.find(a=>a.id===inv.sourceAccountId)?.name || '' : '';
-      const gl = (inv.currentValue||inv.amount) - inv.amount;
+      const gl = ((inv.currentValue ?? inv.amount)) - inv.amount;
       invRows.push([
         inv.name, inv.type||'Other', inv.status||'active',
         inv.amount, inv.currency,
-        inv.currentValue||inv.amount,
+        (inv.currentValue ?? inv.amount),
         inv.status==='sold' ? '' : gl,
         inv.status==='sold' ? (inv.realizedGL||0) : '',
         srcAcct, inv.date||'', inv.notes||''
@@ -26666,7 +26943,7 @@ function renderBankReconBody() {
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(t.notes || '(no notes)')}</div>
-              <div style="font-size:11px;color:var(--text3)">${t.date}</div>
+              <div style="font-size:11px;color:var(--text3)">${fmtDFull(t.date)}</div>
             </div>
             <div style="font-family:var(--mono);font-weight:600;color:${t.type==='income'?'var(--green)':'var(--red)'};font-size:13px">
               ${t.type==='income'?'+':'-'}${fmt(t.amount, t.currency || (acct.currency || _homeBase()))}
@@ -26690,7 +26967,7 @@ function renderBankReconBody() {
       Check if your app balance matches your real bank balance. Catches missing transactions and audit issues.
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    <div class="ef"><div class="ef-card"><!-- PSS #614: same list look as Add and Edit forms -->
       <div class="form-group">
         <label class="form-label" for="recon-acct">Account</label>
         <select class="form-input" id="recon-acct" onchange="_reconState.acctId = this.value">${acctOpts}</select>
@@ -26702,12 +26979,11 @@ function renderBankReconBody() {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="recon-real">Real bank balance (from your bank app)</label>
+        <label class="form-label" for="recon-real">Bank app balance</label>
         <input class="form-input numpad-input" type="number" step="any" id="recon-real" value="${s.realBalance}" placeholder="0.00" inputmode="decimal" oninput="_reconState.realBalance = this.value">
       </div>
-
-      <button class="btn btn-primary btn-sm btn-full" onclick="runReconciliation()">Compare</button>
-    </div>
+    </div></div>
+    <button class="btn btn-primary btn-full" style="margin-bottom:16px" onclick="runReconciliation()">Compare</button>
 
     ${resultHTML}
   </div>`;
@@ -26820,7 +27096,7 @@ function openReconHistory() {
             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
               <div>
                 <div style="font-size:13px;font-weight:600">${escapeAttr(r.acctName)}</div>
-                <div style="font-size:11px;color:var(--text3)">As of ${r.date} · checked ${dispDate}</div>
+                <div style="font-size:11px;color:var(--text3)">As of ${fmtDFull(r.date)} · checked ${dispDate}</div>
               </div>
               <span class="pill" style="background:${bg};color:${color};font-size:11px;padding:3px 8px">${r.isMatch?'✓ MATCH':'≠ DIFF'}</span>
             </div>
@@ -27730,6 +28006,9 @@ function _syncMerge3(base, mine, theirs, path, out) {
     const order = [...theirs.map(x => x.id), ...mine.filter(x => !T.has(x.id)).map(x => x.id)]; const res = [];
     for (const id of order) {
       const m = M.get(id), t = T.get(id), b = B.get(id); const pp = [...path, '#' + id];
+      // PLS #596: Loan profit and Rate change entries are made by the app from the payments and made again after every sync
+      // (PLS #542), so they are never asked, like Insights notes (PLS #549)
+      if (p === 'transactions' && /^tx-l[gr]-/.test(id)) { res.push(t || m); continue; }
       if (m && t && b && p === 'transactions' && _syncPaySplitBoth(b, m, t)) { out.conflicts.push({ pathArr: pp, kind: 'record', mine: m, theirs: t }); res.push(t); continue; } // PLS #566
       if (m && t) { res.push(_syncMerge3(b, m, t, pp, out)); continue; }
       const present = m || t;
@@ -27819,7 +28098,7 @@ function _syncUnion(mine, theirs, path, out) {
   if ((_syncIsIdArr(mine) || emptyArr(mine)) && (_syncIsIdArr(theirs) || emptyArr(theirs))) {
     const T = new Map(theirs.map(x => [x.id, x])); const res = theirs.slice();
     for (const m of mine) { const t = T.get(m.id); if (!t) { res.push(m); continue; }
-      if (!_syncEq(m, t)) out.conflicts.push({ pathArr: [...path, '#' + m.id], kind: 'record', mine: m, theirs: t }); }
+      if (!_syncEq(m, t) && !(p === 'transactions' && /^tx-l[gr]-/.test(m.id))) /* PLS #596 */ out.conflicts.push({ pathArr: [...path, '#' + m.id], kind: 'record', mine: m, theirs: t }); }
     return res; }
   if (Array.isArray(mine) && Array.isArray(theirs)) { const J = x => JSON.stringify(x); const res = theirs.slice(); mine.forEach(x => { if (!res.some(y => J(y) === J(x))) res.push(x); }); return res; }
   return out.prefer === 'mine' ? mine : theirs; // PLS #568: single values (rates, settings) follow the newer save in Combine both
@@ -27889,7 +28168,10 @@ function _syncUnionDB(mine, theirs, prefer, skip) {
   for (const i of (res.installments || [])) { const sides = [instOf(mine, i.id), instOf(theirs, i.id)].filter(Boolean);
     out.instSurplus[i.id] = Math.min(...sides.map(x => Math.max(0, (Number(x.paidMonths) || 0) - ((x.linkedTxIds || []).length)))); }
   out.conflicts.forEach(c => { if (c.kind !== 'record' || c.pathArr[0] !== 'installments' || !c.mine || !c.theirs) return;
-    const L = [...new Set([...(c.theirs.linkedTxIds || []), ...(c.mine.linkedTxIds || [])])]; c.mine = { ...c.mine, linkedTxIds: L }; c.theirs = { ...c.theirs, linkedTxIds: L }; setRec(c.pathArr, c.theirs); });
+    const L = [...new Set([...(c.theirs.linkedTxIds || []), ...(c.mine.linkedTxIds || [])])]; c.mine = { ...c.mine, linkedTxIds: L }; c.theirs = { ...c.theirs, linkedTxIds: L };
+    // PLS #591: the end date is worked out from the start and the months (#580), so a save from before 1.2.19-7 is not asked about it
+    for (const s of ['mine', 'theirs']) { const r = c[s]; if (/^\d{4}-\d{2}-\d{2}$/.test(r.startDate || '')) { const e = _instEndDate(r.startDate, r.totalMonths); if (e) c[s] = { ...r, endDate: e }; } }
+    setRec(c.pathArr, c.theirs); });
   // PLS #568: capital added on each device is all kept (the amount is where both started plus every kept capital entry),
   // so it is not asked; a capital entry he left out is not counted
   out.conflicts.forEach(c => { if (c.kind !== 'record' || c.pathArr[0] !== 'investments' || !c.mine || !c.theirs) return;
@@ -30940,6 +31222,10 @@ function saveNewInstallment() {
   if (!name || !monthlyAmount || !totalMonths || !startDate) {
     showToast('Fill in all required fields'); return;
   }
+  // PLS #611: -5 a month for -5 months was saved
+  if (!(Math.round(monthlyAmount * 100) / 100 > 0)) { showToast('Enter a valid monthly amount'); return; }
+  if (!(totalMonths >= 1)) { showToast('Total months must be 1 or more'); return; }
+  if (alreadyPaid < 0 || alreadyPaid > totalMonths) { showToast('Months already paid must be between 0 and the total'); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
     showToast('Pick a valid start date'); return;
   }
@@ -31133,8 +31419,8 @@ function openEditInstallment(instId) {
     .filter(Boolean);
   const linkedHtml = linkedTxs.length > 0
     ? `<div style="background:var(--green-bg,#0f3a2a);border:1px solid var(--green);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">✓ ${linkedTxs.length} Linked Transaction${linkedTxs.length>1?'s':''}</div>
-        ${linkedTxs.slice(0,5).map(t => `<div style="font-size:11px;color:var(--text2);padding:3px 0;display:flex;justify-content:space-between"><span>${t.date}</span><span>${fmt(t.amount, t.currency||_homeBase())}</span></div>`).join('')}
+        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">Linked payments · ${linkedTxs.length}</div>
+        ${linkedTxs.slice(0,5).map(t => `<div style="font-size:11px;color:var(--text2);padding:3px 0;display:flex;justify-content:space-between"><span>${fmtDFull(t.date) /* PSS #598: dates read Apr 29, 2026 everywhere */}</span><span>${fmt(t.amount, t.currency||_homeBase())}</span></div>`).join('')}
         ${linkedTxs.length > 5 ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">+${linkedTxs.length - 5} more</div>` : ''}
         <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:11px;width:100%" onclick="unlinkAllInstallmentTxs('${instId}')">Unlink all</button>
       </div>`
@@ -31220,6 +31506,9 @@ function saveEditInstallment(instId) {
   const inst = db.installments.find(i => i.id === instId);
   if (!inst) return;
   if (document.getElementById('einst-total') && !(parseInt(document.getElementById('einst-total').value) >= 1)) { showToast('Total months must be 1 or more'); return; } // PLS #552: checked before anything changes
+  { const _a = document.getElementById('einst-amount')?.value, _p = parseInt(document.getElementById('einst-paid')?.value) || 0, _t = parseInt(document.getElementById('einst-total')?.value) || inst.totalMonths; // PLS #611
+    if (_a !== undefined && _a !== '' && !(Math.round(parseFloat(_a) * 100) / 100 > 0)) { showToast('Enter a valid monthly amount'); return; }
+    if (_p < 0 || _p + (inst.paidMonths || 0) > _t) { showToast('Months already paid must be between 0 and the total'); return; } }
   inst.name = document.getElementById('einst-name')?.value?.trim() || inst.name;
   const newIcon = document.getElementById('einst-emoji-display')?.textContent?.trim();
   if (newIcon) inst.icon = newIcon;
