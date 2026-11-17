@@ -1952,11 +1952,13 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .tbc-dot{display:block;width:16px;height:16px;border-radius:50%;background:var(--accent)}
 .tbc-lbl{font-size:11px;font-weight:500;color:var(--text3);margin:10px 2px 6px}
 .tbc-lbl:first-child{margin-top:0}
-.tbc-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
-.tbc-sw{display:flex;flex-direction:column;align-items:center;gap:5px;background:transparent;border:1px solid transparent;border-radius:12px;padding:7px 2px 6px;color:var(--text2);font-size:11px;font-weight:500;min-width:0}
-.tbc-sw span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbc-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px} /* PSS #664: 6 a row */
+.tbc-sw{display:flex;flex-direction:column;align-items:center;gap:5px;background:transparent;border:1px solid transparent;border-radius:12px;padding:7px 0 6px;color:var(--text2);font-size:10.5px;letter-spacing:-.1px;font-weight:500;min-width:0}
+.tbc-sw span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.25;text-align:center}
+.tbc-grid{margin:0 -12px;gap:0} @media(max-width:359px){.tbc-sw{font-size:9.5px;letter-spacing:-.2px}}
+.tbc-sw em{font-style:normal;font-size:10px;color:var(--text3);font-weight:400}
 .tbc-sw.on{border-color:var(--accent);background:var(--accent-bg);color:var(--text);font-weight:600}
-.tbc-sw i{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff}
+.tbc-sw i{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" defer></script><!-- PLS #473: CORS load so sw.js can keep a copy for offline Excel export -->
 </head>
@@ -6361,7 +6363,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '18'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '19'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6372,7 +6374,7 @@ const APP_CHANGELOG = [
     '🔍 Page heading stays sharp on newer iPhones (the heading is now fixed at the top), and the top bar matches the heading color', // PSS #661-#663
     '🔍 A very long category name no longer pushes the Dashboard sideways', // PSS #659, #660
     '🔄 Theme color syncs: pick it on one device and your other devices follow after a sync. Light or Dark stays per device', // PLS #658
-    '🌈 Theme color: pick from 30 colors in Settings, General, Theme color. Buttons, rings, the balance card and light mode tints all follow it', // PSS #657
+    '🌈 Theme color: pick from 36 colors in Settings, General, Theme color. Buttons, rings, the balance card and light mode tints all follow it', // PSS #657
     '📐 Tighter top on the Dashboard: less space above and below the greeting', // PSS #656
     '🎨 New Dashboard look: crystal mosaic on the balance card, Income, Spent and Kept as tiles, Budgets and goals in one card with rings, Kept each month chart, Recent grouped by day', // PSS #655
     '🔄 Sync keeps the installment months you typed in when both devices changed the same installment', // PLS #654
@@ -29383,36 +29385,42 @@ function _syncThemeColor() {
 // re-tints every purple in the style sheet (buttons, rings, sidebar, hero mosaic, light-mode tints and borders) by the
 // same hue turn, so shades keep their place relative to each other. Edits the loaded rules in place (cascade untouched);
 // the original values are kept so switching back is exact. The choice is saved with the data and synced (PLS #658).
-const TB_ACCENTS = [
-  { id:'purple', name:'Purple', hex:'#7c6df0', group:'Purples' },
+const TB_ACCENTS = [ // PSS #664: 36 colors, each group lightest on the left to darkest on the right
+  { id:'lilac', name:'Lilac', hex:'#c19af0', group:'Purples' },
   { id:'lavender', name:'Lavender', hex:'#a084f5', group:'Purples' },
+  { id:'purple', name:'Purple', hex:'#7c6df0', group:'Purples' },
   { id:'violet', name:'Violet', hex:'#8b3ff0', group:'Purples' },
   { id:'grape', name:'Grape', hex:'#6a2fb8', group:'Purples' },
-  { id:'lilac', name:'Lilac', hex:'#c19af0', group:'Purples' },
-  { id:'indigo', name:'Indigo', hex:'#5458e0', group:'Blues' },
-  { id:'blue', name:'Blue', hex:'#3b7cf0', group:'Blues' },
+  { id:'plum', name:'Plum', hex:'#7a2f6e', group:'Purples' },
+  { id:'iris', name:'Iris', hex:'#8c9cf5', group:'Blues' },
   { id:'sky', name:'Sky', hex:'#1aa3e8', group:'Blues' },
-  { id:'navy', name:'Navy', hex:'#2a4aa8', group:'Blues' },
+  { id:'blue', name:'Blue', hex:'#3b7cf0', group:'Blues' },
   { id:'denim', name:'Denim', hex:'#4a6fa5', group:'Blues' },
-  { id:'teal', name:'Teal', hex:'#16ada2', group:'Greens' },
+  { id:'indigo', name:'Indigo', hex:'#5458e0', group:'Blues' },
+  { id:'navy', name:'Navy', hex:'#2a4aa8', group:'Blues' },
+  { id:'lime', name:'Lime', hex:'#7cc21c', group:'Greens' },
   { id:'mint', name:'Mint', hex:'#2cc4a0', group:'Greens' },
   { id:'cyan', name:'Cyan', hex:'#0fb5d0', group:'Greens' },
-  { id:'lime', name:'Lime', hex:'#7cc21c', group:'Greens' },
+  { id:'teal', name:'Teal', hex:'#16ada2', group:'Greens' },
   { id:'sage', name:'Sage', hex:'#7a9a7e', group:'Greens' },
+  { id:'olive', name:'Olive', hex:'#7d8a2a', group:'Greens' },
+  { id:'peach', name:'Peach', hex:'#f5a07a', group:'Warm' },
   { id:'gold', name:'Gold', hex:'#e3a008', group:'Warm' },
   { id:'orange', name:'Orange', hex:'#ee7b30', group:'Warm' },
-  { id:'peach', name:'Peach', hex:'#f5a07a', group:'Warm' },
   { id:'coral', name:'Coral', hex:'#f0685a', group:'Warm' },
   { id:'rust', name:'Rust', hex:'#b7502a', group:'Warm' },
-  { id:'rose', name:'Rose', hex:'#e14a80', group:'Pinks' },
-  { id:'pink', name:'Pink', hex:'#ef5fa7', group:'Pinks' },
+  { id:'brick', name:'Brick', hex:'#a0402e', group:'Warm' },
+  { id:'blush', name:'Blush', hex:'#f4a0bf', group:'Pinks' },
   { id:'candy', name:'Candy', hex:'#ff7fc4', group:'Pinks' },
+  { id:'pink', name:'Pink', hex:'#ef5fa7', group:'Pinks' },
+  { id:'rose', name:'Rose', hex:'#e14a80', group:'Pinks' },
   { id:'magenta', name:'Magenta', hex:'#c23fd6', group:'Pinks' },
   { id:'wine', name:'Wine', hex:'#a3264f', group:'Pinks' },
+  { id:'sand', name:'Sand', hex:'#b59b78', group:'Neutrals' },
+  { id:'steel', name:'Steel', hex:'#7c8a99', group:'Neutrals' },
+  { id:'mocha', name:'Mocha', hex:'#9b6a4e', group:'Neutrals' },
   { id:'graphite', name:'Graphite', hex:'#6b7280', group:'Neutrals' },
   { id:'slate', name:'Slate', hex:'#4f6475', group:'Neutrals' },
-  { id:'mocha', name:'Mocha', hex:'#9b6a4e', group:'Neutrals' },
-  { id:'sand', name:'Sand', hex:'#b59b78', group:'Neutrals' },
   { id:'charcoal', name:'Charcoal', hex:'#3a3a44', group:'Neutrals' },
 ];
 function _tbHsl(r, g, b) {
@@ -29512,7 +29520,7 @@ function openAccentPicker() {
   const cur = _tbAccent().id;
   const groups = [...new Set(TB_ACCENTS.map(a => a.group))];
   openDlg('Theme color', groups.map(g => `<div class="tbc-lbl">${g}</div><div class="tbc-grid">${TB_ACCENTS.filter(a => a.group === g).map(a =>
-    `<button class="tbc-sw${cur === a.id ? ' on' : ''}" onclick="applyAccent('${a.id}');closeDlg();renderSettings()"><i style="background:${a.hex}">${cur === a.id ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' : ''}</i><span>${a.name}</span></button>`).join('')}</div>`).join(''), '');
+    `<button class="tbc-sw${cur === a.id ? ' on' : ''}" onclick="applyAccent('${a.id}');closeDlg();renderSettings()"><i style="background:${a.hex}">${cur === a.id ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' : ''}</i><span>${a.name}${a.id === 'purple' ? '<br><em>(default)</em>' : ''}</span></button>`).join('')}</div>`).join(''), '');
 }
 try {
   if (db && db.settings && !db.settings.accent) { const old = localStorage.getItem('tb_accent'); if (old && old !== 'purple' && TB_ACCENTS.some(a => a.id === old)) { db.settings.accent = old; saveDBWithSync(); } } // PLS #658
