@@ -1940,8 +1940,13 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
    the heading on phones and tablets, so Safari treats the top as a solid bar. It is the same color, so nothing looks different. */
 #tb-topcap{display:none}
 @media(max-width:1023px){
-  #tb-topcap{display:block;position:fixed;left:0;right:0;top:0;height:calc(52px + env(safe-area-inset-top, 0px));background:var(--bg2);z-index:1;pointer-events:none}
+  #tb-topcap{display:block;position:fixed;left:0;right:0;top:0;height:calc(52px + env(safe-area-inset-top, 0px));background:var(--bg2);z-index:1;pointer-events:none} /* PSS #662: heading colour; the phone's top bar uses the same colour (his ask: white like the header, was grey) */
   #page-header{position:relative;z-index:2}
+  /* PSS #663 (his report: the blur still came back sometimes): the strip behind the heading was not always enough, so the heading
+     itself is now the fixed bar at the top edge (what Safari looks for), and the page starts just under it. Same look. */
+  #tb-topcap{display:none}
+  #page-header{position:fixed;top:0;left:0;right:0;z-index:100}
+  #main{padding-top:calc(52px + env(safe-area-inset-top, 0px))}
 }
 /* PSS #657: theme color picker */
 .tbc-dot{display:block;width:16px;height:16px;border-radius:50%;background:var(--accent)}
@@ -6356,7 +6361,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '17'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '18'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6364,7 +6369,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
-    '🔍 Page heading stays sharp on newer iPhones (the top edge is a solid bar now)', // PSS #661
+    '🔍 Page heading stays sharp on newer iPhones (the heading is now fixed at the top), and the top bar matches the heading color', // PSS #661-#663
     '🔍 A very long category name no longer pushes the Dashboard sideways', // PSS #659, #660
     '🔄 Theme color syncs: pick it on one device and your other devices follow after a sync. Light or Dark stays per device', // PLS #658
     '🌈 Theme color: pick from 30 colors in Settings, General, Theme color. Buttons, rings, the balance card and light mode tints all follow it', // PSS #657
@@ -29369,7 +29374,8 @@ new MutationObserver(() => requestAnimationFrame(() => document.querySelectorAll
 function _syncThemeColor() {
   const m = document.querySelector('meta[name="theme-color"]');
   if (!m) return;
-  const bg = (getComputedStyle(document.documentElement).getPropertyValue('--bg') || '').trim() || '#0b0b11';
+  // PSS #662 (his ask, Nov 17): the phone's top bar is the heading's color (white in Light), one solid band with the heading
+  const bg = (getComputedStyle(document.documentElement).getPropertyValue('--bg2') || '').trim() || '#0b0b11';
   m.setAttribute('content', bg);
 }
 
@@ -29498,6 +29504,7 @@ function applyAccent(id) {
   _tbAcc = a.id === 'purple' ? null : _tbLch(parseInt(a.hex.slice(1, 3), 16), parseInt(a.hex.slice(3, 5), 16), parseInt(a.hex.slice(5, 7), 16));
   for (const x of _tbSpots) x.st.setProperty(x.p, _tbAcc ? _tbRecolor(x.v) : x.v, x.pr);
   document.documentElement.setAttribute('data-accent', a.id);
+  try { _syncThemeColor(); } catch (e) {} // PSS #662: the phone's top bar color follows the theme color too
 }
 // for colours written by the app's own drawing code (heatmaps, small charts): pass the purple, get the theme colour
 function _tbC(c) { return _tbAcc ? _tbRecolor(c) : c; }
