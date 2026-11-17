@@ -1948,6 +1948,25 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
   #page-header{position:fixed;top:0;left:0;right:0;z-index:100}
   #main{padding-top:calc(52px + env(safe-area-inset-top, 0px))}
 }
+/* PSS #665 (his pick, Nov 17): one set of moves for the whole app, quick but smooth.
+   Popups: fade and a small zoom (0.2 s, no bounce). Changing section from the sidebar: fade with a small rise (0.18 s).
+   Going into a report or a Settings page: slides in from the right; the back arrow slides it back from the left (0.22 s). */
+.sheet{transform:translate(-50%,-50%) scale(.96);transition:transform .2s cubic-bezier(.2,.8,.2,1),opacity .2s cubic-bezier(.2,.8,.2,1)}
+.sheet.open{transform:translate(-50%,-50%) scale(1)}
+.sheet.rv-shell{transform:translate(-50%,-50%) scale(.96)!important}
+.sheet.rv-shell.open{transform:translate(-50%,-50%) scale(1)!important}
+.dlg{transform:scale(.96);opacity:0;transition:transform .2s cubic-bezier(.2,.8,.2,1),opacity .2s cubic-bezier(.2,.8,.2,1)}
+.dlg-overlay.open .dlg{transform:scale(1);opacity:1}
+.overlay,.dlg-overlay{transition:opacity .2s cubic-bezier(.2,.8,.2,1)}
+.overlay:not(.open),.dlg-overlay:not(.open){transition:opacity .2s cubic-bezier(.2,.8,.2,1),visibility 0s linear .2s}
+.page-anim{animation:none}
+#page-content.pga-fade{animation:pgaFade .18s cubic-bezier(.2,.8,.2,1)}
+#page-content.pga-right{animation:pgaRight .22s cubic-bezier(.2,.8,.2,1)}
+#page-content.pga-left{animation:pgaLeft .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes pgaFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pgaRight{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+@keyframes pgaLeft{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){ #page-content.pga-fade,#page-content.pga-right,#page-content.pga-left{animation:none} }
 /* PSS #657: theme color picker */
 .tbc-dot{display:block;width:16px;height:16px;border-radius:50%;background:var(--accent)}
 .tbc-lbl{font-size:11px;font-weight:500;color:var(--text3);margin:10px 2px 6px}
@@ -4538,6 +4557,12 @@ function _dashWidgetHTML(id, mk, disp) {
   return `<div style="margin-bottom:16px"><div class="section-hdr"><div class="section-title">${DASH_SECTION_LABELS[id]||''}${_hdrIcons}</div><span class="section-action" onclick="nav('analytics')">Open</span></div>${inner}</div>`;
 }
 
+// PSS #665: plays one page move on the page area (fade, right = going in, left = going back); a new move restarts it
+function _pgAnim(kind) {
+  const pc = document.getElementById('page-content'); if (!pc) return;
+  pc.classList.remove('pga-fade', 'pga-right', 'pga-left'); void pc.offsetWidth; pc.classList.add('pga-' + kind);
+  clearTimeout(pc._pgaT); pc._pgaT = setTimeout(() => pc.classList.remove('pga-' + kind), 300);
+}
 function nav(page) {
   const fn = { dashboard:renderDashboard, insights:renderInsights /* PSS #353 */, analytics:renderAnalytics, installments:renderInstallments, transactions:renderTransactions, reimbursements:renderReimbursementsPage, accounts:renderAccounts, investments:renderInvestmentsPage, loans:renderLoans, planning:renderPlanning, settings:renderSettings };
   // PSS #199: unknown/retired page ids (e.g. a stale 'ai' in tb_last_page after the AI Insights
@@ -4580,6 +4605,7 @@ function nav(page) {
   content.innerHTML = '';
   content.scrollTop = 0;
   fn[page]();
+  _pgAnim(window._pgDir || 'fade'); window._pgDir = null; // PSS #665
 }
 
 // PLS #132 family: shared theme-glyph SVGs — used by renderPageHeader AND setThemeMode
@@ -6363,7 +6389,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '19'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '20'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6371,6 +6397,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '✨ Smoother moves: popups fade and zoom, sections fade in, reports and Settings pages slide in and back', // PSS #665
     '🔍 Page heading stays sharp on newer iPhones (the heading is now fixed at the top), and the top bar matches the heading color', // PSS #661-#663
     '🔍 A very long category name no longer pushes the Dashboard sideways', // PSS #659, #660
     '🔄 Theme color syncs: pick it on one device and your other devices follow after a sync. Light or Dark stays per device', // PLS #658
@@ -17799,9 +17826,11 @@ function attachAnalyticsSwipe() {
 }
 
 function setAnalyticsTab(t) {
+  const _fromBrowse = _anHome, _swiped = window._analyticsSwipeDir && window._analyticsSwipeDir !== 'none'; // PSS #665: from Browse slides in; a Related chip fades; a swipe keeps its own slide
   _analyticsTab = t;
   _anHome = false; // PSS #317: opening a report leaves the Browse list
   renderAnalytics();
+  if (!_swiped) _pgAnim(_fromBrowse ? 'right' : 'fade');
 }
 // -- PERSONAL STRUCTURE SET #317 -- Analytics opens on a BROWSE list (Apple Health > Browse, iOS
 // Settings): every report, grouped by what it answers, with one line on what is inside. Tapping a
@@ -17825,13 +17854,13 @@ function analyticsBack() {
   const r = _anReturn;
   if (r) { // PSS #416: one tap back to where the report was opened from
     _anReturn = null;
-    nav(r.page);
+    window._pgDir = 'left'; nav(r.page); // PSS #665
     if (r.page === 'insights' && r.insMk) { _insMk = r.insMk; renderInsights(); }
     const pc = document.getElementById('page-content');
     if (pc) requestAnimationFrame(() => { pc.scrollTop = r.scroll; });
     return;
   }
-  _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0);
+  _anHome = true; renderAnalytics(); window.scrollTo && window.scrollTo(0, 0); _pgAnim('left'); // PSS #665
 }
 const _AN_SECTIONS = [
   { title:'',          keys:['overview'] }, // PSS #353: AI Summary moved out to its own page, Insights
@@ -23547,7 +23576,7 @@ function renderSettings() {
 
 let _setWasWide = window.innerWidth >= 900; // PSS #359
 window.addEventListener('resize', () => { const w = window.innerWidth >= 900; if (_setWasWide !== null && w !== _setWasWide && typeof currentPage !== 'undefined' && currentPage === 'settings') renderSettings(); _setWasWide = w; });
-function setSettingsTab(t) { _settingsTab=t; renderSettings(); const pc=document.getElementById('page-content'); if (pc) pc.scrollTop=0; window.scrollTo && window.scrollTo(0,0); }
+function setSettingsTab(t) { const _was=_settingsTab; _settingsTab=t; renderSettings(); if (_was!==t) _pgAnim(innerWidth >= 1024 ? 'fade' : (t==='home' ? 'left' : 'right')); /* PSS #665 */ const pc=document.getElementById('page-content'); if (pc) pc.scrollTop=0; window.scrollTo && window.scrollTo(0,0); }
 
 // -- PERSONAL STRUCTURE SET #334 -- Settings follows iOS Settings conventions (owner's ask). Every tab is
 // built from the same three pieces, reusing the app's grouped list (lp-sec / lp-grp / lp-row):
