@@ -193,6 +193,17 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .acp-empty{padding:18px 16px;font-size:13px;color:var(--text3);text-align:center}
 /* PSS #534: Paid by someone who owes you (PLS #533) -- the hint under the card and the ask when the bill is more than they owe */
 .pb-sec{font-size:12px;font-weight:500;color:var(--text3);padding:12px 16px 4px}
+#pb-overlay .acp-list{padding:2px 12px 8px}
+#pb-overlay .pb-sec{display:flex;align-items:center;gap:8px;padding:16px 4px 6px;font-size:12px;font-weight:600;color:var(--text2)}
+#pb-overlay .pb-dot{width:8px;height:8px;border-radius:50%;flex:none}
+#pb-overlay .pb-grp{background:var(--bg3);border-radius:12px;overflow:hidden}
+#pb-overlay .pb-grp .acp-row{padding:8px 14px}
+#pb-overlay .pb-grp .acp-row + .acp-row{box-shadow:inset 14px 0 0 var(--bg3),inset 0 1px 0 var(--border)}
+#pb-overlay .pb-grp .acp-row:hover{background:var(--bg4);box-shadow:none}
+#pb-overlay .acp-empty{padding:14px}
+:root:not([data-theme="light"]) #pb-overlay .pb-grp{background:var(--bg4)}
+:root:not([data-theme="light"]) #pb-overlay .pb-grp .acp-row + .acp-row{box-shadow:inset 14px 0 0 var(--bg4),inset 0 1px 0 var(--border)}
+:root:not([data-theme="light"]) #pb-overlay .pb-grp .acp-row:hover{background:var(--bg5)}
 .pb-hint{font-size:11px;color:var(--text3);margin:-6px 4px 12px;line-height:1.45}
 .pb-ask{background:var(--bg3);border-radius:16px;padding:14px 16px;margin:0 0 14px}
 .pb-t{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px}
@@ -6426,7 +6437,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '23'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '24'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6434,6 +6445,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🗂️ Who paid? shows Me, Loans and Reimbursements in their own boxes', // PSS #676
     '🤝 Paid by: people who owe you on shared bills are listed too, apart from loans. What they pay for you comes off those bills, and anything over what they owe counts as your gain', // PLS #675
     '🔒 Budget plan: changing one amount changes only that row; locked rows stand out, and the limit is changed in its own row at the top without moving any row', // PLS/PSS #667
     '➗ Budget plan: Top up to usual fills unlocked rows up to the biggest of what you usually spend, a monthly bill, or what is already spent this month, marked in green', // PLS #668 / #669 / #671
@@ -7932,10 +7944,10 @@ function _pbOpen(forEdit) {
   if (_e && _e.orig) { const L = (_e.origKind || 'loan') === 'reimb' ? rPeople : people; if (!L.includes(_e.orig)) L.unshift(_e.orig); } // PLS #675
   const ov = document.createElement('div'); ov.id = 'pb-overlay'; ov.className = 'gz-pick-overlay';
   ov.innerHTML = `<div class="gz-pick-panel acp-panel" role="dialog" aria-label="Who paid"><div class="acp-head"><span class="gz-pick-title">Who paid?</span><button type="button" class="sheet-close" aria-label="Close" onclick="_pbClose()">✕</button></div>
-    <div class="acp-list">${row('', 'Me', 'From one of your accounts', '')}
-    ${people.length ? `<div class="pb-sec">Loans</div>${people.map(p => row(p, p, 'Owes you on loans', _esc(_pbOwedStr(p)), 'loan')).join('')}` : ''}
-    ${rPeople.length ? `<div class="pb-sec">Reimbursements</div>${rPeople.map(p => row(p, p, 'Owes you on shared bills', _esc(_pbOwedStr(p, 'reimb')), 'reimb')).join('')}` : ''}
-    ${people.length || rPeople.length ? '' : '<div class="pb-sec">Someone who owes you</div><div class="acp-empty">Nobody owes you right now</div>'}</div></div>`;
+    <div class="acp-list"><div class="pb-grp">${row('', 'Me', 'From one of your accounts', '')}</div>
+    ${people.length ? `<div class="pb-sec"><span class="pb-dot" style="background:var(--amber)"></span>Loans</div><div class="pb-grp">${people.map(p => row(p, p, 'Owes you', _esc(_pbOwedStr(p)), 'loan')).join('')}</div>` : ''}
+    ${rPeople.length ? `<div class="pb-sec"><span class="pb-dot" style="background:var(--blue)"></span>Reimbursements</div><div class="pb-grp">${rPeople.map(p => row(p, p, 'Owes you', _esc(_pbOwedStr(p, 'reimb')), 'reimb')).join('')}</div>` : ''}
+    ${people.length || rPeople.length ? '' : '<div class="pb-sec">Someone who owes you</div><div class="pb-grp"><div class="acp-empty">Nobody owes you right now</div></div>'}</div></div>`; // PSS #676
   ov.addEventListener('click', e => {
     const r = e.target.closest('.acp-row');
     if (r) { forEdit ? _pbEditPick(r.dataset.p || null, r.dataset.k) : _pbPick(r.dataset.p || null, r.dataset.k); _pbClose(); return; } // PLS #537, #675
