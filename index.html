@@ -6092,7 +6092,7 @@ function renderDashboard() {
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false; // PSS #545: profit and rate change rows show, as in Transactions
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && (!t.isFxRealized || _glParentLive(t))) return false; // PSS #545: profit and rate change rows show, as in Transactions
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,16); // PLS #399: PC fills its taller column; phones still show 8 (CSS)
   // PSS #655: a small date line above each day's entries (the date under every row is hidden); entries 9+ show only where the column is tall (computer)
@@ -6437,7 +6437,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '25'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '26'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6445,6 +6445,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🔗 Loan profit and Rate change sit under their payment again (its pill shows them), still counted in every total', // PLS #678
     '🏷️ Transactions: a gain or loss on a transfer or a reimbursement shows as a pill beside its name, like loan payments', // PSS #677
     '🗂️ Who paid? shows Me, Loans and Reimbursements in their own boxes', // PSS #676
     '🤝 Paid by: people who owe you on shared bills are listed too, apart from loans. What they pay for you comes off those bills, and anything over what they owe counts as your gain', // PLS #675
@@ -7086,12 +7087,14 @@ function invReturnNestedHTML(tx) {
 // parent transaction. Reused by both the regular-transfer early-return row AND the fall-through
 // row, so cross-currency transfers nest their linked children just like batch settlements do.
 // PSS #677: gain or loss children of an entry as one pill per currency (green gain, red loss)
+// PLS #678: a Loan profit / Rate change row hides under its payment only while that payment is there
+function _glParentLive(t) { return db.transactions.some(p => p.id === t.parentId && !p.archived); }
 function _isGLChild(t) { return t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex; }
 function _glPill(tx) {
   if (tx.isLoanPayment || tx.isBatchSettlement) return ''; // those have their own pill (PSS #548)
   const by = {};
   for (const t of db.transactions) {
-    if (t.archived || t.parentId !== tx.id || !_isGLChild(t)) continue;
+    if (t.archived || !(t.parentId === tx.id || (tx.inKindPayId && t.parentId === tx.inKindPayId)) || !_isGLChild(t)) continue; // PLS #678: Paid by
     const c = t.currency || _homeBase(); by[c] = (by[c] || 0) + (t.type === 'income' ? 1 : -1) * (Number(t.amount) || 0);
   }
   return Object.entries(by).map(([c, v]) => { v = roundMoney(v, c); if (Math.abs(v) < 0.005) return '';
@@ -7104,7 +7107,7 @@ function _nameWithPill(name, tx) {
 function buildLinkedChildrenHTML(tx) {
   let genericChildrenHTML = '';
   if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
-    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isAutoFee || t.isInvestmentReturn)); // PSS #677: gains and losses are a pill now
+    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && t.isAutoFee); // PSS #677: gains and losses are a pill now; PLS #678: a sale has its own card above
     if (directChildren.length > 0) {
       const breakdownId = 'genbreak-' + tx.id;
       const forexC = directChildren.find(c => c.isAutoForex);
@@ -10238,7 +10241,7 @@ function renderTxLog() {
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
     // PLS #544 (his ask, Nov 5 "sa txn din sana"): a loan's Profit and Rate change are their own rows here.
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false;
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && (!t.isFxRealized || _glParentLive(t))) return false;
     // Investment fund/return txns: show in tx log but bypass type filter only (capital movement doesn't fit standard types).
     // Still respect: account filter, search, quick filters (large/foreign/no notes), date range.
     // -- PERSONAL LOGIC SET #226 -- Investment fund/return txs used to bypass the type filter
@@ -10326,6 +10329,7 @@ function renderTxLog() {
     // PLS #497: the day's net uses the SAME rules as the monthly totals (FX gains, write-offs, investment
     // results count; loans and settlements do not), already in the display currency, so the days add up to the month
     const _dIds = new Set(dayTxs.map(t => t.id));
+    db.transactions.forEach(t => { if (t.inKindExpId && _dIds.has(t.inKindExpId)) _dIds.add(t.id); }); // PLS #678: the payment behind a Paid by expense
     db.transactions.forEach(t => { if (t.date === date && t.parentId && _dIds.has(t.parentId)) _dIds.add(t.id); }); // linked FX gain/loss shown inside its parent row
     const dayNet = getMonthTotals(date.slice(0, 7), 0, _dIds).net;
     txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:11px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${fmt(dayNet, _displayCurrency(), true)}</span></div>`; // PLS #314: day net with its currency and centavos (was "-283" for -PHP 282.64)
@@ -10931,6 +10935,8 @@ function openTxDetail(txId) {
       ${loan?.personName?`<div class="detail-row"><div class="detail-label">Person</div><div class="detail-value">${_esc(loan.personName)}</div></div>`:''}
       <div class="detail-row"><div class="detail-label">Date</div><div class="detail-value">${fmtDFull(tx.date)} ${txTimeStr(tx)}</div></div>
       ${tx.notes?`<div class="detail-row"><div class="detail-label">Notes</div><div class="detail-value">${_esc(_noteShow(tx.notes))}</div></div>`:''}
+      ${db.transactions.filter(c => !c.archived && c.parentId === tx.id && (c.isLoanSettlementGain || c.isLoanSettlementLoss)).map(c => { const d = txAmountDisplay(c); // PLS #678
+        return `<div class="detail-row" style="cursor:pointer" onclick="closeDlg();setTimeout(()=>openTxDetail('${c.id}'),50)"><div class="detail-label">${_esc(_stripIcon(txCategoryDisplay(c).name))}</div><div class="detail-value ${d.cls}" style="font-family:var(--mono)">${d.str} ›</div></div>`; }).join('')}
       <div style="margin-top:10px;font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Manage this from the loan in Loans.</div>`,
       `<button class="btn btn-ghost btn-sm" onclick="closeDlg();nav('loans')">Go to loans</button>`
     );
@@ -11283,7 +11289,8 @@ function openTxDetail(txId) {
       const cAmtD = txAmountDisplay(c);
       const cCat = txCategoryDisplay(c);
       let childLabel;
-      if (c.isLoanSettlementGain) childLabel = 'Loan settlement gain';
+      if (c.isFxRealized) childLabel = _esc(_stripIcon(cCat.name)); // PLS #678: Loan profit / Rate change by name
+      else if (c.isLoanSettlementGain) childLabel = 'Loan settlement gain';
       else if (c.isLoanSettlementLoss) childLabel = 'Loan settlement loss';
       else if (c.isReimbSettlementGain) childLabel = 'Reimbursement gain';
       else if (c.isReimbSettlementLoss) childLabel = 'Reimbursement loss';
@@ -13966,7 +13973,7 @@ function openAcctDetail(acctId) {
     // ── PERSONAL LOGIC SET #11 ── Hide isAutoForex gain/loss children from the main tx log;
     // they appear nested under their parent transfer (PLS #31). Still counted in monthly totals (PLS #47).
     if (t.isAutoForex && t.parentId) return false;
-    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return false; // PSS #545: profit and rate change rows show, as in Transactions
+    if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && (!t.isFxRealized || _glParentLive(t))) return false; // PSS #545: profit and rate change rows show, as in Transactions
     return true;
   }).sort((b,c)=>c.date.localeCompare(b.date)).slice(0,5);
 
@@ -18413,7 +18420,7 @@ function openCalDay(dateStr) {
         if (t.inKindExpId) return ''; // PLS #533
         if (t.isAutoReimb && !t.isBatchReimbSettlement) return '';
         if (t.isFeeReimbursable) return '';
-        if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && !t.isFxRealized) return ''; // PSS #545
+        if ((t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss) && t.parentId && !t.writeOffReason && (!t.isFxRealized || _glParentLive(t))) return ''; // PSS #545
         // Category name via the canonical resolver (handles subcategories + 3-tier fallback).
         // Previously looked up the wrong tx field (catId instead of categoryId), so it was always blank.
         const catName = t.type === 'transfer' ? 'Transfer' : txCategoryDisplay(t).name;
