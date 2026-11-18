@@ -6437,7 +6437,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '24'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '25'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6445,6 +6445,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🏷️ Transactions: a gain or loss on a transfer or a reimbursement shows as a pill beside its name, like loan payments', // PSS #677
     '🗂️ Who paid? shows Me, Loans and Reimbursements in their own boxes', // PSS #676
     '🤝 Paid by: people who owe you on shared bills are listed too, apart from loans. What they pay for you comes off those bills, and anything over what they owe counts as your gain', // PLS #675
     '🔒 Budget plan: changing one amount changes only that row; locked rows stand out, and the limit is changed in its own row at the top without moving any row', // PLS/PSS #667
@@ -7084,10 +7085,26 @@ function invReturnNestedHTML(tx) {
 // Builds the nested "Linked · N" accordion (forex gain/loss + fee + settlement children) for a
 // parent transaction. Reused by both the regular-transfer early-return row AND the fall-through
 // row, so cross-currency transfers nest their linked children just like batch settlements do.
+// PSS #677: gain or loss children of an entry as one pill per currency (green gain, red loss)
+function _isGLChild(t) { return t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex; }
+function _glPill(tx) {
+  if (tx.isLoanPayment || tx.isBatchSettlement) return ''; // those have their own pill (PSS #548)
+  const by = {};
+  for (const t of db.transactions) {
+    if (t.archived || t.parentId !== tx.id || !_isGLChild(t)) continue;
+    const c = t.currency || _homeBase(); by[c] = (by[c] || 0) + (t.type === 'income' ? 1 : -1) * (Number(t.amount) || 0);
+  }
+  return Object.entries(by).map(([c, v]) => { v = roundMoney(v, c); if (Math.abs(v) < 0.005) return '';
+    return `<span class="lp-pill ${v > 0 ? 'gain' : 'wo'}">${v > 0 ? '+' : '−'}${fmt(Math.abs(v), c)}</span>`; }).join('');
+}
+function _nameWithPill(name, tx) {
+  const p = _glPill(tx);
+  return p ? `<div class="tx-name" style="display:flex;align-items:center;gap:6px;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>${p}</div>` : `<div class="tx-name">${name}</div>`;
+}
 function buildLinkedChildrenHTML(tx) {
   let genericChildrenHTML = '';
   if (!tx.isLoanTx && !tx.isLoanPayment && tx.type !== 'shared') {
-    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isLoanSettlementGain || t.isLoanSettlementLoss || t.isReimbSettlementGain || t.isReimbSettlementLoss || t.isAutoForex || t.isAutoFee || t.isInvestmentReturn));
+    const directChildren = db.transactions.filter(t => !t.archived && t.parentId === tx.id && (t.isAutoFee || t.isInvestmentReturn)); // PSS #677: gains and losses are a pill now
     if (directChildren.length > 0) {
       const breakdownId = 'genbreak-' + tx.id;
       const forexC = directChildren.find(c => c.isAutoForex);
@@ -7285,7 +7302,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
       <div class="tx-icon tx-icon-transfer">${'↔️'}</div>
       <div class="tx-meta">
-        <div class="tx-name">Transfer</div>
+        ${_nameWithPill('Transfer', tx)}
         <div class="tx-detail"><span class="acct-pill">${_esc(from.name)}</span> → <span class="acct-pill">${_esc(to.name)}</span>${tx.notes?' · '+_esc(_noteShow(tx.notes)):''}</div>
       </div>
       <div class="tx-right">
@@ -7490,9 +7507,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
     const gainChild = db.transactions.find(t => !t.archived && t.parentId === tx.id && t.isReimbSettlementGain);
     if (linkedTxs.length > 0 || gainChild) {
       const breakdownId = 'batchparentreimb-' + tx.id;
-      const childBadge = gainChild
-        ? `<span class="pill" style="font-size:11px;padding:1px 8px;background:var(--green-bg);color:var(--green)">+${fmt(gainChild.amount,gainChild.currency)} gain</span>`
-        : '';
+      const childBadge = ''; // PSS #677: the gain is the pill beside the name
       const linkedRows = linkedTxs.map(lx => {
         const cat = getCategoryDisplay(lx.categoryId);
         return `<div onclick="event.stopPropagation();openTxDetail('${lx.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);cursor:pointer">
@@ -7519,7 +7534,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
           <svg id="${breakdownId}-arrow" width="10" height="6" viewBox="0 0 12 8" fill="none" style="transition:transform 0.2s;flex-shrink:0;opacity:0.5;transform:rotate(0deg)"><path d="M1 1l5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div id="${breakdownId}" style="display:none;padding:0 12px;border-top:1px solid var(--border)">
-          ${linkedRows}${gainRow}
+          ${linkedRows}
         </div>
       </div>`;
     }
@@ -7528,7 +7543,7 @@ function renderTxRowBody(tx, showDate, acct, amtD) {
   return `<div class="tx-item" onclick="if(_txBulkMode)return;openTxDetail('${tx.id}')">
     <div class="tx-icon tx-icon-${tx.type}">${cat.icon}</div>
     <div class="tx-meta">
-      <div class="tx-name">${_esc(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name))}</div>
+      ${_nameWithPill(_esc(/^\p{L}/u.test(cat.name) ? cat.name : _stripIcon(cat.name)), tx)}
       <div class="tx-detail">${detail}</div>
     </div>
     <div class="tx-right">
