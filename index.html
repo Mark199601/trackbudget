@@ -4980,6 +4980,35 @@ function _rvAskInline(shell, body) {
   bDis.onclick = () => { ask.remove(); body.style.display = ''; if (foot) foot.style.display = ''; if (ttlEl) ttlEl.textContent = oldTtl; if (_back) (0, eval)(_back); else closeDlg(); };
   bKeep.onclick = () => { ask.remove(); body.style.display = ''; if (foot) foot.style.display = ''; if (ttlEl) ttlEl.textContent = oldTtl; };
 }
+// -- PERSONAL STRUCTURE SET #705 -- (his Nov 20: "yung discard gumagana dn no sa lahat ng pop up?")
+// Every form popup already asks on Cancel (PLS #376/#392) and Add transaction asks on its X. Three screens with typing
+// fields closed without asking: Bank reconciliation, a currency's rate history (a typed rate not yet saved with its row's
+// Save) and Plan buckets. Each registers a check here; a tap on the X, Close or Cancel of that popup asks first.
+window._dirtyChecks = window._dirtyChecks || [];
+function _dirtyAdd(fn) { if (!window._dirtyChecks.includes(fn)) window._dirtyChecks.push(fn); }
+function _dirtyAny(box) { return window._dirtyChecks.some(f => { try { return f(box) === true; } catch (e) { return false; } }); }
+function _askInlineDlg() { // the same question inside the popup, like a form popup does (PLS #392)
+  const dl = document.querySelector('#dlg-overlay .dlg'), ttl = document.getElementById('dlg-title'); if (!dl || dl.querySelector('.rv-ask-inline')) return;
+  const hide = [document.getElementById('dlg-body'), document.getElementById('dlg-footer'), document.getElementById('al-bar'), ...dl.querySelectorAll('.dlg-header button, .dlg-header .sheet-close')].filter(Boolean);
+  const old = ttl ? ttl.textContent : ''; hide.forEach(e => { e.dataset.askHid = e.style.display; e.style.display = 'none'; }); if (ttl) ttl.textContent = 'Discard changes?';
+  const ask = document.createElement('div'); ask.className = 'rv-ask-inline';
+  ask.innerHTML = `<div class="dlg-ask">What you typed will be lost.</div><div class="rv-foot"><button type="button" class="btn btn-danger rv-dang">Discard</button><button type="button" class="btn rv-sec">Keep editing</button></div>`;
+  const wasRv = dl.classList.contains('rv-shell'); dl.classList.add('rv-shell'); // same look as the form popups' question
+  dl.appendChild(ask); const [bDis, bKeep] = ask.querySelectorAll('button');
+  const back = () => { ask.remove(); if (!wasRv) dl.classList.remove('rv-shell'); hide.forEach(e => { e.style.display = e.dataset.askHid || ''; delete e.dataset.askHid; }); if (ttl) ttl.textContent = old; };
+  bDis.onclick = () => { back(); closeDlg(true); }; bKeep.onclick = back;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.sheet-close, #dlg-footer button, #dlg-overlay .dlg-header button'); if (!b || b.classList.contains('rv-cancel')) return;
+  const isX = b.classList.contains('sheet-close') || b.getAttribute('aria-label') === 'Close';
+  if (!isX && !/^(Close|Cancel)$/i.test(b.textContent.trim())) return;
+  const sh = b.closest('.sheet'), dlg = !sh && b.closest('#dlg-overlay'); const box = sh || (dlg && dlg.querySelector('.dlg')); if (!box || !_dirtyAny(box)) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  if (sh) { const id = sh.id.replace(/-sheet$/, ''); _rvAskDiscard(() => closeSheet(id)); } else _askInlineDlg();
+}, true);
+_dirtyAdd(box => { const r = box.querySelector('#recon-real'); return !!r && (r.value.trim() !== '' || !!(window._reconState && window._reconState.acctId)); }); // Bank reconciliation
+_dirtyAdd(box => [...box.querySelectorAll('.fx-hist-rate')].some(i => i.value.trim() !== i.defaultValue.trim())); // rate history: a typed rate not saved yet
+_dirtyAdd(box => { const st = window._bkPlan; return !!box.querySelector('.bkp-in') && !!st && st.snap != null && JSON.stringify(st.rows.map(r => [r.amt, !!r.lock])) !== st.snap; }); // Plan buckets
 function _rvAskDiscard(onDiscard) { // PLS #376: same question as Add transaction
   window._rvDiscardFn = onDiscard; window._rvPending = 'dlg';
   openDlg('Discard changes?', `<div class="dlg-ask">What you typed will be lost.</div>`,
@@ -5181,6 +5210,7 @@ function closeDlg(force) {
   // PLS #418: a dialog can refuse to close (the budget editor while it is over the limit). Every way out -- Close,
   // the X, a tap outside -- comes through here, so one guard covers them all. closeDlg(true) skips it.
   if (force !== true && typeof window._dlgCloseGuard === 'function' && window._dlgCloseGuard() === false) return;
+  if (force !== true && document.querySelector('#st-pop:not([data-closing]), #lk-pop:not([data-closing])')) return; // PSS #704: a popup is on top; only it closes
   window._dlgCloseGuard = null;
   document.getElementById('dlg-overlay').classList.remove('open');
   setTimeout(_refreshIfStale, 0); // PLS #471
@@ -5563,9 +5593,9 @@ function wireEvents() {
   // PLS #376: Add transaction is locked like the other popups -- a tap outside does nothing; close with the X (asks first if typed)
   document.getElementById('add-overlay').addEventListener('click', () => {});
   // PSS #367: a form popup closes only through Cancel or its own action -- a tap outside does nothing
-  document.getElementById('gen-overlay').addEventListener('click', () => { if (!document.getElementById('gen-sheet').classList.contains('rv-shell')) closeSheet('gen'); });
-  document.getElementById('gen2-overlay').addEventListener('click', () => { if (!document.getElementById('gen2-sheet').classList.contains('rv-shell')) closeSheet('gen2'); });
-  document.getElementById('dlg-overlay').addEventListener('click', (e) => { if(e.target===e.currentTarget && !document.querySelector('#dlg-overlay .dlg').classList.contains('rv-shell')) closeDlg(); });
+  /* gen-overlay: no close on outside tap */ /* PSS #703: a popup closes only through its X, Cancel or Close, never by a tap outside */
+  /* gen2-overlay: no close on outside tap */
+  /* dlg-overlay: no close on outside tap */
   // Swipe-down dismiss (mobile)
   attachSwipeDismiss('add');
   attachSwipeDismiss('gen');
@@ -6535,7 +6565,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '30'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '31'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6552,6 +6582,9 @@ const APP_CHANGELOG = [
     '🔗 The linked status line under a row is a soft pill, so it is easy to see you can tap it', // PSS #700
     '🔗 The linked popup uses the app\'s usual sizes, letters and buttons', // PSS #701
     '🔗 Who pays what in the linked popup has thinner, softer bars and even spacing', // PSS #702
+    '🛑 A popup no longer closes when you tap outside it; use its X, Cancel or Close', // PSS #703
+    '↩️ Closing Share statement takes you back to the transaction details', // PSS #704
+    '❓ Bank reconciliation, rate history and Plan buckets ask Discard changes? before closing with something typed', // PSS #705
     '📤 Share statement is a share icon at the top of the details', // PSS #687, #688
     '🔤 The statement card text is the same size as the rest of the app, with no border line', // PSS #689, #690, #692
     '✏️ A reimbursement payment\'s details have one Edit button, like loan payments', // PSS #690
@@ -7444,12 +7477,17 @@ function _stDraw(d, cssW) { // PSS #689: drawn at the exact width it is shown, s
   font(400, 11); txt(fit(`From ${(db.profile && db.profile.nickname) || 'me'} · as of ${fmtDFull(today())}`, W - 2 * P - tw - 12), P, y + 10, MUT);
   return cv;
 }
-function _stClose() { document.getElementById('st-pop')?.remove(); window._stBlob = null; }
+// -- PERSONAL STRUCTURE SET #704 -- (his Nov 20: closing Share statement also closed the transaction details under it)
+// The popup fades out and keeps catching taps for a moment, so a phone's late second tap never reaches the details
+// underneath; the details also refuse to close while a popup sits on top of them (see closeDlg).
+function _popFadeClose(o) { if (!o || o.dataset.closing) return; o.dataset.closing = '1'; o.style.animation = 'fadeOut .2s ease forwards'; setTimeout(() => o.remove(), 350); }
+function _stClose() { _popFadeClose(document.getElementById('st-pop')); window._stBlob = null; }
 function _lkShareStatement(id, person) {
   const d = _stData(id, person); if (!d) { showToast('Nothing to share'); return; }
   window._stBlob = null; window._stName = d.name;
   let o = document.getElementById('st-pop');
-  if (!o) { o = document.createElement('div'); o.id = 'st-pop'; o.onclick = e => { if (e.target === o) _stClose(); }; document.body.appendChild(o); }
+  if (o && o.dataset.closing) { o.remove(); o = null; } // PSS #704: a fading one is not reused
+  if (!o) { o = document.createElement('div'); o.id = 'st-pop'; /* PSS #703: a popup closes only through its X, Cancel or Close, never by a tap outside */ document.body.appendChild(o); }
   const who = (d.people || []).length > 1 ? `<div class="who">${d.people.map(p => `<button type="button" class="${p === d.name ? 'on' : ''}" onclick="_lkShareStatement('${id}', decodeURIComponent('${encodeURIComponent(p)}'))">${_esc(p)}</button>`).join('')}</div>` : '';
   o.innerHTML = `<div class="sh" role="dialog" aria-label="Statement"><div class="bd">${who}<img alt="Statement for ${_esc(d.name)}"></div>
     <div class="rv-foot"><button type="button" class="rv-sec" onclick="_stClose()">Close</button><button type="button" class="rv-pri" onclick="_stShare()">Share image</button></div></div>`;
@@ -7465,7 +7503,7 @@ function _stShare() {
   if (f && navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f], title: 'Statement' }).catch(err => { if (err.name !== 'AbortError') save(); });
   else save();
 }
-function _lkClose() { document.getElementById('lk-pop')?.remove(); }
+function _lkClose() { _popFadeClose(document.getElementById('lk-pop')); } // PSS #704
 function _lkOpen(id, hl) {
   const tx = db.transactions.find(t => t.id === id); if (!tx) return;
   const G = 'var(--green)', A = 'var(--amber)', C = tx.currency, acct = getAccountDisplay(tx.accountId);
@@ -7517,9 +7555,9 @@ function _lkOpen(id, hl) {
     h += `<div class="sec">Loans it covers</div><div class="tl">` + loans.map(l => { const P = _lkLoanTx(l.id), v = loanPaymentContribution(tx, l);
       return ti({ id: P ? P.id : '', dot: lent ? '🤲' : '🤏', bg: 'var(--bg4)', col: 'var(--text2)', t1: `${lent ? 'Lent' : 'Borrowed'} ${fmt(l.amount, l.currency || C)} <span class="lp-pill ${l.settled ? 'gain' : 'due'}">${l.settled ? 'Paid' : 'Part'}</span>`, t2: `${fmtDFull(l.date)}${l.notes ? ' · ' + _esc(_noteShow(l.notes).replace(/ · [\d.,]+ [A-Z]{2,5} at 1 .*$/, '')) : ''}`, amt: (lent ? '+' : '-') + fmt(v, l.currency || C), acol: G }); }).join('') + `</div>`;
   } else { openTxDetail(id); return; }
-  _lkClose();
+  document.getElementById('lk-pop')?.remove(); // PSS #704: swap at once, no fade
   const o = document.createElement('div'); o.id = 'lk-pop';
-  o.onclick = e => { if (e.target === o) _lkClose(); };
+  o.onclick = null; /* PSS #703: a popup closes only through its X, Cancel or Close, never by a tap outside */
   o.innerHTML = `<div class="sh" role="dialog" aria-label="Linked entries"><span class="x" role="button" aria-label="Close" onclick="_lkClose()">${_ico('x', 14)}</span><div class="bd">${h}</div><div class="rv-foot"><button type="button" class="rv-sec" onclick="_lkClose()">Close</button><button type="button" class="rv-pri" onclick="${go(id)}">Open details</button></div></div>`;
   document.body.appendChild(o);
   if (!window._lkEsc) { window._lkEsc = 1; document.addEventListener('keydown', e => { if (e.key === 'Escape') _lkClose(); }); }
@@ -8270,7 +8308,6 @@ function _axOpenAcctList(selId) {
   ov.addEventListener('click', e => {
     const r = e.target.closest('.acp-row');
     if (r) { _axPick(selId, r.dataset.id); _axCloseAcctList(); return; }
-    if (e.target === ov) _axCloseAcctList();
   });
   document.body.appendChild(ov);
   const on = ov.querySelector('.acp-row.on'); if (on) on.scrollIntoView({ block:'center' });
@@ -8347,7 +8384,6 @@ function _pbOpen(forEdit) {
   ov.addEventListener('click', e => {
     const r = e.target.closest('.acp-row');
     if (r) { forEdit ? _pbEditPick(r.dataset.p || null, r.dataset.k) : _pbPick(r.dataset.p || null, r.dataset.k); _pbClose(); return; } // PLS #537, #675
-    if (e.target === ov) _pbClose();
   });
   document.body.appendChild(ov);
 }
@@ -8797,7 +8833,7 @@ function _cpOverlay(txType) {
   const overlay = document.createElement('div');
   overlay.id = 'cat-picker-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent';
-  overlay.onclick = (e) => { if (e.target === overlay) closeCatPickerSheet(); };
+  /* no close on outside tap */ /* PSS #703: a popup closes only through its X, Cancel or Close, never by a tap outside */
   overlay.innerHTML = `<div style="background:var(--bg2);border-radius:var(--r-xl);width:calc(100% - 32px);max-width:480px;max-height:80vh;overflow-y:auto;padding:18px 16px 24px;animation:fadeIn 0.2s ease;box-shadow:0 8px 24px rgba(0,0,0,0.22)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:17px;font-weight:600">Pick category</div><!-- PLS #391: same title size as the other popups -->
@@ -20730,7 +20766,7 @@ function _gzPickOverlay(inner){
   ov.className = 'gz-pick-overlay';
   ov.id = 'gz-pick-overlay';
   ov.innerHTML = `<div class="gz-pick-panel">${inner}</div>`;
-  ov.addEventListener('click', e => { if (e.target === ov) _gzPickClose(); });
+  /* no close on outside tap */ /* PSS #703: a popup closes only through its X, Cancel or Close, never by a tap outside */
   document.body.appendChild(ov);
   document.addEventListener('keydown', _gzPickEsc);
   return ov;
@@ -23966,7 +24002,7 @@ function openBucketPlan(cid) {
     const dl = document.querySelector('#dlg-overlay .dlg'), ft = document.getElementById('dlg-footer');
     if (dl && ft && !document.getElementById('al-bar')) { const bar = document.createElement('div'); bar.id = 'al-bar'; dl.insertBefore(bar, ft); }
     document.querySelectorAll('.bkp-in').forEach(i => i.addEventListener('input', () => { const r = st.rows.find(x => x.b.id === i.dataset.id); if (!r) return; r.amt = Math.max(0, Math.round((parseFloat(i.value) || 0) * 100) / 100); if (!r.lock) { r.lock = true; _bkpPaint(); } clearTimeout(st.t); st.pend = true; st.t = setTimeout(() => _bkpSpread(), 300); _bkpDraw(); }));
-    _bkpDraw();
+    _bkpDraw(); st.snap = JSON.stringify(st.rows.map(r => [r.amt, !!r.lock])); // PSS #705
   }, 50);
 }
 function _bkpPaint() { const st = window._bkPlan; if (!st) return; st.rows.forEach(r => { const btn = document.querySelector(`.al-lock[data-id="${r.b.id}"]`); if (!btn) return; btn.classList.toggle('on', r.lock); btn.setAttribute('aria-pressed', r.lock); btn.innerHTML = _ico(r.lock ? 'lock' : 'unlock', 16); }); }
