@@ -1289,7 +1289,7 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .dlg-footer .btn-ghost{background:var(--bg3);border:0;color:var(--text)}.dlg-footer .btn-danger,.dlg-footer .btn-warning,.dlg-footer .btn-success{border:0}
 .dlg-footer.ft48{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 18px 18px} /* PSS #686: details buttons the same size as the Discard question */
 .dlg-footer.ft48 .btn{height:48px;min-height:48px;width:100%;margin:0;padding:0 14px;font-size:15px;font-weight:600;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
-.dlg-footer.ft48 .btn:only-child,.dlg-footer.ft48 .btn:first-child:nth-last-child(odd){grid-column:1/-1}
+.dlg-footer.ft48 > :not(.btn){grid-column:1/-1} /* PSS #690: a note in the footer takes the whole row; an odd button count gives the first button its own row (set in openDlg) */
 .dlg-share{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--bg4);border:none;color:var(--text3);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;margin-left:auto;margin-right:8px} /* PSS #687: Share statement as a round icon, the X's twin */
 .dlg-header:has(.dlg-title:empty) .dlg-share{margin:0}
 .dlg-share{background:none;color:var(--text2)} .dlg-share svg{width:20px;height:20px} /* PSS #688 (his pick A): plain share icon, no circle; the X keeps its circle (#673) */
@@ -1783,9 +1783,10 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .lk-st span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #st-pop{position:fixed;inset:0;background:rgba(6,6,13,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:650;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
 #st-pop .sh{width:100%;max-width:440px;max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg2);border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
-#st-pop .bd{overflow-y:auto;padding:18px 18px 0;flex:1;min-height:0}
-#st-pop .bd img{display:block;width:100%;border-radius:16px;border:1px solid var(--border)}
-#st-pop .who{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+#st-pop .bd{overflow-y:auto;padding:18px 18px 0;flex:1;min-height:0} /* PSS #690/#692 (his pick): card set inside the popup like #685, no border line */
+#st-pop .bd img{display:block;width:100%;min-height:40px;border-radius:16px}
+#st-pop .rv-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px} /* PSS #693: side by side like the details buttons */
+#st-pop .who{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
 #st-pop .who button{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border);background:none;color:var(--text2);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 #st-pop .who button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 #lk-pop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
@@ -5143,6 +5144,7 @@ function openDlg(title, html, footer='') {
       ic.setAttribute('onclick', sb.getAttribute('onclick')); ic.innerHTML = _ico('upload', 14); sb.remove();
       if (!document.getElementById('dlg-title').textContent) hd.insertBefore(ic, hd.firstChild); else hd.insertBefore(ic, xb || null); } // no heading: top left corner; with a heading: beside the X
   }
+  if (window._ft48 === true) { const bs = [...document.getElementById('dlg-footer').children].filter(e => e.matches('.btn')); bs.forEach(b => b.style.gridColumn = ''); if (bs.length % 2) bs[0].style.gridColumn = '1/-1'; }
   window._ft48 = false; // PSS #686: only a transaction's details asks for the big buttons
   if (window._rvPending === 'dlg') { window._rvPending = null; _rvApply(_dlg, _db, true); if (_f6) _f6Foot(_dlg); } // PSS #367 / #457
   document.getElementById('dlg-overlay').classList.add('open');
@@ -6505,7 +6507,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '28'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '29'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6520,6 +6522,8 @@ const APP_CHANGELOG = [
     '🧾 Share statement shows a clean statement card and sends it as a picture', // PSS #685
     '🔘 Buttons in a transaction\'s details are the same size as the Discard question', // PSS #686
     '📤 Share statement is a share icon at the top of the details', // PSS #687, #688
+    '🔤 The statement card text is the same size as the rest of the app, with no border line', // PSS #689, #690, #692
+    '✏️ A reimbursement payment\'s details have one Edit button, like loan payments', // PSS #690
     '☁️ A change made just before leaving the app is saved to Google Drive when you come back', // PLS #680
     '🔗 Loan profit and Rate change sit under their payment again (its pill shows them), still counted in every total', // PLS #678
     '🏷️ Transactions: a gain or loss on a transfer or a reimbursement shows as a pill beside its name, like loan payments', // PSS #677
@@ -7348,13 +7352,15 @@ function _stData(id, person) {
   const cat = _stripIcon(txCategoryDisplay(tx).name);
   return { name: q.name, sub: cat + (tx.notes ? ' · ' + _noteShow(tx.notes) : ''), left: q.left, total: q.share, cc: C, rows, people: all.map(x => x.name) };
 }
-function _stDraw(d) {
-  const S = 3, W = 360, P = 24, G = '#16a34a', A = '#d97706', INK = '#1a1a2e', MUT = '#8a8aa0', HAIR = '#ececf3';
+function _stDraw(d, cssW) { // PSS #689: drawn at the exact width it is shown, so 13px text is 13px on screen (his 'font sizes d standard')
+  const S = 3, W = Math.max(280, Math.round(cssW || 360)), P = 24, G = '#16a34a', A = '#d97706', HAIR = '#ececf3';
+  const _lt = document.documentElement.getAttribute('data-theme') !== 'dark', _cv = (v, f) => (_lt && getComputedStyle(document.documentElement).getPropertyValue(v).trim()) || f;
+  const INK = _cv('--text', '#1a1330'), MUT = _cv('--text2', '#5c5285'); // the details' own text colours (the card is always light)
   const AC = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#7c6df0').trim();
   const FF = getComputedStyle(document.body).fontFamily, MONO = (getComputedStyle(document.documentElement).getPropertyValue('--mono') || '').trim() || FF;
   const done = d.left <= 0.005, paid = Math.max(0, d.total - d.left), pct = d.total > 0 ? Math.round(paid / d.total * 100) : 100;
   const n = d.rows.length;
-  const H = P + 44 + 22 + 14 + 6 + 34 + 14 + 6 + (done ? 0 : 22) + 22 + 1 + 18 + 14 + 14 + n * 34 + (n - 1) * 14 + 22 + 1 + 14 + 12 + 22;
+  const H = P + 44 + 22 + 14 + 6 + 26 + 14 + 6 + (done ? 0 : 22) + 22 + 1 + 18 + 14 + 14 + n * 34 + (n - 1) * 14 + 22 + 1 + 14 + 12 + 22;
   const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
   const c = cv.getContext('2d'); c.scale(S, S);
   const font = (w, px, mono) => c.font = `${w} ${px}px ${mono ? MONO : FF}`;
@@ -7364,20 +7370,21 @@ function _stDraw(d) {
   c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.textBaseline = 'alphabetic';
   let y = P;
   // person: initial circle (centred on the ink of the letter), name, what it is, status tag
-  c.fillStyle = '#efedfd'; c.beginPath(); c.arc(P + 22, y + 22, 22, 0, Math.PI * 2); c.fill();
-  font(700, 17); const ini = (d.name || '?').trim().charAt(0).toUpperCase() || '?', m = c.measureText(ini);
-  c.fillStyle = AC; c.textAlign = 'left'; c.fillText(ini, P + 22 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, y + 22 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
-  const chip = done ? ['Paid in full', G, '#e3f6ea'] : paid > 0.005 ? ['Partly paid', A, '#fdf1e1'] : ['Not paid yet', A, '#fdf1e1'];
-  font(600, 11); const cw = c.measureText(chip[0]).width + 20, cx = W - P - cw;
-  rr(cx, y + 11, cw, 22, 11, chip[2]); const cm = c.measureText(chip[0]);
+  const _t = (() => { const h = AC.replace('#', ''); if (h.length !== 6) return '#efedfd'; const n = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16)); return 'rgb(' + n.map(v => Math.round(255 - (255 - v) * 0.12)).join(',') + ')'; })();
+  c.fillStyle = _t; c.beginPath(); c.arc(P + 20, y + 22, 20, 0, Math.PI * 2); c.fill();
+  font(600, 16); const ini = (d.name || '?').trim().charAt(0).toUpperCase() || '?', m = c.measureText(ini);
+  c.fillStyle = AC; c.textAlign = 'left'; c.fillText(ini, P + 20 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, y + 22 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+  const chip = done ? ['Paid in full', G, 'rgba(22,163,74,.08)'] : paid > 0.005 ? ['Partly paid', A, 'rgba(217,119,6,.08)'] : ['Not paid yet', A, 'rgba(217,119,6,.08)'];
+  font(600, 11); const cw = c.measureText(chip[0]).width + 18, cx = W - P - cw;
+  rr(cx, y + 12, cw, 20, 10, chip[2]); const cm = c.measureText(chip[0]);
   txt(chip[0], cx + cw / 2, y + 22 + (cm.actualBoundingBoxAscent - cm.actualBoundingBoxDescent) / 2, chip[1], 'center');
-  const nx = P + 56, nmax = cx - 12 - nx;
-  font(700, 16); txt(fit(d.name, nmax), nx, y + 19, INK);
-  font(400, 12); txt(fit(d.sub, nmax), nx, y + 37, MUT);
+  const nx = P + 52, nmax = cx - 12 - nx;
+  font(600, 16); txt(fit(d.name, nmax), nx, y + 19, INK);
+  font(400, 11); txt(fit(d.sub, nmax), nx, y + 37, MUT);
   y += 44 + 22;
   // amount
   font(500, 12); txt(done ? 'Total paid' : 'Left to pay', P, y + 11, MUT); y += 14 + 6;
-  font(700, 30, true); txt(fmt(done ? d.total : d.left, d.cc), P, y + 28, done ? G : A); y += 34 + 14;
+  font(600, 22, true); txt(fmt(done ? d.total : d.left, d.cc), P, y + 21, done ? G : A); y += 26 + 14;
   rr(P, y, W - 2 * P, 6, 3, '#ececf3'); if (pct > 0) rr(P, y, Math.max(6, (W - 2 * P) * Math.min(1, paid / d.total)), 6, 3, G); y += 6;
   if (!done) {
     y += 22; font(600, 12, true); const a1 = fmt(paid, d.cc), a2 = fmt(d.total, d.cc);
@@ -7394,7 +7401,7 @@ function _stDraw(d) {
     const top = y + i * 48; dotY.push(top + 9);
     font(600, 13, true); const aw = c.measureText(r.a).width;
     txt(r.a, W - P, top + 13, r.k === 'pay' ? G : r.k === 'wo' ? MUT : INK, 'right');
-    font(500, 13); txt(fit(r.t, W - 2 * P - 20 - aw - 12), P + 20, top + 13, INK);
+    font(400, 13); txt(fit(r.t, W - 2 * P - 20 - aw - 12), P + 20, top + 13, INK);
     if (r.d) { font(400, 11); txt(fit(r.d, W - 2 * P - 20), P + 20, top + 30, MUT); }
   });
   c.fillStyle = HAIR; for (let i = 0; i < dotY.length - 1; i++) c.fillRect(P + 4 - 0.75, dotY[i], 1.5, dotY[i + 1] - dotY[i]);
@@ -7408,13 +7415,14 @@ function _stDraw(d) {
 function _stClose() { document.getElementById('st-pop')?.remove(); window._stBlob = null; }
 function _lkShareStatement(id, person) {
   const d = _stData(id, person); if (!d) { showToast('Nothing to share'); return; }
-  const cv = _stDraw(d); window._stBlob = null; window._stName = d.name;
-  cv.toBlob(b => { window._stBlob = b; }, 'image/png'); // ready before the tap, so the phone's share sheet opens straight away
+  window._stBlob = null; window._stName = d.name;
   let o = document.getElementById('st-pop');
   if (!o) { o = document.createElement('div'); o.id = 'st-pop'; o.onclick = e => { if (e.target === o) _stClose(); }; document.body.appendChild(o); }
   const who = (d.people || []).length > 1 ? `<div class="who">${d.people.map(p => `<button type="button" class="${p === d.name ? 'on' : ''}" onclick="_lkShareStatement('${id}', decodeURIComponent('${encodeURIComponent(p)}'))">${_esc(p)}</button>`).join('')}</div>` : '';
-  o.innerHTML = `<div class="sh" role="dialog" aria-label="Statement"><div class="bd">${who}<img alt="Statement for ${_esc(d.name)}" src="${cv.toDataURL('image/png')}"></div>
-    <div class="rv-foot"><button type="button" class="rv-pri" onclick="_stShare()">Share image</button><button type="button" class="rv-sec" onclick="_stClose()">Close</button></div></div>`;
+  o.innerHTML = `<div class="sh" role="dialog" aria-label="Statement"><div class="bd">${who}<img alt="Statement for ${_esc(d.name)}"></div>
+    <div class="rv-foot"><button type="button" class="rv-sec" onclick="_stClose()">Close</button><button type="button" class="rv-pri" onclick="_stShare()">Share image</button></div></div>`;
+  const im = o.querySelector('.bd img'), cv = _stDraw(d, im.getBoundingClientRect().width);
+  im.src = cv.toDataURL('image/png'); cv.toBlob(b => { window._stBlob = b; }, 'image/png'); // ready before the tap, so the phone's share sheet opens straight away
   if (!window._stEsc) { window._stEsc = 1; document.addEventListener('keydown', e => { if (e.key === 'Escape') _stClose(); }); }
 }
 function _stShare() {
@@ -11497,12 +11505,9 @@ function openTxDetail(txId) {
       // never reached Reimbursements. It now routes to the page and to its own edit/undo form.
       const _n = (tx.batchTxIds||[]).length;
       // note stacked above the buttons: the footer is a flex row, so a sibling note got squeezed to a sliver
-      footer = `<div style="display:flex;flex-direction:column;gap:10px;width:100%">
-        <div style="font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm)">💡 Payment from ${_esc(tx.batchPerson||tx.reimbPerson||'someone')} for ${_n} shared ${_n===1?'expense':'expenses'}. Edit or undo it in Reimbursements.</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn-ghost btn-sm" onclick="closeDlg();nav('reimbursements')">Go to reimbursements</button>
-          <button class="btn btn-ghost btn-sm" onclick="closeDlg();setTimeout(()=>openBatchReimbSettleEdit('${tx.id}'),50)">Edit or undo</button>
-        </div></div>`;
+      // PSS #690 (his screenshot): same footer as a loan payment: the note carries the page link, one Edit button (PLS #683 one rule; Undo is inside the editor)
+      footer = `<div style="font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between;gap:10px"><span>💡 Payment from ${_esc(tx.batchPerson||tx.reimbPerson||'someone')} for ${_n} shared ${_n===1?'expense':'expenses'}. It is also on the Reimbursements page.</span><span style="color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap" onclick="closeDlg();nav('reimbursements')">Go to reimbursements</span></div>
+        <button class="btn btn-ghost btn-sm" onclick="closeDlg();setTimeout(()=>openBatchReimbSettleEdit('${tx.id}'),50)">Edit</button>`;
     } else if (tx.isAutoReimb) {
       const parentReimbExists = tx.parentId && db.transactions.find(t=>t.id===tx.parentId);
       footer = `<div style="font-size:11px;color:var(--amber);padding:8px 10px;background:var(--amber-bg);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:space-between">
