@@ -1287,6 +1287,12 @@ b,strong{font-weight:600} /* PSS #433: one bold weight, browsers default these t
 .dlg-footer .btn{padding:0 16px;font-size:13px;font-weight:600;border-radius:999px;min-height:36px;box-shadow:none} /* PSS #429: one button size in the strip. PSS #575: same pill shape and colours as the form popups (it was a small square button) */
 .dlg-footer .btn-primary{background:var(--accent);color:#fff}.dlg-footer .btn-primary:hover{background:var(--accent);transform:none}
 .dlg-footer .btn-ghost{background:var(--bg3);border:0;color:var(--text)}.dlg-footer .btn-danger,.dlg-footer .btn-warning,.dlg-footer .btn-success{border:0}
+.dlg-footer.ft48{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 18px 18px} /* PSS #686: details buttons the same size as the Discard question */
+.dlg-footer.ft48 .btn{height:48px;min-height:48px;width:100%;margin:0;padding:0 14px;font-size:15px;font-weight:600;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.dlg-footer.ft48 .btn:only-child,.dlg-footer.ft48 .btn:first-child:nth-last-child(odd){grid-column:1/-1}
+.dlg-share{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--bg4);border:none;color:var(--text3);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;margin-left:auto;margin-right:8px} /* PSS #687: Share statement as a round icon, the X's twin */
+.dlg-header:has(.dlg-title:empty) .dlg-share{margin:0}
+.dlg-share{background:none;color:var(--text2)} .dlg-share svg{width:20px;height:20px} /* PSS #688 (his pick A): plain share icon, no circle; the X keeps its circle (#673) */
 .dlg-footer:empty{display:none} /* PSS #429: no blank strip when a popup has no buttons (Appearance) */
 
 /* ── EMOJI PICKER ── */
@@ -5129,6 +5135,15 @@ function openDlg(title, html, footer='') {
   const _dlg = document.querySelector('#dlg-overlay .dlg'); _dlg.classList.remove('f6'); let _f6 = false;
   if (window._efNext) { window._efNext = false; _efApply(_db); window._rvPending = 'dlg'; _f6 = _f6Is(title); if (_f6) { _dlg.classList.add('f6'); _f6Apply(_db); } } // PSS #360 / #367 / #457
   document.getElementById('dlg-footer').innerHTML = footer;
+  document.getElementById('dlg-footer').classList.toggle('ft48', window._ft48 === true);
+  document.querySelectorAll('#dlg-overlay .dlg-share').forEach(x => x.remove());
+  if (window._ft48 === true) { // PSS #687 (his Nov 20 'ang spacious ng share statement'): it leaves the footer and sits up top as a round share icon
+    const sb = document.querySelector('#dlg-footer button[onclick^="_lkShareStatement"]'), hd = document.querySelector('#dlg-overlay .dlg-header'), xb = hd && hd.querySelector('.sheet-close');
+    if (sb && hd) { const ic = document.createElement('button'); ic.type = 'button'; ic.className = 'dlg-share'; ic.title = 'Share statement'; ic.setAttribute('aria-label', 'Share statement');
+      ic.setAttribute('onclick', sb.getAttribute('onclick')); ic.innerHTML = _ico('upload', 14); sb.remove();
+      if (!document.getElementById('dlg-title').textContent) hd.insertBefore(ic, hd.firstChild); else hd.insertBefore(ic, xb || null); } // no heading: top left corner; with a heading: beside the X
+  }
+  window._ft48 = false; // PSS #686: only a transaction's details asks for the big buttons
   if (window._rvPending === 'dlg') { window._rvPending = null; _rvApply(_dlg, _db, true); if (_f6) _f6Foot(_dlg); } // PSS #367 / #457
   document.getElementById('dlg-overlay').classList.add('open');
 }
@@ -6490,7 +6505,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '27'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '28'; /* PSS #635: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #409: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #129 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6503,6 +6518,8 @@ const APP_CHANGELOG = [
     '✏️ Loans and loan payments have Edit in their details like every other entry; the link under each row is gone', // PSS #682, PLS #683
     '📤 Receipt is gone from details; split bills and loans have Share statement to send what is owed, paid and left', // PSS #684
     '🧾 Share statement shows a clean statement card and sends it as a picture', // PSS #685
+    '🔘 Buttons in a transaction\'s details are the same size as the Discard question', // PSS #686
+    '📤 Share statement is a share icon at the top of the details', // PSS #687, #688
     '☁️ A change made just before leaving the app is saved to Google Drive when you come back', // PLS #680
     '🔗 Loan profit and Rate change sit under their payment again (its pill shows them), still counted in every total', // PLS #678
     '🏷️ Transactions: a gain or loss on a transfer or a reimbursement shows as a pill beside its name, like loan payments', // PSS #677
@@ -11189,7 +11206,7 @@ function _openSharedFs(tx, footer, fxBadge) {
   const linked = others.map(c => { const d = txAmountDisplay(c), cc = txCategoryDisplay(c);
       return _fsRow({ ico:cc.icon, title:_esc(_stripIcon(cc.name)), sub:fmtDFull(c.date), amt:d.str,
         amtCol:d.cls === 'tx-neg' ? 'var(--red)' : d.cls === 'tx-pos' ? 'var(--green)' : 'var(--text)', onclick:`closeDlg();setTimeout(()=>openTxDetail('${c.id}'),100)`, chev:true }); }).join('');
-  openDlg('', `<div class="fs">
+  window._ft48 = true; openDlg('', `<div class="fs">
     ${_fsHead({ badge:cat.icon, badgeBg:'var(--amber-bg)', badgeCol:'var(--amber)', ring:[pct(realPaid), pct(totalWO)],
       title:_esc(tx.description || _stripIcon(cat.name)), sub:`Shared · ${fmtDFull(tx.date)}${txTimeStr(tx) ? ' ' + txTimeStr(tx) : ''}`, hero, heroCol, heroLbl, pill })}
     ${_fsCard(
@@ -11221,7 +11238,7 @@ function openTxDetail(txId) {
     const payHistHTML = payments.length > 0
       ? payments.map(p=>`<div class="detail-row"><div class="detail-label">Payment</div><div class="detail-value" style="font-family:var(--mono)">${fmt(p.amount,p.currency)} · ${fmtDFull(p.date)}</div></div>`).join('')
       : '';
-    openDlg('Transaction detail',
+    window._ft48 = true; openDlg('Transaction detail',
       `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
         <div class="tx-icon ${iconBg}" style="width:44px;height:44px;font-size:20px">${icon}</div>
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
@@ -11246,7 +11263,7 @@ function openTxDetail(txId) {
     const acctPay = getAccountDisplay(tx.accountId);
     const loan = [...db.loans.lent, ...db.loans.borrowed].find(l=>l.id===tx.parentId);
     const label = tx.loanDirection==='lent' ? 'Repayment Received' : 'Loan Payment Made';
-    openDlg('Transaction detail',
+    window._ft48 = true; openDlg('Transaction detail',
       `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
         <div class="tx-icon tx-icon-${tx.type}" style="width:44px;height:44px;font-size:20px">💳</div>
         <div><div style="font-size:16px;font-weight:600">${label}</div><div class="tx-amount tx-neu" style="font-family:var(--mono);font-size:18px;margin-top:2px">⇄ ${fmt(tx.amount,tx.currency)}</div></div>
@@ -11652,7 +11669,7 @@ function openTxDetail(txId) {
   }
 
   if (tx.type === 'shared' && !tx.archived) { _openSharedFs(tx, footer, fxBadge); return; } // PSS #340
-  openDlg('', `<div class="fs">${fsHeadHTML}<div class="fs-card">${rows}</div>${fxBadge ? `<div style="margin-top:12px">${fxBadge}</div>` : ''}${reimbTimelineHTML}${coversSection}${childrenSection}</div>`, footer); // PSS #340 · #351 covers
+  window._ft48 = true; openDlg('', `<div class="fs">${fsHeadHTML}<div class="fs-card">${rows}</div>${fxBadge ? `<div style="margin-top:12px">${fxBadge}</div>` : ''}${reimbTimelineHTML}${coversSection}${childrenSection}</div>`, footer); // PSS #340 · #351 covers
 }
 
 // ════════════════════════════════════════════════════════════
