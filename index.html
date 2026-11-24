@@ -56,6 +56,7 @@
 //       (was old #641, old #651, old #717, old #721; x part of #263)
 //     PSS #314 Fonts (+ #315 number fitter): also took in old #338, and the font parts of #292, #299, #303.
 //     PSS #319 Text or icon inside a circle is measured exactly centred. (was old #674)
+//       Budgets and goals rings are 46px (4px line, 38px hole) so 115% fits inside; the Owed to you circle is 46px too.
 //     PLS #354 Money precision: amounts in the currency's own places (2, crypto 8) and shown with centavos; rates full
 //       precision, never rounded. (was old #110, old #122, old #377, old #383, old #541, old #543, old #601)
 //     PLS #355 Paid to the centavo: paid in full only when it reaches what is owed to the centavo; a P0.01 extra or
@@ -2043,8 +2044,8 @@ b,strong{font-weight:600} /* PSS #177: one bold weight, browsers default these t
 .fx-plan{padding:4px 16px!important}
 .fx-pr{display:flex;align-items:center;gap:12px;min-height:60px;border-top:1px solid var(--border)}
 .fx-plan .fx-pr:first-child{border-top:0}
-.fx-ring{width:38px;height:38px;flex-shrink:0;position:relative}
-.fx-ring svg{width:38px;height:38px;transform:rotate(-90deg)}
+.fx-ring{width:46px;height:46px;flex-shrink:0;position:relative} /* PSS #319: 46px with a 38px hole so 115% sits inside with 4px each side; the Owed to you circle matches */
+.fx-ring svg{width:46px;height:46px;transform:rotate(-90deg)}
 .fx-ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text);font-family:var(--mono)}
 .fx-pr .x{flex:1;min-width:0}
 .fx-pr .x div:first-child{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -6312,8 +6313,8 @@ function _fzTopHTML(curr, disp, netWorthPhp) {
 }
 // PSS #269: small progress ring with the percent in the middle (Budgets and goals card)
 function _fxRing(pct, col) {
-  const r = 16, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, pct || 0));
-  return `<span class="fx-ring"><svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="4"/><circle cx="19" cy="19" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(2)} ${c.toFixed(2)}"/></svg><b>${Math.round(pct || 0)}<small>%</small></b></span>`;
+  const r = 21, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, pct || 0));
+  return `<span class="fx-ring"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="4"/><circle cx="23" cy="23" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(2)} ${c.toFixed(2)}"/></svg><b>${Math.round(pct || 0)}<small>%</small></b></span>`;
 }
 function renderDashboard() {
   // ── DEBUG-SCAN NOTE ── Net Worth display uses getNetWorth(). Hero card is rendered via helper function. Naive regex scans may flag as missing — present via helpers.
@@ -6728,7 +6729,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '34'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '35'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #23 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6736,6 +6737,7 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '⭕ Dashboard Budgets and goals: the circles are a little bigger so 115% fits inside', // PSS #319
     '🧾 Items on the receipt: in More options, add each item with its own category; the list shows one row, tap it to see the items', // PLS #232
     '🤝 Split bills: paying more than your share asks if it is a gain or money to give back; lowering or archiving a payment fixes what is owed back', // PLS #262
     '✅ Settled shows a person who paid in full even while others still owe', // PSS #85
