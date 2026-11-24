@@ -49,8 +49,10 @@
 //   RULE BOOK (Nov 23, his pick "Oo, lahat ng 12"): one rule per idea; the old numbers below were merged and deleted.
 //     PSS #317 Buttons: every popup and details button is a 48px pill, 15/600, one main colour, 20px around.
 //       (was old #374, old #429, old #575, old #577, old #686, old #709, old #710, old #715; button part of #299)
+//       Row-remove x (items, extra charge, Shared people, Unlink payment): one grey 14px x icon, 40px tap area.
 //     PSS #318 Colour meaning: red = permanent delete only, same red everywhere; amber soft pill = can be undone
 //       (Archive, Write off, Disconnect, Undo, Unlink); dark mode light pills and X are grey #2b2b3c.
+//       Dark mode fillable boxes (search boxes, one-field boxes, Shared people Name/Share, receipt item name) are grey #2b2b3c too.
 //       (was old #641, old #651, old #717, old #721; x part of #263)
 //     PSS #314 Fonts (+ #315 number fitter): also took in old #338, and the font parts of #292, #299, #303.
 //     PSS #319 Text or icon inside a circle is measured exactly centred. (was old #674)
@@ -494,6 +496,17 @@ body,button,input,select,textarea{font-variant-numeric:tabular-nums}
 .xc-cat{margin-left:auto;display:block;flex:0 1 auto;min-width:0;text-align:right;cursor:pointer;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .xc-cat.ax-ph{color:var(--text4);font-weight:400}
 .xc-x{background:transparent;border:0;color:var(--text3);padding:6px 2px 6px 6px;cursor:pointer;display:inline-flex}
+.ri-row{padding:8px 0}.ri-row + .ri-row{border-top:1px solid var(--border)}
+html[data-theme="dark"] #add-body .ri-name{background:#2b2b3c!important;border-color:transparent!important} /* PSS #317: same grey as the dark-mode pills */
+.ri-top{display:flex;align-items:center;gap:8px}.ri-name{flex:1;min-width:0;height:36px;font-size:13px;padding:0 10px}
+.ri-bot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}.ri-amtw{width:72px;flex-shrink:0}.ri-row .xc-amt,.ri-row .xc-fmt{font-size:13px}.ri-row .xc-sym{font-size:13px}
+.ri-left{display:flex;justify-content:space-between;font-size:13px;padding:8px 2px 4px;color:var(--text2);border-top:1px solid var(--border);margin-top:4px}
+.ri-left b{font-family:var(--mono);color:var(--text);font-weight:600}.ri-left.bad b{color:var(--red)}
+.rc-feed .fs-t,.rc-feed .fs-a{font-weight:400}
+.dlg.rc-dlg .dlg-header{display:none}.dlg.rc-dlg #dlg-body{padding-top:0;padding-bottom:0;margin:20px 0 21px} /* the scroll window itself stops 21px from the top and from Close, so items never touch either edge */.dlg.rc-dlg .fs-head{padding-top:0} /* PLS #232: receipt items are plain text, his Nov 24 call */
+.rc-box{background:var(--bg3);border-radius:14px;padding:0 12px}.rc-it{display:flex;align-items:center;gap:10px;padding:9px 0;cursor:pointer}.rc-it + .rc-it{border-top:1px solid var(--border)}
+.rc-ic{font-size:16px;width:20px;text-align:center}.rc-m{flex:1;min-width:0}.rc-n{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rc-c{font-size:11px;color:var(--text3)}
+.rc-a{font-size:13px;font-family:var(--mono);color:var(--text)}.rc-sum{display:flex;justify-content:space-between;font-size:13px;color:var(--text2);padding:10px 4px 0}
 .xc-hint{font-size:12px;color:var(--text3);line-height:1.45;padding:0 0 12px}
 .ax-addp{width:100%;background:transparent;border:0;color:var(--accent);font-size:13px;font-weight:600;padding:8px 0;cursor:pointer;text-align:left}
 .ax-calc{font-size:12px;color:var(--text3);padding:10px 0 2px;border-top:1px solid var(--border);margin-top:4px;pointer-events:none}
@@ -1367,10 +1380,10 @@ html[data-theme="dark"] .al-act{background:#2b2b3c;color:var(--text)}
 .dlg-title{font-size:16px;font-weight:600} /* PSS #214: every sheet and dialog title is 16px/600 */
 b,strong{font-weight:600} /* PSS #177: one bold weight, browsers default these to 700 */
 /* PSS #175 (same-proportion rule, Oct 2026): a popup with no title keeps only the close button's own height on top, no line under it (was a 65px empty strip) */
-.dlg:not(.rv-shell) > .dlg-header:has(.dlg-title:empty){padding:8px 12px 0;border-bottom:0}
-.dlg:not(.rv-shell) > .dlg-header:has(.dlg-title:empty) + .dlg-body{padding-top:8px}
-.sheet:not(.rv-shell) > .sheet-header:has(.sheet-title:empty){padding:6px 12px 0;border-bottom:0}
-.sheet:not(.rv-shell) > .sheet-header:has(.sheet-title:empty) + .sheet-body{padding-top:8px}
+.dlg:not(.rv-shell) > .dlg-header:has(.dlg-title:empty){padding:20px 20px 0;border-bottom:0} /* PSS #322 (his Nov 24): X and share sit 21px from the edges, in line with the cards */
+.dlg:not(.rv-shell) > .dlg-header:has(.dlg-title:empty) + .dlg-body{padding-top:0;margin-top:12px} /* the scroll window starts 12px under the X row, so cards never slide flush under it */
+.sheet:not(.rv-shell) > .sheet-header:has(.sheet-title:empty){padding:20px 20px 0;border-bottom:0} /* PSS #322 */
+.sheet:not(.rv-shell) > .sheet-header:has(.sheet-title:empty) + .sheet-body{padding-top:0;margin-top:12px}
 .dlg-body{padding:20px;padding-bottom:calc(20px + var(--sab));overflow-y:auto;flex:1}
 .dlg-footer{padding:8px 16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;flex-shrink:0} /* PSS #317: every plain popup gets the #174 strip, 61 -> 49px */
 .dlg-footer .btn{padding:0 16px;font-size:13px;font-weight:600;border-radius:999px;min-height:36px;box-shadow:none} /* PSS #317: one button size in the strip. PSS #317: same pill shape and colours as the form popups (it was a small square button) */
@@ -2170,10 +2183,10 @@ b,strong{font-weight:600} /* PSS #177: one bold weight, browsers default these t
 .fx-ring b{inset:auto!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%);display:block!important;padding:0!important;white-space:nowrap;text-box:trim-both cap alphabetic}
 .fz-av{text-box:trim-both cap alphabetic}
 /* PSS #322 (his pick A tight, Nov 22): no top bar and no line under the title on any popup. Every popup with a title
-   uses the form spacing: 22 from the top edge to the title, 18 from the title to the first content. */
+   uses the form spacing. Nov 24 (his 'apply mo sa lahat'): title, X and share 21 from the top and side edges, scroll window 12 under that row. */
 .sheet-handle{display:none!important}
-.sheet:not(.rv-shell) > .sheet-header:not(:has(.sheet-title:empty)),.dlg:not(.rv-shell) > .dlg-header:not(:has(.dlg-title:empty)){border-bottom:0!important;padding:18px 20px 4px!important}
-.sheet:not(.rv-shell) > .sheet-header:not(:has(.sheet-title:empty)) + .sheet-body,.dlg:not(.rv-shell) > .dlg-header:not(:has(.dlg-title:empty)) + .dlg-body{padding-top:10px!important}
+.sheet:not(.rv-shell) > .sheet-header:not(:has(.sheet-title:empty)),.dlg:not(.rv-shell) > .dlg-header:not(:has(.dlg-title:empty)){border-bottom:0!important;padding:20px 20px 0!important} /* Nov 24: 21 from the top like the X (was 18, title-only 22) */
+.sheet:not(.rv-shell) > .sheet-header:not(:has(.sheet-title:empty)) + .sheet-body,.dlg:not(.rv-shell) > .dlg-header:not(:has(.dlg-title:empty)) + .dlg-body{padding-top:0!important}
 .sheet-body > .page-pad{padding:0} /* PSS #322: a page block inside a popup adds no second margin (Bank reconciliation sat 16px deeper than its title) */
 .gz-pick-panel.acp-panel{padding-top:17px} /* PSS #322: account list and Who paid? title 22 from the top like every popup */
 .acp-panel .acp-head{padding-bottom:14px} /* PSS #322: 18 from the title to the first row */
@@ -2234,6 +2247,16 @@ body:not(.on-analytics) .ef-card .fx-rate-row .fx-rate-val,body.on-analytics :is
 body:not(.on-analytics) .ka .v,body.on-analytics :is(.sheet,.dlg) .ka .v,body:not(.on-analytics) .fx-ring b,body.on-analytics :is(.sheet,.dlg) .fx-ring b,body:not(.on-analytics) .tbc-sw,body.on-analytics :is(.sheet,.dlg) .tbc-sw,body:not(.on-analytics) .tbc-sw em,body.on-analytics :is(.sheet,.dlg) .tbc-sw em{font-size:11px!important}
 body:not(.on-analytics) .rv-del,body.on-analytics :is(.sheet,.dlg) .rv-del{font-size:15px!important}
 body:not(.on-analytics) .txf-st .v,body.on-analytics :is(.sheet,.dlg) .txf-st .v{font-size:clamp(11px,2.85vw,13px)!important}
+/* PSS #322 popup frame (his Nov 24 'apply mo sa lahat'): every popup, sheet and form has the same frame.
+   X, share icon and title sit 21px from the top and side edges, in line with the cards; the scroll window starts 12px under
+   that row so content never slides flush under it; content keeps the same 21px side margin. */
+.dlg:not(.rc-dlg) > .dlg-header,.sheet > .sheet-header{padding:20px 20px 0!important;border-bottom:0!important;min-height:48px;box-sizing:border-box;align-items:center!important}
+.dlg > .dlg-header + .dlg-body,.sheet > .sheet-header + .sheet-body{padding-top:0!important;margin-top:12px;padding-left:20px!important;padding-right:20px!important}
+
+/* PSS #318: in dark mode every fillable box (search boxes and one-field boxes) is the same neutral grey #2b2b3c as the dark pills and the receipt item box. Light mode unchanged. */
+:root:not([data-theme="light"]) :is(#tx-search-input,#add-curr-search,#cp-q,#ob-curr-search,.emoji-search,input[placeholder^="Search"]){background:#2b2b3c!important;border-color:transparent!important}
+:root:not([data-theme="light"]) .ef-card:has(#lbf-in,#lsr-in,#snap-label){background:#2b2b3c!important}
+:root:not([data-theme="light"]) :is(#shared-persons-list,#edit-persons-list) .form-input{background:#2b2b3c!important;border-color:transparent!important}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" defer></script><!-- PLS #236: CORS load so sw.js can keep a copy for offline Excel export -->
 </head>
@@ -5312,7 +5335,7 @@ function openDlg(title, html, footer='') {
   document.getElementById('dlg-body').innerHTML = html;
   const _db = document.getElementById('dlg-body'); _db.classList.remove('ef');
   { const _dl = document.querySelector('#dlg-overlay .dlg'); _dl.classList.remove('rv-shell'); _dl.querySelectorAll(':scope > .rv-foot').forEach(x => x.remove()); } // PSS #139 reset
-  const _dlg = document.querySelector('#dlg-overlay .dlg'); _dlg.classList.remove('f6'); let _f6 = false;
+  const _dlg = document.querySelector('#dlg-overlay .dlg'); _dlg.classList.remove('f6', 'rc-dlg'); let _f6 = false;
   if (window._efNext) { window._efNext = false; _efApply(_db); window._rvPending = 'dlg'; _f6 = _f6Is(title); if (_f6) { _dlg.classList.add('f6'); _f6Apply(_db); } } // PSS #134 / #139 / #187
   document.getElementById('dlg-footer').innerHTML = footer;
   document.getElementById('dlg-footer').classList.toggle('ft48', window._ft48 === true);
@@ -6364,7 +6387,7 @@ function renderDashboard() {
     return true;
   }).sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,16); // PLS #202: PC fills its taller column; phones still show 8 (CSS)
   // PSS #269: a small date line above each day's entries (the date under every row is hidden); entries 9+ show only where the column is tall (computer)
-  const _rcRows = (list, prev) => { let last = prev || ''; return list.map(tx => { const hd = tx.date !== last ? `<div class="fx-day">${fmtD(tx.date)}</div>` : ''; last = tx.date; return hd + renderTxRow(tx, true); }).join(''); };
+  const _rcRows = (list, prev) => { let last = prev || ''; return _rcptCollapse(list).map(tx => { const hd = tx.date !== last ? `<div class="fx-day">${fmtD(tx.date)}</div>` : ''; last = tx.date; return hd + renderTxRow(tx, true); }).join(''); };
   let txHTML = recentTxs.length > 0 ? _rcRows(recentTxs.slice(0, 8)) + (recentTxs.length > 8 ? `<div class="fx-more">${_rcRows(recentTxs.slice(8), recentTxs[7].date)}</div>` : '') :
     `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No transactions yet</div></div>`;
 
@@ -6705,7 +6728,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '33'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '34'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #23 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6713,6 +6736,12 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '🧾 Items on the receipt: in More options, add each item with its own category; the list shows one row, tap it to see the items', // PLS #232
+    '🤝 Split bills: paying more than your share asks if it is a gain or money to give back; lowering or archiving a payment fixes what is owed back', // PLS #262
+    '✅ Settled shows a person who paid in full even while others still owe', // PSS #85
+    '🪟 Every popup and form has the same space around the title and X', // PSS #322
+    '✖️ One small grey x to remove a row: items, extra charge, people, linked payments', // PSS #317
+    '🌑 Dark mode: search boxes and fill-in boxes are grey', // PSS #318
     '🔤 One set of text sizes everywhere, matched to the Settings page; Analytics and big amounts keep their own sizes', // PSS #314
     '🔢 Income, Spent and Kept show up to 10 digits in full; on a narrow card they turn into three rows', // PSS #315, #325
     '📅 The month title on that Dashboard card is bigger, with even space above and below', // PSS #325
@@ -9346,8 +9375,8 @@ function spAddRow(name='', share='') {
   // Delete button
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = '×';
-  btn.style.cssText = 'min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:0;flex-shrink:0;line-height:1'; btn.setAttribute('aria-label','Remove person'); // PSS #214: 40px tap area
+  btn.innerHTML = _ico('x', 14); // PSS #317: one row-remove x everywhere (items, extra charge, people)
+  btn.style.cssText = 'min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0;flex-shrink:0;line-height:1'; btn.setAttribute('aria-label','Remove person'); // PSS #214: 40px tap area
   btn.onclick = function() { div.remove(); calcSharedResult(); };
   div.appendChild(nameInp);
   div.appendChild(shareInp);
@@ -9489,13 +9518,14 @@ function _xcRowsHTML(k) {
 }
 function _xcSection() {
   const keys = _xcKeys(); if (!keys.length) return '';
-  const open = keys.some(k => _xcRows(k).some(r => r.a || r.cat));
+  const open = keys.some(k => _xcRows(k).some(r => r.a || r.cat)) || (_addState.type === 'expense' && _xcRows('ri').some(r => r.a || r.n || r.cat));
   return `<div style="margin:2px 0 6px">
       <div onclick="toggleAddMore()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 4px;-webkit-tap-highlight-color:transparent">
         <span style="font-size:12px;color:var(--text3);font-weight:500">More options</span>
         <svg id="add-more-chevron" width="7" height="11" viewBox="0 0 8 13" fill="none" style="transition:transform 0.25s cubic-bezier(.4,0,.2,1);opacity:0.5;transform:rotate(${open ? 90 : 0}deg)"><path d="M1.5 1.5L6 6.5L1.5 11.5" stroke="var(--text3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div id="add-more-row" style="display:${open ? 'block' : 'none'};margin-top:6px">
+        ${_addState.type === 'expense' ? _riCard() : ''}
         ${keys.map(k => `<div class="ax-card xc-card">
           <div class="xc-head">${_XC[k].title}</div>
           <div id="${k}-list">${_xcRowsHTML(k)}</div>
@@ -9513,7 +9543,7 @@ function _xcDel(k, i) { try { npClose(); } catch (e) {} _xcSync(); _xcRows(k).sp
 function _xcOpenCat(k, i) {
   try { npClose(); } catch (e) {}
   _xcSync();
-  const type = _XC[k].type, cur = _xcRows(k)[i] && _xcRows(k)[i].cat;
+  const type = (_XC[k] || { type: 'expense' }).type, cur = _xcRows(k)[i] && _xcRows(k)[i].cat; // 'ri' = receipt items (expense)
   const parent = (db.categories[type] || []).find(c => (c.subcats || []).some(x => x.id === cur));
   window._catGroupOpen = parent ? parent.id : null;
   window._cpEdit = { type, xc: k, i }; // same picker as the main Category, in its pick-for-a-field mode (#230)
@@ -9524,6 +9554,75 @@ function _xcPick(k, i, id) {
   r.cat = id;
   const el = document.getElementById(k + '-cat-' + i);
   if (el) { el.innerHTML = _ecLabel(id); el.classList.remove('ax-ph'); }
+}
+// -- PLS #232 (Nov 24 add, his design: Rabtrad receipt) -- "Items on the receipt": the main amount is the receipt total;
+// each item he types (name, amount, category) is saved as its own expense, and what is left stays in the main
+// category (no items = the whole receipt is the main category in Analytics, as before). All of them share a
+// receiptId, so the list shows ONE row (main category icon, store from the note, total) and the row opens the items.
+// Not Extra charge: an extra charge is ON TOP of the total (tip, fee); items are PART of it.
+function _riSync() { _xcRows('ri').forEach((r, i) => { const a = document.getElementById('ri-amt-' + i), n = document.getElementById('ri-n-' + i); if (a) r.a = a.value; if (n) r.n = n.value; }); }
+function _riRowsHTML() {
+  const cs = _xcSym();
+  return _xcRows('ri').map((r, i) => `<div class="ri-row">
+      <div class="ri-top"><input class="form-input ri-name" id="ri-n-${i}" placeholder="Item name" value="${escapeAttr(r.n || '')}" oninput="_riSync()" aria-label="Item name">
+        <span class="xc-sym">${cs}</span><span class="xc-amtw ri-amtw"><input class="xc-amt numpad-input${r.a ? ' xc-masked' : ''}" type="number" id="ri-amt-${i}" min="0" step="any" placeholder="0" value="${escapeAttr(r.a || '')}" inputmode="none" oninput="_riSync();_xcFmt(this);_riLeft()" aria-label="Item amount"><span class="xc-fmt" aria-hidden="true">${_amtTyped(r.a || '')}</span></span></div>
+      <div class="ri-bot"><div class="xc-cat${r.cat ? '' : ' ax-ph'}" id="ri-cat-${i}" onclick="_xcOpenCat('ri',${i})" role="button">${r.cat ? _ecLabel(r.cat) : 'Choose category'}</div>
+        <button type="button" class="xc-x" onclick="_riDel(${i})" aria-label="Remove">${_ico('x', 14)}</button></div>
+    </div>`).join('');
+}
+function _riCard() {
+  setTimeout(() => { const m = document.getElementById('add-amount'); if (m && !m._riHook) { m._riHook = 1; m.addEventListener('input', _riLeft); } _riLeft(); }, 0);
+  return `<div class="ax-card xc-card"><div class="xc-head">Items on the receipt</div>
+      <div id="ri-list">${_riRowsHTML()}</div>
+      <button type="button" class="ax-addp" onclick="_riAdd()">+ Add item</button>
+      <div class="ri-left" id="ri-left" style="display:none"><span id="ri-left-l"></span><b id="ri-left-v"></b></div>
+      <div class="xc-hint">Type only the items you want to track. What is left stays in the main category.</div></div>`;
+}
+function _riMainName() { const id = _addState.subCatId || _addState.catId; return id ? _stripIcon(getCategoryDisplay(id).name) : 'the main category'; }
+function _riLeft() {
+  const box = document.getElementById('ri-left'); if (!box) return;
+  const _ac = db.accounts.find(a => a.id === document.getElementById('add-account')?.value);
+  const cur = (_ac && _ac.currency) || document.getElementById('add-currency')?.value || _homeBase(); // the account's currency, like the item rows
+  const tot = roundMoney(parseFloat(document.getElementById('add-amount')?.value) || 0, cur);
+  const items = roundMoney(_xcRows('ri').reduce((s, r) => s + (parseFloat(r.a) || 0), 0), cur);
+  box.style.display = items > 0 ? 'flex' : 'none';
+  const left = roundMoney(tot - items, cur);
+  box.classList.toggle('bad', left < -0.004);
+  document.getElementById('ri-left-l').textContent = left < -0.004 ? 'Items are more than the total' : `Left for ${_riMainName()}`;
+  document.getElementById('ri-left-v').textContent = fmt(Math.abs(left), cur);
+}
+function _riRedraw() { const l = document.getElementById('ri-list'); if (l) l.innerHTML = _riRowsHTML(); _riLeft(); }
+function _riAdd() { _riSync(); _xcRows('ri').push({ n: '', a: '', cat: null }); _riRedraw(); }
+function _riDel(i) { try { npClose(); } catch (e) {} _riSync(); _xcRows('ri').splice(i, 1); _riRedraw(); }
+// the list: entries of one receipt drawn as one row (only when 2 or more of them are live)
+function _rcptLive(rid) { return db.transactions.filter(t => !t.archived && t.receiptId === rid); }
+function _rcptCollapse(list) {
+  const seen = new Set(), out = [];
+  for (const t of list) {
+    if (!t.receiptId) { out.push(t); continue; }
+    if (seen.has(t.receiptId)) continue; seen.add(t.receiptId);
+    const all = _rcptLive(t.receiptId); if (all.length < 2) { out.push(t); continue; }
+    const cur = t.currency, tot = roundMoney(all.reduce((s, x) => s + (Number(x.amount) || 0), 0), cur);
+    out.push({ ...t, amount: tot, categoryId: t.receiptCatId || t.categoryId, subCatId: undefined, notes: `${t.receiptStore ? t.receiptStore + ' · ' : ''}${all.length} items`, _rcpt: t.receiptId });
+  }
+  return out;
+}
+function openReceipt(rid) {
+  const all = _rcptLive(rid).sort((a, b) => (a.itemName ? 1 : 0) - (b.itemName ? 1 : 0) || (a.createdAt || '').localeCompare(b.createdAt || ''));
+  if (!all.length) return;
+  const h = all[0], cur = h.currency, tot = roundMoney(all.reduce((s, x) => s + (Number(x.amount) || 0), 0), cur);
+  const main = _stripIcon(getCategoryDisplay(h.receiptCatId || h.categoryId).name), acct = db.accounts.find(a => a.id === h.accountId);
+  // PLS #232 (his Nov 24 call): same look as a shared bill's details (Dining Out): icon, title, date, plain hero, info card, list
+  const mc = getCategoryDisplay(h.receiptCatId || h.categoryId);
+  const rows = all.map(t => { const c = getCategoryDisplay(t.categoryId);
+    return _fsRow({ ico:c.icon, title:_esc(t.itemName || 'Rest of the receipt'), sub:_esc(_stripIcon(c.name)), amt:fmt(t.amount, cur), amtCol:'var(--text)',
+      onclick:`closeDlg();setTimeout(()=>openTxDetail('${t.id}',1),60)`, chev:true }); }).join('');
+  openDlg('', `<div class="fs">
+    ${_fsHead({ badge:mc.icon, badgeBg:'var(--red-bg)', badgeCol:'var(--red)', ring:null, title:_esc(h.receiptStore || main),
+      sub:`${_esc(main)}${acct ? ' · ' + _esc(acct.name) : ''} · ${fmtDFull(h.date)}${txTimeStr(h) ? ' ' + txTimeStr(h) : ''}`, hero:fmt(tot, cur), heroCol:'var(--text)' })}
+    <div class="rc-feed">${_fsFeed(rows)}</div>
+  </div>`, `<button class="btn btn-ghost" onclick="closeDlg()">Close</button>`);
+  document.querySelector('#dlg-overlay .dlg').classList.add('rc-dlg'); // same margin all round, no empty top bar
 }
 
 // After shared form renders, populate the persons list
@@ -10332,7 +10431,7 @@ function syncAddCurrency() {
 
 function submitAddTx() {
   const s = _addState;
-  if (s.type === 'expense' && s.paidBy) return _pbSave(); // PLS #279
+  if (s.type === 'expense' && s.paidBy) { try { _riSync(); } catch (e) {} if (_xcRows('ri').some(r => parseFloat(r.a) > 0)) { showToast('Items on the receipt work when you paid. Remove them or pick Me'); return; } return _pbSave(); } // PLS #279, #232
   const currency = document.getElementById('add-currency')?.value;
   const accountId = document.getElementById('add-account')?.value;
   const date = parseInputDate(document.getElementById('add-date')?.value);
@@ -10382,6 +10481,24 @@ function submitAddTx() {
         notes: '', fxSnapshot: JSON.parse(JSON.stringify(fxSnapshot)), createdAt: new Date().toISOString() });
     }
   }
+  // PLS #232: receipt items -> their own expenses, the rest stays in the main category, one receiptId for all
+  let _riTx = [], _riHeadGone = false;
+  if (s.type === 'expense') {
+    _riSync();
+    const its = _xcRows('ri').filter(r => parseFloat(r.a) > 0);
+    if (its.length) {
+      if (its.some(r => !r.cat)) { showToast('Choose a category for each item'); return; }
+      const sumI = roundMoney(its.reduce((t, r) => t + roundMoney(parseFloat(r.a), currency), 0), currency);
+      if (sumI > amount + 0.004) { showToast(`Items add up to ${fmt(sumI, currency)}, more than the total ${fmt(amount, currency)}`, 3500); return; }
+      const rid = 'rc-' + genId(), store = notes, mainCat = catId;
+      _riTx = its.map(r => ({ id: genId(), type: 'expense', amount: roundMoney(parseFloat(r.a), currency), currency, categoryId: r.cat, accountId, date, time: tx.time,
+        notes: [store, (r.n || '').trim()].filter(Boolean).join(' · '), itemName: (r.n || '').trim() || _stripIcon(getCategoryDisplay(r.cat).name),
+        receiptId: rid, receiptStore: store, receiptCatId: mainCat, fxSnapshot: JSON.parse(JSON.stringify(fxSnapshot)), createdAt: new Date().toISOString() }));
+      const left = roundMoney(amount - sumI, currency);
+      Object.assign(tx, { amount: left, receiptId: rid, receiptStore: store, receiptCatId: mainCat });
+      _riHeadGone = left < 0.005; // every peso itemized: no "rest" entry
+    }
+  }
   if (s.type==='shared') {
     const computedMyShare = parseFloat(document.getElementById('add-myshare')?.value) || totalBill;
     const toSplit = parseFloat(document.getElementById('add-amount-to-split')?.value) || totalBill;
@@ -10410,7 +10527,8 @@ function submitAddTx() {
   // -- PERSONAL LOGIC SET #255 -- no rate popup after saving income in another currency (his call Nov 3:
   // the rate is set by a remittance, or by hand in Settings > Exchange rates). Leftover of the removed Payday feature.
 
-  db.transactions.push(tx);
+  if (!_riHeadGone) db.transactions.push(tx);
+  _riTx.forEach(x => db.transactions.push(x)); // PLS #232: receipt items
   xcTx.forEach(x => db.transactions.push(x)); // PLS #232
   // update account lastTxDate
   const acct = db.accounts.find(a=>a.id===accountId);
@@ -10422,7 +10540,7 @@ function submitAddTx() {
   else if (currentPage==='transactions') renderTransactions();
   else if (currentPage==='reimbursements') renderReimbursementsPage();
   else if (currentPage==='accounts') renderAccounts();
-  showToast(xcTx.length ? `${xcTx.length + 1} transactions saved` : 'Transaction saved!');
+  showToast(_riTx.length ? `Receipt saved, ${_riTx.length + (_riHeadGone ? 0 : 1)} items` : xcTx.length ? `${xcTx.length + 1} transactions saved` : 'Transaction saved!');
 
 }
 
@@ -10898,7 +11016,7 @@ function renderTxLog() {
     db.transactions.forEach(t => { if (t.date === date && t.parentId && _dIds.has(t.parentId)) _dIds.add(t.id); }); // linked FX gain/loss shown inside its parent row
     const dayNet = getMonthTotals(date.slice(0, 7), 0, _dIds).net;
     txHTML += `<div class="month-hdr"><span>${fmtDFull(date)}</span><span style="font-family:var(--mono);font-size:11px;color:${dayNet>=0?'var(--green)':'var(--red)'}">${fmt(dayNet, _displayCurrency(), true)}</span></div>`; // PLS #173: day net with its currency and centavos (was "-283" for -PHP 282.64)
-    txHTML += dayTxs.map(tx=>renderTxRow(tx)).join('');
+    txHTML += _rcptCollapse(dayTxs).map(tx=>renderTxRow(tx)).join(''); // PLS #232: one row per receipt
     _rendered += dayTxs.length;
   }
   if (_hiddenCount > 0) {
@@ -11446,9 +11564,10 @@ function _openSharedFs(tx, footer, fxBadge) {
     ${others.length ? _fsSec(`Linked · ${others.length}`) + _fsFeed(linked) : ''}
   </div>`, footer);
 }
-function openTxDetail(txId) {
+function openTxDetail(txId, _one) {
   const tx = db.transactions.find(t=>t.id===txId) || db.archivedTransactions.find(t=>t.id===txId);
   if (!tx) return;
+  if (!_one && tx.receiptId && !tx.archived && _rcptLive(tx.receiptId).length > 1) return openReceipt(tx.receiptId); // PLS #232
   if (tx.inKindExpId) { // PLS #279: a loan paid in kind is shown and managed as the expense it paid for
     const e = db.transactions.find(t => t.id === tx.inKindExpId) || db.archivedTransactions.find(t => t.id === tx.inKindExpId);
     if (e) return openTxDetail(e.id);
@@ -11970,7 +12089,7 @@ function openEditTx(txId) {
       <div class="edit-person-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input class="form-input" style="flex:2;min-width:0" placeholder="Name" value="${escapeAttr(p.name)}" data-field="name">
         <input class="form-input numpad-input" style="flex:1;min-width:0" type="number" step="any" placeholder="Share" value="${p.share}" data-field="share" oninput="onEditSharedRecalc('${txId}')" inputmode="none">
-        <button aria-label="Remove person" type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">×</button>
+        <button aria-label="Remove person" type="button" onclick="this.closest('.edit-person-row').remove();onEditSharedRecalc('${txId}')" style="min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">${_ico('x', 14)}</button>
       </div>`).join('');
   }
 
@@ -12051,8 +12170,8 @@ function addEditPerson(txId) {
   shareInp.oninput = () => onEditSharedRecalc(txId);
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.textContent = '×';
-  btn.style.cssText = 'min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--red);font-size:22px;cursor:pointer;padding:0;flex-shrink:0;line-height:1'; btn.setAttribute('aria-label','Remove person');
+  btn.innerHTML = _ico('x', 14); // PSS #317: one row-remove x everywhere (items, extra charge, people)
+  btn.style.cssText = 'min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0;flex-shrink:0;line-height:1'; btn.setAttribute('aria-label','Remove person');
   btn.onclick = () => { div.remove(); onEditSharedRecalc(txId); };
   div.appendChild(nameInp);
   div.appendChild(shareInp);
@@ -12321,8 +12440,8 @@ function _sharedOverpaidDlg(tx, over) {
   const one = over.length === 1 ? _esc(over[0].name) : 'them';
   openDlg('They already paid more', `<div style="font-size:13px;color:var(--text2);line-height:1.6">${lines}
       <p style="margin:10px 0 0">The payment you received stays as it is. What should happen to the extra?</p></div>`,
-    `<button class="btn btn-ghost" onclick="closeDlg()">Cancel</button>
-     <button class="btn btn-ghost" onclick="saveEditTx('${tx.id}','return')">I'll give it back</button>
+    `<button class="btn btn-ghost" onclick="saveEditTx('${tx.id}','return')">I'll give it back</button>
+     <button class="btn btn-ghost" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary" onclick="saveEditTx('${tx.id}','gain')">Keep as gain</button>`);
 }
 
@@ -13056,6 +13175,10 @@ function archiveTx(txId, skipConfirm) {
     }
   }
 
+  // PLS #262: a split bill's give-back debts (no payment made on them yet) go to the archive with it
+  if (tx.type === 'shared') for (const l of (db.loans.borrowed || []).filter(l => l.fromOverpayTxId === txId && !getLoanPayments(l.id).length)) {
+    db.loans.borrowed = db.loans.borrowed.filter(x => x.id !== l.id); if (!Array.isArray(db.archivedLoans)) db.archivedLoans = [];
+    db.archivedLoans.push({ ...l, direction: 'borrowed', archivedAt: today(), cascadedFrom: txId }); cascaded++; }
   // If parent was a shared tx, also reset settled status if it had any (already archived so moot)
   saveDBWithSync();
   closeDlg();
@@ -13080,6 +13203,7 @@ function deleteChildReimb(childId, parentId) {
 }
 
 function confirmDeleteChildReimb(childId, parentId) {
+  const _gbSnap = JSON.stringify(db); // PLS #262
   // -- PLS #358 -- (Nov 4 side-effect check) every change to what a bill has been paid first
   // keeps each payment's current split (_reimbFreezeAll, #358). Archiving Mike's K88 used to let his
   // bulk payments slide onto the bill it reopened, so their "K2.10 of K31.40" lines and a later Undo
@@ -13126,6 +13250,8 @@ function confirmDeleteChildReimb(childId, parentId) {
     db.archivedTransactions.push({ ...db.transactions[childIdx], archived: true, archivedAt: archiveStamp, cascadedFrom: parentId, _rev520: { paid: _taken520, wo: 0 } });
     db.transactions.splice(childIdx, 1);
   }
+  _giveBackSync(reimbPerson, [parentId], childId); // PLS #262: the debt goes to the archive with the payment
+  if (_gbBlock(_gbSnap)) { closeDlg(); return; }
 
   saveDBWithSync();
   closeDlg();
@@ -13228,6 +13354,12 @@ function restoreTx(txId) {
     }
   }
   if (tx.inKindPayId) _pbAfterRestore(tx); // PLS #279: loans counted again, the debt it made comes back
+  // PLS #262: give-back debts archived with this bill or payment come back with it (and a part cut off comes back too)
+  for (const l of (db.archivedLoans || []).filter(l => l.cascadedFrom === txId)) {
+    db.archivedLoans = db.archivedLoans.filter(x => x !== l); const back = { ...l }; delete back.cascadedFrom; delete back.archivedAt; delete back.direction; delete back.archived;
+    db.loans.borrowed.push(back); _loanRecount(back); restored++; }
+  for (const l of (db.loans.borrowed || [])) if (l._gbCut && l._gbCut[txId]) {
+    l.amount = roundMoney((Number(l.amount) || 0) + l._gbCut[txId], l.currency || _homeBase()); delete l._gbCut[txId]; if (!Object.keys(l._gbCut).length) delete l._gbCut; _loanRecount(l); }
 
   saveDBWithSync();
   closeDlg();
@@ -13435,7 +13567,7 @@ function renderReimbTab() {
   let html = `<div class="page-pad"><div class="lp-tiles"><div class="lp-tile" style="cursor:default">
       <div class="lp-tile-lbl">Owed to you</div><div class="lp-tile-amt">${fmt(_inDisplay(owedHome), _displayCurrency())}</div>
       <div class="lp-tile-sub">${names.length ? `${names.length} ${names.length>1?'people':'person'} · ${items} ${items>1?'items':'item'}` : 'All settled'}</div></div></div>
-    <div class="lp-chips"><button class="lp-chip ${_reimbView!=='settled'?'on':''}" onclick="setReimbView('active')">Active</button><button class="lp-chip ${_reimbView==='settled'?'on':''}" onclick="setReimbView('settled')">Settled${settled.length?` · ${settled.length}`:''}</button></div>`;
+    <div class="lp-chips"><button class="lp-chip ${_reimbView!=='settled'?'on':''}" onclick="setReimbView('active')">Active</button><button class="lp-chip ${_reimbView==='settled'?'on':''}" onclick="setReimbView('settled')">Settled${(settled.length + _reimbPaidOpen().length)?` · ${settled.length + _reimbPaidOpen().length}`:''}</button></div>`;
   if (_reimbView === 'settled') return html + _reimbSettledView(settled) + `</div>`;
   if (!names.length) return html + `<div class="lp-empty">Nobody owes you right now.<br><span style="color:var(--text3);font-size:12px">Log a Shared expense to split a bill.</span></div></div>`;
   html += `<div class="lp-sec">Active</div><div class="lp-grp">`;
@@ -13533,17 +13665,34 @@ var _reimbView = 'active';
 function setReimbView(v) { _reimbView = v; renderReimbursementsPage(); }
 // PSS #85: settled shared expenses, in the page, newest month first; a batch settlement is one row
 // (tap for its items and Edit), the rest one row each.
+// PSS #85 (Nov 24 add, his ask): a person who paid their whole share shows in Settled even while others on the
+// bill still owe, so a payment never looks lost. Their row says "others still owe"; the bill stays in Active for them.
+function _reimbPaidOpen() {
+  const out = [];
+  for (const b of db.transactions) {
+    if (b.type !== 'shared' || b.archived || b.settled) continue;
+    for (const p of (b.persons || [])) { const sh = Number(p.share) || 0;
+      if (sh > 0.004 && (Number(b.paidSoFar?.[p.name]) || 0) >= sh - 0.005) out.push({ b, person: p.name }); }
+  }
+  return out;
+}
 function _reimbSettledView(settled) {
-  if (!settled.length) return `<div class="lp-empty">Nothing settled yet.</div>`;
+  const _po = _reimbPaidOpen(), _poHas = (b, who) => _po.some(x => x.b === b && x.person === who);
+  if (!settled.length && !_po.length) return `<div class="lp-empty">Nothing settled yet.</div>`;
   const batches = db.transactions.filter(t => !t.archived && t.isBatchReimbSettlement);
-  const inBatch = new Set(), cards = [];
+  const inBatch = new Set(), cards = [], _poDone = new Set();
   for (const bp of batches) {
-    const txs = (bp.batchTxIds||[]).map(id => settled.find(t => t.id === id)).filter(Boolean);
+    const _who = bp.batchPerson || bp.reimbPerson || '';
+    const txs = (bp.batchTxIds||[]).map(id => settled.find(t => t.id === id) || _po.find(x => x.b.id === id && x.person === _who)?.b).filter(Boolean);
+    txs.forEach(t => { if (!t.settled) _poDone.add(t.id + '|' + _who); });
     if (!txs.length) continue;
     txs.forEach(t => inBatch.add(t.id));
     cards.push({ batch: bp, txs, d: bp.date || '' });
   }
   for (const t of settled) if (!inBatch.has(t.id)) cards.push({ tx: t, d: (t.settledAt || t.date || '').slice(0,10) });
+  for (const x of _po) if (!_poDone.has(x.b.id + '|' + x.person)) { // paid with a single payment: one row per person
+    const pay = db.transactions.filter(t => !t.archived && t.isAutoReimb && !t.skipBalance && t.parentId === x.b.id && (t.reimbPerson || t.batchPerson) === x.person).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    cards.push({ po: x, pay, d: (pay?.date || x.b.date || '').slice(0,10) }); }
   cards.sort((x,y) => (y.d||'').localeCompare(x.d||''));
   const _al = _reimbAllocAll().byPayment; // PSS #215
   const groups = [];
@@ -13567,7 +13716,7 @@ function _reimbSettledView(settled) {
         html += `<div class="reimb-person-card"><div class="lp-row" onclick="toggleReimbPerson('${rid}')">
           <div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc(who.slice(0,2).toUpperCase())}</div>
           <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(who)}</span>${gain?`<span class="lp-pill gain">+${fmt(gain.amount, gain.currency)}</span>`:''}</div>
-          <div class="lp-meta">${nItems} ${nItems>1?'bills':'bill'} · paid ${fmtDFull(bp.date)}</div></div>
+          <div class="lp-meta">${c.txs.some(t => !t.settled) ? `Paid ${fmtDFull(bp.date)} · others still owe` : `${nItems} ${nItems>1?'bills':'bill'} · paid ${fmtDFull(bp.date)}`}</div></div>
           <div class="lp-amt">${fmt(bp.amount, bp.currency)}</div><span class="lp-chev" id="${rid}-chev">›</span></div>
           <div id="${rid}" style="display:none;border-top:1px solid var(--border)">` + (parts.length ? parts.map(r => { const tx = r.tx, cat = getCategoryDisplay(tx.categoryId); return `<div class="tx-item" onclick="openTxDetail('${tx.id}')">
               <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_esc(_stripIcon(cat.name))}${tx.notes ? ` <span style="color:var(--text3);font-weight:400">· ${_esc(tx.notes)}</span>` : ''}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
@@ -13575,6 +13724,12 @@ function _reimbSettledView(settled) {
               <div class="tx-icon tx-icon-shared">${cat.icon}</div><div class="tx-meta"><div class="tx-name">${_esc(_stripIcon(cat.name))}</div><div class="tx-detail">${fmtDFull(tx.date)}</div></div>
               <div class="tx-right"><div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(tx.totalBill||tx.amount, tx.currency)}</div></div></div>`; }).join(''))
           + `<div style="padding:10px 16px;display:flex;justify-content:flex-end;border-top:1px solid var(--border)"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openBatchReimbSettleEdit('${bp.id}')">Edit</button></div></div></div>`;
+      } else if (c.po) {
+        const b = c.po.b, cat = getCategoryDisplay(b.categoryId), who = c.po.person;
+        html += `<div class="lp-row" onclick="openTxDetail('${b.id}')"><div class="pool-avatar" style="width:32px;height:32px;font-size:11px">${_esc(who.slice(0,2).toUpperCase())}</div>
+          <div style="min-width:0;flex:1"><div class="lp-name"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(who)}</span></div>
+          <div class="lp-meta">Paid ${fmtDFull(c.d || b.date)} · others still owe</div></div>
+          <div class="lp-amt">${fmt(_reimbShare(b, who), b.currency)}</div><span class="lp-chev">›</span></div>`;
       } else {
         const tx = c.tx, cat = getCategoryDisplay(tx.categoryId);
         const ns = tx.persons?.map(p=>p.name).filter(Boolean) || [tx.sharedWith || tx.personName || 'Unknown'];
@@ -15944,7 +16099,7 @@ function _payAcctCur(pfx, txId, label) {
   if (hint) hint.textContent = `Type what actually came in, in ${c}. ${fmt(tx.amount, tx.currency)} was about ${fmt(est, c)} that day.`;
 }
 
-function openBatchReimbSettleEdit(txId) {
+function openBatchReimbSettleEdit(txId, _keep) {
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
   if (tx.inKindExpId && _pbToExp(tx)) return; // PLS #349
@@ -15977,7 +16132,7 @@ function openBatchReimbSettleEdit(txId) {
        ${txRowsHTML}${gainRow}
      </div>
      <div class="form-group"><label class="form-label" for="brse-amount" id="brse-lbl">Amount received (${tx.currency})</label>
-       <input class="form-input numpad-input" type="number" step="any" id="brse-amount" value="${tx.amount}" inputmode="none">
+       <input class="form-input numpad-input" type="number" step="any" id="brse-amount" value="${_keep && _keep.txId === txId ? _keep.amount : tx.amount}" inputmode="none">
        <div style="font-size:11px;color:var(--text3);margin-top:3px" id="brse-hint">Changing the amount also updates what they still owe.</div>
      </div>
      <div class="form-group"><label class="form-label" for="brse-acct">Account</label>
@@ -16037,6 +16192,7 @@ function undoBatchReimbSettle(txId) {
      <button class="btn btn-danger btn-sm" onclick="confirmUndoBatchReimbSettle('${txId}')">Undo payment</button>`);
 }
 function confirmUndoBatchReimbSettle(txId) {
+  const _gbSnap = JSON.stringify(db); // PLS #262
   const tx = db.transactions.find(t => t.id === txId); if (!tx) { closeDlg(); return; }
   if (tx.inKindExpId && db.transactions.some(t => t.id === tx.inKindExpId)) { closeDlg(); return _pbArchive(tx.inKindExpId); } // PLS #349
   const person = tx.batchPerson || tx.reimbPerson || '';
@@ -16048,6 +16204,8 @@ function confirmUndoBatchReimbSettle(txId) {
     if (v <= 0.001) delete b.paidSoFar[person]; else b.paidSoFar[person] = v;
   }
   db.transactions = db.transactions.filter(t => t.id !== txId && t.parentId !== txId && t.cascadedFrom !== txId);
+  _giveBackSync(person, rows.map(r => r.billId)); // PLS #262
+  if (_gbBlock(_gbSnap)) { closeDlg(); return; }
   let opened = 0;
   for (const id of (tx.batchTxIds || [])) {
     const b = db.transactions.find(t => t.id === id); if (!b) continue;
@@ -16061,17 +16219,100 @@ function confirmUndoBatchReimbSettle(txId) {
   showToast(`Payment undone. ${opened} ${opened === 1 ? 'bill' : 'bills'} owed again`);
 }
 
-function confirmBatchReimbSettleEdit(txId) {
+// -- PLS #262 (Nov 24 add) -- (his ask Nov 24, Tey K30 on Aviat) a "give it back" debt (or a kept-as-gain
+// extra) is the part of a payment ABOVE that person's share. When a payment to the bill is lowered, undone or
+// archived, that part shrinks with it: the debt first (only what is not paid back yet), then the gain. Before:
+// Tey paid K30 on a K27 share, K3 became a debt to give back, then the payment was changed to K27 and the K3
+// debt stayed, so net worth counted the K3 twice (paid K27 AND still owed K3 back).
+var _gbLeft = [];
+// PLS #262 (Nov 24 add): money already given back on a give-back debt cannot be taken off by lowering the payment.
+// The change is refused (everything put back) and he is told to undo that give-back payment in Loans first.
+function _gbBlock(snap) {
+  if (!_gbLeft.length) return false;
+  const x = _gbLeft[0]; db = JSON.parse(snap); _gbLeft = [];
+  showToast(`You already gave ${x.person} ${fmt(x.paid, x.cur)} back. Undo that in Loans first`, 4000); return true;
+}
+function _giveBackSync(person, billIds, archiveBy) {
+  _gbLeft = [];
+  if (!person) return 0;
+  _reimbFreezeAll(); // PLS #358
+  let cutAll = 0;
+  for (const bid of [...new Set(billIds || [])]) {
+    const b = db.transactions.find(t => t.id === bid && t.type === 'shared'); if (!b) continue;
+    const cur = b.currency || _homeBase();
+    let into = 0;
+    for (const t of db.transactions) {
+      if (t.archived || !t.isAutoReimb || t.skipBalance || (t.batchPerson || t.reimbPerson) !== person) continue;
+      for (const r of (Array.isArray(t.reimbBreakdown) ? t.reimbBreakdown : [])) if (r.billId === bid) into += Number(r.amount) || 0;
+    }
+    const wo = Number(b.writtenOff?.[person]) || 0;
+    const over = Math.max(0, into - Math.max(0, _reimbShare(b, person) - wo));
+    const debts = (db.loans.borrowed || []).filter(l => l.fromOverpayTxId === bid && l.personName === person).sort((x, y) => ((y.date || '') + (y.time || '')).localeCompare((x.date || '') + (x.time || '')));
+    const gains = db.transactions.filter(t => !t.archived && t.isOverpayGain && t.parentId === bid && t.batchPerson === person);
+    let cut = roundMoney(debts.reduce((s, l) => s + (Number(l.amount) || 0), 0) + gains.reduce((s, g) => s + (Number(g.amount) || 0), 0) - over, cur);
+    if (cut < 0.01) continue;
+    for (const l of debts) {
+      if (cut < 0.005) break;
+      const take = Math.min(cut, Number(l.remaining) || 0); if (take < 0.005) continue;
+      l.amount = roundMoney((Number(l.amount) || 0) - take, cur); cut = roundMoney(cut - take, cur); cutAll += take;
+      if (l.amount <= 0.005 && !getLoanPayments(l.id).length) { // PLS #262: an archived payment takes its debt to the archive, a restore brings it back
+        db.loans.borrowed = db.loans.borrowed.filter(x => x.id !== l.id);
+        if (archiveBy) { if (!Array.isArray(db.archivedLoans)) db.archivedLoans = [];
+          db.archivedLoans.push({ ...l, amount: roundMoney(l.amount + take, cur), remaining: roundMoney((Number(l.remaining) || 0) + take, cur), direction: 'borrowed', archivedAt: today(), cascadedFrom: archiveBy }); }
+      } else { if (archiveBy) l._gbCut = { ...(l._gbCut || {}), [archiveBy]: roundMoney(((l._gbCut || {})[archiveBy] || 0) + take, cur) }; _loanRecount(l); }
+    }
+    for (const g of gains) {
+      if (cut < 0.005) break;
+      const take = Math.min(cut, Number(g.amount) || 0);
+      g.amount = roundMoney(g.amount - take, cur); cut = roundMoney(cut - take, cur); cutAll += take;
+      if (g.amount <= 0.005) db.transactions = db.transactions.filter(t => t.id !== g.id);
+    }
+    if (cut >= 0.01) _gbLeft.push({ person, billId: bid, cur, left: cut, paid: debts.reduce((s, l) => s + Math.max(0, (Number(l.amount) || 0) - (Number(l.remaining) || 0)), 0) });
+  }
+  return cutAll;
+}
+// PLS #262 (Nov 24 add): after two devices are combined, every give-back debt and kept extra is checked against the
+// payments it came from. One device made the K3 debt, the other lowered Tey's payment to K27: combined, both stayed.
+// PLS #262 (Nov 24 add): what a bill has been paid, when sync added both devices' changes together, is counted again from
+// the payments themselves. PC cut Tey's share to K27, the phone lowered his payment to K27: 30 - 3 - 3 read K24 paid.
+function _syncPaidFromPays(out) {
+  const ids = new Set(((out && out.rules) || []).map(r => (String(r.path).match(/^transactions\.#([^.]+)\.paidSoFar/) || [])[1]).filter(Boolean));
+  if (!ids.size) return; const got = _reimbAllocAll().got;
+  for (const b of db.transactions.filter(t => ids.has(t.id) && t.type === 'shared' && !t.archived && (t.persons || []).length)) {
+    if (!b.paidSoFar || typeof b.paidSoFar !== 'object') b.paidSoFar = {};
+    for (const x of b.persons) { const v = roundMoney(got[b.id + '|' + x.name] || 0, b.currency || _homeBase()); if (v <= 0.001) delete b.paidSoFar[x.name]; else b.paidSoFar[x.name] = v; }
+    _reimbBillSettle(b, b.settledAt || null); }
+}
+function _giveBackSyncAll() {
+  const seen = new Set();
+  for (const l of (db.loans.borrowed || [])) if (l.fromOverpayTxId) seen.add(l.personName + '\u0000' + l.fromOverpayTxId);
+  for (const t of db.transactions) if (!t.archived && t.isOverpayGain && t.parentId) seen.add(t.batchPerson + '\u0000' + t.parentId);
+  let n = 0; const left = []; for (const k of seen) { const [who, bid] = k.split('\u0000'); n += _giveBackSync(who, [bid]); left.push(..._gbLeft); }
+  _gbLeft = left; return n;
+}
+// PLS #262: what Edit payment does with money above what they owe, asked first (same choice as a share cut, #262)
+function _brseOverDlg(txId, extra, cur, person) {
+  openDlg('More than they owe', `<div style="font-size:13px;color:var(--text2);line-height:1.6">
+      <div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${_esc(person || 'They')} paid more than the bills owe</span><b style="font-family:var(--mono);white-space:nowrap">${fmt(extra, cur)} extra</b></div>
+      <p style="margin:10px 0 0">What should happen to the extra?</p></div>`,
+    `<button class="btn btn-ghost" onclick="confirmBatchReimbSettleEdit('${txId}','return')">I'll give it back</button>
+     <button class="btn btn-ghost" onclick="closeDlg();setTimeout(()=>openBatchReimbSettleEdit('${txId}', window._brseVals),60)">Cancel</button>
+     <button class="btn btn-primary" onclick="confirmBatchReimbSettleEdit('${txId}','gain')">Keep as gain</button>`);
+}
+function confirmBatchReimbSettleEdit(txId, overChoice) {
+  const _gbSnap = JSON.stringify(db); // PLS #262
   const tx = db.transactions.find(t => t.id === txId);
   if (!tx) return;
   const home = _homeBase();
   const person = tx.batchPerson || tx.reimbPerson || '';
-  const newAcctId = document.getElementById('brse-acct')?.value || tx.accountId;
+  const _sv = overChoice && window._brseVals && window._brseVals.txId === txId ? window._brseVals : null; // PLS #262: the form is gone once the question opens
+  const newAcctId = _sv ? _sv.acct : document.getElementById('brse-acct')?.value || tx.accountId;
   const cur = db.accounts.find(a => a.id === newAcctId)?.currency || tx.currency || home; // PLS #272
-  const newAmount = roundMoney(parseFloat(document.getElementById('brse-amount')?.value) || tx.amount, cur); // PLS #354
-  const newDate = document.getElementById('brse-date')?.value || tx.date;
-  const newTime = document.getElementById('brse-time')?.value || tx.time;
-  const newNotes = document.getElementById('brse-notes')?.value?.trim() || tx.notes;
+  const newAmount = _sv ? _sv.amount : roundMoney(parseFloat(document.getElementById('brse-amount')?.value) || tx.amount, cur); // PLS #354
+  const newDate = _sv ? _sv.date : document.getElementById('brse-date')?.value || tx.date;
+  const newTime = _sv ? _sv.time : document.getElementById('brse-time')?.value || tx.time;
+  const newNotes = _sv ? _sv.notes : document.getElementById('brse-notes')?.value?.trim() || tx.notes;
+  window._brseVals = { txId, acct: newAcctId, amount: newAmount, date: newDate, time: newTime, notes: newNotes };
   const kids = () => db.transactions.filter(t => !t.archived && t.parentId === txId);
   const done = msg => { saveDBWithSync(); closeDlg(); if (currentPage === 'reimbursements') renderReimbursementsPage(); else if (currentPage === 'transactions') renderTransactions(); showToast(msg); };
 
@@ -16100,8 +16341,18 @@ function confirmBatchReimbSettleEdit(txId) {
       parts.push({ b, inBill: left, inPay: leftIn }); pool -= leftIn; }
     else { parts.push({ b, inBill: roundMoney(conv(pool, cur, bc), bc), inPay: pool }); pool = 0; } // PLS #355
   }
-  if (!parts.length) { showToast('Nothing is owed on these bills'); return; }
-  const excess = roundMoney(Math.max(0, pool), cur);
+  // PLS #262: a give-back debt or kept extra already made on these bills for this person covers that much of the extra
+  const _gbBills = [...new Set([...ownIds, ...parts.map(p => p.b.id)])];
+  const _gbHave = roundMoney(_gbBills.reduce((s, id) => { const b = db.transactions.find(t => t.id === id); if (!b) return s;
+    const bc = b.currency || home, onBill = (db.loans.borrowed || []).filter(l => l.fromOverpayTxId === id && l.personName === person).reduce((a, l) => a + (Number(l.amount) || 0), 0)
+      + db.transactions.filter(t => !t.archived && t.isOverpayGain && t.parentId === id && t.batchPerson === person).reduce((a, g) => a + (Number(g.amount) || 0), 0);
+    return s + conv(onBill, bc, cur); }, 0), cur);
+  const _gbCovered = Math.min(_gbHave, Math.max(0, pool));
+  if (!parts.length && _gbCovered < 0.01) { showToast('Nothing is owed on these bills'); return; }
+  const excess = roundMoney(Math.max(0, pool - _gbCovered), cur);
+  const _wasGain = kids().some(t => t.isReimbSettlementGain && !t.isFxRealized);
+  if (excess >= 0.01 && !overChoice && !_wasGain) { _brseOverDlg(txId, excess, cur, person); return; }
+  const _giveBack = overChoice === 'return' && excess >= 0.01;
 
   // apply: bills, then the payment
   const touched = [...new Set([...own, ...parts.map(p => p.b)])];
@@ -16113,21 +16364,34 @@ function confirmBatchReimbSettleEdit(txId) {
     _reimbBillSettle(b, newDate);
     _reimbFeeSync(b, person, newAcctId, newDate, newTime, snap, add);
   }
+  // PLS #262: the part above the shares (a give-back debt, or one kept before) stays on the bill it came in on
+  const _onTop = roundMoney(_gbCovered + (_giveBack ? excess : 0), cur);
+  const _topBill = (_onTop >= 0.01) ? (parts.length ? parts[parts.length - 1].b : own[own.length - 1]) : null;
+  if (_topBill && !parts.some(p => p.b === _topBill)) parts.push({ b: _topBill, inBill: 0, inPay: 0 });
+  const _bd = parts.map(p => ({ billId: p.b.id, amount: roundMoney(p.inBill + (p.b === _topBill ? conv(_onTop, cur, p.b.currency || home) : 0), p.b.currency || home), currency: p.b.currency || home }));
   Object.assign(tx, { amount: newAmount, currency: cur, accountId: newAcctId, date: newDate, time: newTime, notes: newNotes, fxSnapshot: snap,
     parentId: parts[0].b.id, batchTxIds: parts.map(p => p.b.id),
-    reimbBreakdown: parts.map(p => ({ billId: p.b.id, amount: p.inBill, currency: p.b.currency || home })) });
+    reimbBreakdown: _bd });
+  if (_giveBack && _topBill) {
+    const bc = _topBill.currency || home, billName = (_topBill.notes || '').trim() || txCategoryDisplay(_topBill)?.name || 'split bill';
+    db.loans.borrowed.push({ id: genId(), personName: person, amount: roundMoney(conv(excess, cur, bc), bc), currency: bc, accountId: newAcctId,
+      remaining: roundMoney(conv(excess, cur, bc), bc), date: newDate, time: newTime, dueDate: null, settled: false, fromOverpayTxId: _topBill.id,
+      notes: `Extra paid on ${billName} (${fmtDFull(_topBill.date)}), to give back` });
+  }
 
   const common = { accountId: newAcctId, date: newDate, time: newTime, fxSnapshot: snap, parentId: txId, batchPerson: person, isSettlement: true };
   const pushNew = () => (db.transactions.push({ id: 'tx-' + genId(), createdAt: new Date().toISOString() }), db.transactions[db.transactions.length - 1]);
   const gains = kids().filter(t => t.isReimbSettlementGain && !t.isFxRealized);
   gains.slice(1).forEach(t => db.transactions.splice(db.transactions.indexOf(t), 1));
-  if (excess >= 0.01 /* PLS #355 */) Object.assign(gains[0] || pushNew(), common, { type: 'income', amount: excess, currency: cur,
+  if (excess >= 0.01 /* PLS #355 */ && !_giveBack) Object.assign(gains[0] || pushNew(), common, { type: 'income', amount: excess, currency: cur,
     notes: `Reimbursement gain from ${person}`, isReimbSettlementGain: true, categoryId: gains[0]?.categoryId || 'sc-investreturns' });
   else if (gains[0]) db.transactions.splice(db.transactions.indexOf(gains[0]), 1);
   // PLS #283: the gain on this payment is made by _loanGainSync at save (one rule for every payment).
 
+  _giveBackSync(person, _gbBills); // PLS #262: a lower payment shrinks the give-back debt it paid for
+  if (_gbBlock(_gbSnap)) return;
   const open = touched.filter(b => !b.settled).length;
-  done(excess >= 0.01 /* PLS #355 */ ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
+  done(_giveBack ? `Saved. ${fmt(excess, cur)} added to Loans as owed to ${person}` : excess >= 0.01 /* PLS #355 */ ? `Saved. ${fmt(excess, cur)} gain` : open ? `Saved. ${open} ${open === 1 ? 'bill' : 'bills'} still owed` : 'Saved');
 }
 
 // -- PERSONAL LOGIC SET #297 -- (Nov 7, his ask "ang gulo ng loop") tapping a payment under ONE bill or ONE loan
@@ -16222,20 +16486,27 @@ function _ppHint() {
   if (te) te.textContent = Math.abs(tot - c.tx.amount) > 0.004 ? `${fmt(c.tx.amount, c.cur)} → ${fmt(tot, c.cur)}` : fmt(c.tx.amount, c.cur);
 }
 function _ppApply(c, newT, newIn) {
+  const _gbSnap = JSON.stringify(db); // PLS #262
   const { tx, cur, tc } = c, home = _homeBase();
   const oldIn = roundMoney(c.conv(c.part, tc, cur), cur);
-  const total = roundMoney(tx.amount + (newIn - oldIn), cur);
+  let total = roundMoney(tx.amount + (newIn - oldIn), cur);
   if (c.kind === 'bill') {
     _reimbFreezeAll();
     let rows = (tx.reimbBreakdown || []).slice();
     if (!rows.some(r => r.billId === c.t.id)) rows.push({ billId: c.t.id, amount: 0, currency: tc });
+    // PLS #262 (Nov 24 add): a changed part is what they paid on this bill now, so the extra above the share (a
+    // give-back debt or kept extra) comes off the payment too, and _giveBackSync below takes it off the debt
+    const _xtra = Math.max(0, roundMoney((Number(rows.find(r => r.billId === c.t.id)?.amount) || 0) - c.part, tc));
     rows = newT > 0.004 ? rows.map(r => r.billId === c.t.id ? { ...r, amount: newT } : r) : rows.filter(r => r.billId !== c.t.id);
+    if (_xtra > 0.004) total = roundMoney(total - c.conv(_xtra, tc, cur), cur);
     const b = c.t; if (!b.paidSoFar || typeof b.paidSoFar !== 'object') b.paidSoFar = {};
     const v = roundMoney(Math.max(0, c.paidAll - c.part + newT), tc);
     if (v <= 0.001) delete b.paidSoFar[c.person]; else b.paidSoFar[c.person] = v;
     _reimbBillSettle(b, tx.date);
     _reimbFeeSync(b, c.person, tx.accountId, tx.date, tx.time, tx.fxSnapshot, newT);
     tx.reimbBreakdown = rows; tx.amount = total;
+    _giveBackSync(c.person, [b.id]); // PLS #262
+    if (_gbBlock(_gbSnap)) return;
     if (tx.isBatchReimbSettlement) { // ids of bills not open on this device (archived, or not synced yet) stay as they were
       const live = id => db.transactions.some(t => t.id === id && t.type === 'shared' && !t.archived);
       tx.batchTxIds = [...rows.map(r => r.billId), ...(tx.batchTxIds || []).filter(id => !live(id) && !rows.some(r => r.billId === id))];
@@ -29210,14 +29481,14 @@ async function _syncFinishMerge() {
   if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Data changed while syncing. Trying again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
   _premergeSave(p.meta.deviceName); // PLS #240: the copy is taken right here; the IndexedDB write finishes on its own
   const mineTx = db.transactions.length;
-  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); try { _syncRecountPaid(p.out); } catch (e) { console.warn('[Sync] recount', e); } saveDB();
+  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); try { _syncRecountPaid(p.out); } catch (e) { console.warn('[Sync] recount', e); } try { _syncPaidFromPays(p.out); _giveBackSyncAll(); (p.out.flags = p.out.flags || []).push(..._gbLeft.map(x => ({ kind: 'giveback', ...x }))); _gbLeft = []; } catch (e) { console.warn('[Sync] give back', e); } saveDB(); // PLS #262
   showLoading('Syncing...');
   try { await _syncUpload(); } catch(e) { hideLoading(); db.settings.lastLocalEditAt = new Date().toISOString(); saveDB(); setSyncStatus('unsaved'); showToast('Synced here. Will upload to Drive when it can'); setTimeout(() => location.reload(), 1200); return; }
   hideLoading(); window._syncPending = null;
   const flags = p.out.flags || [];
   const done = () => location.reload();
   if (!flags.length) { showToast(p.out.union ? `Synced with ${p.meta.deviceName}. Items you deleted may be back` : `Synced with ${p.meta.deviceName}`, p.out.union ? 3500 : undefined); setTimeout(done, p.out.union ? 2600 : 1100); return; } // PLS #223
-  const line = f => f.kind === 'duplicate' ? `Maybe added twice: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which you archived on the other device`
+  const line = f => f.kind === 'giveback' ? `You gave ${f.person} ${fmt(f.paid, f.cur)} back, but the payment it came from is now lower. Check ${f.person}'s payment` : f.kind === 'duplicate' ? `Maybe added twice: ${_syncTxName(f.tx)}` : f.kind === 'archived' ? `${_syncTxName(f.tx)} is in ${f.account}, which you archived on the other device`
     : f.kind === 'noaccount' ? `${_syncTxName(f.tx)} uses an account you deleted on the other device`
     : f.kind === 'keptaccount' ? `${f.name} was kept, something still uses it` : `Account ${f.name} was added on both devices`;
   window._syncReload = done;
@@ -32494,7 +32765,7 @@ function _instLinkedHTML(inst) {
   if (!linkedTxs.length) return `<div style="background:var(--bg3);border-radius:14px;padding:12px 14px;margin:0 0 14px;font-size:12px;color:var(--text3)">No linked payments yet. Use Find matching on the installment to link them.</div>`;
   const row = (t, i) => `<div class="einst-lk${i >= 5 ? ' einst-lk-more' : ''}" style="display:${i >= 5 ? 'none' : 'flex'};justify-content:space-between;align-items:center;gap:10px;min-height:40px;font-size:13px;${i ? 'border-top:1px solid var(--border)' : ''}">
       <span style="color:var(--text3);flex:1">${fmtDFull(t.date) /* PSS #320 */}${t.archived ? ' · archived' : ''}</span><span style="font-weight:500">${fmt(t.amount, t.currency || _homeBase())}</span>
-      <button type="button" aria-label="Unlink this payment" onclick="unlinkOneInstallmentTx('${inst.id}','${t.id}')" style="background:none;border:0;color:var(--text3);font-size:16px;line-height:1;padding:6px 0 6px 6px;cursor:pointer">×</button></div>`;
+      <button type="button" aria-label="Unlink this payment" onclick="unlinkOneInstallmentTx('${inst.id}','${t.id}')" style="background:none;border:0;color:var(--text3);font-size:14px;line-height:1;padding:6px 0 6px 6px;cursor:pointer;display:inline-flex">${_ico('x', 14)}</button></div>`;
   return `<div style="margin:0 0 14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin:0 2px 6px"><span style="font-size:12px;font-weight:500;color:var(--text3)">Linked payments · ${linkedTxs.length}</span><span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="unlinkAllInstallmentTxs('${inst.id}')">Unlink all</span></div>
       <div style="background:var(--bg3);border-radius:14px;padding:0 14px">${linkedTxs.map(row).join('')}
