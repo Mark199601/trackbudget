@@ -57,6 +57,14 @@
 //     PSS #314 Fonts (+ #315 number fitter): also took in old #338, and the font parts of #292, #299, #303.
 //     PSS #319 Text or icon inside a circle is measured exactly centred. (was old #674)
 //       Budgets and goals rings are 46px (4px line, 38px hole) so 115% fits inside; the Owed to you circle is 46px too.
+//       1000% and up reads 999+ inside the ring (the row beside it has the exact amounts).
+//     PLS #261 Safe rate: lending AND shared bills paid in Peso but owed by someone where you live use the safe rate
+//       minus the buffer (Settings > Exchange rates). Such a share is shown and collected in Kina (K35.67 from P455.11);
+//       "Show in Peso" on the bill keeps it in Peso (saved per person as collectIn).
+//       A payment received at the safe rate keeps that rate when edited (reimbSafeEff), so an edit never makes a fake extra.
+//       Such a payment books Profit (safe rate vs market on the bill day) + Rate change rows, like a loan (his Nov 25 'listed as gain').
+//     PLS #262 Extra paid / give back: raising a share again first takes back the give-back debt it made; after sync a bill
+//       whose shares changed on one device and payments on the other has 'settled' checked again.
 //     PLS #354 Money precision: amounts in the currency's own places (2, crypto 8) and shown with centavos; rates full
 //       precision, never rounded. (was old #110, old #122, old #377, old #383, old #541, old #543, old #601)
 //     PLS #355 Paid to the centavo: paid in full only when it reaches what is owed to the centavo; a P0.01 extra or
@@ -64,6 +72,7 @@
 //     PSS #320 Plain words: short plain sentences, no dashes, no caps; edits say Save changes, adds say Add <thing>.
 //       (was old #356, old #368, old #404, old #467, old #598, old #719; memory docs old #175: no subtitle that repeats what the chart shows)
 //     PSS #321 Dates read "Nov 6, 2026" and times "10:28 AM", never 2026-11-06. (was old #726; date parts of old #598, old #719)
+//       Save snapshot: the box says Optional and the full default label is shown under it (it was cut in the box).
 //     PLS #356 Don't lose typing: every form asks Discard changes? on Cancel or X; pulling a popup down never closes it.
 //       (was old #376, old #705, old #708; ask part of #199)
 //     PLS #357 What Add has, Edit has: every field you set when adding can be changed when editing. (was old #550, old #552, old #553)
@@ -1835,6 +1844,7 @@ b,strong{font-weight:600} /* PSS #177: one bold weight, browsers default these t
 .fs-t{font-size:13px;font-weight:500;color:var(--text)}.fs-s{font-size:11px;color:var(--text3);margin-top:2px}.fs-a{font-size:13px;font-weight:600;white-space:nowrap}
 .lp-chev{color:var(--text4);font-size:18px;line-height:1;transition:transform var(--transition);flex-shrink:0}
 .lp-chev.open{transform:rotate(90deg)}
+.reimb-sw{margin-top:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r-full);border:none;background:var(--bg3);color:var(--accent);cursor:pointer;font-family:inherit} /* PSS #85: Show in Peso / Kina */
 .lp-pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;white-space:nowrap}
 .lp-pill.due{background:rgba(217,119,6,.16);color:#f59e0b}
 .lp-pill.over{background:rgba(220,38,38,.15);color:#f87171}
@@ -2254,6 +2264,9 @@ body:not(.on-analytics) .txf-st .v,body.on-analytics :is(.sheet,.dlg) .txf-st .v
 .dlg:not(.rc-dlg) > .dlg-header,.sheet > .sheet-header{padding:20px 20px 0!important;border-bottom:0!important;min-height:48px;box-sizing:border-box;align-items:center!important}
 .dlg > .dlg-header + .dlg-body,.sheet > .sheet-header + .sheet-body{padding-top:0!important;margin-top:12px;padding-left:20px!important;padding-right:20px!important}
 
+/* PSS #322 (his Nov 25 screenshot): the scroll window also stops 20px above the popup's bottom edge, so while scrolling
+   the content never runs flush into the rounded bottom, and the scroll bar stays inside the popup (it ran past the corner). */
+:is(body:not(.numpad-open),body.np-pc) :is(.dlg > .dlg-body:last-child,.dlg > .dlg-body:has(+ .dlg-footer:empty:last-child),.sheet > .sheet-body:last-child){padding-bottom:0!important;margin-bottom:20px} /* also on a computer while the side keypad is open */
 /* PSS #318: in dark mode every fillable box (search boxes and one-field boxes) is the same neutral grey #2b2b3c as the dark pills and the receipt item box. Light mode unchanged. */
 :root:not([data-theme="light"]) :is(#tx-search-input,#add-curr-search,#cp-q,#ob-curr-search,.emoji-search,input[placeholder^="Search"]){background:#2b2b3c!important;border-color:transparent!important}
 :root:not([data-theme="light"]) .ef-card:has(#lbf-in,#lsr-in,#snap-label){background:#2b2b3c!important}
@@ -4588,7 +4601,7 @@ function txCategoryDisplay(tx) {
   if (tx.isLoanSettlementLoss && /^(Interest paid|Overpayment) to /.test(tx.notes || '')) return {icon:'📉', name:'Interest Paid'}; // PSS #184
   if (tx.isBatchWriteOff)        return {icon:'✖️', name:'Write-off'}; // PSS #192: same name as the category
   if (tx.isBatchSettlement)      return {icon:'💰', name:'Loan Settlement Received'};
-  if (tx.isFxRealized)           return tx.isLoanRateChange ? (tx.type === 'income' ? {icon:'📈', name:'Rate change'} : {icon:'📉', name:'Rate change'}) : (tx.type === 'income' ? {icon:'💵', name:'Loan profit'} : {icon:'📉', name:'Loan loss'}); // PLS #284 (was old #506 FX Gain / FX Loss)
+  if (tx.isFxRealized)           return tx.isLoanRateChange ? (tx.type === 'income' ? {icon:'📈', name:'Rate change'} : {icon:'📉', name:'Rate change'}) : (tx.type === 'income' ? {icon:'💵', name: tx.isReimbFx ? 'Profit' : 'Loan profit'} : {icon:'📉', name: tx.isReimbFx ? 'Loss' : 'Loan loss'}); // PLS #284 (PLS #261: split bill rows say Profit) (was old #506 FX Gain / FX Loss)
   if (tx.isLoanSettlementGain)   return {icon:'📈', name:'Loan Settlement Gain'};
   if (tx.isLoanSettlementLoss)   return {icon:'📉', name:'Loan Settlement Loss'};
   if (tx.isReimbSettlementGain)  return {icon:'📈', name:'Reimbursement Gain'};
@@ -6312,9 +6325,14 @@ function _fzTopHTML(curr, disp, netWorthPhp) {
     <div class="n">${_esc(x.a.name)}</div><div class="b">${fmt(x.b, x.a.currency)}</div><div class="t">${x.a.currency && x.a.currency !== disp ? `≈ ${fmtApprox(convert(x.b, x.a.currency, disp), disp)}` : _esc(x.a.type||'')}</div></div>`).join('')}</div>` : ''}`;
 }
 // PSS #269: small progress ring with the percent in the middle (Budgets and goals card)
+// PSS #319: up to 999 shows 115%; 1000 and up reads 999+ so it stays inside the 38px hole (the row under it has the exact amounts)
+function _fxRingTxt(pct) {
+  const n = Math.round(pct || 0);
+  return n < 1000 ? `${n}<small>%</small>` : '999+';
+}
 function _fxRing(pct, col) {
   const r = 21, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, pct || 0));
-  return `<span class="fx-ring"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="4"/><circle cx="23" cy="23" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(2)} ${c.toFixed(2)}"/></svg><b>${Math.round(pct || 0)}<small>%</small></b></span>`;
+  return `<span class="fx-ring"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="4"/><circle cx="23" cy="23" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(2)} ${c.toFixed(2)}"/></svg><b>${_fxRingTxt(pct)}</b></span>`;
 }
 function renderDashboard() {
   // ── DEBUG-SCAN NOTE ── Net Worth display uses getNetWorth(). Hero card is rendered via helper function. Naive regex scans may flag as missing — present via helpers.
@@ -6729,7 +6747,7 @@ const UX_DRIVE_SNAPSHOT_LIMIT = 20;     // count — max snapshots shown in Driv
 const UX_RECON_HISTORY_LIMIT = 50;      // count — max reconciliation records kept
 
 // ── APP VERSION ──
-const APP_BUILD = '35'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
+const APP_BUILD = '36'; /* PSS #256: the small number after the version, same as the cache name in sw.js; raise both together */
 const APP_VERSION = '1.2.19'; // his call Oct 31: a major change gets a new number. Earlier: his call (Sep 2026): the build count stops at v-150; plain version numbers from here (1.2.0, 1.2.1 ...)
 const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after the October ships (v1.2.6, v1.2.7)
 // ── PERSONAL STRUCTURE SET #23 ── English-only UI. All user-facing strings (labels, buttons,
@@ -6737,6 +6755,14 @@ const APP_VERSION_DATE = 'November 2026'; // PSS #162: was still September after
 // developer code comments, never in anything the user sees in the app.
 const APP_CHANGELOG = [
   { ver: '1.2.19', date: 'November 2026', changes: [
+    '💱 Split bills paid in your home currency but owed where you live show and collect in that currency at your safe rate; tap Show in Peso to keep one in Peso', // PLS #261
+    '💵 A split bill paid back at the safe rate shows its Profit and Rate change, like a loan', // PLS #261
+    '🤝 Split bills: editing a payment keeps its rate; raising a share back takes off the give-back first; sync checks again who still owes', // PLS #261 / #262
+    '📜 Popups that scroll keep space at the bottom, and the scroll bar stays inside the corners', // PSS #322
+    '📸 Save snapshot: the name is optional, the line under it shows the name it will use', // PSS #321
+    '⭕ Rings at 1000% and up read 999+', // PSS #319
+    '📆 Archiving a payment linked to an installment unlinks it; Restore links it again', // PLS #96
+    '🔁 Sync keeps one gain per loan payment and the newer pick when give back or gain was chosen on two devices', // PLS #262
     '⭕ Dashboard Budgets and goals: the circles are a little bigger so 115% fits inside', // PSS #319
     '🧾 Items on the receipt: in More options, add each item with its own category; the list shows one row, tap it to see the items', // PLS #232
     '🤝 Split bills: paying more than your share asks if it is a gain or money to give back; lowering or archiving a payment fixes what is owed back', // PLS #262
@@ -12352,6 +12378,16 @@ function saveEditTx(txId, overpayChoice) {
       }
       if (newShare > 0.005) tx.paidSoFar[name] = newShare; else delete tx.paidSoFar[name];
     }
+    // PLS #262 (Nov 25 add, simulated Tey case): a share cut below what they paid made a give-back debt; raising the share
+    // again left the debt AND the person owing it again (P100 counted twice). The debt (or kept extra) shrinks first and
+    // that much goes back on the bill as paid. A debt already paid back stays (he gave the money back, so they owe again).
+    for (const p of persons) {
+      if (!(db.loans.borrowed || []).some(l => l.fromOverpayTxId === txId && l.personName === p.name)
+        && !db.transactions.some(t => !t.archived && t.isOverpayGain && t.parentId === txId && t.batchPerson === p.name)) continue;
+      const back = _giveBackSync(p.name, [txId]); _gbLeft = [];
+      if (back > 0.004) { if (!tx.paidSoFar || typeof tx.paidSoFar !== 'object') tx.paidSoFar = {};
+        tx.paidSoFar[p.name] = roundMoney(Math.min(p.share || 0, (Number(tx.paidSoFar[p.name]) || 0) + back), tx.currency); }
+    }
     const newTotalOwed = persons.reduce((s,p) => s + (p.share || 0), 0);
     // Re-evaluate settled again after child reconciliation
     const reconciledPaid = tx.paidSoFar && typeof tx.paidSoFar === 'object'
@@ -13181,6 +13217,11 @@ function archiveTx(txId, skipConfirm) {
   if (tx.type === 'shared') for (const l of (db.loans.borrowed || []).filter(l => l.fromOverpayTxId === txId && !getLoanPayments(l.id).length)) {
     db.loans.borrowed = db.loans.borrowed.filter(x => x.id !== l.id); if (!Array.isArray(db.archivedLoans)) db.archivedLoans = [];
     db.archivedLoans.push({ ...l, direction: 'borrowed', archivedAt: today(), cascadedFrom: txId }); cascaded++; }
+  // PLS #96 (Nov 24 add): an archived payment no longer counts as a paid month on its installment; Restore counts it again
+  { const gone = new Set([tx.id, ...children.map(c => c.id)]);
+    for (const inst of (db.installments || [])) { const hit = (inst.linkedTxIds || []).filter(id => gone.has(id)); if (!hit.length) continue;
+      inst.linkedTxIds = inst.linkedTxIds.filter(id => !gone.has(id)); _instAfterUnlink(inst, hit.length);
+      for (const id of hit) { const a = db.archivedTransactions.find(t => t.id === id); if (a) a._instLink = inst.id; } } }
   // If parent was a shared tx, also reset settled status if it had any (already archived so moot)
   saveDBWithSync();
   closeDlg();
@@ -13363,6 +13404,11 @@ function restoreTx(txId) {
   for (const l of (db.loans.borrowed || [])) if (l._gbCut && l._gbCut[txId]) {
     l.amount = roundMoney((Number(l.amount) || 0) + l._gbCut[txId], l.currency || _homeBase()); delete l._gbCut[txId]; if (!Object.keys(l._gbCut).length) delete l._gbCut; _loanRecount(l); }
 
+  // PLS #96 (Nov 24 add): a restored payment that was a paid month on an installment counts again
+  for (const t of db.transactions.filter(t => t._instLink)) { const inst = (db.installments || []).find(i => i.id === t._instLink); delete t._instLink; if (!inst) continue;
+    if (!Array.isArray(inst.linkedTxIds)) inst.linkedTxIds = []; if (inst.linkedTxIds.includes(t.id)) continue;
+    inst.linkedTxIds.push(t.id); inst.paidMonths = Math.max((inst.paidMonths || 0) + 1, inst.linkedTxIds.length);
+    inst.completed = (inst.alreadyPaid || 0) + inst.paidMonths >= (inst.totalMonths || 12); }
   saveDBWithSync();
   closeDlg();
   // Snappy — re-render archive sheet
@@ -13576,7 +13622,7 @@ function renderReimbTab() {
   for (const person of names.sort()) {
     const entries = persons[person];
     const byCurr = {};
-    for (const e of entries) { const c = e.tx.currency || home; byCurr[c] = (byCurr[c] || 0) + e.remaining; }
+    for (const e of entries) { const sh = _reimbShown(e, person); byCurr[sh.curr] = (byCurr[sh.curr] || 0) + sh.amt; } // PLS #261
     const totalLabel = Object.entries(byCurr).map(([c,v]) => fmt(v, c)).join(' + ');
     const showHome = Object.keys(byCurr).some(c => c !== _displayCurrency()); // PLS #170
     const pHome = entries.reduce((x, e) => x + txAmtIn(e.remaining, e.tx), 0);
@@ -13592,8 +13638,10 @@ function renderReimbTab() {
           <div class="tx-detail">${fmtDFull(tx.date)} · Total ${fmt(tx.totalBill||tx.amount, tx.currency)}${paidLabel}</div>
         </div>
         <div class="tx-right">
-          <div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(e.remaining, tx.currency)}</div>
-          <div class="tx-date-small">owes${tx.currency !== _displayCurrency() ? ` ≈ ${fmtApprox(txAmtIn(e.remaining, tx, _displayCurrency()), _displayCurrency())}` : ''}</div>
+          ${(() => { const sh = _reimbShown(e, person), c = tx.currency || home, canSw = c === home && _localCurrency() && tx.persons && tx.persons.length; // PLS #261
+            return `<div style="font-size:13px;font-family:var(--mono);color:var(--text2)">${fmt(sh.amt, sh.curr)}</div>
+          <div class="tx-date-small">${sh.conv ? `from ${fmt(e.remaining, c)}` : `owes${c !== _displayCurrency() ? ` ≈ ${fmtApprox(txAmtIn(e.remaining, tx, _displayCurrency()), _displayCurrency())}` : ''}`}</div>
+          ${canSw ? `<button class="reimb-sw" onclick="event.stopPropagation();toggleReimbCollect('${tx.id}','${_escJs(person)}')">Show in ${sh.conv ? _currName(c) : _currName(_localCurrency())}</button>` : ''}`; })()}
         </div>
       </div>`;
     }).join('');
@@ -13800,9 +13848,10 @@ function openReimbDialog(person) {
     totalsByCurr[c] = (totalsByCurr[c]||0) + e.remaining;
   }
   const currList = Object.keys(totalsByCurr);
-  const defaultCurr = currList.sort((a,b)=>{
-    const aCount = entries.filter(e=>(e.tx.currency||_homeBase())===a).length;
-    const bCount = entries.filter(e=>(e.tx.currency||_homeBase())===b).length;
+  const ccOf = e => _reimbCollectCurr(e.tx, person); // PLS #261: default = the currency most bills are collected in
+  const defaultCurr = [...new Set(entries.map(ccOf))].sort((a,b)=>{
+    const aCount = entries.filter(e=>ccOf(e)===a).length;
+    const bCount = entries.filter(e=>ccOf(e)===b).length;
     return bCount - aCount;
   })[0];
 
@@ -13815,7 +13864,7 @@ function openReimbDialog(person) {
         <div style="color:var(--text2)">${cat.icon} ${_esc(_stripIcon(cat.name))} · ${fmtDFull(tx.date)}${tx.isFeeReimbursable?` <span style="font-size:11px;padding:1px 5px;border-radius:var(--r-full);background:var(--amber-bg);color:var(--amber);font-weight:600" title="Fee already counted as an expense. Collecting it offsets that, so it is not added to the owed-to-you total">Fee</span>`:''}</div>
         ${e.paid>0?`<div style="color:var(--text3);font-size:11px;margin-top:2px">${fmt(e.paid, tx.currency)} paid</div>`:''}
       </div>
-      <div style="font-family:var(--mono);color:var(--amber)">${fmt(e.remaining, tx.currency)}</div>
+      ${(() => { const sh = _reimbShown(e, person); return `<div style="text-align:right"><div style="font-family:var(--mono);color:var(--amber)">${fmt(sh.amt, sh.curr)}</div>${sh.conv ? `<div style="color:var(--text3);font-size:11px;margin-top:2px">from ${fmt(e.remaining, tx.currency)}</div>` : ''}</div>`; })()}
     </div>`;
   }).join('');
 
@@ -13824,7 +13873,7 @@ function openReimbDialog(person) {
   const currSelectorHtml = currList.length > 1
     ? `<div class="form-group"><label class="form-label" for="rsl-curr">Settlement currency</label>
          <select class="form-input" id="rsl-curr" onchange="updateReimbBatchPreview('${_escJs(person)}')">${currOptsHtml}</select>
-         <div style="font-size:11px;color:var(--text3);margin-top:4px">Other currency entries will be converted using the saved rate</div>
+         <div style="font-size:11px;color:var(--text3);margin-top:4px">Bills in another currency use the safe rate minus your buffer (Settings &gt; Exchange rates)</div>
        </div>`
     : `<input type="hidden" id="rsl-curr" value="${defaultCurr}">`;
 
@@ -13876,16 +13925,62 @@ function openReimbDialog(person) {
 // because snap[PGK] = undefined (home is skipped in snapshot). The toPhp/fromPhp pair
 // internally handles the home base correctly. Applies to all batch settle / reimb / loan flows.
 // Compute grand total in target currency using snapshot FX
+// -- PLS #261 (Nov 24 add, his ask) -- a split bill paid in your home currency (his Unionbank card, P455.11 Mike's share)
+// that the person pays back in another currency (Kina) is converted at the SAFE RATE minus the BUFFER (same numbers as
+// lending, Settings > Exchange rates), not the day's rate, so a fall to 12.9 does not leave him short. 13.02 - 2% = 12.76:
+// P455.11 -> K35.67 (was K34.25). Bills in the other currency paid back in home currency keep the day's rate.
+function _reimbSafeEff(targetCurr) {
+  if (targetCurr === _homeBase()) return 0;
+  const r = _loanSafeRate(targetCurr).rate * (1 - _loanBuffer() / 100); return r > 0 ? r : 0;
+}
+function _reimbConv(amt, from, to, snap, targetCurr) {
+  if (from === to) return amt;
+  const home = _homeBase(), eff = _reimbSafeEff(targetCurr);
+  if (eff && from === home && to === targetCurr) return amt / eff;
+  if (eff && from === targetCurr && to === home) return amt * eff;
+  return fromPhp(toPhp(amt, from, snap), to, snap);
+}
+// PLS #261 (Nov 24 add, his ask "kina displayed na, may option ibalik sa peso"): a share owed in your home currency
+// while you live in another currency is SHOWN and collected in the currency you live in (Kina), at the same safe rate
+// minus buffer. Tap "Show in Peso" on the bill (Reimbursements) to keep it in Peso; saved per person as collectIn.
+function _reimbCollectCurr(tx, person) {
+  const home = _homeBase(), loc = _localCurrency(), c = tx.currency || home;
+  const p = (tx.persons || []).find(x => x.name === person);
+  if (p && p.collectIn) return p.collectIn;
+  return (c === home && loc && _reimbSafeEff(loc)) ? loc : c;
+}
+function _reimbShown(e, person) {
+  const c = e.tx.currency || _homeBase(), cc = _reimbCollectCurr(e.tx, person);
+  if (cc === c) return { amt: e.remaining, curr: c, conv: false };
+  return { amt: _reimbConv(e.remaining, c, cc, buildFxSnapshot(today(), nowTime()), cc), curr: cc, conv: true };
+}
+function _currName(c) { const n = (CURRENCIES.find(x => x.code === c) || {}).name || c; return n.split(' ').pop(); } // Kina, Peso
+function toggleReimbCollect(txId, person) {
+  const tx = db.transactions.find(t => t.id === txId); if (!tx || !tx.persons) return;
+  const p = tx.persons.find(x => x.name === person); if (!p) return;
+  const c = tx.currency || _homeBase(), now = _reimbCollectCurr(tx, person);
+  p.collectIn = now === c ? (_localCurrency() || c) : c;
+  tx.updatedAt = new Date().toISOString(); saveDBWithSync(); renderReimbursementsPage();
+}
+// PLS #261 (Nov 25 add, simulated Mike + Tey together): a payment received at the safe rate keeps that rate
+// (reimbSafeEff). Editing it (date, amount, part) used the day's rate: K39.19 that paid P500 in full turned into
+// P520, and K3 extra became K4.56 and a P60.59 give-back debt; lowering it back left P20.73 owed twice.
+// Old payments without the mark keep the day's rate. Changing the account to your local currency takes today's safe rate.
+function _reimbPayEff(tx, cur) {
+  if (!cur || cur === _homeBase()) return 0;
+  if (tx && tx.reimbSafeEff && cur === (tx.currency || _homeBase())) return tx.reimbSafeEff;
+  return (tx && cur !== (tx.currency || _homeBase())) ? _reimbSafeEff(cur) : 0;
+}
+function _reimbPayConv(eff, cur, snap) {
+  const home = _homeBase();
+  return (a, f, to) => f === to ? a : (eff && f === home && to === cur) ? a / eff : (eff && f === cur && to === home) ? a * eff : fromPhp(toPhp(a, f, snap), to, snap);
+}
 function computeReimbBatchTotal(entries, targetCurr, settlementDate, settlementTime) {
   const snap = buildFxSnapshot(settlementDate, settlementTime);
   let total = 0;
   for (const e of entries) {
     const c = e.tx.currency || _homeBase();
-    if (c === targetCurr) total += e.remaining;
-    else {
-      const inHome = toPhp(e.remaining, c, snap);
-      total += fromPhp(inHome, targetCurr, snap);
-    }
+    total += _reimbConv(e.remaining, c, targetCurr, snap, targetCurr); // PLS #261
   }
   return total;
 }
@@ -13925,11 +14020,7 @@ function updateReimbBatchPreview(person) {
     for (const e of entries) {
       const c = e.tx.currency || _homeBase();
       let rInTarget;
-      if (c===targetCurr) rInTarget = e.remaining;
-      else {
-        const inHome = toPhp(e.remaining, c, snap);
-        rInTarget = fromPhp(inHome, targetCurr, snap);
-      }
+      rInTarget = _reimbConv(e.remaining, c, targetCurr, snap, targetCurr); // PLS #261
       if (_fullyPaid(remainAmt, rInTarget, targetCurr)) /* PLS #355 */ { remainAmt -= rInTarget; fullyPaid++; }
       else if (remainAmt > 0) { partialAmt = remainAmt; remainAmt = 0; break; }
       else break;
@@ -14083,11 +14174,7 @@ function confirmReimbSettlement(person) {
 
   // Helper: convert with snapshot
   // HOME-AGNOSTIC: routes through home base via toPhp/fromPhp
-  const conv = (amt, from, to) => {
-    if (from === to) return amt;
-    const inHome = toPhp(amt, from, snap);
-    return fromPhp(inHome, to, snap);
-  };
+  const conv = (amt, from, to) => _reimbConv(amt, from, to, snap, targetCurr); // PLS #261: home-currency bills at the safe rate
 
   // FIFO walk: deduct from received, settling entries in order
   let remainingReceived = received;
@@ -14173,6 +14260,7 @@ function confirmReimbSettlement(person) {
     isSettlement: true,
     isAutoReimb: true,
     isBatchReimbSettlement: true,
+    ...(_reimbSafeEff(targetCurr) ? { reimbSafeEff: _reimbSafeEff(targetCurr) } : {}), // PLS #261
     parentId: primaryTxId,
     batchTxIds: settledNow.map(s=>s.entry.tx.id),
     reimbBreakdown: settledNow.map(s => ({ billId: s.entry.tx.id, amount: s.paidInTxCurr, currency: s.entry.tx.currency || _homeBase() })), // PLS #358
@@ -15574,6 +15662,31 @@ function _loanGainSync() {
     if (Math.abs(p) >= 0.01) want.set('tx-lg-' + t.id, mk(p, false));
     if (Math.abs(r) >= 0.01) want.set('tx-lr-' + t.id, mk(r, true));
   }
+  // -- PLS #261 (Nov 25 add, his "dba dapat listed as gain?") -- a split bill in your home currency paid back in your local
+  // currency at the safe rate books the same two rows as a loan: Profit = what the safe rate put on top of the market rate
+  // on the bill day (Mike P455.11: K35.67 vs K34.25 = K1.42), Rate change = the market moving between the bill day and
+  // the day he paid. Only payments marked with the safe rate (reimbSafeEff); older ones were at the day's rate and stay as they were.
+  for (const t of db.transactions) {
+    if (t.archived || !t.isBatchReimbSettlement || !t.reimbSafeEff || !Array.isArray(t.reimbBreakdown)) continue;
+    const pc = t.currency || home, snap = t.fxSnapshot || buildFxSnapshot(t.date, t.time), who = t.batchPerson || t.reimbPerson || '';
+    const cv = (a, f, to, sn) => f === to ? a : fromPhp(toPhp(a, f, sn), to, sn);
+    let gp = 0, gt = 0;
+    for (const r of t.reimbBreakdown) {
+      const b = live.get(r.billId); const bc = (b && b.currency) || r.currency || home; if (bc === pc || !b) continue;
+      const amt = Number(r.amount) || 0; if (!(amt > 0)) continue;
+      const got = bc === home ? amt / t.reimbSafeEff : cv(amt, bc, pc, snap);
+      const bs = b.fxSnapshot || buildFxSnapshot(b.date, b.time);
+      gp += got - cv(amt, bc, pc, bs); gt += got - cv(amt, bc, pc, snap);
+    }
+    const P = roundMoney(gp, pc), R = roundMoney(gt - gp, pc);
+    const mk = (amt, rate) => { const gain = amt > 0; return { type: gain ? 'income' : 'expense', amount: Math.abs(amt), currency: pc, accountId: t.accountId || null,
+      date: t.date, time: t.time, isSettlement: true, isFxRealized: true, isLoanRateChange: rate, isReimbFx: true, isReimbSettlementGain: gain, isReimbSettlementLoss: !gain,
+      parentId: t.id, batchPerson: who, fxSnapshot: snap,
+      notes: rate ? `Rate change on split bill with ${who}` : `${gain ? 'Profit' : 'Loss'} on split bill with ${who}`,
+      categoryId: rate ? (gain ? 'sc-forexgain' : 'sc-forexloss') : (gain ? 'sc-loanprofit' : 'sc-forexloss') }; };
+    if (Math.abs(P) >= 0.01) want.set('tx-rg-' + t.id, mk(P, false));
+    if (Math.abs(R) >= 0.01) want.set('tx-rr-' + t.id, mk(R, true));
+  }
   // every exchange-rate child that is not a wanted one goes (old PLS #506 ones, split-bill ones, orphans)
   for (let i = db.transactions.length - 1; i >= 0; i--) {
     const k = db.transactions[i];
@@ -16278,19 +16391,70 @@ function _giveBackSync(person, billIds, archiveBy) {
 // PLS #262 (Nov 24 add): what a bill has been paid, when sync added both devices' changes together, is counted again from
 // the payments themselves. PC cut Tey's share to K27, the phone lowered his payment to K27: 30 - 3 - 3 read K24 paid.
 function _syncPaidFromPays(out) {
-  const ids = new Set(((out && out.rules) || []).map(r => (String(r.path).match(/^transactions\.#([^.]+)\.paidSoFar/) || [])[1]).filter(Boolean));
+  // PLS #262 (Nov 25 add): also a bill whose shares changed on the other device. Phone received Zed's P500 in full,
+  // PC raised his share to P600: combined, the bill kept "settled" and his P100 vanished from Reimbursements.
+  const ids = new Set(((out && out.rules) || []).map(r => (String(r.path).match(/^transactions\.#([^.]+)\.(paidSoFar|persons|settled|totalBill|myShare)/) || [])[1]).filter(Boolean));
   if (!ids.size) return; const got = _reimbAllocAll().got;
   for (const b of db.transactions.filter(t => ids.has(t.id) && t.type === 'shared' && !t.archived && (t.persons || []).length)) {
     if (!b.paidSoFar || typeof b.paidSoFar !== 'object') b.paidSoFar = {};
     for (const x of b.persons) { const v = roundMoney(got[b.id + '|' + x.name] || 0, b.currency || _homeBase()); if (v <= 0.001) delete b.paidSoFar[x.name]; else b.paidSoFar[x.name] = v; }
     _reimbBillSettle(b, b.settledAt || null); }
 }
+// PLS #262 (Nov 24 add, loans): after sync a loan payment keeps ONE gain (money lent) or extra paid (money borrowed),
+// matched to the payment. Same payment edited on two devices (P2,500 on one, P2,200 on the other) came back with both
+// the P500 and the P200 gain, so Analytics income counted P200 too much (net worth was right).
+function _loanExtraSyncAll() {
+  const home = _homeBase(); let n = 0;
+  const kids = {};
+  for (const t of db.transactions) if (!t.archived && t.parentId && (t.isLoanSettlementGain || t.isLoanSettlementLoss) && !t.isFxRealized) (kids[t.parentId] = kids[t.parentId] || []).push(t);
+  for (const [pid, ks] of Object.entries(kids)) {
+    if (ks.length < 2) continue;
+    const tx = db.transactions.find(t => t.id === pid && !t.archived); if (!tx || !Array.isArray(tx.batchBreakdown)) continue;
+    const cur = tx.currency || home, snap = tx.fxSnapshot;
+    const conv = (a, f, to) => f === to ? a : fromPhp(toPhp(a, f, snap), to, snap);
+    const covered = tx.batchBreakdown.reduce((s, r) => s + conv(Number(r.amount) || 0, r.currency || home, cur), 0);
+    const excess = roundMoney(Math.max(0, (Number(tx.amount) || 0) - covered), cur);
+    ks.sort((x, y) => (x.createdAt || '').localeCompare(y.createdAt || ''));
+    for (const k of ks.slice(1)) db.transactions.splice(db.transactions.indexOf(k), 1);
+    if (excess >= 0.01) { ks[0].amount = excess; ks[0].currency = cur; } else db.transactions.splice(db.transactions.indexOf(ks[0]), 1);
+    n++;
+  }
+  return n;
+}
+// PLS #262 (Nov 24 add): the same extra picked two ways on two devices. Tey paid K30 on a K27 share: one phone said
+// "give it back" (K3 owed to Tey), the other said "keep as gain" (K3 gain on the payment). After sync both stayed, so
+// the K3 was owed AND counted as income. The newer pick wins; the older one is taken off (a debt already paid back stays).
+function _giveBackPickSync() {
+  let n = 0;
+  for (const l of [...(db.loans.borrowed || [])]) {
+    if (!l.fromOverpayTxId) continue;
+    const b = db.transactions.find(t => t.id === l.fromOverpayTxId && t.type === 'shared'); if (!b) continue;
+    const person = l.personName, cur = b.currency || _homeBase();
+    const pays = db.transactions.filter(t => !t.archived && t.isAutoReimb && !t.skipBalance && (t.batchPerson || t.reimbPerson) === person && (t.currency || _homeBase()) === cur
+      && (Array.isArray(t.reimbBreakdown) ? t.reimbBreakdown : []).some(r => r.billId === b.id));
+    let into = 0; for (const t of pays) for (const r of t.reimbBreakdown) if (r.billId === b.id) into += Number(r.amount) || 0;
+    const over = Math.max(0, into - Math.max(0, _reimbShare(b, person) - (Number(b.writtenOff?.[person]) || 0)));
+    const gains = db.transactions.filter(t => !t.archived && t.isReimbSettlementGain && (t.currency || _homeBase()) === cur && pays.some(p => p.id === t.parentId));
+    let extra = roundMoney((Number(l.amount) || 0) + gains.reduce((s, g) => s + (Number(g.amount) || 0), 0) - over, cur);
+    if (extra < 0.01 || !gains.length) continue;
+    const ts = x => x.createdAt || (n => n > 1.5e12 && n < 4e12 ? new Date(n).toISOString() : '')(parseInt(String(x.id || '').replace(/^tx-/, '').slice(0, 8), 36)); // a debt keeps no createdAt: its id starts with the time
+    const debtNewer = gains.every(g => ts(l) > ts(g));
+    const cutDebt = () => { const take = Math.min(extra, Number(l.remaining) || 0); if (take < 0.005) return;
+      l.amount = roundMoney(l.amount - take, cur); extra = roundMoney(extra - take, cur); n++;
+      if (l.amount <= 0.005 && !getLoanPayments(l.id).length) db.loans.borrowed = db.loans.borrowed.filter(x => x.id !== l.id); else _loanRecount(l); };
+    const cutGains = () => { for (const g of gains.sort((x, y) => ts(x).localeCompare(ts(y)))) { if (extra < 0.005) break;
+      const take = Math.min(extra, Number(g.amount) || 0); g.amount = roundMoney(g.amount - take, cur); extra = roundMoney(extra - take, cur); n++;
+      if (g.amount <= 0.005) db.transactions = db.transactions.filter(t => t.id !== g.id); } };
+    if (debtNewer) { cutGains(); cutDebt(); } else { cutDebt(); cutGains(); }
+  }
+  return n;
+}
 function _giveBackSyncAll() {
   const seen = new Set();
   for (const l of (db.loans.borrowed || [])) if (l.fromOverpayTxId) seen.add(l.personName + '\u0000' + l.fromOverpayTxId);
   for (const t of db.transactions) if (!t.archived && t.isOverpayGain && t.parentId) seen.add(t.batchPerson + '\u0000' + t.parentId);
   let n = 0; const left = []; for (const k of seen) { const [who, bid] = k.split('\u0000'); n += _giveBackSync(who, [bid]); left.push(..._gbLeft); }
-  _gbLeft = left; return n;
+  _gbLeft = left; return n + _giveBackPickSync();
 }
 // PLS #262: what Edit payment does with money above what they owe, asked first (same choice as a share cut, #262)
 function _brseOverDlg(txId, extra, cur, person) {
@@ -16323,7 +16487,7 @@ function confirmBatchReimbSettleEdit(txId, overChoice) {
     return done('Saved');
   }
   const snap = (newDate !== tx.date || newTime !== tx.time || !tx.fxSnapshot) ? buildFxSnapshot(newDate, newTime) : tx.fxSnapshot; // PLS #161
-  const conv = (amt, from, to) => from === to ? amt : fromPhp(toPhp(amt, from, snap), to, snap);
+  const _eff = _reimbPayEff(tx, cur), conv = _reimbPayConv(_eff, cur, snap); // PLS #261
   _reimbFreezeAll();
   const rows = tx.reimbBreakdown || [];
   const ownIds = tx.batchTxIds || (tx.parentId ? [tx.parentId] : []);
@@ -16371,6 +16535,7 @@ function confirmBatchReimbSettleEdit(txId, overChoice) {
   const _topBill = (_onTop >= 0.01) ? (parts.length ? parts[parts.length - 1].b : own[own.length - 1]) : null;
   if (_topBill && !parts.some(p => p.b === _topBill)) parts.push({ b: _topBill, inBill: 0, inPay: 0 });
   const _bd = parts.map(p => ({ billId: p.b.id, amount: roundMoney(p.inBill + (p.b === _topBill ? conv(_onTop, cur, p.b.currency || home) : 0), p.b.currency || home), currency: p.b.currency || home }));
+  if (_eff) tx.reimbSafeEff = _eff; else delete tx.reimbSafeEff; // PLS #261
   Object.assign(tx, { amount: newAmount, currency: cur, accountId: newAcctId, date: newDate, time: newTime, notes: newNotes, fxSnapshot: snap,
     parentId: parts[0].b.id, batchTxIds: parts.map(p => p.b.id),
     reimbBreakdown: _bd });
@@ -16418,7 +16583,7 @@ function _loanFreezeParts(l, dir) {
 function _ppCtx(kind, payId, targetId, dir) {
   const tx = db.transactions.find(t => t.id === payId && !t.archived); if (!tx) return null;
   const home = _homeBase(), cur = tx.currency || home, snap = tx.fxSnapshot;
-  const conv = (a, f, to) => f === to ? a : fromPhp(toPhp(a, f, snap), to, snap);
+  const conv = kind === 'bill' ? _reimbPayConv(_reimbPayEff(tx, cur), cur, snap) : (a, f, to) => f === to ? a : fromPhp(toPhp(a, f, snap), to, snap); // PLS #261
   if (kind === 'bill') {
     const b = db.transactions.find(t => t.id === targetId && !t.archived); if (!b) return null;
     const person = tx.batchPerson || tx.reimbPerson || '';
@@ -28625,8 +28790,8 @@ function openSnapshotSavePrompt() {
     `<div style="font-size:13px;color:var(--text3);margin-bottom:12px">A snapshot is a labeled restore point saved to Google Drive. You can restore it anytime.</div>
      <div class="form-group">
        <label class="form-label" for="snap-label">Label</label>
-       <input class="form-input" id="snap-label" type="text" placeholder="${defaultLabel.replace(/"/g,'&quot;')}" maxlength="80">
-       <div style="font-size:11px;color:var(--text3);margin-top:4px">Leave blank to use default label above</div>
+       <input class="form-input" id="snap-label" type="text" placeholder="Optional" maxlength="80">
+       <div style="font-size:11px;color:var(--text3);margin-top:4px">Leave blank to use: ${_esc(defaultLabel)}</div><!-- PSS #321: the default label is shown in full here, it was cut in the box -->
      </div>`,
     `<button class="btn btn-ghost btn-sm" onclick="closeDlg()">Cancel</button>
      <button class="btn btn-primary btn-sm" onclick="saveSnapshotConfirm()">Save snapshot</button>`
@@ -29205,6 +29370,15 @@ function _syncMergeDB(base, mine, theirs) {
   for (const t of (res.transactions || [])) if (t.type === 'shared' && t.paidSoFar && out.rules.some(r => r.path.startsWith('transactions.#' + t.id + '.paidSoFar'))) {   // 'settled' follows the combined paid-back total
     const owed = (t.persons || []).reduce((s, x) => s + (x.share || 0), 0) || ((t.totalBill || t.amount) - (t.myShare || 0)); const paid = Object.values(t.paidSoFar).reduce((s, v) => s + (parseFloat(v) || 0), 0);
     if (paid >= owed - 0.01 && !t.settled) t.settled = true; }
+  { // PLS #262 (Nov 25 add): a bill whose shares changed on one device and payments on the other: 'settled' is checked
+    // again both ways (phone received Zed's P500 in full and marked it settled, PC raised his share to P600 meanwhile)
+    const bOf = (db, id) => ((db && db.transactions) || []).find(x => x.id === id), J = v => JSON.stringify(v || null);
+    for (const t of (res.transactions || [])) { if (t.type !== 'shared' || t.archived || !(t.persons || []).length) continue;
+      const b = bOf(base, t.id), m = bOf(mine, t.id), th = bOf(theirs, t.id); if (!b || !m || !th) continue;
+      const pc = x => J(x.persons) !== J(b.persons) || x.totalBill !== b.totalBill, pd = x => J(x.paidSoFar) !== J(b.paidSoFar);
+      if (!((pc(m) && pd(th)) || (pc(th) && pd(m)))) continue;
+      const owed = t.persons.reduce((s, x) => s + (x.share || 0), 0), paid = Object.values(t.paidSoFar || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+      const st = owed > 0 && paid >= owed - 0.005; if (st !== !!t.settled) { t.settled = st; if (!st) { delete t.settledAt; delete t.settledAs; } } } }
   // PLS #297: an installment's paid months IS its linked payments (link adds, unlink all clears). Adding both devices'
   // changes counted one payment linked on both phones twice (6 paid + 1 + 1 = 8 with 7 links): it follows the links.
   // PLS #340: months typed in by hand (paid months that are not links) are kept: each device's extra is compared with the
@@ -29483,7 +29657,7 @@ async function _syncFinishMerge() {
   if (p.mineHash && _syncHash() !== p.mineHash) { window._syncPending = null; showToast('Data changed while syncing. Trying again'); _syncBusy = false; return syncNow(); }   // never combine against a copy that is already out of date
   _premergeSave(p.meta.deviceName); // PLS #240: the copy is taken right here; the IndexedDB write finishes on its own
   const mineTx = db.transactions.length;
-  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); try { _syncRecountPaid(p.out); } catch (e) { console.warn('[Sync] recount', e); } try { _syncPaidFromPays(p.out); _giveBackSyncAll(); (p.out.flags = p.out.flags || []).push(..._gbLeft.map(x => ({ kind: 'giveback', ...x }))); _gbLeft = []; } catch (e) { console.warn('[Sync] give back', e); } saveDB(); // PLS #262
+  _syncReplaceDB(p.merged, p.latest.id, p.meta.deviceName); try { _syncRecountPaid(p.out); } catch (e) { console.warn('[Sync] recount', e); } try { _syncPaidFromPays(p.out); _giveBackSyncAll(); _loanExtraSyncAll(); (p.out.flags = p.out.flags || []).push(..._gbLeft.map(x => ({ kind: 'giveback', ...x }))); _gbLeft = []; } catch (e) { console.warn('[Sync] give back', e); } saveDB(); // PLS #262
   showLoading('Syncing...');
   try { await _syncUpload(); } catch(e) { hideLoading(); db.settings.lastLocalEditAt = new Date().toISOString(); saveDB(); setSyncStatus('unsaved'); showToast('Synced here. Will upload to Drive when it can'); setTimeout(() => location.reload(), 1200); return; }
   hideLoading(); window._syncPending = null;
